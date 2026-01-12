@@ -2368,13 +2368,29 @@ function renderizarCalendarioCompacto() {
     
     // Event listeners para navegação
     document.getElementById('btnMesAnteriorCompacto').onclick = function() {
-        calendarioCompactoAtual.setMonth(calendarioCompactoAtual.getMonth() - 1);
-        renderizarCalendarioCompacto();
+        if (modoCalendarioCompacto === 'anos') {
+            calendarioCompactoAtual.setFullYear(calendarioCompactoAtual.getFullYear() - 16);
+            mostrarSeletorAnos();
+        } else if (modoCalendarioCompacto === 'meses') {
+            calendarioCompactoAtual.setFullYear(calendarioCompactoAtual.getFullYear() - 1);
+            mostrarSeletorMeses();
+        } else {
+            calendarioCompactoAtual.setMonth(calendarioCompactoAtual.getMonth() - 1);
+            renderizarCalendarioCompacto();
+        }
     };
     
     document.getElementById('btnMesProximoCompacto').onclick = function() {
-        calendarioCompactoAtual.setMonth(calendarioCompactoAtual.getMonth() + 1);
-        renderizarCalendarioCompacto();
+        if (modoCalendarioCompacto === 'anos') {
+            calendarioCompactoAtual.setFullYear(calendarioCompactoAtual.getFullYear() + 16);
+            mostrarSeletorAnos();
+        } else if (modoCalendarioCompacto === 'meses') {
+            calendarioCompactoAtual.setFullYear(calendarioCompactoAtual.getFullYear() + 1);
+            mostrarSeletorMeses();
+        } else {
+            calendarioCompactoAtual.setMonth(calendarioCompactoAtual.getMonth() + 1);
+            renderizarCalendarioCompacto();
+        }
     };
 }
 
@@ -2392,9 +2408,26 @@ function selecionarDataCompacto(data) {
     // Atualizar data no AgendamentosManager se existir
     if (window.agendamentosManager) {
         window.agendamentosManager.currentDate = new Date(data);
+        
+        // Se estava em "Hoje", mudar para "Dia"
+        if (window.agendamentosManager.period === 'today') {
+            window.agendamentosManager.period = 'day';
+            
+            // Atualizar botões visuais
+            document.querySelectorAll('.view-period-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.period === 'day') {
+                    btn.classList.add('active');
+                }
+            });
+            
+            console.log('📅 Mudando de "Hoje" para "Dia"');
+        }
+        
         window.agendamentosManager.updateDateDisplay();
         window.agendamentosManager.handlePeriodChange(window.agendamentosManager.period);
         window.agendamentosManager.saveCurrentDate();
+        window.agendamentosManager.savePeriod();
     }
     
     // Fechar calendário após seleção
@@ -2430,7 +2463,7 @@ window.mostrarSeletorMeses = function() {
     conteudo.innerHTML = `
         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px;">
             ${meses.map((mes, index) => `
-                <div onclick="selecionarMesCompacto(${index})" style="
+                <div onclick="event.stopPropagation(); selecionarMesCompacto(${index})" style="
                     padding: 12px;
                     text-align: center;
                     cursor: pointer;
@@ -2471,7 +2504,7 @@ window.mostrarSeletorAnos = function() {
     conteudo.innerHTML = `
         <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px;">
             ${anos.map(ano => `
-                <div onclick="selecionarAnoCompacto(${ano})" style="
+                <div onclick="event.stopPropagation(); selecionarAnoCompacto(${ano})" style="
                     padding: 12px;
                     text-align: center;
                     cursor: pointer;
@@ -2496,6 +2529,7 @@ window.mostrarSeletorAnos = function() {
 
 // Função para selecionar mês
 window.selecionarMesCompacto = function(mes) {
+    console.log('📅 Mês selecionado:', mes);
     calendarioCompactoAtual.setMonth(mes);
     modoCalendarioCompacto = 'dias';
     renderizarCalendarioCompacto();
@@ -2503,6 +2537,7 @@ window.selecionarMesCompacto = function(mes) {
 
 // Função para selecionar ano
 window.selecionarAnoCompacto = function(ano) {
+    console.log('📅 Ano selecionado:', ano);
     calendarioCompactoAtual.setFullYear(ano);
     // Após selecionar ano, mostrar seletor de meses
     mostrarSeletorMeses();
