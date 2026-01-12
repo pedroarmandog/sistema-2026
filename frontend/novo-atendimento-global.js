@@ -104,9 +104,9 @@ function abrirNovoAgendamentoModal() {
                         <i class="fas fa-calendar-alt" style="position: absolute; right: 15px; top: 42px; color: #666; pointer-events: none;"></i>
                         
                         <!-- Calendário Flutuante -->
-                        <div id="calendarioFlutuante" style="display: none; position: absolute; top: 100%; left: 0; z-index: 1000000; background: white; border: 2px solid #2c5aa0; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); padding: 20px; width: 320px; margin-top: 5px;">
+                        <div id="calendarioFlutuante" style="display: none; position: absolute; top: 100%; left: 0; z-index: 10000000; background: white; border: 2px solid #2c5aa0; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); padding: 12px; width: 280px; margin-top: 5px;">
                             <!-- Header do Calendário -->
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                 <button type="button" id="btnMesAnterior" style="background: none; border: none; font-size: 18px; color: #2c5aa0; cursor: pointer; padding: 5px; border-radius: 50%; transition: all 0.2s ease;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='none'">
                                     <i class="fas fa-chevron-left"></i>
                                 </button>
@@ -117,22 +117,22 @@ function abrirNovoAgendamentoModal() {
                             </div>
                             
                             <!-- Dias da Semana -->
-                            <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; margin-bottom: 10px;">
-                                <div style="text-align: center; padding: 8px 0; font-size: 12px; font-weight: 600; color: #666;">Dom</div>
-                                <div style="text-align: center; padding: 8px 0; font-size: 12px; font-weight: 600; color: #666;">Seg</div>
-                                <div style="text-align: center; padding: 8px 0; font-size: 12px; font-weight: 600; color: #666;">Ter</div>
-                                <div style="text-align: center; padding: 8px 0; font-size: 12px; font-weight: 600; color: #666;">Qua</div>
-                                <div style="text-align: center; padding: 8px 0; font-size: 12px; font-weight: 600; color: #666;">Qui</div>
-                                <div style="text-align: center; padding: 8px 0; font-size: 12px; font-weight: 600; color: #666;">Sex</div>
-                                <div style="text-align: center; padding: 8px 0; font-size: 12px; font-weight: 600; color: #666;">Sáb</div>
+                            <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; margin-bottom: 5px;">
+                                <div style="text-align: center; padding: 4px 0; font-size: 11px; font-weight: 600; color: #666;">Dom</div>
+                                <div style="text-align: center; padding: 4px 0; font-size: 11px; font-weight: 600; color: #666;">Seg</div>
+                                <div style="text-align: center; padding: 4px 0; font-size: 11px; font-weight: 600; color: #666;">Ter</div>
+                                <div style="text-align: center; padding: 4px 0; font-size: 11px; font-weight: 600; color: #666;">Qua</div>
+                                <div style="text-align: center; padding: 4px 0; font-size: 11px; font-weight: 600; color: #666;">Qui</div>
+                                <div style="text-align: center; padding: 4px 0; font-size: 11px; font-weight: 600; color: #666;">Sex</div>
+                                <div style="text-align: center; padding: 4px 0; font-size: 11px; font-weight: 600; color: #666;">Sáb</div>
                             </div>
                             
                             <!-- Grid dos Dias -->
                             <div id="diasCalendario" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px;"></div>
                             
                             <!-- Rodapé -->
-                            <div style="margin-top: 15px; text-align: center; border-top: 1px solid #eee; padding-top: 10px;">
-                                <button type="button" onclick="selecionarHoje()" style="background: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-size: 12px; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='#218838'" onmouseout="this.style.background='#28a745'">
+                            <div style="margin-top: 8px; text-align: center; border-top: 1px solid #eee; padding-top: 6px;">
+                                <button type="button" onclick="selecionarHoje()" style="background: #28a745; color: white; border: none; padding: 6px 14px; border-radius: 6px; font-size: 11px; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='#218838'" onmouseout="this.style.background='#28a745'">
                                     Hoje
                                 </button>
                             </div>
@@ -148,13 +148,12 @@ function abrirNovoAgendamentoModal() {
                 
                 <div style="margin-bottom: 20px;">
                     <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">Profissional</label>
-                    <select id="profissionalGlobal" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 6px; font-size: 14px;">
-                        <option value="">Selecione um profissional</option>
-                        <option value="Maria Júlia">Maria Júlia</option>
-                        <option value="Carlos Silva">Carlos Silva</option>
-                        <option value="Ana Costa">Ana Costa</option>
-                        <option value="Pedro Santos">Pedro Santos</option>
-                    </select>
+                    <div style="position: relative;">
+                        <input type="text" id="profissionalGlobalInput" class="filter-select" placeholder="Selecione um profissional" autocomplete="off" style="width:100%;" />
+                        <input type="hidden" id="profissionalGlobalId" value="" />
+                        <div id="resultados-profissional-global" style="position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 1200000; background: white; border: 1px solid #e2e8f0; box-shadow: 0 10px 30px rgba(0,0,0,0.08); max-height: 220px; overflow: auto; border-radius: 6px; display: none;">
+                        </div>
+                    </div>
                 </div>
                 
                 <div style="margin-bottom: 20px;">
@@ -204,6 +203,8 @@ function abrirNovoAgendamentoModal() {
     // ADICIONAR AO DOM
     document.body.appendChild(novoOverlay);
     document.body.appendChild(novoModal);
+    // Carregar profissionais para o dropdown
+    try{ carregarProfissionais(); }catch(e){ console.warn('carregarProfissionais não disponível no escopo ainda'); }
     document.body.style.overflow = 'hidden';
     
     // ANIMAR ENTRADA DO MODAL (fluido e suave)
@@ -257,6 +258,87 @@ function abrirNovoAgendamentoModal() {
     document.getElementById('fecharNovoModal').onclick = fecharModal;
     document.getElementById('cancelarNovoModal').onclick = fecharModal;
     novoOverlay.onclick = fecharModal;
+
+    // Função: carregar lista de profissionais via API e popular o dropdown customizado
+    let profissionaisLista = [];
+    async function carregarProfissionais() {
+        try {
+            const resp = await fetch('/api/profissionais');
+            if (!resp.ok) throw new Error('Resposta ' + resp.status);
+            const list = await resp.json();
+            profissionaisLista = Array.isArray(list) ? list : [];
+            // render inicial se o input já existir
+            renderizarDropdownProfissionais('');
+            setupProfissionalHandlers();
+        } catch (e) {
+            console.error('Erro ao carregar profissionais:', e);
+            profissionaisLista = [];
+            renderizarDropdownProfissionais('');
+            setupProfissionalHandlers();
+        }
+    }
+
+    // Renderiza opções filtradas no container
+    function renderizarDropdownProfissionais(filter) {
+        const container = document.getElementById('resultados-profissional-global');
+        const input = document.getElementById('profissionalGlobalInput');
+        if (!container || !input) return;
+        const q = (filter || input.value || '').toLowerCase().trim();
+        container.innerHTML = '';
+        const lista = profissionaisLista.filter(p => {
+            const nome = (p.nome || '').toLowerCase();
+            return !q || nome.includes(q);
+        });
+        if (!lista.length) {
+            const li = document.createElement('div');
+            li.style.cssText = 'padding:10px;color:#666';
+            li.textContent = profissionaisLista.length ? 'Nenhum profissional encontrado' : 'Nenhum profissional cadastrado';
+            container.appendChild(li);
+            return;
+        }
+        lista.forEach(p => {
+            const item = document.createElement('div');
+            item.style.cssText = 'padding:10px 12px; cursor:pointer; border-bottom:1px solid #f1f5f9;';
+            item.textContent = p.nome || '';
+            item.addEventListener('mouseenter', () => item.style.background = '#f8fafc');
+            item.addEventListener('mouseleave', () => item.style.background = 'transparent');
+            item.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                const inputEl = document.getElementById('profissionalGlobalInput');
+                const hidden = document.getElementById('profissionalGlobalId');
+                if (inputEl) inputEl.value = p.nome || '';
+                if (hidden) hidden.value = p.nome || '';
+                container.style.display = 'none';
+            });
+            container.appendChild(item);
+        });
+    }
+
+    // Anexar handlers no input para abrir/filtrar dropdown
+    function setupProfissionalHandlers() {
+        const input = document.getElementById('profissionalGlobalInput');
+        const container = document.getElementById('resultados-profissional-global');
+        if (!input || !container) return;
+        // evitar múltiplos binds
+        if (input._profHandlersAdded) return;
+        input._profHandlersAdded = true;
+
+        input.addEventListener('focus', (e) => {
+            renderizarDropdownProfissionais('');
+            container.style.display = 'block';
+        });
+        input.addEventListener('input', (e) => {
+            renderizarDropdownProfissionais(e.target.value || '');
+            container.style.display = 'block';
+        });
+        // Clique fora para fechar
+        document.addEventListener('click', function onDocClick(ev){
+            const target = ev.target;
+            if (!target) return;
+            if (target === input || container.contains(target)) return;
+            container.style.display = 'none';
+        });
+    }
 
     // Segurança: garantir remoção de outros overlays que possam permanecer
     function garantirRemoverOverlays() {
@@ -399,6 +481,18 @@ function abrirNovoAgendamentoModal() {
                     };
 
                     adicionarAgendamentoAoDOM(agObj);
+
+                    // Garantir que a lista principal seja atualizada para posicionar corretamente
+                    // o agendamento no grupo/data correta. Preferimos recarregar do servidor
+                    // para manter consistência com o AgendamentosManager.
+                    if (window.agendamentosManager && typeof window.agendamentosManager.loadAgendamentos === 'function') {
+                        try {
+                            await window.agendamentosManager.loadAgendamentos();
+                        } catch (e) {
+                            console.warn('[novo-atendimento-global] Falha ao recarregar agendamentos:', e);
+                        }
+                    }
+
                     notify('Agendamento confirmado com sucesso!', 'success');
                     fecharModal();
                 } catch (err) {
@@ -417,6 +511,8 @@ function abrirNovoAgendamentoModal() {
                 // Preparar payload para API
                 const petInput = document.getElementById('petClienteGlobal');
                 const petId = petInput?.getAttribute('data-selected-pet-id') || petInput?.dataset?.selectedPetId || '';
+                // obter valor do serviço sem alterar a estrutura do fluxo
+                const objAg = criarObjetoAgendamento(dados);
                 
                 if (!petId) {
                     alert('Por favor, selecione um Pet válido nas sugestões (clique no resultado).');
@@ -438,7 +534,7 @@ function abrirNovoAgendamentoModal() {
                     servico: dados.servico || '',
                     observacoes: dados.observacoes || '',
                     profissional: dados.profissional || '',
-                    valor: 0
+                    valor: (objAg && objAg.valor) ? objAg.valor : 0
                 };
 
                 // Chamar API
@@ -463,12 +559,23 @@ function abrirNovoAgendamentoModal() {
                 const created = await response.json();
                 console.log('✅ Agendamento salvo na API:', created);
 
-                // Recarregar do servidor
-                if (window.agendamentosManager && typeof window.agendamentosManager.loadAgendamentos === 'function') {
-                    await window.agendamentosManager.loadAgendamentos();
+                // Redirecionar para a página de detalhes do agendamento criado
+                const createdId = (created && (created.id || created.ID || created.agendamentoId || created._id || created.codigo)) || null;
+                if (createdId) {
+                    window.location.href = `agendamento-detalhes.html?id=${createdId}`;
+                    return;
                 }
 
-                notify('Agendamento confirmado e salvo no servidor!', 'success');
+                // Fallback: recarregar do servidor e fechar modal caso não haja id
+                if (window.agendamentosManager && typeof window.agendamentosManager.loadAgendamentos === 'function') {
+                    try {
+                        await window.agendamentosManager.loadAgendamentos();
+                    } catch (e) {
+                        console.warn('[novo-atendimento-global] Falha ao recarregar agendamentos (fallback):', e);
+                    }
+                }
+
+                notify('Agendamento confirmado', 'success');
                 fecharModal();
             } catch (err) {
                 console.error('❌ Erro ao salvar:', err);
@@ -540,7 +647,7 @@ function coletarDadosFormulario() {
         servico: document.getElementById('servicoGlobal').value,
         data: document.getElementById('dataGlobal').value,
         hora: document.getElementById('horaGlobal').value,
-        profissional: document.getElementById('profissionalGlobal').value,
+        profissional: (document.getElementById('profissionalGlobalInput') && document.getElementById('profissionalGlobalInput').value) || (document.getElementById('profissionalGlobal') && document.getElementById('profissionalGlobal').value) || '',
         observacoes: document.getElementById('observacoesGlobal').value
     };
 }
@@ -1650,7 +1757,7 @@ window.abrirNovoAgendamentoModal = abrirNovoAgendamentoModal;
         // Adicionar dias vazios no início
         for (let i = 0; i < inicioDaSemana; i++) {
             const diaVazio = document.createElement('div');
-            diaVazio.style.cssText = 'height: 35px;';
+            diaVazio.style.cssText = 'height: 28px;';
             diasGrid.appendChild(diaVazio);
         }
 
@@ -1659,13 +1766,13 @@ window.abrirNovoAgendamentoModal = abrirNovoAgendamentoModal;
             const diaElemento = document.createElement('div');
             diaElemento.textContent = dia;
             diaElemento.style.cssText = `
-                height: 35px;
+                height: 28px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 cursor: pointer;
                 border-radius: 6px;
-                font-size: 14px;
+                font-size: 13px;
                 transition: all 0.2s ease;
                 user-select: none;
             `;

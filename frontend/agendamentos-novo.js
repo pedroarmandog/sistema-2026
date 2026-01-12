@@ -220,8 +220,23 @@ class AgendamentosManager {
         const btnRefresh = document.querySelector('.btn-refresh');
         if (btnRefresh) {
             btnRefresh.addEventListener('click', () => {
-                console.log('🔄 Botão refresh clicado');
-                this.loadAgendamentos();
+                console.log('🔄 Atualizando agendamentos...');
+                
+                // Adicionar animação de rotação ao ícone
+                const icon = btnRefresh.querySelector('i');
+                if (icon) {
+                    icon.style.animation = 'spin 1s linear infinite';
+                }
+                
+                // Recarregar agendamentos
+                this.handlePeriodChange(this.period);
+                
+                // Remover animação após 1 segundo
+                setTimeout(() => {
+                    if (icon) {
+                        icon.style.animation = '';
+                    }
+                }, 1000);
             });
         } else {
             console.log('⚠️ Botão .btn-refresh não encontrado');
