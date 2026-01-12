@@ -620,8 +620,9 @@
 .table-columns {
     flex: 1;
     display: grid;
-    grid-template-columns: 100px 2fr 2fr 1fr 100px 100px 100px;
+    grid-template-columns: 100px 2fr 1.5fr 150px 120px 130px 100px;
     gap: 20px;
+    align-items: center;
 }
 
 .column-header {
@@ -1616,7 +1617,7 @@
 .agendamento-columns {
     flex: 1;
     display: grid;
-    grid-template-columns: 100px 2fr 2fr 1fr 100px 100px 100px;
+    grid-template-columns: 100px 2fr 1.5fr 150px 120px 130px 100px;
     gap: 20px;
     align-items: center;
 }

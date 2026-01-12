@@ -334,7 +334,7 @@ class AgendamentosManager {
                     <i class="fas fa-calendar-times"></i>
                     <h3>Nenhum agendamento encontrado</h3>
                     <p>Não há agendamentos com o status "${this.filtros.status ? this.filtros.status.join(', ') : 'agendado'}" no período selecionado.</p>
-                    <button class="btn-primary" onclick="agendamentosManager.openAgendamentoModal()">
+                    <button class="btn-primary" onclick="novoAtendimento()">
                         <i class="fas fa-plus"></i>
                         Novo Agendamento
                     </button>
@@ -1503,12 +1503,6 @@ window.addEventListener('load', () => {
 });
 
 // Functions for dropdown menu integration
-function novoAtendimento() {
-    console.log('🎯 novoAtendimento chamado');
-    if (window.agendamentosManager) {
-        window.agendamentosManager.openAgendamentoSidebar();
-    } else {
-        console.error('❌ agendamentosManager não está disponível');
-    }
-}
+// NOTA: novoAtendimento() é definido globalmente em novo-atendimento-global.js
+// Não sobrescrever aqui para garantir que sempre abra o modal azul correto
 

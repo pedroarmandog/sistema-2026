@@ -613,12 +613,27 @@ function adicionarAgendamentoAoDOM(agendamento) {
         return;
     }
 
-    // Inserir diretamente no DOM (não usar localStorage)
+    // Remover empty-state se existir
+    const emptyState = tableBody.querySelector('.empty-state');
+    if (emptyState) {
+        emptyState.remove();
+    }
+
+    // Inserir diretamente no DOM com estrutura completa (mesma do renderAgendamentos)
     try {
         const status = agendamento.status || 'agendado';
+        const statusClassMap = {
+            'agendado': 'agendado',
+            'checkin': 'check-in',
+            'pronto': 'pronto',
+            'concluido': 'check-out',
+            'cancelado': 'cancelado'
+        };
+        const statusClass = statusClassMap[status] || status;
         const statusTexto = agendamento.statusTexto || (status === 'agendado' ? 'Agendado' : status);
+        
         const html = `
-            <div class="agendamento-row" data-agendamento-id="${escapeHtmlUnsafe(agendamento.id || '')}">
+            <div class="agendamento-row" data-agendamento-id="${escapeHtmlUnsafe(agendamento.id || '')}" data-status="${escapeHtmlUnsafe(status)}">
                 <div class="agendamento-controls">
                     <label class="checkbox-label">
                         <input type="checkbox" value="${escapeHtmlUnsafe(agendamento.id || '')}">
@@ -632,17 +647,23 @@ function adicionarAgendamentoAoDOM(agendamento) {
                         <small>${escapeHtmlUnsafe(agendamento.clienteNome || '')}</small>
                     </div>
                     <div class="agendamento-detalhes">${escapeHtmlUnsafe(agendamento.servico || '')}</div>
-                    <div class="agendamento-profissional">${escapeHtmlUnsafe(agendamento.profissional || '') || '-'}</div>
+                    <div class="agendamento-profissional">${escapeHtmlUnsafe(agendamento.profissional || '-')}</div>
                     <div class="agendamento-valor">${formatCurrencyBR(agendamento.valor || 0)}</div>
                     <div class="agendamento-situacao">
-                        <div class="status-dropdown" data-agendamento-id="${escapeHtmlUnsafe(agendamento.id || '')}">
-                            <button class="status-button status-${escapeHtmlUnsafe(status)}">
-                                <span class="status-dot"></span>
-                                <span class="status-text">${escapeHtmlUnsafe(statusTexto)}</span>
-                                <i class="fas fa-chevron-down status-arrow"></i>
-                            </button>
-                            <div class="status-menu" id="statusMenu_${escapeHtmlUnsafe(agendamento.id || '')}"></div>
-                        </div>
+                        <span class="status-badge status-${statusClass}">
+                            ${escapeHtmlUnsafe(statusTexto)}
+                        </span>
+                    </div>
+                    <div class="agendamento-actions">
+                        <button class="action-icon" title="Localização" onclick="if(window.agendamentosManager){agendamentosManager.showLocation(${agendamento.id})}">
+                            <i class="fas fa-map-marker-alt"></i>
+                        </button>
+                        <button class="action-icon" title="Compartilhar" onclick="if(window.agendamentosManager){agendamentosManager.shareAgendamento(${agendamento.id})}">
+                            <i class="fas fa-external-link-alt"></i>
+                        </button>
+                        <button class="action-icon" title="Mais opções" onclick="if(window.agendamentosManager){agendamentosManager.showMoreOptions(${agendamento.id}, event)}">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -650,6 +671,18 @@ function adicionarAgendamentoAoDOM(agendamento) {
         // inserir no topo
         tableBody.insertAdjacentHTML('afterbegin', html);
         console.log('✅ Agendamento inserido no DOM:', agendamento.id);
+        
+        // Configurar clique na row para navegação
+        const row = tableBody.querySelector(`[data-agendamento-id="${agendamento.id}"]`);
+        if (row && window.agendamentosManager) {
+            row.addEventListener('click', (e) => {
+                if (e.target.type === 'checkbox' || e.target.closest('.checkbox-label')) return;
+                window.location.href = `agendamento-detalhes.html?id=${agendamento.id}`;
+            });
+            row.style.cursor = 'pointer';
+            row.addEventListener('mouseenter', () => { row.style.backgroundColor = '#f8f9fa'; });
+            row.addEventListener('mouseleave', () => { row.style.backgroundColor = ''; });
+        }
     } catch (e) {
         console.error('❌ Erro ao inserir agendamento no DOM:', e);
     }
