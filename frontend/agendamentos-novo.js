@@ -1,0 +1,1514 @@
+// Agendamentos JavaScript
+
+// Pequena função utilitária para escapar HTML em resultados de busca
+function escapeHtml(unsafe) {
+    if (!unsafe && unsafe !== 0) return '';
+    return String(unsafe)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+class AgendamentosManager {
+    constructor() {
+        console.log('🏗️ Construindo AgendamentosManager...');
+        this.agendamentos = [];
+        this.filtros = {};
+        this.viewMode = 'list';
+        this.currentDate = new Date();
+        console.log('📅 Data atual definida:', this.currentDate);
+        this.init();
+        console.log('✅ AgendamentosManager construído com sucesso');
+    }
+
+    init() {
+        console.log('⚙️ Inicializando AgendamentosManager...');
+        this.setupEventListeners();
+        this.updateDateDisplay();
+        this.setupModalEvents();
+        this.setupNovoAgendamentoSidebar();
+        // Carregar agendamentos sem aplicar filtros padrão
+        console.log('🔄 Carregando agendamentos...');
+        this.loadAgendamentos();
+        console.log('✅ Inicialização concluída');
+    }
+
+    setupEventListeners() {
+        console.log('🎧 Configurando event listeners...');
+        
+        // Verificar se elementos existem
+        console.log('🔍 Verificando elementos...');
+        const statusTags = document.querySelectorAll('.status-tag');
+        const applyBtn = document.querySelector('.btn-filter');
+        const refreshBtn = document.querySelector('.btn-refresh');
+        
+        console.log(`🏷️ Status tags encontradas: ${statusTags.length}`);
+        console.log(`🔘 Botão aplicar: ${applyBtn ? 'SIM' : 'NÃO'}`);
+        console.log(`🔄 Botão refresh: ${refreshBtn ? 'SIM' : 'NÃO'}`);
+        
+        // Menu toggle para sidebar
+        const menuToggle = document.querySelector('.menu-toggle');
+        const sidebar = document.querySelector('.sidebar');
+        const mainContent = document.querySelector('.main-content');
+        
+        console.log('Elementos encontrados:', {
+            menuToggle: !!menuToggle,
+            sidebar: !!sidebar,
+            mainContent: !!mainContent
+        });
+        
+        if (menuToggle && sidebar && mainContent) {
+            menuToggle.addEventListener('click', function() {
+                console.log('Menu toggle clicado!');
+                sidebar.classList.toggle('collapsed');
+                mainContent.classList.toggle('sidebar-collapsed');
+                
+                // Log do estado atual
+                console.log('Sidebar collapsed:', sidebar.classList.contains('collapsed'));
+                console.log('Main content collapsed:', mainContent.classList.contains('sidebar-collapsed'));
+            });
+        } else {
+            console.error('Elementos não encontrados para o menu toggle');
+        }
+        
+        // Fechar sidebar ao clicar fora (mobile)
+        document.addEventListener('click', function(e) {
+            if (window.innerWidth <= 768) {
+                if (sidebar && mainContent && !sidebar.contains(e.target) && !menuToggle.contains(e.target)) {
+                    sidebar.classList.add('collapsed');
+                    mainContent.classList.add('sidebar-collapsed');
+                }
+            }
+        });
+
+        // View toggle buttons
+        const viewBtns = document.querySelectorAll('.view-btn');
+        console.log(`👀 View buttons: ${viewBtns.length}`);
+        viewBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                this.viewMode = e.target.dataset.view;
+                this.renderAgendamentos();
+            });
+        });
+
+        // Date navigation
+        const prevBtn = document.getElementById('prevDate');
+        const nextBtn = document.getElementById('nextDate');
+        console.log(`📅 Prev button: ${prevBtn ? 'SIM' : 'NÃO'}`);
+        console.log(`📅 Next button: ${nextBtn ? 'SIM' : 'NÃO'}`);
+        
+        if (prevBtn) {
+            prevBtn.addEventListener('click', () => {
+                this.currentDate.setDate(this.currentDate.getDate() - 1);
+                this.updateDateDisplay();
+                this.loadAgendamentos();
+            });
+        }
+
+        if (nextBtn) {
+            nextBtn.addEventListener('click', () => {
+                this.currentDate.setDate(this.currentDate.getDate() + 1);
+                this.updateDateDisplay();
+                this.loadAgendamentos();
+            });
+        }
+
+        // Period buttons
+        const periodBtns = document.querySelectorAll('.view-period-btn');
+        console.log(`📊 Period buttons: ${periodBtns.length}`);
+        periodBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.view-period-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                this.handlePeriodChange(e.target.dataset.period);
+            });
+        });
+
+        // Status filters
+        console.log('🏷️ Configurando filtros de status...');
+        document.querySelectorAll('.status-tag').forEach((tag, index) => {
+            console.log(`  Configurando tag ${index}: ${tag.textContent} - Classes: ${tag.className}`);
+            tag.addEventListener('click', (e) => {
+                console.log(`🖱️ Clicou na tag: ${e.target.textContent}`);
+                
+                const isCurrentlyActive = e.target.classList.contains('active');
+                const activeTags = document.querySelectorAll('.status-tag.active');
+                
+                console.log(`  Atualmente ativo: ${isCurrentlyActive}`);
+                console.log(`  Total de tags ativas: ${activeTags.length}`);
+                
+                // Se está tentando desmarcar e é o único ativo, não permitir
+                if (isCurrentlyActive && activeTags.length === 1) {
+                    console.log('🚫 Não é possível desmarcar o último filtro ativo');
+                    return; // Não fazer nada
+                }
+                
+                // Caso contrário, permitir toggle normal
+                e.target.classList.toggle('active');
+                console.log(`  Status após toggle: ${e.target.classList.contains('active')}`);
+                this.updateStatusFilters();
+            });
+        });
+
+        // Apply filter button
+        const btnApply = document.querySelector('.btn-apply');
+        if (btnApply) {
+            btnApply.addEventListener('click', () => {
+                console.log('🔘 Botão aplicar filtros clicado');
+                this.applyFilters();
+            });
+        } else {
+            console.log('⚠️ Botão .btn-apply não encontrado');
+        }
+
+        // Clear filters button
+        const btnClear = document.querySelector('.btn-clear');
+        if (btnClear) {
+            btnClear.addEventListener('click', () => {
+                console.log('🧹 Botão limpar filtros clicado');
+                this.clearFilters();
+            });
+        } else {
+            console.log('⚠️ Botão .btn-clear não encontrado');
+        }
+
+        // Apply filter button (status)
+        const btnFilter = document.querySelector('.btn-filter');
+        if (btnFilter) {
+            btnFilter.addEventListener('click', () => {
+                console.log('🎯 Botão aplicar filtro de status clicado');
+                this.applyStatusFilters();
+            });
+        } else {
+            console.log('⚠️ Botão .btn-filter não encontrado');
+        }
+
+        // Refresh button
+        const btnRefresh = document.querySelector('.btn-refresh');
+        if (btnRefresh) {
+            btnRefresh.addEventListener('click', () => {
+                console.log('🔄 Botão refresh clicado');
+                this.loadAgendamentos();
+            });
+        } else {
+            console.log('⚠️ Botão .btn-refresh não encontrado');
+        }
+
+        // Select all checkbox
+        document.getElementById('selectAll').addEventListener('change', (e) => {
+            this.toggleSelectAll(e.target.checked);
+        });
+
+        // Form submission
+        document.getElementById('agendamentoForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.saveAgendamento();
+        });
+
+        // Submenu Cliente
+        const clienteMenuItem = document.getElementById('clienteMenuItem');
+        const clienteSubmenu = document.getElementById('clienteSubmenu');
+        const clienteMenuContainer = clienteMenuItem?.parentElement;
+        
+        if (clienteMenuItem && clienteSubmenu && clienteMenuContainer) {
+            clienteMenuItem.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // Toggle submenu
+                clienteMenuContainer.classList.toggle('open');
+                clienteSubmenu.classList.toggle('open');
+                
+                console.log('Submenu cliente toggled');
+            });
+        }
+    }
+
+    setupModalEvents() {
+        const modal = document.getElementById('agendamentoModal');
+        const closeBtn = modal.querySelector('.modal-close');
+
+        closeBtn.addEventListener('click', () => {
+            this.closeAgendamentoModal();
+        });
+
+        // Close modal when clicking outside
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                this.closeAgendamentoModal();
+            }
+        });
+
+        // Load pets for select
+        this.loadPetsForSelect();
+    }
+
+    updateDateDisplay() {
+        const options = { 
+            day: 'numeric', 
+            month: 'long', 
+            year: 'numeric' 
+        };
+        const dateStr = this.currentDate.toLocaleDateString('pt-BR', options);
+        document.getElementById('currentDate').textContent = dateStr;
+    }
+
+    handlePeriodChange(period) {
+        switch(period) {
+            case 'today':
+                this.currentDate = new Date();
+                this.updateDateDisplay();
+                this.loadAgendamentos();
+                break;
+            case 'day':
+                // Current day view - already implemented
+                break;
+            case 'week':
+                this.showWeekView();
+                break;
+            case 'month':
+                this.showMonthView();
+                break;
+            case 'appointments':
+                this.showAppointmentsView();
+                break;
+            case 'calendar':
+                this.showCalendarView();
+                break;
+            case 'activities':
+                this.showActivitiesView();
+                break;
+        }
+    }
+
+    async loadAgendamentos() {
+        try {
+            console.log('🔄 Carregando agendamentos...');
+            console.log('📅 Data atual:', this.currentDate);
+            
+            // Usar data local (YYYY-MM-DD) para evitar timezone
+            const pad = (n) => String(n).padStart(2, '0');
+            const dateStr = `${this.currentDate.getFullYear()}-${pad(this.currentDate.getMonth()+1)}-${pad(this.currentDate.getDate())}`;
+            console.log('📅 Data formatada (local):', dateStr);
+            
+            const response = await fetch(`/api/agendamentos?data=${dateStr}`);
+            console.log('📡 Response status:', response.status);
+            
+            if (response.ok) {
+                this.agendamentos = await response.json();
+                console.log('✅ Agendamentos carregados:', this.agendamentos.length);
+                console.log('📋 Dados:', this.agendamentos);
+            } else {
+                console.log('❌ Erro na resposta:', response.status);
+                this.agendamentos = [];
+            }
+            
+            console.log('🎯 Filtros atuais:', this.filtros);
+            this.renderAgendamentos();
+        } catch (error) {
+            console.error('💥 Erro ao carregar agendamentos:', error);
+            this.agendamentos = [];
+            this.renderAgendamentos();
+        }
+    }
+
+    renderAgendamentos() {
+        console.log('🎨 Renderizando agendamentos...');
+        console.log('📊 Total de agendamentos:', this.agendamentos.length);
+        
+        const tableBody = document.getElementById('agendamentosTableBody');
+        
+        // Aplicar filtros antes de renderizar
+        let agendamentosFiltrados = this.filterAgendamentos();
+        console.log('🔍 Agendamentos filtrados:', agendamentosFiltrados.length);
+        console.log('🎯 Filtros aplicados:', this.filtros);
+        
+        if (agendamentosFiltrados.length === 0) {
+            console.log('📭 Nenhum agendamento após filtragem');
+            tableBody.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-calendar-times"></i>
+                    <h3>Nenhum agendamento encontrado</h3>
+                    <p>Não há agendamentos com o status "${this.filtros.status ? this.filtros.status.join(', ') : 'agendado'}" no período selecionado.</p>
+                    <button class="btn-primary" onclick="agendamentosManager.openAgendamentoModal()">
+                        <i class="fas fa-plus"></i>
+                        Novo Agendamento
+                    </button>
+                </div>
+            `;
+            return;
+        }
+
+        const agendamentosHtml = agendamentosFiltrados.map(agendamento => {
+            // Mapear status do banco para className CSS
+            const statusClassMap = {
+                'agendado': 'agendado',
+                'checkin': 'check-in',
+                'pronto': 'pronto',
+                'concluido': 'check-out',
+                'cancelado': 'cancelado'
+            };
+            const statusClass = statusClassMap[agendamento.status] || agendamento.status;
+            
+            return `
+            <div class="agendamento-row" data-agendamento-id="${agendamento.id}" data-status="${agendamento.status}">
+                <div class="agendamento-controls">
+                    <label class="checkbox-label">
+                        <input type="checkbox" value="${agendamento.id}">
+                        <span class="checkmark"></span>
+                    </label>
+                </div>
+                <div class="agendamento-columns">
+                    <div class="agendamento-horario">${this.formatTimeBR(agendamento.horario)}</div>
+                    <div class="agendamento-pet-cliente">
+                        <strong>${agendamento.petNome}</strong><br>
+                        <small>${agendamento.clienteNome}</small>
+                    </div>
+                    <div class="agendamento-detalhes">${agendamento.servico}</div>
+                    <div class="agendamento-profissional">${agendamento.profissional || '-'}</div>
+                    <div class="agendamento-valor">${this.formatCurrency(agendamento.valor)}</div>
+                    <div class="agendamento-situacao">
+                        <span class="status-badge status-${statusClass}">
+                            ${this.getStatusLabel(agendamento.status)}
+                        </span>
+                    </div>
+                    <div class="agendamento-actions">
+                        <button class="action-icon" title="Localização" onclick="agendamentosManager.showLocation(${agendamento.id})">
+                            <i class="fas fa-map-marker-alt"></i>
+                        </button>
+                        <button class="action-icon" title="Compartilhar" onclick="agendamentosManager.shareAgendamento(${agendamento.id})">
+                            <i class="fas fa-external-link-alt"></i>
+                        </button>
+                        <button class="action-icon" title="Mais opções" onclick="agendamentosManager.showMoreOptions(${agendamento.id}, event)">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        }).join('');
+
+        console.log('✅ HTML gerado, inserindo no DOM');
+        tableBody.innerHTML = agendamentosHtml;
+        
+        // Adicionar event listeners para navegação aos detalhes
+        this.setupAgendamentoClickListeners();
+        // Adicionar listeners para o badge de status (abrir menu de ações)
+        this.setupStatusBadgeListeners();
+    }
+
+    setupAgendamentoClickListeners() {
+        const agendamentoRows = document.querySelectorAll('.agendamento-row');
+        agendamentoRows.forEach(row => {
+            row.addEventListener('click', (e) => {
+                // Não redirecionar se clicou no checkbox
+                if (e.target.type === 'checkbox' || e.target.closest('.checkbox-label')) {
+                    return;
+                }
+                
+                const agendamentoId = row.getAttribute('data-agendamento-id');
+                if (agendamentoId) {
+                    console.log(`🎯 Navegando para detalhes do agendamento ${agendamentoId}`);
+                    window.location.href = `agendamento-detalhes.html?id=${agendamentoId}`;
+                }
+            });
+            
+            // Adicionar cursor pointer e estilo hover
+            row.style.cursor = 'pointer';
+            row.addEventListener('mouseenter', () => {
+                row.style.backgroundColor = '#f8f9fa';
+            });
+            row.addEventListener('mouseleave', () => {
+                row.style.backgroundColor = '';
+            });
+        });
+    }
+
+    setupStatusBadgeListeners() {
+        // Remover menus existentes se houver
+        const removeMenu = () => {
+            document.querySelectorAll('.status-menu').forEach(m => m.remove());
+            try { window._openStatusMenuFor = null; } catch(e){}
+        };
+
+        if (typeof window._openStatusMenuFor === 'undefined') window._openStatusMenuFor = null;
+
+        // Listener delegado para garantir funcionamento mesmo após re-render
+        if (!document._agendamentoStatusDelegateAttached) {
+            document._agendamentoStatusDelegateAttached = true;
+            document.addEventListener('click', (ev) => {
+                const badge = ev.target.closest?.('.status-badge');
+                if (!badge) return;
+                ev.stopPropagation();
+                // identificar agendamento
+                const row = badge.closest('.agendamento-row');
+                const agendamentoId = row?.getAttribute('data-agendamento-id');
+                // toggle: fechar se já estiver aberto para mesmo id
+                if (agendamentoId && window._openStatusMenuFor && String(window._openStatusMenuFor) === String(agendamentoId)) { removeMenu(); return; }
+                // criar um evento customizado para reutilizar e abrir menu
+                const custom = new CustomEvent('agendamentoStatusClick', { detail: { badge, agendamentoId } });
+                document.dispatchEvent(custom);
+            }, true); // use capture phase so we intercept before row click handlers
+
+            // Listener que efetivamente cria o menu quando disparado
+            document.addEventListener('agendamentoStatusClick', (e) => {
+                const badge = e.detail.badge;
+                // simular clique para criar menu (reaproveita o código abaixo criando menu)
+                // Para não duplicar código mantemos a implementação aqui
+
+                // Remover menus existentes
+                removeMenu();
+
+                const row = badge.closest('.agendamento-row');
+                const agendamentoId = e.detail.agendamentoId || row?.getAttribute('data-agendamento-id');
+                if (!agendamentoId) return;
+
+                console.log('[StatusMenu][delegado] Abrindo menu para agendamento', agendamentoId);
+
+                const menu = document.createElement('div');
+                menu.className = 'status-menu';
+                menu.style.position = 'absolute';
+                if (agendamentoId) {
+                    menu.setAttribute('data-for', agendamentoId);
+                    try { window._openStatusMenuFor = agendamentoId; } catch(e){}
+                }
+                menu.style.zIndex = '99999';
+                menu.style.visibility = 'hidden';
+                if (agendamentoId) {
+                    menu.setAttribute('data-for', agendamentoId);
+                    try { window._openStatusMenuFor = agendamentoId; } catch(e){}
+                }
+
+                const options = [
+                    { label: 'Agendado', value: 'agendado', className: 'agendado', dot: '#6c757d' },
+                    { label: 'Check-in', value: 'checkin', className: 'check-in', dot: '#1e88e5' },
+                    { label: 'Pronto', value: 'pronto', className: 'pronto', dot: '#7b1fa2' },
+                    { label: 'Check-out', value: 'concluido', className: 'check-out', dot: '#2e7d32' },
+                    { label: 'Cancelado', value: 'cancelado', className: 'cancelado', dot: '#c12b2b' }
+                ];
+
+                options.forEach(opt => {
+                    const item = document.createElement('div');
+                    item.className = 'item';
+                    item.innerHTML = `<span class="dot" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${opt.dot};margin-right:8px;vertical-align:middle;"></span> ${opt.label}`;
+                    item.addEventListener('click', async (ev) => {
+                        ev.stopPropagation();
+                        try {
+                            const res = await fetch(`/api/agendamentos/${agendamentoId}/status`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ status: opt.value }),
+                                credentials: 'include'
+                            });
+
+                            if (!res.ok) {
+                                const err = await res.json().catch(()=>({ error: 'Erro' }));
+                                alert(err.error || 'Erro ao atualizar status');
+                                removeMenu();
+                                return;
+                            }
+
+                            // Atualiza apenas o badge localmente sem recarregar a lista (evita que o item suma)
+                            badge.textContent = opt.label;
+                            const cls = opt.className || opt.value;
+                            badge.className = `status-badge status-${cls}`;
+                            
+                            // Atualizar data-status na row para sincronizar
+                            if (row) {
+                                row.setAttribute('data-status', opt.value);
+                            }
+                        } catch (error) {
+                            console.error('Erro ao atualizar status:', error);
+                            alert('Erro ao atualizar status');
+                        } finally {
+                            removeMenu();
+                        }
+                    });
+                    menu.appendChild(item);
+                });
+
+                document.body.appendChild(menu);
+                const rect = badge.getBoundingClientRect();
+                const scrollX = window.scrollX || window.pageXOffset;
+                const scrollY = window.scrollY || window.pageYOffset;
+                let left = rect.left + scrollX;
+                let top = rect.bottom + scrollY + 6;
+                
+                // Obter dimensões do menu
+                menu.style.visibility = 'hidden';
+                menu.style.display = 'block';
+                const menuHeight = menu.offsetHeight;
+                const menuWidth = menu.offsetWidth;
+                
+                // Verificar espaço disponível abaixo e acima
+                const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+                const spaceBelow = viewportHeight - rect.bottom;
+                const spaceAbove = rect.top;
+                
+                // Se não houver espaço embaixo mas houver em cima, abrir para cima
+                if (spaceBelow < menuHeight + 20 && spaceAbove > menuHeight + 20) {
+                    top = rect.top + scrollY - menuHeight - 6;
+                    console.log('📜 Menu aberto para CIMA');
+                }
+                
+                // Ajustar posição horizontal se sair da tela
+                const viewportWidth = document.documentElement.clientWidth;
+                if (left + menuWidth > viewportWidth - 8) {
+                    left = Math.max(8, viewportWidth - menuWidth - 8);
+                }
+                
+                menu.style.left = `${left}px`;
+                menu.style.top = `${top}px`;
+                menu.style.visibility = 'visible';
+
+                const onDocClick = (ev2) => {
+                    if (!menu.contains(ev2.target) && ev2.target !== badge) {
+                        removeMenu();
+                        document.removeEventListener('click', onDocClick);
+                    }
+                };
+                document.addEventListener('click', onDocClick);
+                const closeOnScroll = () => { removeMenu(); window.removeEventListener('scroll', closeOnScroll); window.removeEventListener('resize', closeOnScroll); };
+                window.addEventListener('scroll', closeOnScroll);
+                window.addEventListener('resize', closeOnScroll);
+            });
+        }
+
+        if (document._agendamentoStatusDelegateAttached) {
+            console.log('[StatusMenu] Delegado ativo; pulando handlers individuais');
+            return;
+        }
+
+        document.querySelectorAll('.status-badge').forEach(badge => {
+            // evitar duplicar listeners
+            badge.removeEventListener('click', badge._statusClickHandler);
+
+            const handler = async (e) => {
+                e.stopPropagation();
+                removeMenu();
+
+                const row = badge.closest('.agendamento-row');
+                const agendamentoId = row?.getAttribute('data-agendamento-id');
+                if (!agendamentoId) return;
+
+                console.log('[StatusMenu] Abrindo menu para agendamento', agendamentoId);
+
+                // Criar menu
+                const menu = document.createElement('div');
+                menu.className = 'status-menu';
+                menu.style.position = 'absolute';
+
+                const options = [
+                    { label: 'Agendado', value: 'agendado', dot: '#6c757d' },
+                    { label: 'Check-in', value: 'checkin', className: 'check-in', dot: '#1e88e5' },
+                    { label: 'Pronto', value: 'pronto', className: 'pronto', dot: '#7b1fa2' },
+                    { label: 'Check-out', value: 'concluido', className: 'check-out', dot: '#2e7d32' },
+                    { label: 'Cancelado', value: 'cancelado', className: 'cancelado', dot: '#c12b2b' }
+                ];
+
+                options.forEach(opt => {
+                    const item = document.createElement('div');
+                    item.className = 'item';
+                    item.innerHTML = `<span class="dot" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${opt.dot};margin-right:8px;vertical-align:middle;"></span> ${opt.label}`;
+                    item.addEventListener('click', async (ev) => {
+                        ev.stopPropagation();
+                        // Chamar API para atualizar status
+                        try {
+                            const res = await fetch(`/api/agendamentos/${agendamentoId}/status`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ status: opt.value }),
+                                credentials: 'include'
+                            });
+
+                            if (!res.ok) {
+                                const err = await res.json().catch(()=>({ error: 'Erro' }));
+                                alert(err.error || 'Erro ao atualizar status');
+                                removeMenu();
+                                return;
+                            }
+
+                            // Atualiza apenas o badge localmente sem recarregar a lista (evita que o item suma)
+                            badge.textContent = opt.label;
+                            const cls = opt.className || opt.value;
+                            badge.className = `status-badge status-${cls}`;
+                            
+                            // Atualizar data-status na row para sincronizar
+                            const row = badge.closest('.agendamento-row');
+                            if (row) {
+                                row.setAttribute('data-status', opt.value);
+                            }
+                        } catch (error) {
+                            console.error('Erro ao atualizar status:', error);
+                            alert('Erro ao atualizar status');
+                        } finally {
+                            removeMenu();
+                        }
+                    });
+                    menu.appendChild(item);
+                });
+
+                // Append ao body para evitar overflow do container
+                document.body.appendChild(menu);
+
+                // posicionar menu abaixo do badge e garantir que fique dentro da viewport
+                const rect = badge.getBoundingClientRect();
+                const scrollX = window.scrollX || window.pageXOffset;
+                const scrollY = window.scrollY || window.pageYOffset;
+                let left = rect.left + scrollX;
+                let top = rect.bottom + scrollY + 6;
+
+                // ajustar se ultrapassar a largura
+                const menuRectEst = menu.getBoundingClientRect();
+                const viewportWidth = document.documentElement.clientWidth;
+                if (left + menuRectEst.width > viewportWidth - 8) {
+                    left = Math.max(8, viewportWidth - menuRectEst.width - 8);
+                }
+
+                menu.style.left = `${left}px`;
+                menu.style.top = `${top}px`;
+
+                // Se o menu não estiver visível (altura 0 ou fora da tela), anexar dentro da row como fallback
+                const checkVisible = () => {
+                    const mr = menu.getBoundingClientRect();
+                    if (mr.width === 0 || mr.height === 0 || mr.bottom < 0) {
+                        console.warn('[StatusMenu] menu possivelmente invisível, anexando fallback no row');
+                        removeMenu();
+                        row.appendChild(menu);
+                        menu.style.position = 'relative';
+                        menu.style.left = '';
+                        menu.style.top = '';
+                    }
+                };
+                setTimeout(checkVisible, 100);
+
+                // fechar ao clicar fora
+                const onDocClick = (ev) => {
+                    if (!menu.contains(ev.target) && ev.target !== badge) {
+                        removeMenu();
+                        document.removeEventListener('click', onDocClick);
+                    }
+                };
+                document.addEventListener('click', onDocClick);
+
+                // fechar ao rolar ou redimensionar
+                const closeOnScroll = () => { removeMenu(); window.removeEventListener('scroll', closeOnScroll); window.removeEventListener('resize', closeOnScroll); };
+                window.addEventListener('scroll', closeOnScroll);
+                window.addEventListener('resize', closeOnScroll);
+            };
+
+            badge.addEventListener('click', handler);
+            badge._statusClickHandler = handler;
+        });
+    }
+
+    filterAgendamentos() {
+        console.log('🔍 Iniciando filtro de agendamentos...');
+        console.log('📋 Agendamentos originais:', this.agendamentos.length);
+        
+        let filtrados = [...this.agendamentos];
+
+        // Filtro por status
+        if (this.filtros.status && this.filtros.status.length > 0) {
+            console.log('🏷️ Filtrando por status:', this.filtros.status);
+            const antesDoFiltro = filtrados.length;
+            
+            filtrados = filtrados.filter(agendamento => {
+                const incluir = this.filtros.status.includes(agendamento.status);
+                console.log(`  - ${agendamento.id}: ${agendamento.status} → ${incluir ? 'INCLUIR' : 'EXCLUIR'}`);
+                return incluir;
+            });
+            
+            console.log(`📊 Filtro de status: ${antesDoFiltro} → ${filtrados.length}`);
+        } else {
+            console.log('🚫 Nenhum filtro de status - mostrando todos os agendamentos');
+        }
+
+        // Filtro por pet/cliente
+        if (this.filtros.petCliente) {
+            console.log('🐕 Filtrando por pet/cliente:', this.filtros.petCliente);
+            const termo = this.filtros.petCliente.toLowerCase();
+            filtrados = filtrados.filter(agendamento => 
+                (agendamento.petNome && agendamento.petNome.toLowerCase().includes(termo)) ||
+                (agendamento.clienteNome && agendamento.clienteNome.toLowerCase().includes(termo))
+            );
+        }
+
+        // Filtro por profissional
+        if (this.filtros.profissional) {
+            const termo = this.filtros.profissional.toLowerCase();
+            filtrados = filtrados.filter(agendamento => 
+                agendamento.profissional && agendamento.profissional.toLowerCase().includes(termo)
+            );
+        }
+
+        // Filtro por número
+        if (this.filtros.numero) {
+            filtrados = filtrados.filter(agendamento => 
+                agendamento.numero && agendamento.numero.toString().includes(this.filtros.numero)
+            );
+        }
+
+        // Filtro por área
+        if (this.filtros.area) {
+            filtrados = filtrados.filter(agendamento => 
+                agendamento.area === this.filtros.area
+            );
+        }
+
+        // Filtro por categoria
+        if (this.filtros.categoria) {
+            filtrados = filtrados.filter(agendamento => 
+                agendamento.categoria === this.filtros.categoria
+            );
+        }
+
+        // Filtro por horário
+        if (this.filtros.horario) {
+            filtrados = filtrados.filter(agendamento => 
+                agendamento.horario && agendamento.horario.includes(this.filtros.horario)
+            );
+        }
+
+        console.log('✅ Filtro concluído:', filtrados.length, 'agendamentos');
+        return filtrados;
+    }
+
+    getStatusLabel(status) {
+        const labels = {
+            'agendado': 'Agendado',
+            'checkin': 'Check-in',
+            'pronto': 'Pronto',
+            'concluido': 'Check-out',
+            'cancelado': 'Cancelado'
+        };
+        return labels[status] || status;
+    }
+    
+    formatTimeBR(horario) {
+        if (!horario && horario !== 0) return '-';
+        // Se já estiver no formato HH:MM:SS
+        if (typeof horario === 'string' && /^\d{2}:\d{2}:\d{2}$/.test(horario)) {
+            return horario.slice(0,5);
+        }
+
+        // Se for string ISO ou contém 'T' (data completa)
+        try {
+            if (typeof horario === 'string' && (horario.includes('T') || horario.includes('-'))) {
+                const d = new Date(horario);
+                if (!isNaN(d)) {
+                    return new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Sao_Paulo' }).format(d);
+                }
+            }
+
+            // Se for número (timestamp)
+            const n = Number(horario);
+            if (!isNaN(n)) {
+                const d2 = new Date(n);
+                if (!isNaN(d2)) return new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Sao_Paulo' }).format(d2);
+            }
+        } catch (e) {
+            console.warn('formatTimeBR erro ao formatar:', e);
+        }
+
+        // Fallback: se string com pelo menos 5 chars, pegar HH:MM
+        const s = String(horario);
+        if (/^\d{2}:\d{2}/.test(s)) return s.slice(0,5);
+        return s;
+    }
+    formatCurrency(value) {
+        if (!value) return 'R$ 0,00';
+        return new Intl.NumberFormat('pt-BR', {
+            style: 'currency',
+            currency: 'BRL'
+        }).format(value);
+    }
+
+    applyFilters() {
+        this.filtros = {
+            petCliente: document.getElementById('filterPetCliente').value,
+            profissional: document.getElementById('filterProfissional').value,
+            numero: document.getElementById('filterNumero').value,
+            endereco: document.getElementById('filterEndereco').value,
+            area: document.getElementById('filterArea').value,
+            categoria: document.getElementById('filterCategoria').value,
+            levaTraz: document.getElementById('filterLevaTraz').value,
+            horario: document.getElementById('filterHorario').value,
+            andamento: document.getElementById('filterAndamento').checked,
+            exibirEndereco: document.getElementById('filterExibirEnerco').checked
+        };
+
+        this.loadAgendamentos();
+    }
+
+    clearFilters() {
+        document.getElementById('filterPetCliente').value = '';
+        document.getElementById('filterProfissional').value = '';
+        document.getElementById('filterNumero').value = '';
+        document.getElementById('filterEndereco').value = '';
+        document.getElementById('filterArea').value = '';
+        document.getElementById('filterCategoria').value = '';
+        document.getElementById('filterLevaTraz').value = '';
+        document.getElementById('filterHorario').value = '';
+        document.getElementById('filterAndamento').checked = false;
+        document.getElementById('filterExibirEnerco').checked = false;
+
+        this.filtros = {};
+        this.loadAgendamentos();
+    }
+
+    updateStatusFilters() {
+        console.log('🏷️ Atualizando filtros de status...');
+        
+        const activeTags = document.querySelectorAll('.status-tag.active');
+        console.log('📌 Tags ativas encontradas:', activeTags.length);
+        
+        const statusFilters = Array.from(activeTags).map(tag => {
+            if (tag.classList.contains('status-agendado')) return 'agendado';
+            if (tag.classList.contains('status-checkin')) return 'checkin';
+            if (tag.classList.contains('status-pronto')) return 'pronto';
+            if (tag.classList.contains('status-cancelado')) return 'cancelado';
+        }).filter(status => status !== undefined);
+        
+        console.log('🎯 Status filtros mapeados:', statusFilters);
+        this.filtros.status = statusFilters;
+        console.log('💾 Filtros atualizados:', this.filtros);
+    }
+
+    applyStatusFilters() {
+        this.updateStatusFilters();
+        this.loadAgendamentos();
+    }
+
+    toggleSelectAll(checked) {
+        const checkboxes = document.querySelectorAll('.agendamento-row input[type="checkbox"]');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = checked;
+        });
+    }
+
+    openAgendamentoModal() {
+        document.getElementById('agendamentoModal').style.display = 'block';
+        
+        // Set default date to today
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('agendamentoData').value = today;
+    }
+
+    closeAgendamentoModal() {
+        document.getElementById('agendamentoModal').style.display = 'none';
+        document.getElementById('agendamentoForm').reset();
+    }
+
+    async loadPetsForSelect() {
+        try {
+            const response = await fetch('/api/pets');
+            if (response.ok) {
+                const data = await response.json();
+                // API pode retornar array ou objeto com propriedade (ex: { pets: [...] })
+                let pets = [];
+                if (Array.isArray(data)) pets = data;
+                else if (Array.isArray(data.pets)) pets = data.pets;
+                else if (Array.isArray(data.rows)) pets = data.rows;
+                else {
+                    console.warn('loadPetsForSelect: resposta inesperada', data);
+                }
+
+                const select = document.getElementById('agendamentoPet');
+                select.innerHTML = '<option value="">Selecionar Pet</option>';
+                pets.forEach(pet => {
+                    const option = document.createElement('option');
+                    option.value = pet.id || pet.ID || '';
+                    const clienteNome = pet.Cliente?.nome || pet.cliente?.nome || pet.clienteNome || '';
+                    option.textContent = `${pet.nome || pet.Nome} - ${clienteNome}`;
+                    select.appendChild(option);
+                });
+            } else {
+                const text = await response.text().catch(()=>null);
+                console.error('loadPetsForSelect: resposta inválida', response.status, text);
+            }
+        } catch (error) {
+            console.error('Erro ao carregar pets:', error);
+        }
+    }
+
+    async saveAgendamento() {
+        const formData = new FormData(document.getElementById('agendamentoForm'));
+        const data = Object.fromEntries(formData);
+
+        try {
+            const response = await fetch('/api/agendamentos', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            });
+
+            if (response.ok) {
+                this.showNotification('Agendamento criado com sucesso!', 'success');
+                this.closeAgendamentoModal();
+                this.loadAgendamentos();
+            } else {
+                throw new Error('Erro ao criar agendamento');
+            }
+        } catch (error) {
+            console.error('Erro ao salvar agendamento:', error);
+            this.showNotification('Erro ao criar agendamento. Tente novamente.', 'error');
+        }
+    }
+
+    showNotification(message, type = 'info') {
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = `notification notification-${type}`;
+        notification.innerHTML = `
+            <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+            <span>${message}</span>
+            <button class="notification-close">&times;</button>
+        `;
+
+        // Add to page
+        document.body.appendChild(notification);
+
+        // Auto remove after 5 seconds
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 5000);
+
+        // Remove on click
+        notification.querySelector('.notification-close').addEventListener('click', () => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        });
+    }
+
+    // Calendar view methods (to be implemented)
+    showWeekView() {
+        console.log('Week view - to be implemented');
+    }
+
+    showMonthView() {
+        console.log('Month view - to be implemented');
+    }
+
+    showAppointmentsView() {
+        console.log('Appointments view - current view');
+    }
+
+    showCalendarView() {
+        console.log('Calendar view - to be implemented with FullCalendar');
+    }
+
+    showActivitiesView() {
+        console.log('Activities view - to be implemented');
+    }
+
+    // Novo Agendamento Sidebar Manager
+    setupNovoAgendamentoSidebar() {
+        const btnNovoAgendamento = document.getElementById('btnNovoAgendamento');
+        const sidebar = document.getElementById('novoAgendamentoSidebar');
+        const btnCloseSidebar = document.getElementById('btnCloseSidebar');
+        const btnCancelarAgendamento = document.getElementById('btnCancelarAgendamento');
+        const form = document.getElementById('novoAgendamentoForm');
+        
+        // Abrir sidebar
+        if (btnNovoAgendamento) {
+            btnNovoAgendamento.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.openAgendamentoSidebar();
+            });
+        }
+        
+        // Fechar sidebar
+        if (btnCloseSidebar) {
+            btnCloseSidebar.addEventListener('click', () => {
+                this.closeAgendamentoSidebar();
+            });
+        }
+        
+        if (btnCancelarAgendamento) {
+            btnCancelarAgendamento.addEventListener('click', () => {
+                this.closeAgendamentoSidebar();
+            });
+        }
+        
+        // Submit form
+        if (form) {
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.submitNovoAgendamento();
+            });
+        }
+        
+        // Setup search functionality
+        this.setupPetClienteSearch();
+        this.setupServicoSearch();
+        this.setupCalculoValores();
+    }
+    
+    openAgendamentoSidebar() {
+        const sidebar = document.getElementById('novoAgendamentoSidebar');
+        const overlay = this.createOverlay();
+        
+        if (sidebar) {
+            sidebar.classList.add('open');
+            document.body.appendChild(overlay);
+            document.body.style.overflow = 'hidden';
+            
+            // Set default date to today
+            const dataAgendamento = document.getElementById('dataAgendamento');
+            if (dataAgendamento) {
+                dataAgendamento.value = new Date().toISOString().split('T')[0];
+            }
+        }
+    }
+    
+    closeAgendamentoSidebar() {
+        const sidebar = document.getElementById('novoAgendamentoSidebar');
+        const overlay = document.querySelector('.sidebar-overlay');
+        const form = document.getElementById('novoAgendamentoForm');
+        
+        if (sidebar) {
+            sidebar.classList.remove('open');
+        }
+        
+        if (overlay) {
+            overlay.remove();
+        }
+        
+        if (form) {
+            form.reset();
+            this.clearSelectedPet();
+            this.clearSelectedServico();
+        }
+        
+        document.body.style.overflow = '';
+    }
+    
+    createOverlay() {
+        const overlay = document.createElement('div');
+        overlay.className = 'sidebar-overlay show';
+        overlay.addEventListener('click', () => {
+            this.closeAgendamentoSidebar();
+        });
+        return overlay;
+    }
+    
+    setupPetClienteSearch() {
+        const input = document.getElementById('petCliente');
+        // HTML uses id="resultados-pet-cliente"
+        const results = document.getElementById('resultados-pet-cliente');
+        let searchTimeout;
+
+        if (input && results) {
+            input.addEventListener('input', (e) => {
+                clearTimeout(searchTimeout);
+                const query = e.target.value.trim();
+
+                if (query.length < 2) {
+                    results.classList.remove('show');
+                    return;
+                }
+
+                searchTimeout = setTimeout(() => {
+                    this.searchPetsClientes(query, results);
+                }, 300);
+            });
+
+            // Hide results on click outside
+            document.addEventListener('click', (e) => {
+                if (!input.contains(e.target) && !results.contains(e.target)) {
+                    results.classList.remove('show');
+                }
+            });
+        } else {
+            console.warn('setupPetClienteSearch: elementos não encontrados', { input: !!input, results: !!results });
+        }
+    }
+    
+    async searchPetsClientes(query, resultsContainer) {
+        try {
+            const q = query.toLowerCase();
+
+            // 1) Try to use in-page pets data if available (meus-pets.js defines _meusPetsData)
+                if (typeof _meusPetsData !== 'undefined' && Array.isArray(_meusPetsData) && _meusPetsData.length > 0) {
+                    console.debug('[agendamentos-novo] searchPetsClientes: using in-page _meusPetsData, items=', _meusPetsData.length);
+                const pets = _meusPetsData.filter(p => {
+                    const nome = String(p.nome || p.pet || p.nome_pet || '').toLowerCase();
+                    const cliente = String(p.cliente || p.nome_cliente || p.owner || p.clienteNome || '').toLowerCase();
+                    return nome.includes(q) || cliente.includes(q);
+                }).map(p => ({
+                    id: p.id || p.codigo || p.pet_id || p._id || null,
+                    nome: p.nome || p.pet || p.nome_pet,
+                    cliente: p.cliente || p.nome_cliente || p.owner || p.clienteNome || '',
+                    clienteId: p.clienteId || p.cliente_id || p.clienteCodigo || p.codigo_cliente || p.clienteId || '',
+                    especie: p.especie || p.tipo || '',
+                    raca: p.raca || p.raca_nome || ''
+                }));
+
+                this.displaySearchResults([], pets, resultsContainer);
+                return;
+            }
+
+            // 2) Try API endpoints (if backend available)
+                let pets = [];
+                console.debug('[agendamentos-novo] searchPetsClientes: in-page data not available, trying /api/pets fallback');
+            try {
+                const petsResponse = await fetch(`/api/pets?search=${encodeURIComponent(query)}`).catch(() => null);
+                if (petsResponse && petsResponse.ok) {
+                    const apiPets = await petsResponse.json();
+                    pets = (Array.isArray(apiPets) ? apiPets : (apiPets.pets || []))
+                        .map(p => ({
+                            id: p.id || p.codigo || p.pet_id || null,
+                            nome: p.nome || p.pet || '',
+                            cliente: p.cliente || p.nome_cliente || p.owner || '',
+                            clienteId: p.clienteId || p.cliente_id || p.codigo_cliente || '',
+                            especie: p.especie || p.tipo || '',
+                            raca: p.raca || ''
+                        }));
+                }
+            } catch (e) {
+                console.debug('API /api/pets não disponível ou falhou', e && e.message);
+            }
+
+            // 3) Fallback to sample data
+            if (!pets || pets.length === 0) {
+                const sample = this.getSamplePetsClientes();
+                pets = sample.pets.filter(p => (p.nome || '').toLowerCase().includes(q) || (p.cliente || '').toLowerCase().includes(q));
+            }
+
+            this.displaySearchResults([], pets, resultsContainer);
+        } catch (error) {
+            console.error('Erro na busca:', error);
+            const sample = this.getSamplePetsClientes();
+            const pets = sample.pets.filter(p => (p.nome || '').toLowerCase().includes(query.toLowerCase()) || (p.cliente || '').toLowerCase().includes(query.toLowerCase()));
+            this.displaySearchResults([], pets, resultsContainer);
+                console.debug('[agendamentos-novo] searchPetsClientes: falling back to sample data');
+        }
+    }
+    
+    getSamplePetsClientes() {
+        return {
+            clientes: [
+                { id: 1, nome: 'Maria Silva Santos', email: 'maria@email.com', telefone: '(11) 99999-1234' },
+                { id: 2, nome: 'João Carlos Oliveira', email: 'joao@email.com', telefone: '(11) 88888-5678' },
+                { id: 3, nome: 'Ana Paula Costa', email: 'ana@email.com', telefone: '(11) 77777-9012' }
+            ],
+            pets: [
+                { id: 1, nome: 'Rex', especie: 'Cachorro', raca: 'Labrador', cliente: 'Maria Silva Santos', clienteId: 1 },
+                { id: 2, nome: 'Mimi', especie: 'Gato', raca: 'SRD', cliente: 'Maria Silva Santos', clienteId: 1 },
+                { id: 3, nome: 'Bella', especie: 'Cachorro', raca: 'Golden', cliente: 'João Carlos Oliveira', clienteId: 2 },
+                { id: 4, nome: 'Felix', especie: 'Gato', raca: 'Persa', cliente: 'Ana Paula Costa', clienteId: 3 }
+            ]
+        };
+    }
+    
+    displaySearchResults(clientes, pets, container) {
+        container.innerHTML = '';
+
+        // Show pet-first entries: pet name (bold) and client + code below
+        pets.forEach(pet => {
+            const item = document.createElement('div');
+            item.className = 'search-result-item';
+            item.innerHTML = `
+                <div class="search-result-name">${escapeHtml(pet.nome || '')}</div>
+                <div class="search-result-details">${escapeHtml(pet.cliente || '')} <span style="color:#999;">Código: ${escapeHtml(pet.clienteId || '')}</span></div>
+            `;
+            item.addEventListener('click', () => {
+                this.selectPet(pet);
+                container.classList.remove('show');
+            });
+            container.appendChild(item);
+        });
+
+        if (pets.length > 0) {
+            container.classList.add('show');
+        } else {
+            container.innerHTML = '<div class="search-result-item" style="padding:10px; color:#999; text-align:center;">Nenhum resultado encontrado</div>';
+            container.classList.add('show');
+        }
+    }
+    
+    selectPet(pet) {
+        const input = document.getElementById('petCliente');
+        const selectedPetId = document.getElementById('selectedPetId');
+        const selectedInfo = document.getElementById('selectedPetInfo');
+        
+        if (input) input.value = `${pet.nome} - ${pet.cliente}`;
+        if (selectedPetId) selectedPetId.value = pet.id;
+        
+        if (selectedInfo) {
+            selectedInfo.innerHTML = `
+                <div class="selected-pet-name">${pet.nome}</div>
+                <div class="selected-pet-details">${pet.especie} - ${pet.raca} | Cliente: ${pet.cliente}</div>
+            `;
+            selectedInfo.classList.add('show');
+        }
+    }
+    
+    selectCliente(cliente) {
+        const input = document.getElementById('petCliente');
+        const selectedInfo = document.getElementById('selectedPetInfo');
+        
+        if (input) input.value = cliente.nome;
+        
+        if (selectedInfo) {
+            selectedInfo.innerHTML = `
+                <div class="selected-pet-name">${cliente.nome}</div>
+                <div class="selected-pet-details">${cliente.email} | ${cliente.telefone}</div>
+            `;
+            selectedInfo.classList.add('show');
+        }
+    }
+    
+    clearSelectedPet() {
+        const selectedPetId = document.getElementById('selectedPetId');
+        const selectedInfo = document.getElementById('selectedPetInfo');
+        
+        if (selectedPetId) selectedPetId.value = '';
+        if (selectedInfo) {
+            selectedInfo.classList.remove('show');
+            selectedInfo.innerHTML = '';
+        }
+    }
+    
+    setupServicoSearch() {
+        const input = document.getElementById('servico');
+        const results = document.getElementById('servicoResults');
+        let searchTimeout;
+        
+        if (input && results) {
+            input.addEventListener('input', (e) => {
+                clearTimeout(searchTimeout);
+                const query = e.target.value.trim();
+                
+                if (query.length < 2) {
+                    results.classList.remove('show');
+                    return;
+                }
+                
+                searchTimeout = setTimeout(() => {
+                    this.searchServicos(query, results);
+                }, 300);
+            });
+            
+            document.addEventListener('click', (e) => {
+                if (!input.contains(e.target) && !results.contains(e.target)) {
+                    results.classList.remove('show');
+                }
+            });
+        }
+    }
+    
+    searchServicos(query, resultsContainer) {
+        const servicos = [
+            { id: 1, nome: 'Banho', preco: 25.00, descricao: 'Banho completo' },
+            { id: 2, nome: 'Banho e Tosa', preco: 45.00, descricao: 'Banho + Tosa higiênica' },
+            { id: 3, nome: 'Tosa Completa', preco: 60.00, descricao: 'Tosa completa com acabamento' },
+            { id: 4, nome: 'Consulta Veterinária', preco: 80.00, descricao: 'Consulta clínica geral' },
+            { id: 5, nome: 'Vacinação', preco: 35.00, descricao: 'Aplicação de vacina' },
+            { id: 6, nome: 'Exame de Sangue', preco: 120.00, descricao: 'Hemograma completo' }
+        ];
+        
+        const filteredServicos = servicos.filter(s => 
+            s.nome.toLowerCase().includes(query.toLowerCase()) ||
+            s.descricao.toLowerCase().includes(query.toLowerCase())
+        );
+        
+        resultsContainer.innerHTML = '';
+        
+        filteredServicos.forEach(servico => {
+            const item = document.createElement('div');
+            item.className = 'search-result-item';
+            item.innerHTML = `
+                <div class="search-result-name">${servico.nome}</div>
+                <div class="search-result-details">${servico.descricao} - R$ ${servico.preco.toFixed(2)}</div>
+            `;
+            item.addEventListener('click', () => {
+                this.selectServico(servico);
+                resultsContainer.classList.remove('show');
+            });
+            resultsContainer.appendChild(item);
+        });
+        
+        if (filteredServicos.length > 0) {
+            resultsContainer.classList.add('show');
+        } else {
+            resultsContainer.innerHTML = '<div class="search-result-item">Nenhum serviço encontrado</div>';
+            resultsContainer.classList.add('show');
+        }
+    }
+    
+    selectServico(servico) {
+        const input = document.getElementById('servico');
+        const selectedServicoId = document.getElementById('selectedServicoId');
+        const valorUnitario = document.getElementById('valorUnitario');
+        
+        if (input) input.value = servico.nome;
+        if (selectedServicoId) selectedServicoId.value = servico.id;
+        if (valorUnitario) valorUnitario.value = servico.preco.toFixed(2);
+        
+        this.calcularValorFinal();
+    }
+    
+    clearSelectedServico() {
+        const selectedServicoId = document.getElementById('selectedServicoId');
+        const valorUnitario = document.getElementById('valorUnitario');
+        
+        if (selectedServicoId) selectedServicoId.value = '';
+        if (valorUnitario) valorUnitario.value = '';
+    }
+    
+    setupCalculoValores() {
+        const quantidade = document.getElementById('quantidade');
+        const desconto = document.getElementById('desconto');
+        
+        if (quantidade) {
+            quantidade.addEventListener('input', () => this.calcularValorFinal());
+        }
+        
+        if (desconto) {
+            desconto.addEventListener('input', () => this.calcularValorFinal());
+        }
+    }
+    
+    calcularValorFinal() {
+        const valorUnitario = parseFloat(document.getElementById('valorUnitario')?.value || 0);
+        const quantidade = parseInt(document.getElementById('quantidade')?.value || 1);
+        const desconto = parseFloat(document.getElementById('desconto')?.value || 0);
+        const valorFinal = document.getElementById('valorFinal');
+        
+        if (valorUnitario > 0) {
+            const valorTotal = valorUnitario * quantidade;
+            const valorComDesconto = valorTotal - (valorTotal * desconto / 100);
+            
+            if (valorFinal) {
+                valorFinal.value = valorComDesconto.toFixed(2);
+            }
+        }
+    }
+    
+    async submitNovoAgendamento() {
+        const form = document.getElementById('novoAgendamentoForm');
+        const formData = new FormData(form);
+        
+        // Validar campos obrigatórios
+        const petId = document.getElementById('selectedPetId')?.value;
+        const servicoId = document.getElementById('selectedServicoId')?.value;
+        const data = formData.get('dataAgendamento') || document.getElementById('dataAgendamento')?.value;
+        const horario = formData.get('horarioAgendamento') || document.getElementById('horarioAgendamento')?.value;
+        
+        if (!petId && !document.getElementById('petCliente')?.value) {
+            alert('Por favor, selecione um pet ou cliente.');
+            return;
+        }
+        
+        if (!servicoId && !document.getElementById('servico')?.value) {
+            alert('Por favor, selecione um serviço.');
+            return;
+        }
+        
+        if (!data) {
+            alert('Por favor, selecione uma data.');
+            return;
+        }
+        
+        if (!horario) {
+            alert('Por favor, selecione um horário.');
+            return;
+        }
+        
+        const agendamentoData = {
+            petId: petId || null,
+            cliente: document.getElementById('petCliente')?.value,
+            servico: document.getElementById('servico')?.value,
+            servicoId: servicoId || null,
+            dataAgendamento: data,
+            horario: horario,
+            valorUnitario: parseFloat(document.getElementById('valorUnitario')?.value || 0),
+            quantidade: parseInt(document.getElementById('quantidade')?.value || 1),
+            desconto: parseFloat(document.getElementById('desconto')?.value || 0),
+            valorFinal: parseFloat(document.getElementById('valorFinal')?.value || 0),
+            profissional: document.getElementById('profissional')?.value,
+            observacoes: document.getElementById('observacoes')?.value,
+            status: document.getElementById('statusAgendamento')?.value || 'agendado'
+        };
+        
+        try {
+            const response = await fetch('/api/agendamentos', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(agendamentoData)
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                alert('Agendamento criado com sucesso!');
+                this.closeAgendamentoSidebar();
+                this.loadAgendamentos(); // Recarregar a lista
+            } else {
+                const error = await response.json();
+                alert('Erro ao criar agendamento: ' + (error.message || 'Erro desconhecido'));
+            }
+        } catch (error) {
+            console.error('Erro ao enviar agendamento:', error);
+            alert('Erro ao criar agendamento. Verifique sua conexão e tente novamente.');
+        }
+    }
+
+    // Métodos para ações dos ícones
+    showLocation(agendamentoId) {
+        console.log('📍 Mostrar localização para agendamento:', agendamentoId);
+        // TODO: Implementar funcionalidade de localização
+        alert('Funcionalidade de localização será implementada em breve!');
+    }
+
+    shareAgendamento(agendamentoId) {
+        console.log('� Redirecionando para checkout do agendamento:', agendamentoId);
+        // Redireciona para a página de detalhes para finalizar checkout
+        window.location.href = `agendamento-detalhes.html?id=${agendamentoId}`;
+    }
+
+    showMoreOptions(agendamentoId, event) {
+        if (event) event.stopPropagation();
+        console.log('⋮ Mostrar mais opções para agendamento:', agendamentoId);
+        // TODO: Implementar menu de opções
+        alert('Menu de opções será implementado em breve!');
+    }
+}
+
+// Initialize when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('🚀 DOM carregado, iniciando AgendamentosManager...');
+    window.agendamentosManager = new AgendamentosManager();
+    console.log('✅ AgendamentosManager inicializado:', window.agendamentosManager);
+});
+
+// Fallback para garantir inicialização
+window.addEventListener('load', () => {
+    if (!window.agendamentosManager) {
+        console.log('🔄 Fallback: Inicializando AgendamentosManager...');
+        window.agendamentosManager = new AgendamentosManager();
+    }
+});
+
+// Functions for dropdown menu integration
+function novoAtendimento() {
+    console.log('🎯 novoAtendimento chamado');
+    if (window.agendamentosManager) {
+        window.agendamentosManager.openAgendamentoSidebar();
+    } else {
+        console.error('❌ agendamentosManager não está disponível');
+    }
+}
+

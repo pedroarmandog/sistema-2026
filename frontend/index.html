@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema Pet Cria</title>
+</head>
+<body>
+    <h1>Cadastro de Cliente</h1>
+    <form id="formCliente">
+        <input type="text" name="nome" placeholder="Nome" required>
+        <input type="email" name="email" placeholder="Email" required>
+        <input type="text" name="telefone" placeholder="Telefone" required>
+        <input type="file" name="imagem_perfil">
+        <button type="submit">Cadastrar</button>
+    </form>
+
+    <h2>Clientes Cadastrados</h2>
+    <ul id="listaClientes"></ul>
+
+    <h1>Cadastrar Pet</h1>
+<form id="formPet">
+  <input type="text" name="nome" placeholder="Nome do pet" required>
+  <input type="text" name="tipo" placeholder="Tipo (ex: cachorro)" required>
+  <input type="text" name="raca" placeholder="Raça">
+  <input type="number" name="idade" placeholder="Idade">
+  <input type="number" name="clienteId" placeholder="ID do dono">
+  <input type="file" name="imagem_pet">
+  <button type="submit">Cadastrar Pet</button>
+</form>
+
+
+    <script src="script.js"></script>
+    <script src="/sidebar-component/inject-sidebar.js"></script>
+</body>
+</html>

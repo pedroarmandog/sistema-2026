@@ -1,0 +1,338 @@
+/* ========================================
+   ESTILOS ESPECÍFICOS PARA PÁGINAS DE CLIENTES
+   ======================================== */
+
+/* Este arquivo deve importar as cores globais */
+@import url('./colors.css');
+
+/* Estilos para busca de CEP */
+.cep-group {
+    position: relative;
+}
+
+.input-with-button {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.input-with-button input {
+    flex: 1;
+}
+
+.btn-search-cep {
+    background: var(--btn-primary);
+    color: white;
+    border: none;
+    padding: 10px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    height: 44px;
+    transition: all 0.3s ease;
+}
+
+.btn-search-cep:hover {
+    background: var(--btn-primary-hover);
+    transform: scale(1.05);
+}
+
+.btn-search-cep:disabled {
+    background: var(--text-muted);
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-search-cep i {
+    font-size: 14px;
+}
+
+/* Mensagens de status do CEP */
+.cep-message {
+    margin-top: 8px;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+/* Animações */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeOut {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+}
+
+/* Estilos para formulários */
+.form-section {
+    margin-bottom: 24px;
+    padding: 20px;
+    background: var(--bg-white);
+    border-radius: 8px;
+    border: 1px solid var(--border-light);
+}
+
+.form-section h3 {
+    color: var(--text-primary);
+    margin-bottom: 16px;
+    font-size: 18px;
+    font-weight: 600;
+    border-bottom: 2px solid var(--color-primary);
+    padding-bottom: 8px;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.form-group label {
+    color: var(--text-primary);
+    font-weight: 500;
+    margin-bottom: 6px;
+    font-size: 14px;
+}
+
+.form-control {
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    background: var(--bg-white);
+    color: var(--text-primary);
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.form-control:disabled {
+    background: var(--bg-light);
+    color: var(--text-muted);
+    cursor: not-allowed;
+}
+
+/* Loading states */
+.btn-search-cep .fa-spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* ========================================
+   BOTÕES DE AÇÃO (EDITAR/EXCLUIR)
+   ======================================== */
+
+/* Botões de ação (Editar/Excluir) */
+.btn-action {
+    background: none !important;
+    border: none !important;
+    padding: 8px !important;
+    border-radius: 4px !important;
+    cursor: pointer !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: all 0.2s ease !important;
+    width: 32px !important;
+    height: 32px !important;
+    margin: 0 2px !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12) !important;
+}
+
+.btn-action i {
+    font-size: 14px !important;
+}
+
+/* Botão Editar (Azul) */
+.btn-action.btn-edit {
+    color: #007bff !important;
+    background-color: rgba(0, 123, 255, 0.1) !important;
+}
+
+.btn-action.btn-edit:hover {
+    background-color: rgba(0, 123, 255, 0.2) !important;
+    color: #0056b3 !important;
+    box-shadow: 0 2px 6px rgba(0, 123, 255, 0.25) !important;
+}
+
+/* Botão Excluir (Vermelho) */
+.btn-action.btn-delete {
+    color: #dc3545 !important;
+    background-color: rgba(220, 53, 69, 0.1) !important;
+}
+
+.btn-action.btn-delete:hover {
+    background-color: rgba(220, 53, 69, 0.2) !important;
+    color: #c82333 !important;
+    box-shadow: 0 2px 6px rgba(220, 53, 69, 0.25) !important;
+}
+
+/* Container das ações */
+.actions-container {
+    display: flex !important;
+    gap: 4px !important;
+    justify-content: center !important;
+    align-items: center !important;
+}
+
+/* ========================================
+   MODAL DE CONFIRMAÇÃO CUSTOMIZADO
+   ======================================== */
+
+.custom-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10000;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.custom-modal.show {
+    opacity: 1;
+}
+
+.modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 12px;
+    padding: 30px;
+    max-width: 500px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    transform: scale(0.9);
+    transition: transform 0.3s ease;
+}
+
+.custom-modal.show .modal-content {
+    transform: scale(1);
+}
+
+.modal-icon {
+    width: 64px;
+    height: 64px;
+    background: #ff5252;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+}
+
+.modal-icon i {
+    font-size: 28px;
+    color: white;
+}
+
+.modal-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: #333;
+    margin: 0 0 15px;
+    line-height: 1.3;
+}
+
+.modal-message {
+    font-size: 14px;
+    color: #666;
+    margin: 0 0 30px;
+    line-height: 1.5;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+}
+
+.btn-cancel,
+.btn-confirm {
+    padding: 10px 24px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 100px;
+}
+
+.btn-cancel {
+    background: #f8f9fa;
+    color: #6c757d;
+    border: 1px solid #dee2e6;
+}
+
+.btn-cancel:hover {
+    background: #e9ecef;
+    color: #495057;
+}
+
+.btn-confirm {
+    background: #ff5252;
+    color: white;
+}
+
+.btn-confirm:hover {
+    background: #e53935;
+}
+
+/* Responsividade para botões de ação */
+@media (max-width: 768px) {
+    .btn-action {
+        width: 28px;
+        height: 28px;
+    }
+    
+    .btn-action i {
+        font-size: 12px;
+    }
+}
