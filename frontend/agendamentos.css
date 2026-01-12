@@ -522,6 +522,24 @@
     border-color: #007bff;
 }
 
+/* Botões de período desabilitados (não clicáveis) — tom um pouco mais escuro */
+.view-period-btn.view-period-disabled,
+.view-period-btn[disabled] {
+    background: #eceff1;
+    color: #333;
+    border-color: #d0d5d9;
+    cursor: default;
+    pointer-events: none;
+    opacity: 1;
+}
+
+.view-period-btn.view-period-disabled:hover,
+.view-period-btn[disabled]:hover {
+    background: #eceff1;
+    color: #333;
+    border-color: #d0d5d9;
+}
+
 .status-filters {
     display: flex;
     align-items: center;
@@ -1687,4 +1705,48 @@
 
 .agendamento-actions .action-icon:last-child {
     color: #999;
+}
+
+/* Cabeçalho de seção por data (linha cinza) */
+.agendamento-section { margin-bottom: 8px; }
+.agendamento-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #e9edf0;
+    color: #2f3a3f;
+    padding: 10px 14px;
+    font-weight: 700;
+    border: 1px solid #d7dfe3;
+    border-radius: 6px 6px 0 0;
+}
+.agendamento-section-header .section-date { font-size: 14px; }
+.agendamento-section-header .section-count { color: #6c757d; font-weight: 600; }
+.agendamento-section-body {
+    border-left: 1px solid #e9ecef;
+    border-right: 1px solid #e9ecef;
+    border-bottom: 1px solid #e9ecef;
+    border-radius: 0 0 6px 6px;
+}
+
+/* Cabeçalho de seção por data (linha cinza) */
+.agendamento-section { margin-bottom: 8px; }
+.agendamento-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #e9edf0;
+    color: #2f3a3f;
+    padding: 10px 14px;
+    font-weight: 700;
+    border: 1px solid #d7dfe3;
+    border-radius: 6px 6px 0 0;
+}
+.agendamento-section-header .section-date { font-size: 14px; }
+.agendamento-section-header .section-count { color: #6c757d; font-weight: 600; }
+.agendamento-section-body {
+    border-left: 1px solid #e9ecef;
+    border-right: 1px solid #e9ecef;
+    border-bottom: 1px solid #e9ecef;
+    border-radius: 0 0 6px 6px;
 }

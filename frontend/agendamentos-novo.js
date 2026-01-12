@@ -17,6 +17,7 @@ class AgendamentosManager {
         this.agendamentos = [];
         this.filtros = {};
         this.viewMode = 'list';
+        this.period = 'day';
         this.currentDate = new Date();
         console.log('📅 Data atual definida:', this.currentDate);
         this.init();
@@ -29,9 +30,9 @@ class AgendamentosManager {
         this.updateDateDisplay();
         this.setupModalEvents();
         this.setupNovoAgendamentoSidebar();
-        // Carregar agendamentos sem aplicar filtros padrão
-        console.log('🔄 Carregando agendamentos...');
-        this.loadAgendamentos();
+        // Carregar agendamentos conforme período atual (Hoje/Dia/Semana/Mês)
+        console.log('🔄 Carregando agendamentos para período:', this.period);
+        this.handlePeriodChange(this.period);
         console.log('✅ Inicialização concluída');
     }
 
@@ -103,17 +104,29 @@ class AgendamentosManager {
         
         if (prevBtn) {
             prevBtn.addEventListener('click', () => {
-                this.currentDate.setDate(this.currentDate.getDate() - 1);
+                if (this.period === 'week') {
+                    this.currentDate.setDate(this.currentDate.getDate() - 7);
+                } else if (this.period === 'month') {
+                    this.currentDate.setMonth(this.currentDate.getMonth() - 1);
+                } else {
+                    this.currentDate.setDate(this.currentDate.getDate() - 1);
+                }
                 this.updateDateDisplay();
-                this.loadAgendamentos();
+                this.handlePeriodChange(this.period);
             });
         }
 
         if (nextBtn) {
             nextBtn.addEventListener('click', () => {
-                this.currentDate.setDate(this.currentDate.getDate() + 1);
+                if (this.period === 'week') {
+                    this.currentDate.setDate(this.currentDate.getDate() + 7);
+                } else if (this.period === 'month') {
+                    this.currentDate.setMonth(this.currentDate.getMonth() + 1);
+                } else {
+                    this.currentDate.setDate(this.currentDate.getDate() + 1);
+                }
                 this.updateDateDisplay();
-                this.loadAgendamentos();
+                this.handlePeriodChange(this.period);
             });
         }
 
@@ -176,12 +189,12 @@ class AgendamentosManager {
             console.log('⚠️ Botão .btn-clear não encontrado');
         }
 
-        // Apply filter button (status)
+        // Apply filter button (aplica filtros gerais: pet/cliente, profissional, etc.)
         const btnFilter = document.querySelector('.btn-filter');
         if (btnFilter) {
             btnFilter.addEventListener('click', () => {
-                console.log('🎯 Botão aplicar filtro de status clicado');
-                this.applyStatusFilters();
+                console.log('🎯 Botão aplicar filtro clicado (pet/profissional)');
+                this.applyFilters();
             });
         } else {
             console.log('⚠️ Botão .btn-filter não encontrado');
@@ -248,24 +261,51 @@ class AgendamentosManager {
     }
 
     updateDateDisplay() {
-        const options = { 
-            day: 'numeric', 
-            month: 'long', 
-            year: 'numeric' 
-        };
-        const dateStr = this.currentDate.toLocaleDateString('pt-BR', options);
-        document.getElementById('currentDate').textContent = dateStr;
+        const dateEl = document.getElementById('currentDate');
+        if (!dateEl) return;
+        
+        if (this.period === 'week') {
+            // Mostrar intervalo da semana
+            const d = new Date(this.currentDate);
+            const day = d.getDay();
+            const diff = (day + 6) % 7;
+            const monday = new Date(d);
+            monday.setDate(d.getDate() - diff);
+            const sunday = new Date(monday);
+            sunday.setDate(monday.getDate() + 6);
+            
+            const opts = { day: '2-digit', month: '2-digit', year: 'numeric' };
+            const start = monday.toLocaleDateString('pt-BR', opts);
+            const end = sunday.toLocaleDateString('pt-BR', opts);
+            dateEl.textContent = `${start} - ${end}`;
+        } else if (this.period === 'month') {
+            // Mostrar mês e ano
+            const opts = { month: 'long', year: 'numeric' };
+            dateEl.textContent = this.currentDate.toLocaleDateString('pt-BR', opts);
+        } else {
+            // Dia único
+            const options = { 
+                day: 'numeric', 
+                month: 'long', 
+                year: 'numeric' 
+            };
+            const dateStr = this.currentDate.toLocaleDateString('pt-BR', options);
+            dateEl.textContent = dateStr;
+        }
     }
 
     handlePeriodChange(period) {
-        switch(period) {
+        // definir período atual e carregar conforme tipo
+        this.period = period || this.period || 'day';
+        switch(this.period) {
             case 'today':
                 this.currentDate = new Date();
                 this.updateDateDisplay();
                 this.loadAgendamentos();
                 break;
             case 'day':
-                // Current day view - already implemented
+                // carregar agendamentos do dia selecionado
+                this.loadAgendamentos();
                 break;
             case 'week':
                 this.showWeekView();
@@ -319,6 +359,7 @@ class AgendamentosManager {
     renderAgendamentos() {
         console.log('🎨 Renderizando agendamentos...');
         console.log('📊 Total de agendamentos:', this.agendamentos.length);
+        console.log('🔵 Período atual:', this.period);
         
         const tableBody = document.getElementById('agendamentosTableBody');
         
@@ -326,6 +367,15 @@ class AgendamentosManager {
         let agendamentosFiltrados = this.filterAgendamentos();
         console.log('🔍 Agendamentos filtrados:', agendamentosFiltrados.length);
         console.log('🎯 Filtros aplicados:', this.filtros);
+
+        // Se estiver em week ou month, agrupar por data com cabeçalhos
+        if (this.period === 'week' || this.period === 'month') {
+            console.log('✅ Renderizando agrupado por data (week/month)');
+            this.renderAgendamentosGroupedByDate(agendamentosFiltrados, tableBody);
+            return;
+        }
+        
+        console.log('📝 Renderizando lista normal (day/today)');
         
         if (agendamentosFiltrados.length === 0) {
             console.log('📭 Nenhum agendamento após filtragem');
@@ -353,9 +403,15 @@ class AgendamentosManager {
                 'cancelado': 'cancelado'
             };
             const statusClass = statusClassMap[agendamento.status] || agendamento.status;
-            
+            // determinar data do agendamento (YYYY-MM-DD) — não altera estrutura, apenas atributo
+            let dateKey = '';
+            if (agendamento.data) dateKey = String(agendamento.data).split('T')[0];
+            else if (agendamento.horario && typeof agendamento.horario === 'string' && agendamento.horario.includes('T')) dateKey = agendamento.horario.split('T')[0];
+            else if (agendamento.horario && typeof agendamento.horario === 'number') dateKey = new Date(agendamento.horario).toISOString().split('T')[0];
+            else dateKey = new Date(this.currentDate).toISOString().split('T')[0];
+
             return `
-            <div class="agendamento-row" data-agendamento-id="${agendamento.id}" data-status="${agendamento.status}">
+            <div class="agendamento-row" data-date="${dateKey}" data-agendamento-id="${agendamento.id}" data-status="${agendamento.status}">
                 <div class="agendamento-controls">
                     <label class="checkbox-label">
                         <input type="checkbox" value="${agendamento.id}">
@@ -394,10 +450,153 @@ class AgendamentosManager {
 
         console.log('✅ HTML gerado, inserindo no DOM');
         tableBody.innerHTML = agendamentosHtml;
-        
+
+        // Agrupar visualmente por data sem alterar os elementos individuais
+        (function groupRowsByDate() {
+            try {
+                const rows = Array.from(tableBody.querySelectorAll('.agendamento-row'));
+                if (!rows.length) return;
+                const groups = {};
+                rows.forEach(r => {
+                    const dk = r.getAttribute('data-date') || '';
+                    if (!groups[dk]) groups[dk] = [];
+                    groups[dk].push(r.outerHTML);
+                });
+                const sortedDates = Object.keys(groups).sort();
+                const now = new Date();
+                const todayKey = now.toISOString().split('T')[0];
+                const tomorrow = new Date(now); tomorrow.setDate(now.getDate()+1);
+                const tomorrowKey = tomorrow.toISOString().split('T')[0];
+
+                const newHtml = sortedDates.map(dateKey => {
+                    const parts = dateKey.split('-');
+                    const labelDate = parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dateKey;
+                    const label = dateKey === todayKey ? `${labelDate} - Hoje` : (dateKey === tomorrowKey ? `${labelDate} - Amanhã` : labelDate);
+                    return `
+                        <div class="agendamento-section">
+                            <div class="agendamento-section-header">
+                                <div class="section-date">${label}</div>
+                                <div class="section-count">(${groups[dateKey].length})</div>
+                            </div>
+                            <div class="agendamento-section-body">${groups[dateKey].join('')}</div>
+                        </div>
+                    `;
+                }).join('');
+
+                tableBody.innerHTML = newHtml;
+            } catch (e) {
+                console.warn('Erro ao agrupar linhas por data', e);
+            }
+        })();
+
         // Adicionar event listeners para navegação aos detalhes
         this.setupAgendamentoClickListeners();
         // Adicionar listeners para o badge de status (abrir menu de ações)
+        this.setupStatusBadgeListeners();
+    }
+
+    renderAgendamentosGroupedByDate(agendamentos, tableBody) {
+        console.log('📦 renderAgendamentosGroupedByDate chamado com:', agendamentos.length, 'agendamentos');
+        
+        if (agendamentos.length === 0) {
+            tableBody.innerHTML = '<div class="empty-state"><h3>Nenhum agendamento encontrado</h3></div>';
+            return;
+        }
+
+        // Log do primeiro agendamento completo para debug
+        if (agendamentos.length > 0) {
+            console.log('📋 Estrutura completa do primeiro agendamento:', JSON.stringify(agendamentos[0], null, 2));
+        }
+
+        // Agrupar por data
+        const groups = {};
+        agendamentos.forEach(a => {
+            let dateKey = '';
+            console.log('🔍 Agendamento:', a.id, 'data:', a.data, 'horario:', a.horario);
+            // Tentar extrair data de dataAgendamento primeiro
+            if (a.dataAgendamento) dateKey = String(a.dataAgendamento).split('T')[0];
+            else if (a.data) dateKey = String(a.data).split('T')[0];
+            else if (a.horario && typeof a.horario === 'string' && a.horario.includes('T')) dateKey = a.horario.split('T')[0];
+            else if (a.horario && typeof a.horario === 'number') dateKey = new Date(a.horario).toISOString().split('T')[0];
+            else dateKey = new Date(this.currentDate).toISOString().split('T')[0];
+            console.log('📅 DateKey extraída:', dateKey);
+            if (!groups[dateKey]) groups[dateKey] = [];
+            groups[dateKey].push(a);
+        });
+        console.log('📊 Grupos criados:', Object.keys(groups));
+
+        const sortedDates = Object.keys(groups).sort();
+        const now = new Date();
+        const todayKey = now.toISOString().split('T')[0];
+        const tomorrow = new Date(now); tomorrow.setDate(now.getDate()+1); 
+        const tomorrowKey = tomorrow.toISOString().split('T')[0];
+
+        let html = '';
+        sortedDates.forEach(dateKey => {
+            const items = groups[dateKey];
+            const parts = dateKey.split('-');
+            const labelDate = parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dateKey;
+            const label = dateKey === todayKey ? `${labelDate} - Hoje` : (dateKey === tomorrowKey ? `${labelDate} - Amanhã` : labelDate);
+            
+            // Cabeçalho da seção (linha cinza)
+            html += `
+                <div class="agendamento-section">
+                    <div class="agendamento-section-header">
+                        <div class="section-date">${label}</div>
+                        <div class="section-count">(${items.length})</div>
+                    </div>
+                    <div class="agendamento-section-body">`;
+            
+            // Renderizar cada agendamento
+            items.forEach(agendamento => {
+                const statusClassMap = {
+                    'agendado': 'agendado',
+                    'checkin': 'check-in',
+                    'pronto': 'pronto',
+                    'concluido': 'check-out',
+                    'cancelado': 'cancelado'
+                };
+                const statusClass = statusClassMap[agendamento.status] || agendamento.status;
+                
+                html += `
+                    <div class="agendamento-row" data-date="${dateKey}" data-agendamento-id="${agendamento.id}" data-status="${agendamento.status}">
+                        <div class="agendamento-controls">
+                            <label class="checkbox-label">
+                                <input type="checkbox" value="${agendamento.id}">
+                                <span class="checkmark"></span>
+                            </label>
+                        </div>
+                        <div class="agendamento-columns">
+                            <div class="agendamento-horario">${this.formatTimeBR(agendamento.horario)}</div>
+                            <div class="agendamento-pet-cliente">
+                                <strong>${agendamento.petNome}</strong><br>
+                                <small>${agendamento.clienteNome}</small>
+                            </div>
+                            <div class="agendamento-detalhes">${agendamento.servico}</div>
+                            <div class="agendamento-profissional">${agendamento.profissional || '-'}</div>
+                            <div class="agendamento-valor">${this.formatCurrency(agendamento.valor)}</div>
+                            <div class="agendamento-situacao">
+                                <span class="status-badge status-${statusClass}">${this.getStatusLabel(agendamento.status)}</span>
+                            </div>
+                            <div class="agendamento-actions">
+                                <button class="action-icon" title="Localização" onclick="agendamentosManager.showLocation(${agendamento.id})"><i class="fas fa-map-marker-alt"></i></button>
+                                <button class="action-icon" title="Compartilhar" onclick="agendamentosManager.shareAgendamento(${agendamento.id})"><i class="fas fa-external-link-alt"></i></button>
+                                <button class="action-icon" title="Mais opções" onclick="agendamentosManager.showMoreOptions(${agendamento.id}, event)"><i class="fas fa-ellipsis-v"></i></button>
+                            </div>
+                        </div>
+                    </div>`;
+            });
+            
+            html += `
+                    </div>
+                </div>`;
+        });
+
+        console.log('📝 HTML gerado, grupos encontrados:', sortedDates.length);
+        console.log('📏 Tamanho do HTML:', html.length, 'caracteres');
+        tableBody.innerHTML = html;
+        console.log('✅ HTML inserido no DOM');
+        this.setupAgendamentoClickListeners();
         this.setupStatusBadgeListeners();
     }
 
@@ -842,7 +1041,8 @@ class AgendamentosManager {
             exibirEndereco: document.getElementById('filterExibirEnerco').checked
         };
 
-        this.loadAgendamentos();
+        // Recarregar conforme o período atual (day/week/month)
+        this.handlePeriodChange(this.period || 'day');
     }
 
     clearFilters() {
@@ -991,12 +1191,65 @@ class AgendamentosManager {
     }
 
     // Calendar view methods (to be implemented)
+    // Helper: buscar agendamentos para uma data (YYYY-MM-DD)
+    async fetchAgendamentosForDate(dateStr) {
+        try {
+            const res = await fetch(`/api/agendamentos?data=${encodeURIComponent(dateStr)}`);
+            if (!res.ok) return [];
+            const data = await res.json();
+            return Array.isArray(data) ? data : (data.rows || data.agendamentos || []);
+        } catch (e) {
+            console.warn('fetchAgendamentosForDate falhou for', dateStr, e);
+            return [];
+        }
+    }
+
+    // Carrega agendamentos combinando várias datas (array de YYYY-MM-DD)
+    async loadAgendamentosForDates(dates) {
+        try {
+            console.log('🔄 Carregando agendamentos para múltiplas datas:', dates.length);
+            const promises = dates.map(d => this.fetchAgendamentosForDate(d));
+            const results = await Promise.all(promises);
+            // Achatar arrays e normalizar
+            this.agendamentos = results.flat();
+            console.log('✅ Total combinado:', this.agendamentos.length);
+            this.renderAgendamentos();
+        } catch (e) {
+            console.error('Erro loadAgendamentosForDates:', e);
+            this.agendamentos = [];
+            this.renderAgendamentos();
+        }
+    }
     showWeekView() {
-        console.log('Week view - to be implemented');
+        // Carregar agendamentos para os 7 dias da semana que contém currentDate
+        const d = new Date(this.currentDate);
+        const day = d.getDay();
+        const diff = (day + 6) % 7; // dias desde segunda
+        const monday = new Date(d);
+        monday.setDate(d.getDate() - diff);
+        const dates = [];
+        for (let i = 0; i < 7; i++) {
+            const dt = new Date(monday);
+            dt.setDate(monday.getDate() + i);
+            dates.push(dt.toISOString().split('T')[0]);
+        }
+        this.updateDateDisplay();
+        this.loadAgendamentosForDates(dates);
     }
 
     showMonthView() {
-        console.log('Month view - to be implemented');
+        // Carregar agendamentos para todos os dias do mês da currentDate
+        const d = new Date(this.currentDate);
+        const year = d.getFullYear();
+        const month = d.getMonth();
+        const first = new Date(year, month, 1);
+        const last = new Date(year, month + 1, 0);
+        const dates = [];
+        for (let dt = new Date(first); dt <= last; dt.setDate(dt.getDate() + 1)) {
+            dates.push(new Date(dt).toISOString().split('T')[0]);
+        }
+        this.updateDateDisplay();
+        this.loadAgendamentosForDates(dates);
     }
 
     showAppointmentsView() {
