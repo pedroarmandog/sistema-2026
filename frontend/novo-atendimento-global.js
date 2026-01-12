@@ -2130,29 +2130,35 @@ window.abrirCalendarioCompacto = function() {
         </div>
         
         <!-- Header do Calendário -->
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <button type="button" id="btnMesAnteriorCompacto" style="background: none; border: none; font-size: 14px; color: #2c5aa0; cursor: pointer; padding: 4px; border-radius: 50%; transition: all 0.2s ease;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='none'">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 8px 12px; background: #28a745; border-radius: 8px;">
+            <button type="button" id="btnMesAnteriorCompacto" style="background: none; border: none; font-size: 14px; color: white; cursor: pointer; padding: 4px; border-radius: 50%; transition: all 0.2s ease;" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='none'">
                 <i class="fas fa-chevron-left"></i>
             </button>
-            <h5 id="mesAnoCalendarioCompacto" style="margin: 0; color: #2c5aa0; font-size: 13px; font-weight: 600;"></h5>
-            <button type="button" id="btnMesProximoCompacto" style="background: none; border: none; font-size: 14px; color: #2c5aa0; cursor: pointer; padding: 4px; border-radius: 50%; transition: all 0.2s ease;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='none'">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex: 1; padding: 0 10px;">
+                <h5 id="mesCalendarioCompacto" style="margin: 0; color: white; font-size: 13px; font-weight: 600; cursor: pointer; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'" onclick="mostrarSeletorMeses()"></h5>
+                <h5 id="anoCalendarioCompacto" style="margin: 0; color: white; font-size: 13px; font-weight: 600; cursor: pointer; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'" onclick="mostrarSeletorAnos()"></h5>
+            </div>
+            <button type="button" id="btnMesProximoCompacto" style="background: none; border: none; font-size: 14px; color: white; cursor: pointer; padding: 4px; border-radius: 50%; transition: all 0.2s ease;" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='none'">
                 <i class="fas fa-chevron-right"></i>
             </button>
         </div>
         
-        <!-- Dias da Semana -->
-        <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 5px;">
-            <div style="text-align: center; padding: 4px 0; font-size: 9px; font-weight: 600; color: #666;">D</div>
-            <div style="text-align: center; padding: 4px 0; font-size: 9px; font-weight: 600; color: #666;">S</div>
-            <div style="text-align: center; padding: 4px 0; font-size: 9px; font-weight: 600; color: #666;">T</div>
-            <div style="text-align: center; padding: 4px 0; font-size: 9px; font-weight: 600; color: #666;">Q</div>
-            <div style="text-align: center; padding: 4px 0; font-size: 9px; font-weight: 600; color: #666;">Q</div>
-            <div style="text-align: center; padding: 4px 0; font-size: 9px; font-weight: 600; color: #666;">S</div>
-            <div style="text-align: center; padding: 4px 0; font-size: 9px; font-weight: 600; color: #666;">S</div>
+        <!-- Container para visualizações (dias/meses/anos) -->
+        <div id="calendarioConteudoCompacto">
+            <!-- Dias da Semana -->
+            <div id="diasSemanaCompacto" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 5px;">
+                <div style="text-align: center; padding: 4px 0; font-size: 9px; font-weight: 600; color: #666;">D</div>
+                <div style="text-align: center; padding: 4px 0; font-size: 9px; font-weight: 600; color: #666;">S</div>
+                <div style="text-align: center; padding: 4px 0; font-size: 9px; font-weight: 600; color: #666;">T</div>
+                <div style="text-align: center; padding: 4px 0; font-size: 9px; font-weight: 600; color: #666;">Q</div>
+                <div style="text-align: center; padding: 4px 0; font-size: 9px; font-weight: 600; color: #666;">Q</div>
+                <div style="text-align: center; padding: 4px 0; font-size: 9px; font-weight: 600; color: #666;">S</div>
+                <div style="text-align: center; padding: 4px 0; font-size: 9px; font-weight: 600; color: #666;">S</div>
+            </div>
+            
+            <!-- Grid dos Dias -->
+            <div id="diasCalendarioCompacto" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 10px;"></div>
         </div>
-        
-        <!-- Grid dos Dias -->
-        <div id="diasCalendarioCompacto" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 10px;"></div>
         
         <!-- Botões -->
         <div style="display: flex; gap: 5px; justify-content: center;">
@@ -2241,22 +2247,45 @@ function inicializarCalendarioCompacto() {
 
 // Função para renderizar calendário compacto
 function renderizarCalendarioCompacto() {
-    const mesAno = document.getElementById('mesAnoCalendarioCompacto');
+    const mesElemento = document.getElementById('mesCalendarioCompacto');
+    const anoElemento = document.getElementById('anoCalendarioCompacto');
     const diasGrid = document.getElementById('diasCalendarioCompacto');
+    const conteudo = document.getElementById('calendarioConteudoCompacto');
     
-    if (!mesAno || !diasGrid) return;
+    if (!mesElemento || !anoElemento || !conteudo) return;
+    
+    // Resetar para modo dias
+    modoCalendarioCompacto = 'dias';
     
     // Meses em português
     const meses = [
-        'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
-        'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'
+        'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
     ];
     
-    // Atualizar header
-    mesAno.textContent = `${meses[calendarioCompactoAtual.getMonth()]} ${calendarioCompactoAtual.getFullYear()}`;
+    // Atualizar header - mês e ano separados
+    mesElemento.textContent = meses[calendarioCompactoAtual.getMonth()];
+    anoElemento.textContent = calendarioCompactoAtual.getFullYear();
     
-    // Limpar grid
-    diasGrid.innerHTML = '';
+    // Restaurar conteúdo de dias
+    conteudo.innerHTML = `
+        <!-- Dias da Semana -->
+        <div id="diasSemanaCompacto" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 5px;">
+            <div style="text-align: center; padding: 4px 0; font-size: 9px; font-weight: 600; color: #666;">D</div>
+            <div style="text-align: center; padding: 4px 0; font-size: 9px; font-weight: 600; color: #666;">S</div>
+            <div style="text-align: center; padding: 4px 0; font-size: 9px; font-weight: 600; color: #666;">T</div>
+            <div style="text-align: center; padding: 4px 0; font-size: 9px; font-weight: 600; color: #666;">Q</div>
+            <div style="text-align: center; padding: 4px 0; font-size: 9px; font-weight: 600; color: #666;">Q</div>
+            <div style="text-align: center; padding: 4px 0; font-size: 9px; font-weight: 600; color: #666;">S</div>
+            <div style="text-align: center; padding: 4px 0; font-size: 9px; font-weight: 600; color: #666;">S</div>
+        </div>
+        
+        <!-- Grid dos Dias -->
+        <div id="diasCalendarioCompacto" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-bottom: 10px;"></div>
+    `;
+    
+    const diasGridNovo = document.getElementById('diasCalendarioCompacto');
+    if (!diasGridNovo) return;
     
     // Primeiro dia do mês e último dia
     const primeiroDia = new Date(calendarioCompactoAtual.getFullYear(), calendarioCompactoAtual.getMonth(), 1);
@@ -2273,7 +2302,7 @@ function renderizarCalendarioCompacto() {
     for (let i = 0; i < inicioDaSemana; i++) {
         const diaVazio = document.createElement('div');
         diaVazio.style.cssText = 'height: 22px;';
-        diasGrid.appendChild(diaVazio);
+        diasGridNovo.appendChild(diaVazio);
     }
     
     // Adicionar todos os dias do mês
@@ -2334,7 +2363,7 @@ function renderizarCalendarioCompacto() {
             selecionarDataCompacto(dataAtual);
         });
         
-        diasGrid.appendChild(diaElemento);
+        diasGridNovo.appendChild(diaElemento);
     }
     
     // Event listeners para navegação
@@ -2360,6 +2389,14 @@ function selecionarDataCompacto(data) {
     
     console.log(`📅 Data selecionada: ${dia}/${mes}/${ano}`);
     
+    // Atualizar data no AgendamentosManager se existir
+    if (window.agendamentosManager) {
+        window.agendamentosManager.currentDate = new Date(data);
+        window.agendamentosManager.updateDateDisplay();
+        window.agendamentosManager.handlePeriodChange(window.agendamentosManager.period);
+        window.agendamentosManager.saveCurrentDate();
+    }
+    
     // Fechar calendário após seleção
     setTimeout(() => {
         fecharCalendarioCompacto();
@@ -2373,6 +2410,102 @@ window.selecionarHojeCompacto = function() {
     const hoje = new Date();
     const hojeBrasilia = new Date(hoje.toLocaleString("en-US", {timeZone: "America/Sao_Paulo"}));
     selecionarDataCompacto(hojeBrasilia);
+}
+
+// Variável para controlar o modo do calendário (dias, meses, anos)
+let modoCalendarioCompacto = 'dias';
+
+// Função para mostrar seletor de meses
+window.mostrarSeletorMeses = function() {
+    modoCalendarioCompacto = 'meses';
+    const conteudo = document.getElementById('calendarioConteudoCompacto');
+    
+    if (!conteudo) return;
+    
+    const meses = [
+        'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ];
+    
+    conteudo.innerHTML = `
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px;">
+            ${meses.map((mes, index) => `
+                <div onclick="selecionarMesCompacto(${index})" style="
+                    padding: 12px;
+                    text-align: center;
+                    cursor: pointer;
+                    border-radius: 6px;
+                    font-size: 12px;
+                    font-weight: 500;
+                    color: #666;
+                    transition: all 0.2s;
+                    background: ${calendarioCompactoAtual.getMonth() === index ? '#28a745' : '#f8f9fa'};
+                    color: ${calendarioCompactoAtual.getMonth() === index ? 'white' : '#666'};
+                " onmouseover="if(${calendarioCompactoAtual.getMonth() !== index}) this.style.background='#e9ecef'" onmouseout="if(${calendarioCompactoAtual.getMonth() !== index}) this.style.background='#f8f9fa'">
+                    ${mes}
+                </div>
+            `).join('')}
+        </div>
+    `;
+    
+    // Atualizar header
+    document.getElementById('mesCalendarioCompacto').textContent = 'Selecione o Mês';
+    document.getElementById('anoCalendarioCompacto').textContent = calendarioCompactoAtual.getFullYear();
+}
+
+// Função para mostrar seletor de anos
+window.mostrarSeletorAnos = function() {
+    modoCalendarioCompacto = 'anos';
+    const conteudo = document.getElementById('calendarioConteudoCompacto');
+    
+    if (!conteudo) return;
+    
+    const anoAtual = calendarioCompactoAtual.getFullYear();
+    const anoInicio = anoAtual - 8;
+    const anos = [];
+    
+    for (let i = 0; i < 16; i++) {
+        anos.push(anoInicio + i);
+    }
+    
+    conteudo.innerHTML = `
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px;">
+            ${anos.map(ano => `
+                <div onclick="selecionarAnoCompacto(${ano})" style="
+                    padding: 12px;
+                    text-align: center;
+                    cursor: pointer;
+                    border-radius: 6px;
+                    font-size: 12px;
+                    font-weight: 500;
+                    transition: all 0.2s;
+                    background: ${calendarioCompactoAtual.getFullYear() === ano ? '#28a745' : '#f8f9fa'};
+                    color: ${calendarioCompactoAtual.getFullYear() === ano ? 'white' : '#666'};
+                " onmouseover="if(${calendarioCompactoAtual.getFullYear() !== ano}) this.style.background='#e9ecef'" onmouseout="if(${calendarioCompactoAtual.getFullYear() !== ano}) this.style.background='#f8f9fa'">
+                    ${ano}
+                </div>
+            `).join('')}
+        </div>
+    `;
+    
+    // Atualizar header para mostrar intervalo de anos
+    const anoFim = anoInicio + 15;
+    document.getElementById('mesCalendarioCompacto').textContent = 'Selecione o Ano';
+    document.getElementById('anoCalendarioCompacto').textContent = `${anoInicio} - ${anoFim}`;
+}
+
+// Função para selecionar mês
+window.selecionarMesCompacto = function(mes) {
+    calendarioCompactoAtual.setMonth(mes);
+    modoCalendarioCompacto = 'dias';
+    renderizarCalendarioCompacto();
+}
+
+// Função para selecionar ano
+window.selecionarAnoCompacto = function(ano) {
+    calendarioCompactoAtual.setFullYear(ano);
+    // Após selecionar ano, mostrar seletor de meses
+    mostrarSeletorMeses();
 }
 
 console.log('🌟 Sistema Global de Novo Atendimento configurado!');

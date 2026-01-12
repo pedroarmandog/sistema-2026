@@ -3,26 +3,29 @@ console.log('🔍 Sistema de Filtros carregado');
 
 // Variáveis globais de filtro
 let filtroAtual = {
-    situacao: 'agendado', // Filtro de situação ativo
+    situacao: ['agendado'], // Filtro de situação ativo (array para múltipla seleção)
     periodo: 'day'        // Filtro de período ativo
 };
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🎯 Inicializando sistema de filtros');
     
+    // DESABILITADO: Sistema de filtros movido para agendamentos-novo.js
+    // para evitar conflito de listeners duplicados
+    
     // Configurar filtros de situação
-    configurarFiltrosSituacao();
+    // configurarFiltrosSituacao();
     
     // Configurar filtros de período
-    configurarFiltrosPeriodo();
+    // configurarFiltrosPeriodo();
     
     // Configurar botão "Aplicar filtro"
-    configurarBotaoAplicar();
+    // configurarBotaoAplicar();
     
     // NÃO aplicar filtros automaticamente - deixar o sistema existente carregar
     // aplicarFiltros();
     
-    console.log('✅ Sistema de filtros pronto (aguardando clique do usuário)');
+    console.log('✅ Sistema de filtros pronto (desabilitado - usando agendamentos-novo.js)');
 });
 
 function configurarFiltrosSituacao() {
@@ -30,22 +33,28 @@ function configurarFiltrosSituacao() {
     
     statusTags.forEach(tag => {
         tag.addEventListener('click', function() {
-            // Remover active de todas as tags
-            statusTags.forEach(t => t.classList.remove('active'));
+            // Toggle da tag (permite múltipla seleção)
+            const isActive = this.classList.contains('active');
+            const activeTags = document.querySelectorAll('.status-tag.active');
             
-            // Adicionar active na tag clicada
-            this.classList.add('active');
-            
-            // Atualizar filtro atual
-            if (this.classList.contains('status-agendado')) {
-                filtroAtual.situacao = 'agendado';
-            } else if (this.classList.contains('status-checkin')) {
-                filtroAtual.situacao = 'checkin';
-            } else if (this.classList.contains('status-pronto')) {
-                filtroAtual.situacao = 'pronto';
-            } else if (this.classList.contains('status-cancelado')) {
-                filtroAtual.situacao = 'cancelado';
+            // Não permitir desmarcar se é a única ativa
+            if (isActive && activeTags.length === 1) {
+                console.log('🚫 Não é possível desmarcar o último filtro ativo');
+                return;
             }
+            
+            // Toggle da classe active
+            this.classList.toggle('active');
+            
+            // Atualizar filtro atual com array de situações ativas
+            const activeTagsUpdated = document.querySelectorAll('.status-tag.active');
+            filtroAtual.situacao = Array.from(activeTagsUpdated).map(t => {
+                if (t.classList.contains('status-agendado')) return 'agendado';
+                if (t.classList.contains('status-checkin')) return 'checkin';
+                if (t.classList.contains('status-pronto')) return 'pronto';
+                if (t.classList.contains('status-checkout')) return 'checkout';
+                if (t.classList.contains('status-cancelado')) return 'cancelado';
+            }).filter(s => s);
             
             console.log('🏷️ Filtro de situação alterado para:', filtroAtual.situacao);
             
@@ -108,11 +117,13 @@ function aplicarFiltros() {
     }
     */
     
-    // Filtrar por situação
+    // Filtrar por situação (suporta array de situações)
     let agendamentosFiltrados = agendamentosSalvos.filter(agendamento => {
         const situacaoAgendamento = agendamento.status || agendamento.situacao || 'agendado';
-        const match = situacaoAgendamento === filtroAtual.situacao;
-        console.log(`🏷️ Agendamento ${agendamento.id}: status="${situacaoAgendamento}", filtro="${filtroAtual.situacao}", match=${match}`);
+        const match = Array.isArray(filtroAtual.situacao) 
+            ? filtroAtual.situacao.includes(situacaoAgendamento)
+            : situacaoAgendamento === filtroAtual.situacao;
+        console.log(`🏷️ Agendamento ${agendamento.id}: status="${situacaoAgendamento}", filtro="${JSON.stringify(filtroAtual.situacao)}", match=${match}`);
         return match;
     });
     

@@ -487,6 +487,15 @@
     background: white;
     border-radius: 6px;
     cursor: pointer;
+    transition: all 0.2s;
+}
+
+.mini-controls .btn-calendar:hover {
+    background: white !important;
+    border-color: #dee2e6 !important;
+    color: inherit !important;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .mini-controls .view-toggle .view-btn {
@@ -516,7 +525,7 @@
 }
 
 .view-period-btn.active,
-.view-period-btn:hover {
+.view-period-btn:hover:not(.view-period-disabled):not([disabled]) {
     background: #007bff;
     color: white;
     border-color: #007bff;
@@ -525,19 +534,21 @@
 /* Botões de período desabilitados (não clicáveis) — tom um pouco mais escuro */
 .view-period-btn.view-period-disabled,
 .view-period-btn[disabled] {
-    background: #eceff1;
-    color: #333;
-    border-color: #d0d5d9;
-    cursor: default;
+    background: #eceff1 !important;
+    color: #333 !important;
+    border-color: #d0d5d9 !important;
+    cursor: default !important;
+    opacity: 1 !important;
     pointer-events: none;
-    opacity: 1;
 }
 
 .view-period-btn.view-period-disabled:hover,
 .view-period-btn[disabled]:hover {
-    background: #eceff1;
-    color: #333;
-    border-color: #d0d5d9;
+    background: #eceff1 !important;
+    color: #333 !important;
+    border-color: #d0d5d9 !important;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .status-filters {
@@ -567,6 +578,13 @@
     border: 2px solid transparent;
 }
 
+/* Estilo para tags ativas - borda mais grossa e destacada */
+.status-tag.active {
+    border-width: 3px;
+    font-weight: 600;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
 .status-tag.status-agendado {
     background: #e3f2fd;
     color: #1976d2;
@@ -586,12 +604,34 @@
 }
 
 .status-tag.status-pronto {
+    /* Pronto: roxo */
+    background: #f3e5f5;
+    color: #6a1b9a;
+}
+
+.status-tag.status-pronto.active {
+    border-color: #6a1b9a;
+}
+
+.status-tag.status-checkout {
+    /* Check-out: verde */
     background: #e8f5e8;
     color: #2e7d32;
 }
 
-.status-tag.status-pronto.active {
+.status-tag.status-checkout.active {
     border-color: #2e7d32;
+}
+
+.status-tag.status-cancelado {
+    /* Cancelado: cinza escuro */
+    background: #424242;
+    color: white;
+}
+
+.status-tag.status-cancelado.active {
+    /* Borda cinza claro para ser visível no fundo escuro */
+    border-color: #bdbdbd;
 }
 
 .btn-filter {

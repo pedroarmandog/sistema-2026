@@ -30,9 +30,18 @@ class AgendamentosManager {
         this.updateDateDisplay();
         this.setupModalEvents();
         this.setupNovoAgendamentoSidebar();
-        // Carregar agendamentos conforme período atual (Hoje/Dia/Semana/Mês)
-        console.log('🔄 Carregando agendamentos para período:', this.period);
-        this.handlePeriodChange(this.period);
+        // Carregar filtros salvos antes de carregar agendamentos
+        this.loadSavedFilters().then(() => {
+            // Carregar período salvo e aplicar
+            return this.loadSavedPeriod();
+        }).then(() => {
+            // Carregar data salva
+            return this.loadSavedDate();
+        }).then(() => {
+            // Carregar agendamentos conforme período atual (Hoje/Dia/Semana/Mês)
+            console.log('🔄 Carregando agendamentos para período:', this.period);
+            this.handlePeriodChange(this.period);
+        });
         console.log('✅ Inicialização concluída');
     }
 
@@ -113,6 +122,7 @@ class AgendamentosManager {
                 }
                 this.updateDateDisplay();
                 this.handlePeriodChange(this.period);
+                this.saveCurrentDate(); // Salvar data no banco
             });
         }
 
@@ -127,6 +137,7 @@ class AgendamentosManager {
                 }
                 this.updateDateDisplay();
                 this.handlePeriodChange(this.period);
+                this.saveCurrentDate(); // Salvar data no banco
             });
         }
 
@@ -138,6 +149,7 @@ class AgendamentosManager {
                 document.querySelectorAll('.view-period-btn').forEach(b => b.classList.remove('active'));
                 e.target.classList.add('active');
                 this.handlePeriodChange(e.target.dataset.period);
+                this.savePeriod(); // Salvar no banco
             });
         });
 
@@ -163,7 +175,11 @@ class AgendamentosManager {
                 // Caso contrário, permitir toggle normal
                 e.target.classList.toggle('active');
                 console.log(`  Status após toggle: ${e.target.classList.contains('active')}`);
+                
+                // Aplicar filtros imediatamente
                 this.updateStatusFilters();
+                this.saveStatusFilters(); // Salvar no banco
+                this.renderAgendamentos();
             });
         });
 
@@ -302,6 +318,7 @@ class AgendamentosManager {
                 this.currentDate = new Date();
                 this.updateDateDisplay();
                 this.loadAgendamentos();
+                this.saveCurrentDate(); // Salvar data resetada para hoje
                 break;
             case 'day':
                 // carregar agendamentos do dia selecionado
@@ -400,6 +417,7 @@ class AgendamentosManager {
                 'checkin': 'check-in',
                 'pronto': 'pronto',
                 'concluido': 'check-out',
+                'checkout': 'check-out',
                 'cancelado': 'cancelado'
             };
             const statusClass = statusClassMap[agendamento.status] || agendamento.status;
@@ -554,6 +572,7 @@ class AgendamentosManager {
                     'checkin': 'check-in',
                     'pronto': 'pronto',
                     'concluido': 'check-out',
+                    'checkout': 'check-out',
                     'cancelado': 'cancelado'
                 };
                 const statusClass = statusClassMap[agendamento.status] || agendamento.status;
@@ -917,8 +936,16 @@ class AgendamentosManager {
             const antesDoFiltro = filtrados.length;
             
             filtrados = filtrados.filter(agendamento => {
-                const incluir = this.filtros.status.includes(agendamento.status);
-                console.log(`  - ${agendamento.id}: ${agendamento.status} → ${incluir ? 'INCLUIR' : 'EXCLUIR'}`);
+                // Mapear 'checkout' para incluir também 'concluido' do banco
+                const statusBusca = agendamento.status;
+                let incluir = this.filtros.status.includes(statusBusca);
+                
+                // Se o filtro inclui 'checkout', aceitar também 'concluido'
+                if (!incluir && this.filtros.status.includes('checkout') && statusBusca === 'concluido') {
+                    incluir = true;
+                }
+                
+                console.log(`  - ${agendamento.id}: ${statusBusca} → ${incluir ? 'INCLUIR' : 'EXCLUIR'}`);
                 return incluir;
             });
             
@@ -982,6 +1009,7 @@ class AgendamentosManager {
             'agendado': 'Agendado',
             'checkin': 'Check-in',
             'pronto': 'Pronto',
+            'checkout': 'Check-out',
             'concluido': 'Check-out',
             'cancelado': 'Cancelado'
         };
@@ -1071,6 +1099,7 @@ class AgendamentosManager {
             if (tag.classList.contains('status-agendado')) return 'agendado';
             if (tag.classList.contains('status-checkin')) return 'checkin';
             if (tag.classList.contains('status-pronto')) return 'pronto';
+            if (tag.classList.contains('status-checkout')) return 'checkout';
             if (tag.classList.contains('status-cancelado')) return 'cancelado';
         }).filter(status => status !== undefined);
         
@@ -1737,6 +1766,287 @@ class AgendamentosManager {
         console.log('⋮ Mostrar mais opções para agendamento:', agendamentoId);
         // TODO: Implementar menu de opções
         alert('Menu de opções será implementado em breve!');
+    }
+
+    // ========== PERSISTÊNCIA DOS FILTROS DE SITUAÇÃO ==========
+    
+    async loadSavedFilters() {
+        try {
+            const response = await fetch('/api/user-filters?pagina=agendamentos-novo');
+            if (!response.ok) {
+                console.log('ℹ️ Nenhum filtro salvo encontrado');
+                return;
+            }
+            
+            const data = await response.json();
+            console.log('📥 Filtros carregados:', data);
+            
+            // Parse filtros se vier como string
+            let filtros = data.filtros;
+            if (typeof filtros === 'string') {
+                try {
+                    filtros = JSON.parse(filtros);
+                } catch (e) {
+                    console.warn('Não foi possível parsear filtros:', e);
+                    return;
+                }
+            }
+            
+            if (filtros && filtros.statusFilters && Array.isArray(filtros.statusFilters)) {
+                // Aplicar filtros salvos às tags
+                this.applyStatusFilters(filtros.statusFilters);
+                // Atualizar array interno
+                this.filtros.status = filtros.statusFilters;
+                console.log('✅ Filtros de situação aplicados:', filtros.statusFilters);
+            }
+        } catch (error) {
+            console.error('❌ Erro ao carregar filtros salvos:', error);
+        }
+    }
+    
+    applyStatusFilters(statusArray) {
+        // Remover 'active' de todas as tags primeiro
+        const allTags = document.querySelectorAll('.status-tag');
+        allTags.forEach(tag => tag.classList.remove('active'));
+        
+        // Adicionar 'active' apenas nas tags que estão no array salvo
+        statusArray.forEach(status => {
+            const tag = document.querySelector(`.status-tag.status-${status}`);
+            if (tag) {
+                tag.classList.add('active');
+            }
+        });
+    }
+    
+    async saveStatusFilters() {
+        try {
+            // Primeiro, buscar o estado atual de filtersCollapsed para não sobrescrever
+            let currentFiltersCollapsed = false;
+            let currentPeriod = this.period;
+            try {
+                const currentResp = await fetch('/api/user-filters?pagina=agendamentos-novo');
+                if (currentResp.ok) {
+                    const currentData = await currentResp.json();
+                    let filtros = currentData.filtros;
+                    if (typeof filtros === 'string') {
+                        filtros = JSON.parse(filtros);
+                    }
+                    if (filtros && typeof filtros.filtersCollapsed !== 'undefined') {
+                        currentFiltersCollapsed = filtros.filtersCollapsed;
+                    }
+                    if (filtros && filtros.selectedPeriod) {
+                        currentPeriod = filtros.selectedPeriod;
+                    }
+                }
+            } catch (e) {
+                console.warn('Não foi possível buscar estado atual:', e);
+            }
+            
+            const payload = {
+                pagina: 'agendamentos-novo',
+                filtros: {
+                    filtersCollapsed: currentFiltersCollapsed,
+                    statusFilters: this.filtros.status,
+                    selectedPeriod: currentPeriod
+                }
+            };
+            
+            const response = await fetch('/api/user-filters', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+            
+            if (!response.ok) {
+                throw new Error('Erro ao salvar filtros');
+            }
+            
+            console.log('💾 Filtros salvos:', this.filtros.status);
+        } catch (error) {
+            console.error('❌ Erro ao salvar filtros:', error);
+        }
+    }
+    
+    async loadSavedPeriod() {
+        try {
+            const response = await fetch('/api/user-filters?pagina=agendamentos-novo');
+            if (!response.ok) {
+                console.log('ℹ️ Nenhum período salvo encontrado');
+                return;
+            }
+            
+            const data = await response.json();
+            
+            // Parse filtros se vier como string
+            let filtros = data.filtros;
+            if (typeof filtros === 'string') {
+                try {
+                    filtros = JSON.parse(filtros);
+                } catch (e) {
+                    console.warn('Não foi possível parsear filtros:', e);
+                    return;
+                }
+            }
+            
+            if (filtros && filtros.selectedPeriod) {
+                this.period = filtros.selectedPeriod;
+                // Aplicar classe active no botão correto
+                document.querySelectorAll('.view-period-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                    if (btn.dataset.period === filtros.selectedPeriod) {
+                        btn.classList.add('active');
+                    }
+                });
+                console.log('✅ Período aplicado:', filtros.selectedPeriod);
+            }
+        } catch (error) {
+            console.error('❌ Erro ao carregar período salvo:', error);
+        }
+    }
+    
+    async savePeriod() {
+        try {
+            // Buscar estado atual para não sobrescrever outros campos
+            let currentFiltersCollapsed = false;
+            let currentStatusFilters = this.filtros.status;
+            let currentDate = this.currentDate.toISOString();
+            try {
+                const currentResp = await fetch('/api/user-filters?pagina=agendamentos-novo');
+                if (currentResp.ok) {
+                    const currentData = await currentResp.json();
+                    let filtros = currentData.filtros;
+                    if (typeof filtros === 'string') {
+                        filtros = JSON.parse(filtros);
+                    }
+                    if (filtros && typeof filtros.filtersCollapsed !== 'undefined') {
+                        currentFiltersCollapsed = filtros.filtersCollapsed;
+                    }
+                    if (filtros && filtros.statusFilters) {
+                        currentStatusFilters = filtros.statusFilters;
+                    }
+                    if (filtros && filtros.currentDate) {
+                        currentDate = filtros.currentDate;
+                    }
+                }
+            } catch (e) {
+                console.warn('Não foi possível buscar estado atual:', e);
+            }
+            
+            const payload = {
+                pagina: 'agendamentos-novo',
+                filtros: {
+                    filtersCollapsed: currentFiltersCollapsed,
+                    statusFilters: currentStatusFilters,
+                    selectedPeriod: this.period,
+                    currentDate: currentDate
+                }
+            };
+            
+            const response = await fetch('/api/user-filters', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+            
+            if (!response.ok) {
+                throw new Error('Erro ao salvar período');
+            }
+            
+            console.log('💾 Período salvo:', this.period);
+        } catch (error) {
+            console.error('❌ Erro ao salvar período:', error);
+        }
+    }
+    
+    async loadSavedDate() {
+        try {
+            const response = await fetch('/api/user-filters?pagina=agendamentos-novo');
+            if (!response.ok) {
+                console.log('ℹ️ Nenhuma data salva encontrada');
+                return;
+            }
+            
+            const data = await response.json();
+            
+            // Parse filtros se vier como string
+            let filtros = data.filtros;
+            if (typeof filtros === 'string') {
+                try {
+                    filtros = JSON.parse(filtros);
+                } catch (e) {
+                    console.warn('Não foi possível parsear filtros:', e);
+                    return;
+                }
+            }
+            
+            if (filtros && filtros.currentDate) {
+                this.currentDate = new Date(filtros.currentDate);
+                this.updateDateDisplay();
+                console.log('✅ Data aplicada:', this.currentDate);
+            }
+        } catch (error) {
+            console.error('❌ Erro ao carregar data salva:', error);
+        }
+    }
+    
+    async saveCurrentDate() {
+        try {
+            // Buscar estado atual para não sobrescrever outros campos
+            let currentFiltersCollapsed = false;
+            let currentStatusFilters = this.filtros.status;
+            let currentPeriod = this.period;
+            try {
+                const currentResp = await fetch('/api/user-filters?pagina=agendamentos-novo');
+                if (currentResp.ok) {
+                    const currentData = await currentResp.json();
+                    let filtros = currentData.filtros;
+                    if (typeof filtros === 'string') {
+                        filtros = JSON.parse(filtros);
+                    }
+                    if (filtros && typeof filtros.filtersCollapsed !== 'undefined') {
+                        currentFiltersCollapsed = filtros.filtersCollapsed;
+                    }
+                    if (filtros && filtros.statusFilters) {
+                        currentStatusFilters = filtros.statusFilters;
+                    }
+                    if (filtros && filtros.selectedPeriod) {
+                        currentPeriod = filtros.selectedPeriod;
+                    }
+                }
+            } catch (e) {
+                console.warn('Não foi possível buscar estado atual:', e);
+            }
+            
+            const payload = {
+                pagina: 'agendamentos-novo',
+                filtros: {
+                    filtersCollapsed: currentFiltersCollapsed,
+                    statusFilters: currentStatusFilters,
+                    selectedPeriod: currentPeriod,
+                    currentDate: this.currentDate.toISOString()
+                }
+            };
+            
+            const response = await fetch('/api/user-filters', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+            
+            if (!response.ok) {
+                throw new Error('Erro ao salvar data');
+            }
+            
+            console.log('💾 Data salva:', this.currentDate);
+        } catch (error) {
+            console.error('❌ Erro ao salvar data:', error);
+        }
     }
 }
 
