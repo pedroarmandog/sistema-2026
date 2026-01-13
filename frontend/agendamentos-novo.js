@@ -113,6 +113,15 @@ class AgendamentosManager {
         
         if (prevBtn) {
             prevBtn.addEventListener('click', () => {
+                // Se estiver em 'today', trocar para 'day' para permitir navegação por data
+                if (this.period === 'today') {
+                    this.period = 'day';
+                    document.querySelectorAll('.view-period-btn').forEach(b => b.classList.remove('active'));
+                    const dayBtn = document.querySelector('.view-period-btn[data-period="day"]');
+                    if (dayBtn) dayBtn.classList.add('active');
+                    try { this.savePeriod(); } catch (e) { console.warn('savePeriod() indisponível', e); }
+                }
+
                 if (this.period === 'week') {
                     this.currentDate.setDate(this.currentDate.getDate() - 7);
                 } else if (this.period === 'month') {
@@ -128,6 +137,15 @@ class AgendamentosManager {
 
         if (nextBtn) {
             nextBtn.addEventListener('click', () => {
+                // Se estiver em 'today', trocar para 'day' para permitir navegação por data
+                if (this.period === 'today') {
+                    this.period = 'day';
+                    document.querySelectorAll('.view-period-btn').forEach(b => b.classList.remove('active'));
+                    const dayBtn = document.querySelector('.view-period-btn[data-period="day"]');
+                    if (dayBtn) dayBtn.classList.add('active');
+                    try { this.savePeriod(); } catch (e) { console.warn('savePeriod() indisponível', e); }
+                }
+
                 if (this.period === 'week') {
                     this.currentDate.setDate(this.currentDate.getDate() + 7);
                 } else if (this.period === 'month') {
@@ -241,6 +259,31 @@ class AgendamentosManager {
         } else {
             console.log('⚠️ Botão .btn-refresh não encontrado');
         }
+
+        // Escutar atualizações vindas de outras abas/janelas (BroadcastChannel)
+        try {
+            if (typeof BroadcastChannel !== 'undefined') {
+                const bc = new BroadcastChannel('agendamentos_channel');
+                bc.onmessage = (ev) => {
+                    const data = ev.data;
+                    if (data && data.type === 'status-updated') {
+                        console.log('🔔 Recebido update de status via BroadcastChannel', data);
+                        this.updateRowStatusInList(String(data.id), data.status);
+                    }
+                };
+            }
+        } catch (e) { console.warn('BroadcastChannel não disponível', e); }
+
+        // Fallback: mensagens via postMessage
+        window.addEventListener('message', (ev) => {
+            try {
+                const data = ev.data;
+                if (data && data.type === 'status-updated') {
+                    console.log('🔔 Recebido update de status via postMessage', data);
+                    this.updateRowStatusInList(String(data.id), data.status);
+                }
+            } catch (e) { /* ignore */ }
+        });
 
         // Select all checkbox
         document.getElementById('selectAll').addEventListener('change', (e) => {
@@ -466,7 +509,7 @@ class AgendamentosManager {
                         </span>
                     </div>
                     <div class="agendamento-actions">
-                        <button class="action-icon" title="Localização" onclick="agendamentosManager.showLocation(${agendamento.id})">
+                        <button class="action-icon" title="Localização" onclick="(function(e){ try{ e.preventDefault(); e.stopPropagation(); }catch(_){} if(window.agendamentosManager){ agendamentosManager.marcarCheckin(${agendamento.id}); } return false; })(event)">
                             <i class="fas fa-map-marker-alt"></i>
                         </button>
                         <button class="action-icon" title="Compartilhar" onclick="agendamentosManager.shareAgendamento(${agendamento.id})">
@@ -526,6 +569,34 @@ class AgendamentosManager {
         this.setupAgendamentoClickListeners();
         // Adicionar listeners para o badge de status (abrir menu de ações)
         this.setupStatusBadgeListeners();
+    }
+
+    // Atualiza visualmente uma linha da lista pelo id do agendamento
+    updateRowStatusInList(id, status) {
+        try {
+            const tableBody = document.getElementById('agendamentosTableBody');
+            if (!tableBody) return;
+            const row = tableBody.querySelector(`.agendamento-row[data-agendamento-id="${id}"]`);
+            if (!row) return;
+            const badge = row.querySelector('.status-badge');
+            if (!badge) return;
+
+            // Normaliza o nome da classe para corresponder ao CSS (ex: 'checkin' -> 'check-in')
+            const s = String(status || '').toLowerCase();
+            const classMap = { 'checkin': 'check-in', 'check-in': 'check-in', 'checkout': 'check-out', 'check-out': 'check-out', 'concluido': 'check-out' };
+            const statusClass = classMap[s] || s.replace(/[^a-z0-9]+/g, '-');
+
+            const labelMap = { agendado: 'Agendado', 'check-in': 'Check-in', pronto: 'Pronto', 'check-out': 'Check-out', cancelado: 'Cancelado' };
+            const display = labelMap[statusClass] || status;
+
+            // Remover estilos inline antigos para garantir que o CSS se aplique
+            badge.removeAttribute('style');
+
+            badge.className = `status-badge status-${statusClass}`;
+            badge.textContent = display;
+        } catch (e) {
+            console.error('Erro ao atualizar status na lista:', e);
+        }
     }
 
     renderAgendamentosGroupedByDate(agendamentos, tableBody) {
@@ -613,7 +684,7 @@ class AgendamentosManager {
                                 <span class="status-badge status-${statusClass}">${this.getStatusLabel(agendamento.status)}</span>
                             </div>
                             <div class="agendamento-actions">
-                                <button class="action-icon" title="Localização" onclick="agendamentosManager.showLocation(${agendamento.id})"><i class="fas fa-map-marker-alt"></i></button>
+                                <button class="action-icon" title="Check-in" onclick="(function(e){e.stopPropagation(); if(window.agendamentosManager){agendamentosManager.marcarCheckin(${agendamento.id})}})(event)"><i class="fas fa-map-marker-alt"></i></button>
                                 <button class="action-icon" title="Compartilhar" onclick="agendamentosManager.shareAgendamento(${agendamento.id})"><i class="fas fa-external-link-alt"></i></button>
                                 <button class="action-icon" title="Mais opções" onclick="agendamentosManager.showMoreOptions(${agendamento.id}, event)"><i class="fas fa-ellipsis-v"></i></button>
                             </div>
@@ -1781,6 +1852,48 @@ class AgendamentosManager {
         console.log('⋮ Mostrar mais opções para agendamento:', agendamentoId);
         // TODO: Implementar menu de opções
         alert('Menu de opções será implementado em breve!');
+    }
+
+    // Marca um agendamento como check-in (disparado pelo ícone azul)
+    async marcarCheckin(agendamentoId) {
+        try {
+            const res = await fetch(`/api/agendamentos/${agendamentoId}/status`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'checkin' }),
+                credentials: 'include'
+            });
+
+            if (!res.ok) {
+                const err = await res.json().catch(()=>({ error: 'Erro' }));
+                alert(err.error || 'Erro ao marcar check-in');
+                return;
+            }
+
+            // Atualiza localmente a linha na lista
+            this.updateRowStatusInList(String(agendamentoId), 'checkin');
+
+            // Atualiza o array local se presente
+            try {
+                const idx = this.agendamentos.findIndex(a => String(a.id) === String(agendamentoId));
+                if (idx !== -1) this.agendamentos[idx].status = 'checkin';
+            } catch(e) { /* ignore */ }
+
+            // Notificar outras abas
+            try {
+                if (typeof BroadcastChannel !== 'undefined') {
+                    const bc = new BroadcastChannel('agendamentos_channel');
+                    bc.postMessage({ type: 'status-updated', id: agendamentoId, status: 'checkin' });
+                    bc.close();
+                } else if (window.postMessage) {
+                    window.postMessage({ type: 'status-updated', id: agendamentoId, status: 'checkin' }, '*');
+                }
+            } catch (e) { console.warn('Erro ao notificar abas sobre check-in', e); }
+
+        } catch (error) {
+            console.error('Erro ao marcar check-in:', error);
+            alert('Erro ao marcar check-in. Tente novamente.');
+        }
     }
 
     // ========== PERSISTÊNCIA DOS FILTROS DE SITUAÇÃO ==========

@@ -2335,6 +2335,19 @@ function configurarCalculoMargem() {
         custo.addEventListener('input', calcularPrecoVenda);
         percentualMargem.addEventListener('input', calcularPrecoVenda);
         venda.addEventListener('input', calcularMargem);
+        // Quando o usuário editar o valor em R$ de margem, recalcular venda e percentual
+        reaisMargem.addEventListener('input', function() {
+            const custoVal = parseFloat(custo.value) || 0;
+            const margemReais = parseFloat(this.value) || 0;
+            const novoVenda = custoVal + margemReais;
+            venda.value = novoVenda.toFixed(2);
+            if (custoVal > 0) {
+                const percentual = (margemReais / custoVal) * 100;
+                percentualMargem.value = percentual.toFixed(2);
+            } else {
+                percentualMargem.value = (0).toFixed(2);
+            }
+        });
     }
 }
 

@@ -5,6 +5,29 @@
 
 console.log('🌐 Sistema Global de Novo Atendimento carregado!');
 
+// Função simples de notificação (toast) para erros/sucesso
+function showNotification(message, type = 'error') {
+    try {
+        // remover existente
+        const existing = document.querySelector('.notification-toast');
+        if (existing) existing.remove();
+
+        const n = document.createElement('div');
+        n.className = `notification-toast notification-${type}`;
+        n.style.cssText = 'position:fixed;right:18px;top:18px;z-index:1200010;min-width:220px;max-width:420px;padding:12px 16px;border-radius:8px;box-shadow:0 8px 24px rgba(2,16,26,0.12);font-weight:400;display:flex;align-items:center;gap:12px;opacity:0;transition:opacity .18s,transform .18s;';
+        n.innerHTML = `
+            <div style="flex:0 0 28px;text-align:center;font-size:18px;color:${type==='error'?'#7b1f2d':'#1e7e34'};">
+                <i class="fas ${type==='error'?'fa-exclamation-circle':'fa-check-circle'}"></i>
+            </div>
+            <div style="flex:1;color:${type==='error'?'#661426':'#0b6435'};">${message}</div>
+            <button style="background:transparent;border:none;color:#999;cursor:pointer;font-size:14px;" onclick="this.parentElement.remove()">✕</button>
+        `;
+        document.body.appendChild(n);
+        requestAnimationFrame(()=>{ n.style.opacity = '1'; n.style.transform = 'none'; });
+        setTimeout(()=>{ try{ n.remove(); }catch(e){} }, 5000);
+    } catch (e) { console.warn('showNotification fail', e); }
+}
+
 // =============================================
 // FUNÇÃO GLOBAL: Novo Atendimento
 // =============================================
@@ -87,11 +110,30 @@ function abrirNovoAgendamentoModal() {
                 
                 <div style="margin-bottom: 20px; position: relative;">
                     <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333; transition: color 0.2s ease;">Serviço/Produto *</label>
-                    <input type="text" id="servicoGlobal" autocomplete="off" placeholder="Digite o serviço ou produto..." style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); outline: none;" 
-                        onfocus="this.style.borderColor='#2c5aa0'; this.style.boxShadow='0 0 0 3px rgba(44, 90, 160, 0.1)'; this.style.transform='translateY(-1px)'"
-                        onblur="this.style.borderColor='#ddd'; this.style.boxShadow='none'; this.style.transform='translateY(0)'" required>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="servicoGlobal" autocomplete="off" placeholder="Digite o serviço ou produto..." style="flex: 1; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); outline: none;" 
+                            onfocus="this.style.borderColor='#2c5aa0'; this.style.boxShadow='0 0 0 3px rgba(44, 90, 160, 0.1)'; this.style.transform='translateY(-1px)'"
+                            onblur="this.style.borderColor='#ddd'; this.style.boxShadow='none'; this.style.transform='translateY(0)'" required>
+                        <button type="button" id="btnAdicionarServico" style="padding: 12px 20px; border: none; border-radius: 8px; background: #2c5aa0; color: white; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.3s ease;" 
+                            onmouseover="this.style.background='#1e3a5f'; this.style.transform='scale(1.05)'" 
+                            onmouseout="this.style.background='#2c5aa0'; this.style.transform='scale(1)'">
+                            <i class="fas fa-plus"></i> Adicionar
+                        </button>
+                    </div>
                     <!-- Container para resultados (será preenchido dinamicamente) -->
                     <div id="resultados-servico-global" style="position: absolute; left: 0; right: 0; top: calc(100% + 6px); background: white; border: 1px solid #e0e0e0; box-shadow: 0 10px 30px rgba(0,0,0,0.08); max-height: 240px; overflow: auto; border-radius: 6px; display: none; z-index: 1000002;"></div>
+                    
+                    <!-- Lista de Serviços Adicionados -->
+                    <div id="listaServicos" style="margin-top: 15px; display: none;">
+                        <div style="background: #f8f9fa; border-radius: 8px; padding: 15px;">
+                            <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #2c5aa0;">Serviços Selecionados:</h4>
+                            <div id="servicosAdicionados"></div>
+                            <div style="margin-top: 10px; padding-top: 10px; border-top: 2px solid #2c5aa0; font-weight: bold; display: flex; justify-content: space-between;">
+                                <span>TOTAL:</span>
+                                <span id="valorTotal" style="color: #28a745; font-size: 16px;">R$ 0,00</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 
                 <div style="display: flex; gap: 15px; margin-bottom: 20px;">
@@ -203,6 +245,10 @@ function abrirNovoAgendamentoModal() {
     // ADICIONAR AO DOM
     document.body.appendChild(novoOverlay);
     document.body.appendChild(novoModal);
+    
+    // Array para armazenar serviços adicionados
+    window.servicosAdicionados = [];
+    
     // Carregar profissionais para o dropdown
     try{ carregarProfissionais(); }catch(e){ console.warn('carregarProfissionais não disponível no escopo ainda'); }
     document.body.style.overflow = 'hidden';
@@ -230,6 +276,9 @@ function abrirNovoAgendamentoModal() {
     
     // ADICIONAR EVENT LISTENERS
     function fecharModal() {
+        // Limpar lista de serviços ao fechar
+        window.servicosAdicionados = [];
+        
         // Animar saída (mais rápida que entrada)
         novoModal.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 1, 1)';
         novoOverlay.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 1, 1)';
@@ -418,14 +467,14 @@ function abrirNovoAgendamentoModal() {
                         data: formatDateForAPI(dados.data),
                         hora: dados.hora || '',
                         petId: petId || dados.petId || '',
-                        servico: dados.servico || (servicoSelectedId ? `#${servicoSelectedId}` : ''),
+                        servico: dados.servicosNomes || dados.servico || '', // String concatenada dos serviços
                         observacoes: dados.observacoes || '',
                         profissional: dados.profissional || '',
-                        valor: objAg.valor || 0
+                        valor: dados.valorTotal || objAg.valor || 0
                     };
 
                     if (!payload.petId) {
-                        alert('Selecione um Pet válido nas sugestões (clique no resultado).');
+                        showNotification('Selecione um Pet válido nas sugestões (clique no resultado).', 'error');
                         return;
                     }
 
@@ -449,17 +498,17 @@ function abrirNovoAgendamentoModal() {
                         });
                     } catch(e){
                         console.error('[novo-atendimento-global] Erro ao chamar API /api/agendamentos', e);
-                        alert('Erro ao salvar agendamento (falha na conexão). Veja o console.');
+                        showNotification('Erro ao salvar agendamento (falha na conexão). Veja o console.', 'error');
                         return;
                     }
 
                     if (!postResp || !postResp.ok) {
                         const text = await (postResp ? postResp.text() : Promise.resolve(''));
                         console.error('API /api/agendamentos retornou erro:', postResp && postResp.status, text);
-                        try {
-                            const j = postResp && postResp.json ? await postResp.json() : null;
-                            alert('Erro ao salvar: ' + (j && j.error ? j.error : (postResp.statusText || 'Erro desconhecido')));
-                        } catch(e){ alert('Erro ao salvar agendamento. Veja o console.'); }
+                        let j = null;
+                        try { j = text ? JSON.parse(text) : null; } catch (e) { j = null; }
+                        const msg = j && (j.error || j.message) ? (j.error || j.message) : (text || (postResp && postResp.statusText) || 'Erro desconhecido');
+                        showNotification('Erro ao salvar: ' + msg, 'error');
                         return;
                     }
 
@@ -497,7 +546,7 @@ function abrirNovoAgendamentoModal() {
                     fecharModal();
                 } catch (err) {
                     console.error('Erro ao salvar agendamento via API:', err);
-                    alert('Erro ao salvar agendamento. Veja o console para detalhes.');
+                    showNotification('Erro ao salvar agendamento. Veja o console para detalhes.', 'error');
                 }
             })();
         }
@@ -515,7 +564,7 @@ function abrirNovoAgendamentoModal() {
                 const objAg = criarObjetoAgendamento(dados);
                 
                 if (!petId) {
-                    alert('Por favor, selecione um Pet válido nas sugestões (clique no resultado).');
+                    showNotification('Por favor, selecione um Pet válido nas sugestões (clique no resultado).', 'error');
                     return;
                 }
 
@@ -531,10 +580,10 @@ function abrirNovoAgendamentoModal() {
                     data: formatDateForAPI(dados.data),
                     hora: dados.hora || '',
                     petId: petId,
-                    servico: dados.servico || '',
+                    servico: dados.servicosNomes || dados.servico || '', // String concatenada dos serviços
                     observacoes: dados.observacoes || '',
                     profissional: dados.profissional || '',
-                    valor: (objAg && objAg.valor) ? objAg.valor : 0
+                    valor: dados.valorTotal || (objAg && objAg.valor) ? objAg.valor : 0
                 };
 
                 // Chamar API
@@ -546,13 +595,13 @@ function abrirNovoAgendamentoModal() {
 
                 if (response.status === 409) {
                     const j = await response.json();
-                    alert('Não foi possível salvar: ' + (j?.error || j?.message || 'Conflito de horário.'));
+                    showNotification('Não foi possível salvar: ' + (j?.error || j?.message || 'Conflito de horário.'), 'error');
                     return;
                 }
 
                 if (!response.ok) {
                     const j = await response.json();
-                    alert('Erro ao salvar: ' + (j?.error || j?.message || response.statusText));
+                    showNotification('Erro ao salvar: ' + (j?.error || j?.message || response.statusText), 'error');
                     return;
                 }
 
@@ -579,7 +628,7 @@ function abrirNovoAgendamentoModal() {
                 fecharModal();
             } catch (err) {
                 console.error('❌ Erro ao salvar:', err);
-                alert('Erro ao salvar agendamento. Veja o console para detalhes.');
+                showNotification('Erro ao salvar agendamento. Veja o console para detalhes.', 'error');
             }
         }
     };
@@ -590,6 +639,98 @@ function abrirNovoAgendamentoModal() {
     }, 100);
     
     console.log('✅ Modal de Novo Agendamento criado e exibido!');
+
+    // =============================================
+    // FUNÇÕES PARA MÚLTIPLOS SERVIÇOS
+    // =============================================
+    
+    function adicionarServicoALista() {
+        const servicoInput = document.getElementById('servicoGlobal');
+        const servicoNome = servicoInput.value.trim();
+        const servicoId = servicoInput.getAttribute('data-selected-id');
+        const servicoValor = parseFloat(servicoInput.getAttribute('data-selected-valor') || '0');
+        
+        if (!servicoNome) {
+            showNotification('Por favor, selecione um serviço primeiro', 'error');
+            return;
+        }
+        
+        // Verificar se já foi adicionado
+        const jaExiste = window.servicosAdicionados.some(s => s.id === servicoId);
+        if (jaExiste) {
+            showNotification('Este serviço já foi adicionado', 'error');
+            return;
+        }
+        
+        // Adicionar à lista
+        window.servicosAdicionados.push({
+            id: servicoId,
+            nome: servicoNome,
+            valor: servicoValor
+        });
+        
+        // Limpar campo
+        servicoInput.value = '';
+        servicoInput.removeAttribute('data-selected-id');
+        servicoInput.removeAttribute('data-selected-valor');
+        
+        // Renderizar lista
+        renderizarListaServicos();
+    }
+    
+    function removerServico(servicoId) {
+        window.servicosAdicionados = window.servicosAdicionados.filter(s => s.id !== servicoId);
+        renderizarListaServicos();
+    }
+    
+    function renderizarListaServicos() {
+        const listaContainer = document.getElementById('listaServicos');
+        const servicosContainer = document.getElementById('servicosAdicionados');
+        const valorTotalElement = document.getElementById('valorTotal');
+        
+        if (window.servicosAdicionados.length === 0) {
+            listaContainer.style.display = 'none';
+            return;
+        }
+        
+        listaContainer.style.display = 'block';
+        
+        // Renderizar cada serviço
+        servicosContainer.innerHTML = window.servicosAdicionados.map(servico => `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: white; border-radius: 6px; margin-bottom: 8px;">
+                <span style="flex: 1; color: #333;">${servico.nome}</span>
+                <span style="color: #28a745; font-weight: 600; margin: 0 15px;">R$ ${servico.valor.toFixed(2).replace('.', ',')}</span>
+                <button type="button" onclick="window.removerServicoGlobal('${servico.id}')" style="background: #dc3545; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `).join('');
+        
+        // Calcular e mostrar total
+        const total = window.servicosAdicionados.reduce((acc, s) => acc + s.valor, 0);
+        valorTotalElement.textContent = `R$ ${total.toFixed(2).replace('.', ',')}`;
+    }
+    
+    // Expor funções globalmente
+    window.adicionarServicoGlobal = adicionarServicoALista;
+    window.removerServicoGlobal = removerServico;
+    
+    // Configurar botão adicionar serviço
+    const btnAdicionarServico = document.getElementById('btnAdicionarServico');
+    if (btnAdicionarServico) {
+        btnAdicionarServico.addEventListener('click', adicionarServicoALista);
+    }
+    
+    // Permitir adicionar com Enter
+    const servicoInput = document.getElementById('servicoGlobal');
+    if (servicoInput) {
+        servicoInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                adicionarServicoALista();
+            }
+        });
+    }
 
     // Configurar busca/auto-complete para o campo Pet/Cliente dentro deste modal
     try {
@@ -642,21 +783,36 @@ function abrirNovoAgendamentoModal() {
 // FUNÇÕES AUXILIARES
 // =============================================
 function coletarDadosFormulario() {
-    return {
+    // Calcular valor total dos serviços
+    const valorTotal = (window.servicosAdicionados || []).reduce((acc, s) => acc + s.valor, 0);
+    
+    const dados = {
         petCliente: document.getElementById('petClienteGlobal').value,
         servico: document.getElementById('servicoGlobal').value,
+        servicos: window.servicosAdicionados || [], // Array de serviços
+        servicosNomes: (window.servicosAdicionados || []).map(s => s.nome).join(', '), // String concatenada
         data: document.getElementById('dataGlobal').value,
         hora: document.getElementById('horaGlobal').value,
         profissional: (document.getElementById('profissionalGlobalInput') && document.getElementById('profissionalGlobalInput').value) || (document.getElementById('profissionalGlobal') && document.getElementById('profissionalGlobal').value) || '',
-        observacoes: document.getElementById('observacoesGlobal').value
+        observacoes: document.getElementById('observacoesGlobal').value,
+        valorTotal: valorTotal
     };
+    
+    console.log('📋 Dados coletados:', dados);
+    return dados;
 }
 
 function validarFormulario(dados) {
-    if (!dados.petCliente || !dados.servico) {
-        alert('Por favor, preencha os campos obrigatórios: Pet/Cliente e Serviço');
+    if (!dados.petCliente) {
+        showNotification('Por favor, preencha o campo obrigatório: Pet/Cliente', 'error');
         return false;
     }
+    
+    if (!dados.servicos || dados.servicos.length === 0) {
+        showNotification('Por favor, adicione pelo menos um serviço', 'error');
+        return false;
+    }
+    
     return true;
 }
 
@@ -683,29 +839,16 @@ function criarObjetoAgendamento(dados) {
         clienteNome = '';
     }
     
-    // Tentar obter valor do serviço selecionado
-    let valor = 0;
-    try {
-        const servicoInput = document.getElementById('servicoGlobal');
-        const selectedId = servicoInput?.getAttribute('data-selected-id');
-        if (selectedId) {
-            const meusItens = getMeusItensFromStorage();
-            const item = meusItens.find(x => String(x.id) === String(selectedId));
-            if (item) {
-                const preco = item.preco || item.venda || item.valor || 0;
-                valor = Number(String(preco).replace(',', '.')) || 0;
-            }
-        }
-    } catch (e) {
-        console.debug('Erro ao obter valor do serviço:', e);
-    }
+    // Usar valor total dos serviços adicionados
+    const valor = dados.valorTotal || 0;
     
     return {
         id: Date.now(),
         horario: dados.hora || '',
         petNome: petNome,
         clienteNome: clienteNome,
-        servico: dados.servico || '',
+        servico: dados.servicosNomes || dados.servico || '', // Usa lista concatenada de serviços
+        servicos: dados.servicos || [], // Array completo de serviços
         profissional: dados.profissional || '',
         valor: valor,
         status: 'agendado',
@@ -963,7 +1106,7 @@ function excluirAgendamentosSelecionados() {
     try {
         const checkboxes = document.querySelectorAll('#agendamentosTableBody input[type="checkbox"]:checked');
         if (checkboxes.length === 0) {
-            alert('Selecione pelo menos um agendamento para excluir.');
+            showNotification('Selecione pelo menos um agendamento para excluir.', 'error');
             return;
         }
 
@@ -1123,11 +1266,11 @@ function verDetalhesAgendamento(agendamentoId) {
             console.log('✅ Redirecionando para detalhes do agendamento:', agendamentoId);
         } else {
             console.error('❌ Agendamento não encontrado:', agendamentoId);
-            alert('Agendamento não encontrado!');
+            showNotification('Agendamento não encontrado!', 'error');
         }
     } catch (e) {
         console.error('❌ Erro ao carregar detalhes do agendamento:', e);
-        alert('Erro ao carregar detalhes do agendamento!');
+        showNotification('Erro ao carregar detalhes do agendamento!', 'error');
     }
     */
 }
@@ -1480,10 +1623,16 @@ async function searchPetsClientesGlobal(query){
                         if(obj){
                             input.value = obj.nome || obj.titulo || obj.name || '';
                             input.setAttribute('data-selected-id', String(obj.id));
+                            
+                            // Armazenar o valor do serviço para uso posterior
+                            const preco = obj.preco || obj.venda || obj.valor || 0;
+                            const valor = Number(String(preco).replace(',', '.')) || 0;
+                            input.setAttribute('data-selected-valor', String(valor));
                         } else {
                             // fallback: set visible text
                             input.value = this.textContent.trim();
                             input.removeAttribute('data-selected-id');
+                            input.removeAttribute('data-selected-valor');
                         }
                     // esconder e evitar reabrir imediatamente por causa do focus handler
                     container.style.display = 'none';

@@ -586,21 +586,22 @@
 }
 
 .status-tag.status-agendado {
-    background: #e3f2fd;
-    color: #1976d2;
+    background: #424242;
+    color: white;
 }
 
 .status-tag.status-agendado.active {
-    border-color: #1976d2;
+    border-color: #bdbdbd;
 }
 
 .status-tag.status-checkin {
-    background: #fff3e0;
-    color: #f57c00;
+    /* Check-in: azul suave (fundo claro) com texto azul */
+    background: #e3f2fd;
+    color: #1e88e5;
 }
 
 .status-tag.status-checkin.active {
-    border-color: #f57c00;
+    border-color: #1e88e5;
 }
 
 .status-tag.status-pronto {
@@ -625,13 +626,13 @@
 
 .status-tag.status-cancelado {
     /* Cancelado: cinza escuro */
-    background: #424242;
+    background: #c12b2b;
     color: white;
 }
 
 .status-tag.status-cancelado.active {
     /* Borda cinza claro para ser visível no fundo escuro */
-    border-color: #bdbdbd;
+    border-color: #421212;
 }
 
 .btn-filter {
@@ -1613,7 +1614,7 @@
 }
 
 .status-option.status-checkin {
-    color: #007bff;
+    color: #bdbdbd;
     background: transparent;
 }
 

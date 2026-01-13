@@ -334,15 +334,16 @@ body {
 }
 
 .status-select {
-    background: #28a745;
-    color: white;
-    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    border: 1px solid #ddd;
     border-radius: 20px;
     padding: 8px 16px;
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
     min-width: 120px;
+    transition: background-color 0.15s ease, color 0.15s ease, border 0.15s ease;
 }
 
 .status-select:focus {
@@ -424,6 +425,55 @@ body {
 
 .action-btn i {
     font-size: 14px;
+}
+
+/* Status badges (sobrescreve estilos globais para os badges na página de detalhes) */
+.agendamento-situacao .status-badge {
+    display: inline-block;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: none;
+    min-width: 110px;
+    text-align: center;
+}
+
+/* Agendado - outlined blue */
+.agendamento-situacao .status-badge.status-agendado {
+    background: #ffffff !important;
+    color: #6c757d !important; /* cinza */
+    border: 2px solid #6c757d !important;
+    box-shadow: none !important;
+}
+
+/* Check-in - light orange */
+.agendamento-situacao .status-badge.status-check-in {
+    background: #1e88e5 !important; /* azul */
+    color: #ffffff !important;
+    border: none !important;
+}
+
+/* Pronto - light purple */
+.agendamento-situacao .status-badge.status-pronto {
+    background: #f5eafd !important;
+    color: #8e24aa !important;
+    border: none !important;
+}
+
+/* Check-out / Concluido - light green */
+.agendamento-situacao .status-badge.status-check-out,
+.agendamento-situacao .status-badge.status-concluido {
+    background: #edf7ee !important;
+    color: #2e7d32 !important;
+    border: none !important;
+}
+
+/* Cancelado - dark solid */
+.agendamento-situacao .status-badge.status-cancelado {
+    background: #424242 !important;
+    color: #ffffff !important;
+    border: none !important;
 }
 
 .btn-add-item i,

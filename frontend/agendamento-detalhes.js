@@ -314,6 +314,9 @@ async function carregarAgendamento() {
         }
         
         // Buscar diretamente da API
+        // Mostrar placeholders nos itens para evitar flash de conteúdo antigo
+        try { showItemsPlaceholder(); } catch (e) { /* ignore */ }
+
         console.log(`📡 Buscando agendamento ${agendamentoId} da API...`);
         const response = await fetch(`/api/agendamentos/${agendamentoId}`);
         
@@ -438,43 +441,127 @@ function preencherDadosAgendamento(agendamento) {
         const observacoes = document.getElementById('observacoes');
         if (observacoes) observacoes.value = agendamento.observacoes || '';
         
-        // Preenche o serviço na tabela
-        const servicoDesc = document.querySelector('.col-descricao');
-        if (servicoDesc && agendamento.servico) {
-            servicoDesc.textContent = agendamento.servico;
-        }
+                // Renderiza a lista de serviços/produtos na seção "Serviços e Produtos"
+                try {
+                        const category = document.querySelector('.category-section');
+                        if (category) {
+                                // Remove itens de exemplo existentes
+                                category.querySelectorAll('.service-item').forEach(n => n.remove());
+
+                                // Normaliza possíveis fontes de dados
+                                const servicosArray = Array.isArray(agendamento.servicos) ? agendamento.servicos : null;
+                                const nomesConcatenados = agendamento.servicosNomes || agendamento.servicos_nome || agendamento.servico || '';
+                                const valorTotalAgendamento = parseFloat(agendamento.valor || agendamento.valorTotal || agendamento.total) || 0;
+
+                                if (servicosArray && servicosArray.length > 0) {
+                                        servicosArray.forEach(s => {
+                                                const nome = s.nome || s.nomeServico || String(s).trim();
+                                                const horario = s.horario || s.time || '';
+                                                const data = s.data || s.dataServico || '';
+                                                const profissional = s.profissional || s.profissionalNome || '';
+                                                const qtd = s.quantidade || s.qtd || 1;
+                                                const unitario = parseFloat(s.unitario || s.valor_unitario || s.valor || 0) || 0;
+                                                const total = parseFloat(s.total || s.valor || unitario * qtd) || unitario * qtd;
+
+                                                const item = document.createElement('div');
+                                                item.className = 'service-item';
+                                                item.innerHTML = `
+                                                        <div class="col-horario">
+                                                            <i class="fas fa-clock"></i>
+                                                            <div class="time-info">
+                                                                <span class="time">${horario || ''}</span>
+                                                                <small class="date">${data || ''}</small>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-descricao">
+                                                            <div class="service-name">${escapeHtmlUnsafe(nome)}</div>
+                                                        </div>
+                                                        <div class="col-profissional">${escapeHtmlUnsafe(profissional)}</div>
+                                                        <div class="col-qtd">${escapeHtmlUnsafe(qtd)}</div>
+                                                        <div class="col-unitario">${formatarMoeda(unitario)}</div>
+                                                        <div class="col-desconto">${escapeHtmlUnsafe(s.desconto || '-')}</div>
+                                                        <div class="col-total">${formatarMoeda(total)}</div>
+                                                        <div class="col-acoes">
+                                                            <button class="btn-item-action" title="Mais opções"><i class="fas fa-ellipsis-v"></i></button>
+                                                        </div>
+                                                `;
+                                                category.appendChild(item);
+                                        });
+                                } else if (nomesConcatenados) {
+                                        // Se não houver array, renderiza a string concatenada como um único item
+                                        const item = document.createElement('div');
+                                        item.className = 'service-item';
+                                        item.innerHTML = `
+                                                <div class="col-horario">
+                                                    <i class="fas fa-clock"></i>
+                                                </div>
+                                                <div class="col-descricao">
+                                                    <div class="service-name">${escapeHtmlUnsafe(nomesConcatenados)}</div>
+                                                </div>
+                                                <div class="col-profissional">-</div>
+                                                <div class="col-qtd">1</div>
+                                                <div class="col-unitario">${formatarMoeda(valorTotalAgendamento)}</div>
+                                                <div class="col-desconto">-</div>
+                                                <div class="col-total">${formatarMoeda(valorTotalAgendamento)}</div>
+                                                <div class="col-acoes">
+                                                    <button class="btn-item-action" title="Mais opções"><i class="fas fa-ellipsis-v"></i></button>
+                                                </div>
+                                        `;
+                                        category.appendChild(item);
+                                }
+
+                                // Atualiza totais laterais
+                                const totalGeral = document.getElementById('totalGeral');
+                                if (totalGeral) totalGeral.textContent = formatarMoeda(valorTotalAgendamento);
+                                const totalPendente = document.getElementById('totalPendente');
+                                if (totalPendente) totalPendente.textContent = formatarMoeda(valorTotalAgendamento);
+                                const amount = document.querySelector('.amount');
+                                if (amount) amount.textContent = formatarMoeda(valorTotalAgendamento);
+
+                                // Atualiza Profissional Responsável na barra lateral (puxa da API/agendamento)
+                                try {
+                                    const profSection = document.querySelector('.professional-section .professional-content');
+                                    if (profSection) {
+                                        profSection.innerHTML = '';
+                                        const profName = agendamento.profissional || agendamento.profissionalNome || (Array.isArray(agendamento.servicos) && agendamento.servicos[0] && (agendamento.servicos[0].profissional || agendamento.servicos[0].profissionalNome)) || '-';
+                                        const wrapper = document.createElement('div');
+                                        wrapper.className = 'prof-card';
+                                        const nameEl = document.createElement('div');
+                                        nameEl.className = 'prof-name';
+                                        nameEl.textContent = profName;
+                                        wrapper.appendChild(nameEl);
+                                        profSection.appendChild(wrapper);
+                                    }
+                                } catch (e) { console.warn('Erro ao preencher Profissional:', e); }
+                        }
+                } catch (e) {
+                        console.warn('Erro ao renderizar serviços:', e);
+                }
         
-        // Preenche profissional
-        const profissionalCell = document.querySelector('.col-profissional');
-        if (profissionalCell && agendamento.profissional) {
-            profissionalCell.textContent = agendamento.profissional;
-        }
-        
-        // Preenche horário
-        const horarioCell = document.querySelector('.col-horario');
-        if (horarioCell && agendamento.horario) {
-            horarioCell.textContent = agendamento.horario;
-        }
-        
-        // Preenche valores
-        const valor = parseFloat(agendamento.valor) || 0;
-        
-        const totalGeral = document.getElementById('totalGeral');
-        if (totalGeral) totalGeral.textContent = formatarMoeda(valor);
-        
-        const totalPendente = document.getElementById('totalPendente');
-        if (totalPendente) totalPendente.textContent = formatarMoeda(valor);
-        
-        const amount = document.querySelector('.amount');
-        if (amount) amount.textContent = formatarMoeda(valor);
-        
-        // Preenche valor unitário e total na tabela
-        const unitarioCell = document.querySelector('.col-unitario');
-        if (unitarioCell) unitarioCell.textContent = formatarMoeda(valor);
-        
-        const totalCell = document.querySelector('.col-total');
-        if (totalCell) totalCell.textContent = formatarMoeda(valor);
-        
+        // Garantir que todos os locais que exibem o profissional sejam preenchidos
+        try {
+            const profFromAg = agendamento.profissional || agendamento.profissionalNome || (Array.isArray(agendamento.servicos) && agendamento.servicos[0] && (agendamento.servicos[0].profissional || agendamento.servicos[0].profissionalNome)) || '-';
+            // Preencher apenas as células de profissional dentro dos itens (não alterar o cabeçalho da tabela)
+            document.querySelectorAll('.category-section .col-profissional, .service-item .col-profissional').forEach(el => { el.textContent = profFromAg; });
+            document.querySelectorAll('.agendamento-profissional').forEach(el => { el.textContent = profFromAg; });
+            const profSidebar = document.querySelector('.professional-section .professional-content');
+            if (profSidebar && !profSidebar.textContent.trim()) {
+                profSidebar.innerHTML = '';
+                const wrapper = document.createElement('div');
+                wrapper.className = 'prof-card';
+                const nameEl = document.createElement('div');
+                nameEl.className = 'prof-name';
+                nameEl.textContent = profFromAg;
+                wrapper.appendChild(nameEl);
+                profSidebar.appendChild(wrapper);
+            }
+            const infoProf = document.querySelector('.info-row:nth-child(2) .info-value');
+            if (infoProf) infoProf.textContent = profFromAg;
+        } catch (e) { console.warn('Erro ao popular profissionais em múltiplos locais:', e); }
+
+        // Atualiza ícones dos serviços conforme status
+        try { updateServiceIcons(agendamento.status || agendamento.statusTexto || agendamento.status_nome); } catch(e){/* ignore */}
+
         console.log('✅ Dados preenchidos na tela');
     } catch (error) {
         console.error('Erro ao preencher dados:', error);
@@ -506,6 +593,41 @@ function formatarMoeda(valor) {
     return valor || '0,00';
 }
 
+// Mostra placeholders '...' na seção de itens enquanto os dados carregam
+function showItemsPlaceholder() {
+        try {
+                const category = document.querySelector('.category-section');
+                if (!category) return;
+
+                // Remove itens atuais e adiciona item placeholder
+                category.querySelectorAll('.service-item').forEach(n => n.remove());
+
+                const item = document.createElement('div');
+                item.className = 'service-item placeholder-item';
+                item.innerHTML = `
+                        <div class="col-horario">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="col-descricao">
+                            <div class="service-name">...</div>
+                        </div>
+                        <div class="col-profissional">...</div>
+                        <div class="col-qtd">...</div>
+                        <div class="col-unitario">...</div>
+                        <div class="col-desconto">...</div>
+                        <div class="col-total">...</div>
+                        <div class="col-acoes"></div>
+                `;
+
+                category.appendChild(item);
+
+                // Totais também com placeholder
+                const totalGeral = document.getElementById('totalGeral'); if (totalGeral) totalGeral.textContent = '...';
+                const totalPendente = document.getElementById('totalPendente'); if (totalPendente) totalPendente.textContent = '...';
+                const amount = document.querySelector('.amount'); if (amount) amount.textContent = '...';
+        } catch (e) { console.warn('Erro ao mostrar placeholders:', e); }
+}
+
 // Função para alternar abas
 function alternarAba(aba) {
     // Remove classe active de todas as abas
@@ -530,28 +652,89 @@ function atualizarClasseStatus(selectElement) {
     selectElement.className = 'status-select';
     
     // Adiciona classe específica baseada no status
-    switch(status) {
+    // normalizar possíveis variantes de valor (ex: 'checkin' vs 'check-in')
+    const normalized = String(status).toLowerCase().replace(/_/g, '-');
+    // limpar estilos inline anteriores
+    selectElement.style.background = '';
+    selectElement.style.color = '';
+    selectElement.style.border = '';
+    selectElement.style.boxShadow = '';
+
+    switch(normalized) {
         case 'agendado':
-            selectElement.style.background = '#4CAF50';
+            // outlined gray
+            selectElement.style.background = '#ffffff';
+            selectElement.style.color = '#6c757d';
+            selectElement.style.border = '2px solid #6c757d';
+            selectElement.style.boxShadow = 'none';
             break;
+        case 'checkin':
         case 'check-in':
-            selectElement.style.background = '#007bff';
+            // filled blue
+            selectElement.style.background = '#1e88e5';
+            selectElement.style.color = '#ffffff';
+            selectElement.style.border = 'none';
             break;
         case 'confirmado':
-            selectElement.style.background = '#2196F3';
+            // keep confirmed as blue variant (legacy mapping)
+            selectElement.style.background = '#1e88e5';
+            selectElement.style.color = '#ffffff';
+            selectElement.style.border = 'none';
+            break;
+        case 'pronto':
+            // light purple
+            selectElement.style.background = '#f5eafd';
+            selectElement.style.color = '#8e24aa';
+            selectElement.style.border = 'none';
             break;
         case 'em-atendimento':
-            selectElement.style.background = '#FF9800';
+            // treat as orange-ish
+            selectElement.style.background = '#fff4e6';
+            selectElement.style.color = '#ff8a00';
+            selectElement.style.border = 'none';
             break;
+        case 'concluido':
+        case 'check-out':
+        case 'checkout':
         case 'finalizado':
-            selectElement.style.background = '#9C27B0';
+            // light green
+            selectElement.style.background = '#edf7ee';
+            selectElement.style.color = '#2e7d32';
+            selectElement.style.border = 'none';
             break;
         case 'cancelado':
-            selectElement.style.background = '#F44336';
+            // canceled: red solid
+            selectElement.style.background = '#c12b2b';
+            selectElement.style.color = '#ffffff';
+            selectElement.style.border = 'none';
             break;
         default:
-            selectElement.style.background = '#007bff';
+            selectElement.style.background = '#ffffff';
+            selectElement.style.color = '#333';
+            selectElement.style.border = '1px solid #ddd';
     }
+}
+
+// Atualiza ícones dos serviços: relógio -> check quando status for check-out/concluido
+function updateServiceIcons(status) {
+    try {
+        const normalized = String(status || '').toLowerCase();
+        const isChecked = ['concluido', 'check-out', 'checkout'].includes(normalized);
+        const icons = document.querySelectorAll('.category-section .col-horario i');
+        icons.forEach(i => {
+            // remover classes antigas
+            i.classList.remove('fa-clock');
+            i.classList.remove('fa-check');
+            i.classList.remove('fa-check-circle');
+            if (isChecked) {
+                i.classList.add('fa-check');
+                i.style.color = '#2e7d32';
+            } else {
+                i.classList.add('fa-clock');
+                i.style.color = ''; 
+            }
+        });
+    } catch (e) { console.warn('Erro updateServiceIcons', e); }
 }
 
 // Função para finalizar cobrança e fazer checkout
@@ -621,6 +804,22 @@ async function salvarStatus() {
         
         if (response.ok) {
             console.log('✅ Status atualizado na API');
+            // Atualiza visualmente qualquer linha da lista presente nesta página
+            try { atualizarLinhaListaStatus(agendamentoAtual.id, novoStatus); } catch(e){ console.warn('Não foi possível atualizar a linha da lista localmente', e); }
+
+            // Atualizar ícones dos serviços na página de detalhes
+            try { updateServiceIcons(novoStatus); } catch(e){ console.warn('Erro ao atualizar ícones após salvar status', e); }
+
+            // Notifica outras abas/janelas via BroadcastChannel (se disponível)
+            try {
+                if (typeof BroadcastChannel !== 'undefined') {
+                    const bc = new BroadcastChannel('agendamentos_channel');
+                    bc.postMessage({ type: 'status-updated', id: agendamentoAtual.id, status: novoStatus });
+                    bc.close();
+                } else if (window.opener && window.opener.postMessage) {
+                    window.opener.postMessage({ type: 'status-updated', id: agendamentoAtual.id, status: novoStatus }, '*');
+                }
+            } catch (e) { console.warn('Broadcast de status falhou', e); }
         } else {
             console.warn('⚠️ Erro ao salvar na API, salvando apenas no localStorage');
         }
@@ -633,6 +832,32 @@ async function salvarStatus() {
         console.error('Erro ao salvar status:', error);
         // Atualiza apenas no localStorage em caso de erro
         atualizarLocalStorage();
+    }
+}
+
+// Atualiza a linha da lista de agendamentos caso ela exista no DOM desta página
+function atualizarLinhaListaStatus(id, status) {
+    try {
+        const row = document.querySelector(`.agendamento-row[data-agendamento-id="${id}"]`);
+        if (!row) return;
+        const badge = row.querySelector('.status-badge');
+        if (!badge) return;
+
+        // Mapear label para exibição
+        const s = String(status || '').toLowerCase();
+        const classMap = { 'checkin': 'check-in', 'check-in': 'check-in', 'checkout': 'check-out', 'check-out': 'check-out', 'concluido': 'check-out' };
+        const statusClass = classMap[s] || s.replace(/[^a-z0-9]+/g, '-');
+
+        const labelMap = { agendado: 'Agendado', 'check-in': 'Check-in', pronto: 'Pronto', 'check-out': 'Check-out', cancelado: 'Cancelado' };
+        const display = labelMap[statusClass] || status;
+
+        // Remover estilos inline antigos para aplicar CSS corretamente
+        badge.removeAttribute('style');
+
+        badge.className = `status-badge status-${statusClass}`;
+        badge.textContent = display;
+    } catch (e) {
+        console.error('Erro ao atualizar linha de lista localmente:', e);
     }
 }
 
@@ -701,6 +926,157 @@ async function salvarObservacoes() {
 // Função para voltar à lista de agendamentos
 function voltarParaLista() {
     window.location.href = 'agendamentos-novo.html';
+}
+
+// Abre modal pequeno centralizado para adicionar item (produto/serviço)
+function openAddItemModal() {
+    // evitar múltiplos modais
+    if (document.getElementById('modalAdicionarItem')) return;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'modalAdicionarItemOverlay';
+    overlay.style.cssText = 'position:fixed;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;z-index:1200000;';
+
+    const modal = document.createElement('div');
+    modal.id = 'modalAdicionarItem';
+    modal.style.cssText = 'width:520px;background:white;border-radius:8px;box-shadow:0 10px 40px rgba(2,16,26,0.3);overflow:hidden;font-family:inherit;';
+    modal.innerHTML = `
+        <div style="background:#f5f6f8;padding:12px 16px;border-bottom:1px solid #e6e9ee;display:flex;align-items:center;justify-content:space-between;">
+            <strong>Adicionar Item</strong>
+            <button id="fecharModalAdicionarItem" style="background:transparent;border:none;font-size:18px;cursor:pointer;color:#666">✕</button>
+        </div>
+        <div style="padding:16px;">
+            <label style="display:block;margin-bottom:6px;font-weight:600;color:#333">Produto/Serviço *</label>
+            <input id="adicionarItemInput" type="text" placeholder="Digite para buscar..." style="width:100%;padding:10px;border:1px solid #dfe6ef;border-radius:6px;margin-bottom:8px;box-sizing:border-box;">
+            <div id="adicionarItemResults" style="max-height:220px;overflow:auto;border:1px solid #f1f5f9;border-radius:6px;display:none;margin-bottom:8px;"></div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;">
+                <button id="btnSalvarItem" class="btn" style="background:#28a745;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer">Salvar</button>
+                <button id="btnFecharItem" class="btn" style="background:#c12b2b;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer">Cancelar</button>
+            </div>
+        </div>
+    `;
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    const input = document.getElementById('adicionarItemInput');
+    const results = document.getElementById('adicionarItemResults');
+
+    // search function using global cache from novo-atendimento-global
+    async function doSearch(q){
+        const qq = (q||'').trim();
+        if(!qq){ results.style.display='none'; results.innerHTML=''; return; }
+        try { if (window.ensureMeusItensLoaded) await window.ensureMeusItensLoaded(); } catch(e){}
+        const all = Array.isArray(window.__meusItensCache) ? window.__meusItensCache : [];
+        const filtered = (all||[]).filter(it => {
+            const nome = String(it.nome || it.titulo || '').toLowerCase();
+            return nome.indexOf(qq.toLowerCase()) !== -1;
+        }).slice(0,40);
+        if(!filtered || filtered.length===0){ results.innerHTML = '<div style="padding:10px;color:#666">Nenhum serviço encontrado</div>'; results.style.display='block'; return; }
+        results.innerHTML = filtered.map(it => `
+            <div class="resultado-add-item" data-id="${escapeHtmlUnsafe(it.id)}" style="padding:10px;border-bottom:1px solid #f6f6f6;cursor:pointer;">
+                <div style="font-weight:700;color:#222">${escapeHtmlUnsafe(it.nome||it.titulo||'')}</div>
+                <div style="font-size:13px;color:#6b7280">${escapeHtmlUnsafe(String(it.tipo||''))} ${it.preco?(' • '+formatarMoeda(Number(String(it.preco).replace(',','.')))):''}</div>
+            </div>
+        `).join('');
+        results.style.display = 'block';
+        Array.from(results.querySelectorAll('.resultado-add-item')).forEach(el => el.addEventListener('click', function(){
+            const id = this.getAttribute('data-id');
+            const all = Array.isArray(window.__meusItensCache) ? window.__meusItensCache : [];
+            const obj = all.find(x => String(x.id) === String(id));
+            if(obj){
+                input.value = obj.nome || obj.titulo || '';
+                input.setAttribute('data-selected-id', String(obj.id));
+                input.setAttribute('data-selected-valor', String(obj.preco || obj.venda || obj.valor || 0));
+            }
+            results.style.display='none';
+        }));
+    }
+
+    const deb = (function(){let t; return function(fn,ms){ clearTimeout(t); t=setTimeout(fn,ms||250); }; })();
+    input.addEventListener('input', function(e){ deb(()=>doSearch(input.value),250); });
+    input.addEventListener('focus', function(){ if(input.value) doSearch(input.value); });
+
+    // Salvar item (permite adicionar múltiplos)
+    document.getElementById('btnSalvarItem').addEventListener('click', function(){
+        const selId = input.getAttribute('data-selected-id');
+        const nome = input.value.trim();
+        const valor = Number(String(input.getAttribute('data-selected-valor')||'0').replace(',','.')) || 0;
+        if(!nome || (!selId && nome.length===0)){
+            // Preferir notificações do sistema se existir
+            try {
+                if (window.showNotification) {
+                    window.showNotification('Por favor, selecione um serviço/produto primeiro', 'error');
+                } else {
+                    // fallback simples: criar toast local
+                    const n = document.createElement('div');
+                    n.className = 'notification-toast notification-error';
+                    n.style.cssText = 'position:fixed;right:18px;top:18px;z-index:1200010;min-width:220px;max-width:420px;padding:12px 16px;border-radius:8px;box-shadow:0 8px 24px rgba(2,16,26,0.12);font-weight:400;display:flex;align-items:center;gap:12px;background:#fff2f2;color:#661426;';
+                    n.innerHTML = `<div style="flex:0 0 28px;text-align:center;font-size:18px;color:#7b1f2d;"><i class="fas fa-exclamation-circle"></i></div><div style="flex:1">Por favor, selecione um serviço primeiro</div><button style="background:transparent;border:none;color:#999;cursor:pointer;font-size:14px;" onclick="this.parentElement.remove()">✕</button>`;
+                    document.body.appendChild(n);
+                    setTimeout(()=>{ try{ n.remove(); }catch(e){} }, 5000);
+                }
+            } catch(e){ console.warn('notify fallback failed', e); }
+            return;
+        }
+        // criar objeto de serviço compatível com preencherDadosAgendamento
+        const s = { id: selId || Date.now(), nome: nome, quantidade: 1, unitario: valor, valor: valor, total: valor, profissional: (agendamentoAtual && agendamentoAtual.profissional) ? agendamentoAtual.profissional : '-' };
+        if(!agendamentoAtual) agendamentoAtual = { servicos: [] };
+        if(!Array.isArray(agendamentoAtual.servicos)) agendamentoAtual.servicos = [];
+        agendamentoAtual.servicos.push(s);
+        // atualizar DOM: anexar item ao final da category-section
+        appendServiceToCategory(s);
+        // atualizar totais
+        try { const prevTotal = parseFloat(document.getElementById('totalGeral')?.textContent.replace(/[R$\s\.]/g,'').replace(',','.')||0); const newTotal = (agendamentoAtual.servicos||[]).reduce((acc,it)=>acc + (parseFloat(it.total||it.valor||0)||0),0); document.getElementById('totalGeral').textContent = formatarMoeda(newTotal); document.getElementById('totalPendente').textContent = formatarMoeda(newTotal); const amount = document.querySelector('.amount'); if(amount) amount.textContent = formatarMoeda(newTotal); } catch(e){}
+        // limpar input para permitir adicionar outro
+        input.value = '';
+        input.removeAttribute('data-selected-id');
+        input.removeAttribute('data-selected-valor');
+        input.focus();
+    });
+
+    document.getElementById('btnFecharItem').addEventListener('click', closeModal);
+    document.getElementById('fecharModalAdicionarItem').addEventListener('click', closeModal);
+
+    function closeModal(){ try{ overlay.remove(); }catch(e){} }
+}
+
+function appendServiceToCategory(s){
+    try{
+        const category = document.querySelector('.category-section');
+        if(!category) return;
+        const horario = s.horario || '';
+        const data = s.data || '';
+        const nome = s.nome || s.nomeServico || '';
+        const profissional = s.profissional || '';
+        const qtd = s.quantidade || 1;
+        const unitario = parseFloat(s.unitario || s.valor || 0) || 0;
+        const total = parseFloat(s.total || unitario * qtd) || unitario * qtd;
+
+        const item = document.createElement('div');
+        item.className = 'service-item';
+        item.innerHTML = `
+            <div class="col-horario">
+              <i class="fas fa-clock"></i>
+              <div class="time-info">
+                <span class="time">${escapeHtmlUnsafe(horario)}</span>
+                <small class="date">${escapeHtmlUnsafe(data)}</small>
+              </div>
+            </div>
+            <div class="col-descricao">
+              <div class="service-name">${escapeHtmlUnsafe(nome)}</div>
+            </div>
+            <div class="col-profissional">${escapeHtmlUnsafe(profissional)}</div>
+            <div class="col-qtd">${escapeHtmlUnsafe(qtd)}</div>
+            <div class="col-unitario">${formatarMoeda(unitario)}</div>
+            <div class="col-desconto">-</div>
+            <div class="col-total">${formatarMoeda(total)}</div>
+            <div class="col-acoes">
+              <button class="btn-item-action" title="Mais opções"><i class="fas fa-ellipsis-v"></i></button>
+            </div>
+        `;
+        category.appendChild(item);
+    }catch(e){ console.warn('appendServiceToCategory error', e); }
 }
 
 // Função para adicionar item (placeholder)
@@ -773,7 +1149,7 @@ function setupStatusDropdown() {
             { label: 'Check-in', value: 'checkin', dot: '#1e88e5' },
             { label: 'Pronto', value: 'pronto', dot: '#7b1fa2' },
             { label: 'Check-out', value: 'concluido', dot: '#2e7d32' },
-            { label: 'Cancelado', value: 'cancelado', dot: '#495057' }
+            { label: 'Cancelado', value: 'cancelado', dot: '#c12b2b' }
         ];
 
         options.forEach(opt => {
@@ -912,6 +1288,15 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(() => {
         setupStatusDropdown();
     }, 300);
+
+    // Configurar botão + Item para abrir modal de adicionar item
+    const btnAddItem = document.querySelector('.btn-add-item');
+    if (btnAddItem) {
+        btnAddItem.addEventListener('click', function(e){
+            e.preventDefault(); e.stopPropagation();
+            openAddItemModal();
+        });
+    }
     
     console.log('✅ Página de detalhes do agendamento inicializada');
 });
