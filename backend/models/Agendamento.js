@@ -25,6 +25,12 @@ const Agendamento = sequelize.define('Agendamento', {
         allowNull: false,
         comment: 'Tipo de serviço (consulta, banho, vacina, etc.)'
     },
+    servicos: {
+        type: DataTypes.JSON,
+        allowNull: true,
+        defaultValue: [],
+        comment: 'Array de serviços/produtos detalhados (cada item com nome, quantidade, valor, etc.)'
+    },
     observacoes: {
         type: DataTypes.TEXT,
         allowNull: true,

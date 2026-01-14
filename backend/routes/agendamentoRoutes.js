@@ -61,6 +61,7 @@ router.get('/', async (req, res) => {
             petNome: agendamento.pet?.nome || 'Pet não encontrado',
             clienteNome: agendamento.pet?.cliente?.nome || 'Cliente não encontrado',
             servico: agendamento.servico,
+            servicos: agendamento.servicos || [],
             observacoes: agendamento.observacoes,
             profissional: agendamento.profissional,
             valor: agendamento.valor,
@@ -100,6 +101,7 @@ router.get('/:id', async (req, res) => {
             petNome: agendamento.pet?.nome || 'Pet não encontrado',
             clienteNome: agendamento.pet?.cliente?.nome || 'Cliente não encontrado',
             servico: agendamento.servico,
+            servicos: agendamento.servicos || [],
             observacoes: agendamento.observacoes,
             profissional: agendamento.profissional,
             valor: agendamento.valor,
@@ -118,7 +120,7 @@ router.get('/:id', async (req, res) => {
 // POST /api/agendamentos - Criar novo agendamento
 router.post('/', async (req, res) => {
     try {
-        const { data, hora, petId, servico, observacoes, profissional, valor } = req.body;
+        const { data, hora, petId, servico, servicos, observacoes, profissional, valor } = req.body;
 
         // Validações básicas
         if (!data || !hora || !petId || !servico) {
@@ -159,6 +161,7 @@ router.post('/', async (req, res) => {
             horario: hora,
             petId,
             servico,
+            servicos: Array.isArray(servicos) ? servicos : (servico ? [{ nome: servico, valor: valor || 0 }] : []),
             observacoes: observacoes || '',
             profissional: profissional || '',
             valor: valor || 0,
@@ -200,7 +203,7 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { data, hora, petId, servico, observacoes, profissional, valor, status } = req.body;
+        const { data, hora, petId, servico, servicos, observacoes, profissional, valor, status } = req.body;
 
         const agendamento = await Agendamento.findByPk(id);
         if (!agendamento) {
@@ -217,6 +220,33 @@ router.put('/:id', async (req, res) => {
         
         if (petId) updateData.petId = petId;
         if (servico) updateData.servico = servico;
+        // Se o cliente enviar um array estruturado de serviços, persista também no campo JSON
+        if (servicos && Array.isArray(servicos)) {
+            // Mesclar com o que já existe no banco para evitar perda de dados
+            try {
+                const existing = Array.isArray(agendamento.servicos) ? agendamento.servicos : [];
+                const combined = existing.concat(servicos);
+                // Deduplicar por id ou por conteúdo serializado quando id ausente
+                const seen = new Map();
+                for (const it of combined) {
+                    try {
+                        const key = (it && (it.id !== undefined && it.id !== null)) ? String(it.id) : JSON.stringify(it);
+                        if (!seen.has(key)) seen.set(key, it);
+                    } catch (e) {
+                        // fallback: use index-based key
+                        const key = JSON.stringify(it);
+                        if (!seen.has(key)) seen.set(key, it);
+                    }
+                }
+                const merged = Array.from(seen.values());
+                updateData.servicos = merged;
+                // atualizar campo texto concatenado para compatibilidade com views legadas
+                const names = merged.map(s => s && (s.nome || s.name || s.nomeServico) ? (s.nome || s.name || s.nomeServico) : '').filter(Boolean);
+                updateData.servico = names.join(', ');
+            } catch (e) {
+                updateData.servicos = servicos;
+            }
+        }
         if (observacoes !== undefined) updateData.observacoes = observacoes;
         if (profissional !== undefined) updateData.profissional = profissional;
         if (valor !== undefined) updateData.valor = valor;
@@ -241,6 +271,7 @@ router.put('/:id', async (req, res) => {
             petNome: agendamentoAtualizado.pet?.nome || 'Pet não encontrado',
             clienteNome: agendamentoAtualizado.pet?.cliente?.nome || 'Cliente não encontrado',
             servico: agendamentoAtualizado.servico,
+            servicos: agendamentoAtualizado.servicos || [],
             observacoes: agendamentoAtualizado.observacoes,
             profissional: agendamentoAtualizado.profissional,
             valor: agendamentoAtualizado.valor,

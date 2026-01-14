@@ -450,8 +450,13 @@ function preencherDadosAgendamento(agendamento) {
 
                                 // Normaliza possíveis fontes de dados
                                 const servicosArray = Array.isArray(agendamento.servicos) ? agendamento.servicos : null;
+                                // manter cópia estruturada dos serviços existentes (pode ser undefined para registros legados)
+                                try { agendamento.__existingServicosArray = Array.isArray(agendamento.servicos) ? agendamento.servicos.slice() : []; } catch(e) { agendamento.__existingServicosArray = []; }
                                 const nomesConcatenados = agendamento.servicosNomes || agendamento.servicos_nome || agendamento.servico || '';
                                 const valorTotalAgendamento = parseFloat(agendamento.valor || agendamento.valorTotal || agendamento.total) || 0;
+                                // armazenar totals/servicos originais para permitir somar novos itens posteriormente
+                                try { agendamento.__existingTotal = valorTotalAgendamento; } catch(e){}
+                                try { agendamento.__existingServicosString = nomesConcatenados || (agendamento.servico || ''); } catch(e){}
 
                                 if (servicosArray && servicosArray.length > 0) {
                                         servicosArray.forEach(s => {
@@ -962,72 +967,196 @@ function openAddItemModal() {
     const input = document.getElementById('adicionarItemInput');
     const results = document.getElementById('adicionarItemResults');
 
-    // search function using global cache from novo-atendimento-global
+    // garantir array para itens adicionados nesta sessão (não sobrescreve dados do servidor)
+    if (!agendamentoAtual) agendamentoAtual = {};
+    if (!Array.isArray(agendamentoAtual._addedServicos)) agendamentoAtual._addedServicos = [];
+
+    // Busca direto via API (não usa cache no navegador). Usa AbortController para cancelar requisições pendentes.
+    let __currentSearchController = null;
+    const SEARCH_API_PATH = '/api/itens?q='; // endpoint que retorna itens do banco (usar ?q= para compatibilidade)
+    let __loadingTimeout = null;
+    let __isComposing = false;
+
     async function doSearch(q){
         const qq = (q||'').trim();
         if(!qq){ results.style.display='none'; results.innerHTML=''; return; }
-        try { if (window.ensureMeusItensLoaded) await window.ensureMeusItensLoaded(); } catch(e){}
-        const all = Array.isArray(window.__meusItensCache) ? window.__meusItensCache : [];
-        const filtered = (all||[]).filter(it => {
-            const nome = String(it.nome || it.titulo || '').toLowerCase();
-            return nome.indexOf(qq.toLowerCase()) !== -1;
-        }).slice(0,40);
-        if(!filtered || filtered.length===0){ results.innerHTML = '<div style="padding:10px;color:#666">Nenhum serviço encontrado</div>'; results.style.display='block'; return; }
-        results.innerHTML = filtered.map(it => `
-            <div class="resultado-add-item" data-id="${escapeHtmlUnsafe(it.id)}" style="padding:10px;border-bottom:1px solid #f6f6f6;cursor:pointer;">
-                <div style="font-weight:700;color:#222">${escapeHtmlUnsafe(it.nome||it.titulo||'')}</div>
-                <div style="font-size:13px;color:#6b7280">${escapeHtmlUnsafe(String(it.tipo||''))} ${it.preco?(' • '+formatarMoeda(Number(String(it.preco).replace(',','.')))):''}</div>
-            </div>
-        `).join('');
-        results.style.display = 'block';
-        Array.from(results.querySelectorAll('.resultado-add-item')).forEach(el => el.addEventListener('click', function(){
-            const id = this.getAttribute('data-id');
-            const all = Array.isArray(window.__meusItensCache) ? window.__meusItensCache : [];
-            const obj = all.find(x => String(x.id) === String(id));
-            if(obj){
-                input.value = obj.nome || obj.titulo || '';
-                input.setAttribute('data-selected-id', String(obj.id));
-                input.setAttribute('data-selected-valor', String(obj.preco || obj.venda || obj.valor || 0));
+
+        // cancela requisição anterior
+        try { if (__currentSearchController) __currentSearchController.abort(); } catch(e){}
+        __currentSearchController = new AbortController();
+        const signal = __currentSearchController.signal;
+
+        // não sobrescrever resultados imediatamente — evita piscar ao digitar rápido
+        // exibe o indicador "Carregando..." apenas se a requisição demorar
+        try { if (__loadingTimeout) clearTimeout(__loadingTimeout); } catch(e){}
+        __loadingTimeout = setTimeout(()=>{
+            try { results.innerHTML = '<div style="padding:10px;color:#666">Carregando...</div>'; results.style.display = 'block'; } catch(e){}
+        }, 300);
+
+        try {
+            const url = SEARCH_API_PATH + encodeURIComponent(qq) + '&limit=20';
+            const res = await fetch(url, { method: 'GET', signal, credentials: 'include' });
+            if (!res.ok) {
+                try { if (__loadingTimeout) clearTimeout(__loadingTimeout); } catch(e){}
+                results.innerHTML = '<div style="padding:10px;color:#666">Erro ao buscar serviços</div>';
+                return;
             }
-            results.style.display='none';
-        }));
+            const data = await res.json();
+            const items = Array.isArray(data) ? data : (Array.isArray(data.items) ? data.items : []);
+            if (!items || items.length === 0) { results.innerHTML = '<div style="padding:10px;color:#666">Nenhum serviço encontrado</div>'; return; }
+
+            // renderizar via DocumentFragment para performance
+            const frag = document.createDocumentFragment();
+            items.slice(0,20).forEach(it => {
+                const div = document.createElement('div');
+                div.className = 'resultado-add-item';
+                div.setAttribute('data-id', String(it.id));
+                div.style.cssText = 'padding:10px;border-bottom:1px solid #f6f6f6;cursor:pointer;';
+                const title = document.createElement('div');
+                title.style.fontWeight = '700'; title.style.color = '#222';
+                title.textContent = it.nome || it.titulo || it.descricao || '';
+                const meta = document.createElement('div');
+                meta.style.fontSize = '13px'; meta.style.color = '#6b7280';
+                const preco = it.preco || it.venda || it.valor || 0;
+                meta.textContent = (it.tipo ? it.tipo + ' • ' : '') + (preco ? formatarMoeda(Number(String(preco).replace(',','.'))) : '');
+                div.appendChild(title); div.appendChild(meta);
+                div.addEventListener('click', function(){
+                    input.value = it.nome || it.titulo || '';
+                    input.setAttribute('data-selected-id', String(it.id));
+                    input.setAttribute('data-selected-valor', String(preco || 0));
+                    results.style.display = 'none';
+                });
+                frag.appendChild(div);
+            });
+            results.innerHTML = '';
+            results.appendChild(frag);
+            results.style.display = 'block';
+            try { if (__loadingTimeout) clearTimeout(__loadingTimeout); } catch(e){}
+        } catch (err) {
+            try { if (__loadingTimeout) clearTimeout(__loadingTimeout); } catch(e){}
+            if (err.name === 'AbortError') return; // requisição cancelada
+            console.warn('Erro na busca de itens:', err);
+            results.innerHTML = '<div style="padding:10px;color:#666">Erro ao buscar serviços</div>';
+        }
     }
 
-    const deb = (function(){let t; return function(fn,ms){ clearTimeout(t); t=setTimeout(fn,ms||250); }; })();
-    input.addEventListener('input', function(e){ deb(()=>doSearch(input.value),250); });
-    input.addEventListener('focus', function(){ if(input.value) doSearch(input.value); });
+    const deb = (function(){let t; return function(fn,ms){ clearTimeout(t); t=setTimeout(fn,ms||200); }; })();
+    // Desativar autocomplete nativo
+    try { input.setAttribute('autocomplete','off'); } catch(e){}
+    // Lidar com composição (IME) — não buscar durante composição
+    let __isComposingLocal = false;
+    input.addEventListener('compositionstart', function(){ __isComposingLocal = true; });
+    input.addEventListener('compositionend', function(){ __isComposingLocal = false; deb(()=>doSearch(input.value)); });
+
+    // Chamar busca com debounce — ignorar se em composição
+    input.addEventListener('input', function(e){
+        if (input.hasAttribute('data-selected-id')) { input.removeAttribute('data-selected-id'); input.removeAttribute('data-selected-valor'); }
+        if (__isComposingLocal) return;
+        deb(()=>doSearch(input.value));
+    });
+
+    input.addEventListener('focus', function(){ if(input.value) deb(()=>doSearch(input.value), 0); });
 
     // Salvar item (permite adicionar múltiplos)
-    document.getElementById('btnSalvarItem').addEventListener('click', function(){
+    document.getElementById('btnSalvarItem').addEventListener('click', async function(){
         const selId = input.getAttribute('data-selected-id');
         const nome = input.value.trim();
         const valor = Number(String(input.getAttribute('data-selected-valor')||'0').replace(',','.')) || 0;
         if(!nome || (!selId && nome.length===0)){
-            // Preferir notificações do sistema se existir
-            try {
-                if (window.showNotification) {
-                    window.showNotification('Por favor, selecione um serviço/produto primeiro', 'error');
-                } else {
-                    // fallback simples: criar toast local
-                    const n = document.createElement('div');
-                    n.className = 'notification-toast notification-error';
-                    n.style.cssText = 'position:fixed;right:18px;top:18px;z-index:1200010;min-width:220px;max-width:420px;padding:12px 16px;border-radius:8px;box-shadow:0 8px 24px rgba(2,16,26,0.12);font-weight:400;display:flex;align-items:center;gap:12px;background:#fff2f2;color:#661426;';
-                    n.innerHTML = `<div style="flex:0 0 28px;text-align:center;font-size:18px;color:#7b1f2d;"><i class="fas fa-exclamation-circle"></i></div><div style="flex:1">Por favor, selecione um serviço primeiro</div><button style="background:transparent;border:none;color:#999;cursor:pointer;font-size:14px;" onclick="this.parentElement.remove()">✕</button>`;
-                    document.body.appendChild(n);
-                    setTimeout(()=>{ try{ n.remove(); }catch(e){} }, 5000);
-                }
-            } catch(e){ console.warn('notify fallback failed', e); }
+            try { if (window.showNotification) { window.showNotification('Por favor, selecione um serviço/produto primeiro', 'error'); } else { alert('Por favor, selecione um serviço/produto primeiro'); } } catch(e){ console.warn('notify failed', e); }
             return;
         }
+
         // criar objeto de serviço compatível com preencherDadosAgendamento
         const s = { id: selId || Date.now(), nome: nome, quantidade: 1, unitario: valor, valor: valor, total: valor, profissional: (agendamentoAtual && agendamentoAtual.profissional) ? agendamentoAtual.profissional : '-' };
-        if(!agendamentoAtual) agendamentoAtual = { servicos: [] };
-        if(!Array.isArray(agendamentoAtual.servicos)) agendamentoAtual.servicos = [];
-        agendamentoAtual.servicos.push(s);
-        // atualizar DOM: anexar item ao final da category-section
-        appendServiceToCategory(s);
-        // atualizar totais
-        try { const prevTotal = parseFloat(document.getElementById('totalGeral')?.textContent.replace(/[R$\s\.]/g,'').replace(',','.')||0); const newTotal = (agendamentoAtual.servicos||[]).reduce((acc,it)=>acc + (parseFloat(it.total||it.valor||0)||0),0); document.getElementById('totalGeral').textContent = formatarMoeda(newTotal); document.getElementById('totalPendente').textContent = formatarMoeda(newTotal); const amount = document.querySelector('.amount'); if(amount) amount.textContent = formatarMoeda(newTotal); } catch(e){}
+        if(!agendamentoAtual) agendamentoAtual = {};
+        if(!Array.isArray(agendamentoAtual._addedServicos)) agendamentoAtual._addedServicos = [];
+        agendamentoAtual._addedServicos.push(s);
+
+            // atualizar DOM: anexar item ao final da category-section (imediato)
+            appendServiceToCategory(s);
+            // marcar como já presente na lista local para evitar re-append até confirmação do servidor
+            try {
+                if (!Array.isArray(agendamentoAtual.servicos)) agendamentoAtual.servicos = Array.isArray(agendamentoAtual.__existingServicosArray) ? agendamentoAtual.__existingServicosArray.slice() : [];
+                // adicionar ao array local imediatamente (mantendo unicidade por id)
+                const exists = (agendamentoAtual.servicos || []).some(x => String(x.id) === String(s.id));
+                if (!exists) agendamentoAtual.servicos.push(s);
+            } catch(e) { console.warn('Erro ao atualizar agendamentoAtual.servicos localmente', e); }
+
+        // recalcular total: soma do total já existente no agendamento (do servidor) + itens adicionados nesta sessão
+        let baseTotal = parseFloat(agendamentoAtual.__existingTotal || agendamentoAtual.valor || 0) || 0;
+        let addedTotal = 0;
+        try {
+            addedTotal = (agendamentoAtual._addedServicos||[]).reduce((acc,it)=>{
+                const v = parseFloat(String(it.total || it.valor || it.unitario || 0).toString().replace(',','.')) || 0;
+                return acc + v;
+            }, 0);
+        } catch(e){ addedTotal = 0; }
+        const newTotal = baseTotal + addedTotal;
+
+        // concatenar nomes: manter nomes já salvos no servidor e acrescentar os novos
+        const existingNames = String(agendamentoAtual.__existingServicosString || agendamentoAtual.servico || '').trim();
+        const addedNames = (agendamentoAtual._addedServicos||[]).map(x => x.nome).filter(Boolean);
+        const nomesConcat = [existingNames].concat(addedNames).filter(Boolean).join(' • ');
+
+        // atualizar totais no DOM imediatamente
+        try { document.getElementById('totalGeral').textContent = formatarMoeda(newTotal); document.getElementById('totalPendente').textContent = formatarMoeda(newTotal); const amount = document.querySelector('.amount'); if(amount) amount.textContent = formatarMoeda(newTotal); } catch(e){}
+
+        // Enviar atualização para o backend (PUT) para persistir o novo serviço e novo valor
+        try {
+            if (agendamentoAtual && agendamentoAtual.id) {
+                // Montar array de serviços a ser enviado: pegar array existente do servidor (se houver)
+                const existingServicos = Array.isArray(agendamentoAtual.servicos) ? agendamentoAtual.servicos.slice() : (Array.isArray(agendamentoAtual.__existingServicosArray) ? agendamentoAtual.__existingServicosArray.slice() : []);
+                const toAdd = Array.isArray(agendamentoAtual._addedServicos) ? agendamentoAtual._addedServicos.slice() : [];
+                // concatenar e deduplicar por id (stringified)
+                const combined = existingServicos.concat(toAdd || []);
+                const seen = new Set();
+                const mergedServicos = combined.filter(it => {
+                    const id = (it && (it.id !== undefined && it.id !== null)) ? String(it.id) : JSON.stringify(it);
+                    if (seen.has(id)) return false;
+                    seen.add(id);
+                    return true;
+                });
+
+                const resp = await fetch(`/api/agendamentos/${agendamentoAtual.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ servico: nomesConcat, servicos: mergedServicos, valor: newTotal })
+                });
+                if (resp.ok) {
+                    const updated = await resp.json().catch(()=>null);
+                    // atualizar objeto local com o valor retornado
+                    if (updated) {
+                        agendamentoAtual.valor = updated.valor !== undefined ? updated.valor : newTotal;
+                        agendamentoAtual.servico = updated.servico || nomesConcat;
+                        agendamentoAtual.servicos = Array.isArray(updated.servicos) ? updated.servicos : mergedServicos;
+                        agendamentoAtual.__existingTotal = agendamentoAtual.valor;
+                        agendamentoAtual.__existingServicosString = agendamentoAtual.servico;
+                        // marcar itens adicionados como persistidos
+                        agendamentoAtual._addedServicos = [];
+                    } else {
+                        agendamentoAtual.valor = newTotal;
+                        agendamentoAtual.servico = nomesConcat;
+                        agendamentoAtual.servicos = mergedServicos;
+                        agendamentoAtual.__existingTotal = agendamentoAtual.valor;
+                        agendamentoAtual.__existingServicosString = agendamentoAtual.servico;
+                        agendamentoAtual._addedServicos = [];
+                    }
+                    try { if (window.showNotification) window.showNotification('Item adicionado e salvo', 'success'); } catch(e){}
+                } else {
+                    const txt = await resp.text().catch(()=>null);
+                    try { if (window.showNotification) window.showNotification('Erro ao salvar no servidor', 'error'); else alert('Erro ao salvar no servidor'); } catch(e){}
+                    console.warn('PUT /api/agendamentos failed', resp.status, txt);
+                }
+            } else {
+                // sem id do agendamento: apenas manter no frontend
+                try { if (window.showNotification) window.showNotification('Item adicionado localmente (sem agendamento salvo)', 'warning'); } catch(e){}
+            }
+        } catch(err){
+            console.error('Erro salvando item no backend', err);
+            try { if (window.showNotification) window.showNotification('Erro ao salvar no servidor', 'error'); else alert('Erro ao salvar no servidor'); } catch(e){}
+        }
+
         // limpar input para permitir adicionar outro
         input.value = '';
         input.removeAttribute('data-selected-id');
@@ -1042,41 +1171,51 @@ function openAddItemModal() {
 }
 
 function appendServiceToCategory(s){
-    try{
-        const category = document.querySelector('.category-section');
-        if(!category) return;
-        const horario = s.horario || '';
-        const data = s.data || '';
-        const nome = s.nome || s.nomeServico || '';
-        const profissional = s.profissional || '';
-        const qtd = s.quantidade || 1;
-        const unitario = parseFloat(s.unitario || s.valor || 0) || 0;
-        const total = parseFloat(s.total || unitario * qtd) || unitario * qtd;
+        try {
+                // elemento de categoria onde os itens são renderizados
+                const category = document.querySelector('.category-section');
+                if (!category) return;
 
-        const item = document.createElement('div');
-        item.className = 'service-item';
-        item.innerHTML = `
-            <div class="col-horario">
-              <i class="fas fa-clock"></i>
-              <div class="time-info">
-                <span class="time">${escapeHtmlUnsafe(horario)}</span>
-                <small class="date">${escapeHtmlUnsafe(data)}</small>
-              </div>
-            </div>
-            <div class="col-descricao">
-              <div class="service-name">${escapeHtmlUnsafe(nome)}</div>
-            </div>
-            <div class="col-profissional">${escapeHtmlUnsafe(profissional)}</div>
-            <div class="col-qtd">${escapeHtmlUnsafe(qtd)}</div>
-            <div class="col-unitario">${formatarMoeda(unitario)}</div>
-            <div class="col-desconto">-</div>
-            <div class="col-total">${formatarMoeda(total)}</div>
-            <div class="col-acoes">
-              <button class="btn-item-action" title="Mais opções"><i class="fas fa-ellipsis-v"></i></button>
-            </div>
-        `;
-        category.appendChild(item);
-    }catch(e){ console.warn('appendServiceToCategory error', e); }
+                // montar dados do serviço recebido
+                const horario = s.horario || s.time || '';
+                const data = s.data || '';
+                const nome = s.nome || s.nomeServico || '';
+                const profissional = s.profissional || '';
+                const qtd = s.quantidade || 1;
+                const unitario = parseFloat(s.unitario || s.valor || 0) || 0;
+                const total = parseFloat(s.total || unitario * qtd) || unitario * qtd;
+
+                const item = document.createElement('div');
+                item.className = 'service-item';
+                item.innerHTML = `
+                        <div class="col-horario">
+                            <i class="fas fa-clock"></i>
+                            <div class="time-info">
+                                <span class="time">${escapeHtmlUnsafe(horario)}</span>
+                                <small class="date">${escapeHtmlUnsafe(data)}</small>
+                            </div>
+                        </div>
+                        <div class="col-descricao">
+                            <div class="service-name">${escapeHtmlUnsafe(nome)}</div>
+                        </div>
+                        <div class="col-profissional">${escapeHtmlUnsafe(profissional)}</div>
+                        <div class="col-qtd">${escapeHtmlUnsafe(qtd)}</div>
+                        <div class="col-unitario">${formatarMoeda(unitario)}</div>
+                        <div class="col-desconto">-</div>
+                        <div class="col-total">${formatarMoeda(total)}</div>
+                        <div class="col-acoes">
+                            <button class="btn-item-action" title="Mais opções"><i class="fas fa-ellipsis-v"></i></button>
+                        </div>
+                `;
+
+                category.appendChild(item);
+
+                // rolar até o novo item (se a área for scrollável)
+                try {
+                        const scrollParent = getScrollParent(category);
+                        if (scrollParent && typeof item.scrollIntoView === 'function') item.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                } catch (e) { /* ignore */ }
+        } catch(e){ console.warn('appendServiceToCategory error', e); }
 }
 
 // Função para adicionar item (placeholder)

@@ -468,6 +468,7 @@ function abrirNovoAgendamentoModal() {
                         hora: dados.hora || '',
                         petId: petId || dados.petId || '',
                         servico: dados.servicosNomes || dados.servico || '', // String concatenada dos serviços
+                        servicos: dados.servicos || [], // Array estruturado de serviços
                         observacoes: dados.observacoes || '',
                         profissional: dados.profissional || '',
                         valor: dados.valorTotal || objAg.valor || 0
@@ -581,6 +582,7 @@ function abrirNovoAgendamentoModal() {
                     hora: dados.hora || '',
                     petId: petId,
                     servico: dados.servicosNomes || dados.servico || '', // String concatenada dos serviços
+                    servicos: dados.servicos || [], // Array estruturado de serviços
                     observacoes: dados.observacoes || '',
                     profissional: dados.profissional || '',
                     valor: dados.valorTotal || (objAg && objAg.valor) ? objAg.valor : 0
