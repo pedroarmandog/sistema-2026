@@ -39,7 +39,7 @@ exports.getAgendamentos = async (req, res) => {
             where: whereCondition,
             include: [{
                 model: Pet,
-                attributes: ['nome', 'tipo', 'raca'],
+                attributes: ['nome', 'tipo', 'raca', 'observacao'],
                 include: [{
                     model: Cliente,
                     attributes: ['nome', 'email', 'telefone']
@@ -59,6 +59,7 @@ exports.getAgendamentos = async (req, res) => {
             valor: agendamento.valor,
             status: agendamento.status,
             observacoes: agendamento.observacoes,
+            petObservacao: agendamento.Pet?.observacao || null,
             dataAgendamento: agendamento.dataAgendamento
         }));
 

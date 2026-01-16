@@ -148,19 +148,26 @@ document.addEventListener('DOMContentLoaded', function() {
     detectarIDsDuplicados();
     limparEstadoSubmenus();
 
-    const menuToggle = document.querySelector('.menu-toggle');
+    const menuToggles = Array.from(document.querySelectorAll('.menu-toggle'));
     const sidebar = document.querySelector('.sidebar');
     const mainContent = document.querySelector('.main-content');
-    if (menuToggle && sidebar && mainContent) {
-        if (!menuToggle.hasAttribute('data-toggle-configured')) {
-            menuToggle.setAttribute('data-toggle-configured', 'true');
-            menuToggle.addEventListener('click', function(e){ e.preventDefault(); e.stopPropagation(); sidebar.classList.toggle('collapsed'); mainContent.classList.toggle('sidebar-collapsed'); });
-        }
+    if (menuToggles.length && sidebar && mainContent) {
+        menuToggles.forEach(menuToggle => {
+            if (!menuToggle.hasAttribute('data-toggle-configured')) {
+                menuToggle.setAttribute('data-toggle-configured', 'true');
+                menuToggle.addEventListener('click', function(e){
+                    e.preventDefault(); e.stopPropagation();
+                    sidebar.classList.toggle('collapsed');
+                    mainContent.classList.toggle('sidebar-collapsed');
+                });
+            }
+        });
     }
 
     document.addEventListener('click', function(e) {
         if (window.innerWidth <= 768) {
-            if (sidebar && mainContent && !sidebar.contains(e.target) && !menuToggle.contains(e.target)) {
+            const clickedOnToggle = menuToggles.some(t => t.contains(e.target));
+            if (sidebar && mainContent && !sidebar.contains(e.target) && !clickedOnToggle) {
                 sidebar.classList.add('collapsed'); mainContent.classList.add('sidebar-collapsed');
             }
         }

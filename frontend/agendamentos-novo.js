@@ -30,6 +30,7 @@ class AgendamentosManager {
         this.updateDateDisplay();
         this.setupModalEvents();
         this.setupNovoAgendamentoSidebar();
+        this.setupUpdateListener();
         // Carregar filtros salvos antes de carregar agendamentos
         this.loadSavedFilters().then(() => {
             // Carregar período salvo e aplicar
@@ -42,6 +43,11 @@ class AgendamentosManager {
             console.log('🔄 Carregando agendamentos para período:', this.period);
             this.handlePeriodChange(this.period);
         });
+        // Atualizar lista quando o usuário navegar com o botão Voltar/Avançar
+        try {
+            window.addEventListener('popstate', () => { try { this.loadAgendamentos(); } catch(e){} });
+            window.addEventListener('pageshow', (ev) => { try { if (ev && ev.persisted) this.loadAgendamentos(); } catch(e){} });
+        } catch(e) { console.warn('Navigation listeners not attached', e); }
         console.log('✅ Inicialização concluída');
     }
 
@@ -58,35 +64,46 @@ class AgendamentosManager {
         console.log(`🔘 Botão aplicar: ${applyBtn ? 'SIM' : 'NÃO'}`);
         console.log(`🔄 Botão refresh: ${refreshBtn ? 'SIM' : 'NÃO'}`);
         
-        // Menu toggle para sidebar
-        const menuToggle = document.querySelector('.menu-toggle');
+        // Menu toggle para sidebar — ligar a todos os botões .menu-toggle
+        const menuToggles = Array.from(document.querySelectorAll('.menu-toggle'));
         const sidebar = document.querySelector('.sidebar');
         const mainContent = document.querySelector('.main-content');
-        
+
         console.log('Elementos encontrados:', {
-            menuToggle: !!menuToggle,
+            menuToggles: menuToggles.length,
             sidebar: !!sidebar,
             mainContent: !!mainContent
         });
-        
-        if (menuToggle && sidebar && mainContent) {
-            menuToggle.addEventListener('click', function() {
-                console.log('Menu toggle clicado!');
-                sidebar.classList.toggle('collapsed');
-                mainContent.classList.toggle('sidebar-collapsed');
-                
-                // Log do estado atual
-                console.log('Sidebar collapsed:', sidebar.classList.contains('collapsed'));
-                console.log('Main content collapsed:', mainContent.classList.contains('sidebar-collapsed'));
-            });
+
+        if (menuToggles.length && sidebar && mainContent) {
+            // Se outro módulo já configurou o toggle (ex: menu.js), não reaplicar handlers
+            const alreadyConfigured = menuToggles.some(t => t.hasAttribute('data-toggle-configured') || t.hasAttribute('data-toggle-attached'));
+            if (alreadyConfigured) {
+                console.log('[agendamentos-novo] menu toggle já configurado por outro módulo; pulando registro local');
+            } else {
+                menuToggles.forEach(mt => {
+                    if (!mt.hasAttribute('data-toggle-attached')) {
+                        mt.setAttribute('data-toggle-attached', 'true');
+                        mt.addEventListener('click', function(e) {
+                            e.preventDefault(); e.stopPropagation();
+                            console.log('Menu toggle clicado!');
+                            sidebar.classList.toggle('collapsed');
+                            mainContent.classList.toggle('sidebar-collapsed');
+                            console.log('Sidebar collapsed:', sidebar.classList.contains('collapsed'));
+                            console.log('Main content collapsed:', mainContent.classList.contains('sidebar-collapsed'));
+                        });
+                    }
+                });
+            }
         } else {
             console.error('Elementos não encontrados para o menu toggle');
         }
-        
+
         // Fechar sidebar ao clicar fora (mobile)
         document.addEventListener('click', function(e) {
             if (window.innerWidth <= 768) {
-                if (sidebar && mainContent && !sidebar.contains(e.target) && !menuToggle.contains(e.target)) {
+                const clickedOnToggle = menuToggles.some(t => t.contains(e.target));
+                if (sidebar && mainContent && !sidebar.contains(e.target) && !clickedOnToggle) {
                     sidebar.classList.add('collapsed');
                     mainContent.classList.add('sidebar-collapsed');
                 }
@@ -431,6 +448,45 @@ class AgendamentosManager {
         }
     }
 
+    // Atualizar linha específica ao receber evento de agendamento atualizado
+    setupUpdateListener(){
+        try {
+            window.addEventListener('agendamento-updated', (e) => {
+                try {
+                    const d = e.detail || {};
+                    if (!d || !d.id) return;
+                    const row = document.querySelector(`.agendamento-row[data-agendamento-id="${d.id}"]`);
+                    if (row) {
+                        const profEl = row.querySelector('.agendamento-profissional');
+                        if (profEl) profEl.textContent = d.profissional || '-';
+                        // atualizar observações se enviadas no evento
+                        if (d.hasOwnProperty('observacoes')) {
+                            try {
+                                const detailsEl = row.querySelector('.agendamento-detalhes');
+                                if (detailsEl) {
+                                    const existingObs = detailsEl.querySelector('.agendamento-observacao');
+                                    if (d.observacoes) {
+                                        const obsHtml = `<div class="agendamento-observacao" style="color:#c12b2b;font-size:12px;margin-top:4px;display:flex;align-items:flex-start;gap:6px;"><i class="fas fa-sticky-note" style="font-size:12px;line-height:1;opacity:0.9;margin-top:2px"></i><div style="line-height:1.1">${escapeHtml(d.observacoes)}</div></div>`;
+                                        if (existingObs) {
+                                            existingObs.outerHTML = obsHtml;
+                                        } else {
+                                            detailsEl.insertAdjacentHTML('beforeend', obsHtml);
+                                        }
+                                    } else {
+                                        if (existingObs) existingObs.remove();
+                                    }
+                                }
+                            } catch (e) { console.warn('erro atualizando observacoes na linha', e); }
+                        }
+                    } else {
+                        // se a linha não está renderizada (outro período ou não carregada), recarregar a lista
+                        this.loadAgendamentos();
+                    }
+                } catch(err){ console.warn('agendamento-updated handler error', err); }
+            });
+        } catch(e){ console.warn('setupUpdateListener error', e); }
+    }
+
     renderAgendamentos() {
         console.log('🎨 Renderizando agendamentos...');
         console.log('📊 Total de agendamentos:', this.agendamentos.length);
@@ -500,7 +556,10 @@ class AgendamentosManager {
                         <strong>${agendamento.petNome}</strong><br>
                         <small>${agendamento.clienteNome}</small>
                     </div>
-                    <div class="agendamento-detalhes">${agendamento.servico}</div>
+                    <div class="agendamento-detalhes">${agendamento.servico}
+                        ${agendamento.petObservacao ? `<div class="agendamento-pet-observacao" style="color:#c12b2b;font-size:12px;margin-top:4px;display:flex;align-items:flex-start;gap:6px;"><i class="fas fa-paw" style="font-size:12px;line-height:1;opacity:0.9;margin-top:2px"></i><div style="line-height:1.1">${escapeHtml(agendamento.petObservacao)}</div></div>` : ''}
+                        ${agendamento.observacoes ? `<div class="agendamento-observacao" style="color:#c12b2b;font-size:12px;margin-top:4px;display:flex;align-items:flex-start;gap:6px;"><i class="fas fa-sticky-note" style="font-size:12px;line-height:1;opacity:0.9;margin-top:2px"></i><div style="line-height:1.1">${escapeHtml(agendamento.observacoes)}</div></div>` : ''}
+                    </div>
                     <div class="agendamento-profissional">${agendamento.profissional || '-'}</div>
                     <div class="agendamento-valor">${this.formatCurrency(agendamento.valor)}</div>
                     <div class="agendamento-situacao">
@@ -677,7 +736,10 @@ class AgendamentosManager {
                                 <strong>${agendamento.petNome}</strong><br>
                                 <small>${agendamento.clienteNome}</small>
                             </div>
-                            <div class="agendamento-detalhes">${agendamento.servico}</div>
+                            <div class="agendamento-detalhes">${agendamento.servico}
+                                ${agendamento.petObservacao ? `<div class="agendamento-pet-observacao" style="color:#c12b2b;font-size:12px;margin-top:4px;display:flex;align-items:flex-start;gap:6px;"><i class="fas fa-paw" style="font-size:12px;line-height:1;opacity:0.9;margin-top:2px"></i><div style="line-height:1.1">${escapeHtml(agendamento.petObservacao)}</div></div>` : ''}
+                                ${agendamento.observacoes ? `<div class="agendamento-observacao" style="color:#c12b2b;font-size:12px;margin-top:4px;display:flex;align-items:flex-start;gap:6px;"><i class="fas fa-sticky-note" style="font-size:12px;line-height:1;opacity:0.9;margin-top:2px"></i><div style="line-height:1.1">${escapeHtml(agendamento.observacoes)}</div></div>` : ''}
+                            </div>
                             <div class="agendamento-profissional">${agendamento.profissional || '-'}</div>
                             <div class="agendamento-valor">${this.formatCurrency(agendamento.valor)}</div>
                             <div class="agendamento-situacao">

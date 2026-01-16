@@ -61,6 +61,9 @@ function novoAtendimento() {
 function abrirNovoAgendamentoModal() {
     console.log('🚀 Abrindo modal de Novo Agendamento...');
     
+    // Limpar ID de edição (modo criação)
+    window.agendamentoEmEdicaoId = null;
+    
     // REMOVER MODAL ANTERIOR SE EXISTIR
     const modalAnterior = document.getElementById('novoSidebarFuncional');
     if (modalAnterior) {
@@ -91,7 +94,7 @@ function abrirNovoAgendamentoModal() {
     const novoModal = document.createElement('div');
     novoModal.id = 'novoSidebarFuncional';
     novoModal.innerHTML = `
-        <div style="background: #2c5aa0; color: white; padding: 20px; display: flex; justify-content: space-between; align-items: center; border-radius: 10px 10px 0 0;">
+        <div style="background: #007bff; color: white; padding: 20px; display: flex; justify-content: space-between; align-items: center; border-radius: 10px 10px 0 0;">
             <h3 style="margin: 0; font-size: 20px;">
                 <i class="fas fa-calendar-plus"></i> Novo Agendamento
             </h3>
@@ -104,31 +107,33 @@ function abrirNovoAgendamentoModal() {
                 <div style="margin-bottom: 20px;">
                     <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333; transition: color 0.2s ease;">Pet/Cliente *</label>
                     <input type="text" name="petClienteGlobal_input" autocomplete="off" id="petClienteGlobal" placeholder="Digite o nome do pet ou cliente..." style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); outline: none;" 
-                        onfocus="this.style.borderColor='#2c5aa0'; this.style.boxShadow='0 0 0 3px rgba(44, 90, 160, 0.1)'; this.style.transform='translateY(-1px)'"
+                        onfocus="this.style.borderColor='#007bff'; this.style.boxShadow='0 0 0 3px rgba(0, 123, 255, 0.1)'; this.style.transform='translateY(-1px)'"
                         onblur="this.style.borderColor='#ddd'; this.style.boxShadow='none'; this.style.transform='translateY(0)'" required>
                 </div>
                 
-                <div style="margin-bottom: 20px; position: relative;">
+                <div style="margin-bottom: 20px;">
                     <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333; transition: color 0.2s ease;">Serviço/Produto *</label>
-                    <div style="display: flex; gap: 10px;">
-                        <input type="text" id="servicoGlobal" autocomplete="off" placeholder="Digite o serviço ou produto..." style="flex: 1; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); outline: none;" 
-                            onfocus="this.style.borderColor='#2c5aa0'; this.style.boxShadow='0 0 0 3px rgba(44, 90, 160, 0.1)'; this.style.transform='translateY(-1px)'"
-                            onblur="this.style.borderColor='#ddd'; this.style.boxShadow='none'; this.style.transform='translateY(0)'" required>
-                        <button type="button" id="btnAdicionarServico" style="padding: 12px 20px; border: none; border-radius: 8px; background: #2c5aa0; color: white; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.3s ease;" 
-                            onmouseover="this.style.background='#1e3a5f'; this.style.transform='scale(1.05)'" 
-                            onmouseout="this.style.background='#2c5aa0'; this.style.transform='scale(1)'">
-                            <i class="fas fa-plus"></i> Adicionar
-                        </button>
+                    <div style="position: relative;">
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" id="servicoGlobal" autocomplete="off" placeholder="Digite o serviço ou produto..." style="flex: 1; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); outline: none;" 
+                                onfocus="this.style.borderColor='#007bff'; this.style.boxShadow='0 0 0 3px rgba(0, 123, 255, 0.1)'; this.style.transform='translateY(-1px)'"
+                                onblur="this.style.borderColor='#ddd'; this.style.boxShadow='none'; this.style.transform='translateY(0)'" required>
+                            <button type="button" id="btnAdicionarServico" style="padding: 12px 20px; border: none; border-radius: 8px; background: #007bff; color: white; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.3s ease;" 
+                                onmouseover="this.style.background='#0056b3'; this.style.transform='scale(1.05)'" 
+                                onmouseout="this.style.background='#007bff'; this.style.transform='scale(1)'">
+                                <i class="fas fa-plus"></i> Adicionar
+                            </button>
+                        </div>
+                        <!-- Container para resultados (será preenchido dinamicamente) -->
+                        <div id="resultados-servico-global" style="position: absolute; left: 0; right: 0; top: calc(100% + 6px); background: white; border: 1px solid #e0e0e0; box-shadow: 0 10px 30px rgba(0,0,0,0.08); max-height: 240px; overflow: auto; border-radius: 6px; display: none; z-index: 9999999;"></div>
                     </div>
-                    <!-- Container para resultados (será preenchido dinamicamente) -->
-                    <div id="resultados-servico-global" style="position: absolute; left: 0; right: 0; top: calc(100% + 6px); background: white; border: 1px solid #e0e0e0; box-shadow: 0 10px 30px rgba(0,0,0,0.08); max-height: 240px; overflow: auto; border-radius: 6px; display: none; z-index: 1000002;"></div>
                     
                     <!-- Lista de Serviços Adicionados -->
                     <div id="listaServicos" style="margin-top: 15px; display: none;">
                         <div style="background: #f8f9fa; border-radius: 8px; padding: 15px;">
-                            <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #2c5aa0;">Serviços Selecionados:</h4>
+                            <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #007bff;">Serviços Selecionados:</h4>
                             <div id="servicosAdicionados"></div>
-                            <div style="margin-top: 10px; padding-top: 10px; border-top: 2px solid #2c5aa0; font-weight: bold; display: flex; justify-content: space-between;">
+                            <div style="margin-top: 10px; padding-top: 10px; border-top: 2px solid #007bff; font-weight: bold; display: flex; justify-content: space-between;">
                                 <span>TOTAL:</span>
                                 <span id="valorTotal" style="color: #28a745; font-size: 16px;">R$ 0,00</span>
                             </div>
@@ -141,19 +146,19 @@ function abrirNovoAgendamentoModal() {
                         <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">Data</label>
                         <input type="text" id="dataGlobal" placeholder="Selecione uma data" readonly style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); outline: none; background: white;" 
                             onclick="toggleCalendario()"
-                            onfocus="this.style.borderColor='#2c5aa0'; this.style.boxShadow='0 0 0 3px rgba(44, 90, 160, 0.1)'; this.style.transform='translateY(-1px)'"
+                            onfocus="this.style.borderColor='#007bff'; this.style.boxShadow='0 0 0 3px rgba(0, 123, 255, 0.1)'; this.style.transform='translateY(-1px)'"
                             onblur="this.style.borderColor='#ddd'; this.style.boxShadow='none'; this.style.transform='translateY(0)'">
                         <i class="fas fa-calendar-alt" style="position: absolute; right: 15px; top: 42px; color: #666; pointer-events: none;"></i>
                         
                         <!-- Calendário Flutuante -->
-                        <div id="calendarioFlutuante" style="display: none; position: absolute; top: 100%; left: 0; z-index: 10000000; background: white; border: 2px solid #2c5aa0; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); padding: 12px; width: 280px; margin-top: 5px;">
+                        <div id="calendarioFlutuante" style="display: none; position: absolute; top: 100%; left: 0; z-index: 10000000; background: white; border: 2px solid #007bff; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); padding: 12px; width: 280px; margin-top: 5px;">
                             <!-- Header do Calendário -->
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                                <button type="button" id="btnMesAnterior" style="background: none; border: none; font-size: 18px; color: #2c5aa0; cursor: pointer; padding: 5px; border-radius: 50%; transition: all 0.2s ease;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='none'">
+                                <button type="button" id="btnMesAnterior" style="background: none; border: none; font-size: 18px; color: #007bff; cursor: pointer; padding: 5px; border-radius: 50%; transition: all 0.2s ease;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='none'">
                                     <i class="fas fa-chevron-left"></i>
                                 </button>
-                                <h4 id="mesAnoCalendario" style="margin: 0; color: #2c5aa0; font-size: 16px; font-weight: 600;"></h4>
-                                <button type="button" id="btnMesProximo" style="background: none; border: none; font-size: 18px; color: #2c5aa0; cursor: pointer; padding: 5px; border-radius: 50%; transition: all 0.2s ease;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='none'">
+                                <h4 id="mesAnoCalendario" style="margin: 0; color: #007bff; font-size: 16px; font-weight: 600;"></h4>
+                                <button type="button" id="btnMesProximo" style="background: none; border: none; font-size: 18px; color: #007bff; cursor: pointer; padding: 5px; border-radius: 50%; transition: all 0.2s ease;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='none'">
                                     <i class="fas fa-chevron-right"></i>
                                 </button>
                             </div>
@@ -183,7 +188,7 @@ function abrirNovoAgendamentoModal() {
                     <div style="flex: 1;">
                         <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">Hora</label>
                         <input type="time" id="horaGlobal" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); outline: none;"
-                            onfocus="this.style.borderColor='#2c5aa0'; this.style.boxShadow='0 0 0 3px rgba(44, 90, 160, 0.1)'; this.style.transform='translateY(-1px)'"
+                            onfocus="this.style.borderColor='#007bff'; this.style.boxShadow='0 0 0 3px rgba(0, 123, 255, 0.1)'; this.style.transform='translateY(-1px)'"
                             onblur="this.style.borderColor='#ddd'; this.style.boxShadow='none'; this.style.transform='translateY(0)'">
                     </div>
                 </div>
@@ -191,7 +196,10 @@ function abrirNovoAgendamentoModal() {
                 <div style="margin-bottom: 20px;">
                     <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">Profissional</label>
                     <div style="position: relative;">
-                        <input type="text" id="profissionalGlobalInput" class="filter-select" placeholder="Selecione um profissional" autocomplete="off" style="width:100%;" />
+                        <input type="text" id="profissionalGlobalInput" class="filter-select" placeholder="Selecione um profissional" autocomplete="off" 
+                            style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); outline: none;"
+                            onfocus="this.style.borderColor='#007bff'; this.style.boxShadow='0 0 0 3px rgba(0, 123, 255, 0.1)'; this.style.transform='translateY(-1px)'"
+                            onblur="this.style.borderColor='#ddd'; this.style.boxShadow='none'; this.style.transform='translateY(0)'" />
                         <input type="hidden" id="profissionalGlobalId" value="" />
                         <div id="resultados-profissional-global" style="position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 1200000; background: white; border: 1px solid #e2e8f0; box-shadow: 0 10px 30px rgba(0,0,0,0.08); max-height: 220px; overflow: auto; border-radius: 6px; display: none;">
                         </div>
@@ -214,9 +222,9 @@ function abrirNovoAgendamentoModal() {
                         onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='none'; this.style.background='#28a745'">
                         <i class="fas fa-save"></i> Salvar
                     </button>
-                    <button type="button" id="salvarEIr" style="padding: 12px 25px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; background: #2c5aa0; color: white; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); transform: scale(1);"
-                        onmouseover="this.style.transform='scale(1.05) translateY(-2px)'; this.style.boxShadow='0 8px 25px rgba(44, 90, 160, 0.3)'; this.style.background='#1e3a5f'"
-                        onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='none'; this.style.background='#2c5aa0'">
+                    <button type="button" id="salvarEIr" style="padding: 12px 25px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; background: #007bff; color: white; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); transform: scale(1);"
+                        onmouseover="this.style.transform='scale(1.05) translateY(-2px)'; this.style.boxShadow='0 8px 25px rgba(0, 123, 255, 0.3)'; this.style.background='#0056b3'"
+                        onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='none'; this.style.background='#007bff'">
                         <i class="fas fa-save"></i> <i class="fas fa-arrow-right"></i> Salvar e Ir
                     </button>
                 </div>
@@ -237,7 +245,7 @@ function abrirNovoAgendamentoModal() {
         box-shadow: 0 20px 60px rgba(0,0,0,0) !important;
         border-radius: 15px !important;
         overflow: hidden !important;
-        border: 3px solid #2c5aa0 !important;
+        border: 3px solid #007bff !important;
         opacity: 0 !important;
         transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
     `;
@@ -248,6 +256,9 @@ function abrirNovoAgendamentoModal() {
     
     // Array para armazenar serviços adicionados
     window.servicosAdicionados = [];
+    
+    // Variável para armazenar ID do agendamento em edição (se houver)
+    window.agendamentoEmEdicaoId = null;
     
     // Carregar profissionais para o dropdown
     try{ carregarProfissionais(); }catch(e){ console.warn('carregarProfissionais não disponível no escopo ainda'); }
@@ -261,8 +272,8 @@ function abrirNovoAgendamentoModal() {
         novoModal.style.transform = 'translate(-50%, -70%) scale(0.8)';
         
         setTimeout(() => {
-            // Animar overlay
-            novoOverlay.style.background = 'rgba(0,0,0,0.7)';
+            // Animar overlay (menos escuro)
+            novoOverlay.style.background = 'rgba(0,0,0,0.45)';
             novoOverlay.style.opacity = '1';
             
             // Animar modal com delay para efeito cascata
@@ -278,6 +289,9 @@ function abrirNovoAgendamentoModal() {
     function fecharModal() {
         // Limpar lista de serviços ao fechar
         window.servicosAdicionados = [];
+        
+        // Limpar ID de edição
+        window.agendamentoEmEdicaoId = null;
         
         // Animar saída (mais rápida que entrada)
         novoModal.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 1, 1)';
@@ -479,20 +493,20 @@ function abrirNovoAgendamentoModal() {
                         return;
                     }
 
+                    // Detectar se é edição ou criação
+                    const isEdicao = !!(window.agendamentoEmEdicaoId);
+                    const metodo = isEdicao ? 'PUT' : 'POST';
+                    const url = isEdicao ? `/api/agendamentos/${window.agendamentoEmEdicaoId}` : '/api/agendamentos';
+
+                    console.log(`📡 ${isEdicao ? 'Atualizando' : 'Criando'} agendamento via ${metodo} ${url}`);
+                    console.log('📦 Payload enviado:', JSON.stringify(payload, null, 2));
+
                     // chamar API
                     let resp;
                     try {
-                        resp = await tryFetchAny('/api/agendamentos');
-                        // tryFetchAny returns a Response for GET; for POST we call fetch directly
-                    } catch(e) { /* ignore */ }
-
-                    // usar fetch com origem correta
-                    let postResp;
-                    try {
                         const origin = window.location.origin;
-                        const url = '/api/agendamentos';
-                        postResp = await fetch((origin + url), {
-                            method: 'POST',
+                        resp = await fetch((origin + url), {
+                            method: metodo,
                             credentials: 'include',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(payload)
@@ -503,18 +517,18 @@ function abrirNovoAgendamentoModal() {
                         return;
                     }
 
-                    if (!postResp || !postResp.ok) {
-                        const text = await (postResp ? postResp.text() : Promise.resolve(''));
-                        console.error('API /api/agendamentos retornou erro:', postResp && postResp.status, text);
+                    if (!resp || !resp.ok) {
+                        const text = await (resp ? resp.text() : Promise.resolve(''));
+                        console.error('API /api/agendamentos retornou erro:', resp && resp.status, text);
                         let j = null;
                         try { j = text ? JSON.parse(text) : null; } catch (e) { j = null; }
-                        const msg = j && (j.error || j.message) ? (j.error || j.message) : (text || (postResp && postResp.statusText) || 'Erro desconhecido');
+                        const msg = j && (j.error || j.message) ? (j.error || j.message) : (text || (resp && resp.statusText) || 'Erro desconhecido');
                         showNotification('Erro ao salvar: ' + msg, 'error');
                         return;
                     }
 
-                    const created = await postResp.json();
-                    console.log('🔁 Agendamento criado via API:', created);
+                    const created = await resp.json();
+                    console.log(`🔁 Agendamento ${isEdicao ? 'atualizado' : 'criado'} via API:`, created);
 
                     // adaptar para o formato esperado pelo DOM
                     const agObj = {
@@ -543,8 +557,20 @@ function abrirNovoAgendamentoModal() {
                         }
                     }
 
-                    notify('Agendamento confirmado com sucesso!', 'success');
+                    notify(`Agendamento ${isEdicao ? 'atualizado' : 'confirmado'} com sucesso!`, 'success');
+                    
+                    // Limpar ID de edição
+                    window.agendamentoEmEdicaoId = null;
+                    
                     fecharModal();
+                    
+                    // Se for edição, recarregar a página para atualizar os dados
+                    if (isEdicao) {
+                        console.log('🔄 Recarregando página após edição...');
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 500);
+                    }
                 } catch (err) {
                     console.error('Erro ao salvar agendamento via API:', err);
                     showNotification('Erro ao salvar agendamento. Veja o console para detalhes.', 'error');
@@ -588,9 +614,18 @@ function abrirNovoAgendamentoModal() {
                     valor: dados.valorTotal || (objAg && objAg.valor) ? objAg.valor : 0
                 };
 
+                // Detectar se é edição ou criação
+                const isEdicao = !!(window.agendamentoEmEdicaoId);
+                const metodo = isEdicao ? 'PUT' : 'POST';
+                const url = isEdicao ? `/api/agendamentos/${window.agendamentoEmEdicaoId}` : '/api/agendamentos';
+
+                console.log(`📡 ${isEdicao ? 'Atualizando' : 'Criando'} agendamento (e redirecionando) via ${metodo} ${url}`);
+                console.log('📦 Payload enviado:', JSON.stringify(payload, null, 2));
+
                 // Chamar API
-                const response = await fetch('/api/agendamentos', {
-                    method: 'POST',
+                const response = await fetch(url, {
+                    method: metodo,
+                    credentials: 'include',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
@@ -608,12 +643,16 @@ function abrirNovoAgendamentoModal() {
                 }
 
                 const created = await response.json();
-                console.log('✅ Agendamento salvo na API:', created);
+                console.log(`✅ Agendamento ${isEdicao ? 'atualizado' : 'salvo'} na API:`, created);
 
-                // Redirecionar para a página de detalhes do agendamento criado
-                const createdId = (created && (created.id || created.ID || created.agendamentoId || created._id || created.codigo)) || null;
-                if (createdId) {
-                    window.location.href = `agendamento-detalhes.html?id=${createdId}`;
+                // Redirecionar para a página de detalhes do agendamento
+                const agendamentoId = isEdicao ? window.agendamentoEmEdicaoId : (created && (created.id || created.ID || created.agendamentoId || created._id || created.codigo)) || null;
+                
+                // Limpar ID de edição
+                window.agendamentoEmEdicaoId = null;
+                
+                if (agendamentoId) {
+                    window.location.href = `agendamento-detalhes.html?id=${agendamentoId}`;
                     return;
                 }
 
@@ -626,7 +665,7 @@ function abrirNovoAgendamentoModal() {
                     }
                 }
 
-                notify('Agendamento confirmado', 'success');
+                notify(`Agendamento ${isEdicao ? 'atualizado' : 'confirmado'}`, 'success');
                 fecharModal();
             } catch (err) {
                 console.error('❌ Erro ao salvar:', err);
@@ -641,6 +680,14 @@ function abrirNovoAgendamentoModal() {
     }, 100);
     
     console.log('✅ Modal de Novo Agendamento criado e exibido!');
+    
+    // Garantir que o botão "Salvar e Ir" esteja visível no modo criação
+    setTimeout(() => {
+        const btnSalvarEIr = document.getElementById('salvarEIr');
+        if (btnSalvarEIr && !window.agendamentoEmEdicaoId) {
+            btnSalvarEIr.style.display = '';
+        }
+    }, 50);
 
     // =============================================
     // FUNÇÕES PARA MÚLTIPLOS SERVIÇOS
@@ -668,7 +715,10 @@ function abrirNovoAgendamentoModal() {
         window.servicosAdicionados.push({
             id: servicoId,
             nome: servicoNome,
-            valor: servicoValor
+            valor: servicoValor,
+            quantidade: 1,
+            unitario: servicoValor,
+            desconto: 0
         });
         
         // Limpar campo
@@ -697,25 +747,76 @@ function abrirNovoAgendamentoModal() {
         
         listaContainer.style.display = 'block';
         
-        // Renderizar cada serviço
-        servicosContainer.innerHTML = window.servicosAdicionados.map(servico => `
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: white; border-radius: 6px; margin-bottom: 8px;">
-                <span style="flex: 1; color: #333;">${servico.nome}</span>
-                <span style="color: #28a745; font-weight: 600; margin: 0 15px;">R$ ${servico.valor.toFixed(2).replace('.', ',')}</span>
-                <button type="button" onclick="window.removerServicoGlobal('${servico.id}')" style="background: #dc3545; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;">
-                    <i class="fas fa-times"></i>
-                </button>
+        // Renderizar cada serviço com campos editáveis
+        servicosContainer.innerHTML = window.servicosAdicionados.map((servico, index) => {
+            const valorCalculado = calcularValorServico(servico);
+            return `
+            <div style="background: white; border-radius: 6px; margin-bottom: 12px; padding: 12px; border: 1px solid #e0e0e0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span style="flex: 1; color: #333; font-weight: 600;">${servico.nome}</span>
+                    <button type="button" onclick="window.removerServicoGlobal('${servico.id}')" style="background: #dc3545; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px;">
+                    <div>
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 4px;">Qtd. *</label>
+                        <input type="number" min="0.001" step="0.001" value="${servico.quantidade || 1}" 
+                            onchange="window.atualizarServicoGlobal(${index}, 'quantidade', parseFloat(this.value) || 1)"
+                            style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 4px;">Unitário *</label>
+                        <input type="number" min="0" step="0.01" value="${(servico.unitario || servico.valor || 0).toFixed(2)}" 
+                            onchange="window.atualizarServicoGlobal(${index}, 'unitario', parseFloat(this.value) || 0)"
+                            style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 4px;">% Desconto</label>
+                        <input type="number" min="0" max="100" step="0.0001" value="${(servico.desconto || 0).toFixed(4)}" 
+                            onchange="window.atualizarServicoGlobal(${index}, 'desconto', parseFloat(this.value) || 0)"
+                            style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                    </div>
+                </div>
+                <div style="text-align: right; margin-top: 8px; padding-top: 8px; border-top: 1px solid #f0f0f0;">
+                    <span style="color: #666; font-size: 12px;">Subtotal: </span>
+                    <span style="color: #28a745; font-weight: 600; font-size: 14px;">R$ ${valorCalculado.toFixed(2).replace('.', ',')}</span>
+                </div>
             </div>
-        `).join('');
+        `;
+        }).join('');
         
         // Calcular e mostrar total
-        const total = window.servicosAdicionados.reduce((acc, s) => acc + s.valor, 0);
+        const total = window.servicosAdicionados.reduce((acc, s) => acc + calcularValorServico(s), 0);
         valorTotalElement.textContent = `R$ ${total.toFixed(2).replace('.', ',')}`;
     }
+    
+    // Função para calcular valor do serviço (quantidade * unitario - desconto%)
+    function calcularValorServico(servico) {
+        const qtd = parseFloat(servico.quantidade) || 1;
+        const unitario = parseFloat(servico.unitario) || parseFloat(servico.valor) || 0;
+        const desconto = parseFloat(servico.desconto) || 0;
+        
+        const subtotal = qtd * unitario;
+        const valorDesconto = subtotal * (desconto / 100);
+        return subtotal - valorDesconto;
+    }
+    
+    // Função para atualizar campo de um serviço
+    window.atualizarServicoGlobal = function(index, campo, valor) {
+        if (window.servicosAdicionados[index]) {
+            window.servicosAdicionados[index][campo] = valor;
+            // Recalcular valor total
+            window.servicosAdicionados[index].valor = calcularValorServico(window.servicosAdicionados[index]);
+            renderizarListaServicos();
+        }
+    };
     
     // Expor funções globalmente
     window.adicionarServicoGlobal = adicionarServicoALista;
     window.removerServicoGlobal = removerServico;
+    window.renderizarListaServicosGlobal = renderizarListaServicos;
+    window.calcularValorServicoGlobal = calcularValorServico;
     
     // Configurar botão adicionar serviço
     const btnAdicionarServico = document.getElementById('btnAdicionarServico');
@@ -1933,7 +2034,7 @@ window.abrirNovoAgendamentoModal = abrirNovoAgendamentoModal;
             const ehHoje = dataAtual.toDateString() === hojeBrasilia.toDateString();
 
             if (ehHoje) {
-                diaElemento.style.background = '#2c5aa0';
+                diaElemento.style.background = '#007bff';
                 diaElemento.style.color = 'white';
                 diaElemento.style.fontWeight = '600';
             } else {
@@ -1951,7 +2052,7 @@ window.abrirNovoAgendamentoModal = abrirNovoAgendamentoModal;
             diaElemento.addEventListener('mouseenter', function() {
                 if (!ehHoje && (!dataSelecionada || dataAtual.toDateString() !== dataSelecionada.toDateString())) {
                     this.style.background = '#f0f8ff';
-                    this.style.color = '#2c5aa0';
+                    this.style.color = '#007bff';
                 }
             });
 
@@ -2061,7 +2162,7 @@ window.abrirCalendarioSidebar = function() {
     
     // HTML da sidebar
     sidebar.innerHTML = `
-        <div style="padding: 25px; border-bottom: 1px solid #eee; background: linear-gradient(135deg, #2c5aa0 0%, #1e3a5f 100%); color: white;">
+        <div style="padding: 25px; border-bottom: 1px solid #eee; background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); color: white;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                 <h3 style="margin: 0; font-size: 20px; font-weight: 600;">
                     <i class="fas fa-calendar-alt" style="margin-right: 10px;"></i>
@@ -2080,18 +2181,18 @@ window.abrirCalendarioSidebar = function() {
             <!-- Data Selecionada -->
             <div id="dataSelecionadaWidget" style="background: #f8f9fa; border: 2px solid #e9ecef; border-radius: 12px; padding: 20px; margin-bottom: 25px; text-align: center;">
                 <div style="font-size: 14px; color: #666; margin-bottom: 5px;">Data Selecionada</div>
-                <div id="dataExibicaoWidget" style="font-size: 24px; font-weight: 600; color: #2c5aa0;">Nenhuma data selecionada</div>
+                <div id="dataExibicaoWidget" style="font-size: 24px; font-weight: 600; color: #007bff;">Nenhuma data selecionada</div>
             </div>
             
             <!-- Calendário -->
-            <div style="background: white; border: 2px solid #2c5aa0; border-radius: 12px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+            <div style="background: white; border: 2px solid #007bff; border-radius: 12px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
                 <!-- Header do Calendário -->
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <button type="button" id="btnMesAnteriorWidget" style="background: none; border: none; font-size: 18px; color: #2c5aa0; cursor: pointer; padding: 8px; border-radius: 50%; transition: all 0.2s ease;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='none'">
+                    <button type="button" id="btnMesAnteriorWidget" style="background: none; border: none; font-size: 18px; color: #007bff; cursor: pointer; padding: 8px; border-radius: 50%; transition: all 0.2s ease;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='none'">
                         <i class="fas fa-chevron-left"></i>
                     </button>
-                    <h4 id="mesAnoCalendarioWidget" style="margin: 0; color: #2c5aa0; font-size: 16px; font-weight: 600;"></h4>
-                    <button type="button" id="btnMesProximoWidget" style="background: none; border: none; font-size: 18px; color: #2c5aa0; cursor: pointer; padding: 8px; border-radius: 50%; transition: all 0.2s ease;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='none'">
+                    <h4 id="mesAnoCalendarioWidget" style="margin: 0; color: #007bff; font-size: 16px; font-weight: 600;"></h4>
+                    <button type="button" id="btnMesProximoWidget" style="background: none; border: none; font-size: 18px; color: #007bff; cursor: pointer; padding: 8px; border-radius: 50%; transition: all 0.2s ease;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='none'">
                         <i class="fas fa-chevron-right"></i>
                     </button>
                 </div>
@@ -2123,11 +2224,11 @@ window.abrirCalendarioSidebar = function() {
             
             <!-- Ações Rápidas -->
             <div style="margin-top: 25px;">
-                <h4 style="margin-bottom: 15px; color: #2c5aa0; font-size: 16px;">
+                <h4 style="margin-bottom: 15px; color: #007bff; font-size: 16px;">
                     <i class="fas fa-bolt"></i> Ações Rápidas
                 </h4>
                 <div style="display: flex; flex-direction: column; gap: 10px;">
-                    <button onclick="novoAtendimento()" style="background: #2c5aa0; color: white; border: none; padding: 12px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.3s ease; display: flex; align-items: center; gap: 10px;" onmouseover="this.style.background='#1e3a5f'; this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#2c5aa0'; this.style.transform='translateY(0)'">
+                    <button onclick="novoAtendimento()" style="background: #007bff; color: white; border: none; padding: 12px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.3s ease; display: flex; align-items: center; gap: 10px;" onmouseover="this.style.background='#0056b3'; this.style.transform='translateY(-2px)'" onmouseout="this.style.background='#007bff'; this.style.transform='translateY(0)'">
                         <i class="fas fa-calendar-plus"></i>
                         Novo Atendimento
                     </button>
@@ -2249,7 +2350,7 @@ function renderizarCalendarioWidget() {
         const ehHoje = dataAtual.toDateString() === hojeBrasilia.toDateString();
         
         if (ehHoje) {
-            diaElemento.style.background = '#2c5aa0';
+            diaElemento.style.background = '#007bff';
             diaElemento.style.color = 'white';
             diaElemento.style.fontWeight = '600';
         } else {
@@ -2267,7 +2368,7 @@ function renderizarCalendarioWidget() {
         diaElemento.addEventListener('mouseenter', function() {
             if (!ehHoje && (!dataSelecionadaWidget || dataAtual.toDateString() !== dataSelecionadaWidget.toDateString())) {
                 this.style.background = '#e3f2fd';
-                this.style.color = '#2c5aa0';
+                this.style.color = '#007bff';
                 this.style.transform = 'scale(1.1)';
             }
         });
@@ -2365,7 +2466,7 @@ window.abrirCalendarioCompacto = function() {
         left: ${rect.left}px;
         width: 280px;
         background: white;
-        border: 2px solid #2c5aa0;
+        border: 2px solid #007bff;
         border-radius: 12px;
         box-shadow: 0 8px 25px rgba(0,0,0,0.15);
         z-index: 999999;
@@ -2378,7 +2479,7 @@ window.abrirCalendarioCompacto = function() {
     // HTML do calendário compacto
     calendario.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <h4 style="margin: 0; color: #2c5aa0; font-size: 14px; font-weight: 600;">
+            <h4 style="margin: 0; color: #007bff; font-size: 14px; font-weight: 600;">
                 <i class="fas fa-calendar-alt" style="margin-right: 5px;"></i>
                 Calendário
             </h4>
@@ -2585,7 +2686,7 @@ function renderizarCalendarioCompacto() {
         const ehHoje = dataAtual.toDateString() === hojeBrasilia.toDateString();
         
         if (ehHoje) {
-            diaElemento.style.background = '#2c5aa0';
+            diaElemento.style.background = '#007bff';
             diaElemento.style.color = 'white';
             diaElemento.style.fontWeight = '600';
         } else {

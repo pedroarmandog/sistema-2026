@@ -427,6 +427,30 @@ body {
     font-size: 14px;
 }
 
+/* Estilo para botões desabilitados nesta página */
+.action-btn[disabled],
+.action-btn.disabled {
+    background: #d6d6d6; /* tom mais escuro */
+    border-color: #bfbfbf;
+    color: #333;
+    cursor: default;
+    box-shadow: none;
+    transform: none;
+    opacity: 1;
+}
+
+.action-btn[disabled]:hover,
+.action-btn.disabled:hover {
+    background: #d6d6d6;
+    border-color: #bfbfbf;
+}
+
+.action-btn[disabled] i,
+.action-btn.disabled i {
+    color: inherit;
+    opacity: 0.95;
+}
+
 /* Status badges (sobrescreve estilos globais para os badges na página de detalhes) */
 .agendamento-situacao .status-badge {
     display: inline-block;
@@ -841,6 +865,19 @@ body {
 
 .btn-formularios:hover {
     background: #5a6268;
+}
+
+/* Estado desabilitado para botão Formulários (painel lateral) */
+.btn-formularios[disabled] {
+    background: #4a4f54; /* mais escuro */
+    color: #e9ecef;
+    cursor: default;
+    opacity: 1;
+    box-shadow: none;
+    transform: none;
+}
+.btn-formularios[disabled]:hover {
+    background: #4a4f54;
 }
 
 .btn-checkout {

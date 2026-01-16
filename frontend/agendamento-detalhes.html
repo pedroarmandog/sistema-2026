@@ -763,16 +763,16 @@
           <button class="action-btn btn-add-item">
             <i class="fas fa-plus"></i> Item
           </button>
-          <button class="action-btn btn-uso-consumo">
+          <button class="action-btn btn-uso-consumo" disabled aria-disabled="true">
             <i class="fas fa-plus"></i> Uso e consumo
           </button>
           <button class="action-btn btn-editar">
             <i class="fas fa-edit"></i> Editar
           </button>
-          <button class="action-btn btn-formularios">
+          <button class="action-btn btn-formularios" disabled aria-disabled="true">
             <i class="fas fa-file-alt"></i> Formulários
           </button>
-          <button class="action-btn btn-menu">
+          <button class="action-btn btn-menu" disabled aria-disabled="true">
             <i class="fas fa-ellipsis-v"></i>
           </button>
           <button class="action-btn btn-desfazer" onclick="desfazerCheckout()">
@@ -795,7 +795,7 @@
             <div class="items-section">
               <div class="section-header">
                 <h3>Itens</h3>
-                <button class="btn-add" onclick="adicionarItem()">
+                <button class="btn-add btn-imprimir-comprovante">
                   <i class="fas fa-plus"></i> Imprimir
                 </button>
               </div>
@@ -917,7 +917,7 @@
           </div>
 
           <div class="action-buttons">
-            <button class="btn-formularios">
+            <button class="btn-formularios" disabled aria-disabled="true">
               <i class="fas fa-file-alt"></i> Formulários
             </button>
             <button class="btn-checkout">

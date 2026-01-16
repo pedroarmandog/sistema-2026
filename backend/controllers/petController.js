@@ -296,6 +296,9 @@ exports.updatePet = async (req, res) => {
             ativo: ativo !== undefined ? ativo : pet.ativo
         });
 
+        // Recarregar do banco para garantir que temos os dados mais recentes
+        await pet.reload();
+
         console.log('✅ Pet atualizado com sucesso');
 
         res.json({

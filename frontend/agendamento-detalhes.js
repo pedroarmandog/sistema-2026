@@ -21,8 +21,301 @@ function detectarIDsDuplicados() {
             problemas.push(`ID '${id}' duplicado ${elementos.length} vezes`);
             console.warn(`⚠️  ID DUPLICADO: ${id} (${elementos.length} elementos)`);
         }
+
+    // Modal de edição de um serviço/servico dentro do agendamento
+    function openEditServiceModal(itemEl){
+        try {
+            console.log('[openEditServiceModal] called for itemEl:', itemEl);
+            // limpar modal anterior se existir (forçar re-criação)
+            try { const prev = document.getElementById('modalEditarServicoOverlay'); if (prev && prev.parentNode) prev.remove(); } catch(e){}
+
+            const currentName = itemEl.querySelector('.service-name')?.textContent || '';
+            const currentQtd = itemEl.querySelector('.col-qtd')?.textContent || '1';
+            const currentUnit = itemEl.querySelector('.col-unitario')?.textContent || '0,00';
+
+            const overlay = document.createElement('div');
+            overlay.id = 'modalEditarServicoOverlay';
+            overlay.style.cssText = 'position:fixed;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;z-index:1600000;';
+
+            const modal = document.createElement('div');
+            modal.id = 'modalEditarServico';
+            modal.style.cssText = 'width:560px;max-width:96%;background:white;border-radius:8px;box-shadow:0 10px 40px rgba(2,16,26,0.3);overflow:hidden;font-family:inherit;z-index:1600001;';
+            modal.innerHTML = `
+                <div style="background:#f5f6f8;padding:12px 16px;border-bottom:1px solid #e6e9ee;display:flex;align-items:center;justify-content:space-between;">
+                    <strong>Editar Item</strong>
+                    <button id="fecharModalEditarServico" style="background:transparent;border:none;font-size:18px;cursor:pointer;color:#666">✕</button>
+                </div>
+                <div style="padding:16px;">
+                    <label style="display:block;margin-bottom:6px;font-weight:600;color:#333">Produto/Serviço</label>
+                    <input id="editServiceInput" type="text" placeholder="Clique para selecionar..." value="${escapeHtmlUnsafe(currentName)}" style="width:100%;padding:10px;border:1px solid #dfe6ef;border-radius:6px;margin-bottom:8px;box-sizing:border-box;" autocomplete="off">
+                    <div id="editServiceResults" style="max-height:220px;overflow:auto;border:1px solid #f1f5f9;border-radius:6px;display:none;margin-bottom:8px;"></div>
+
+                    <div style="display:flex;gap:8px;margin-top:8px;">
+                        <div style="flex:1">
+                            <label style="display:block;margin-bottom:6px;font-weight:600;color:#333">Quantidade</label>
+                            <input id="editServiceQtd" type="number" value="${escapeHtmlUnsafe(currentQtd)}" min="1" style="width:100%;padding:10px;border:1px solid #dfe6ef;border-radius:6px;">
+                        </div>
+                        <div style="flex:1">
+                            <label style="display:block;margin-bottom:6px;font-weight:600;color:#333">Valor unitário</label>
+                            <input id="editServiceValor" type="text" value="${escapeHtmlUnsafe(currentUnit)}" style="width:100%;padding:10px;border:1px solid #dfe6ef;border-radius:6px;">
+                        </div>
+                    </div>
+
+                    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
+                        <button id="btnCancelarEditarServico" class="btn" style="background:#6c757d;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer">Cancelar</button>
+                        <button id="btnSalvarEditarServico" class="btn" style="background:#28a745;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer">Salvar</button>
+                    </div>
+                </div>
+            `;
+
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+            // impedir scroll do body enquanto modal aberto
+            try { document.body.style.overflow = 'hidden'; } catch(e){}
+
+            const input = document.getElementById('editServiceInput');
+            const results = document.getElementById('editServiceResults');
+
+            // search helpers
+            let controller = null;
+            const doSearch = (async (q) => {
+                const qq = (q||'').trim();
+                if (!qq) { results.style.display='none'; results.innerHTML=''; return; }
+                try { if (controller) controller.abort(); } catch(e){}
+                controller = new AbortController();
+                const signal = controller.signal;
+                try {
+                    results.innerHTML = '<div style="padding:10px;color:#666">Carregando...</div>'; results.style.display='block';
+                    const res = await fetch('/api/itens?q=' + encodeURIComponent(qq) + '&limit=40', { signal, credentials: 'include' });
+                    if (!res.ok) { results.innerHTML = '<div style="padding:10px;color:#666">Erro na busca</div>'; return; }
+                    const data = await res.json();
+                    const items = Array.isArray(data) ? data : (Array.isArray(data.items) ? data.items : []);
+                    if (!items || items.length === 0) { results.innerHTML = '<div style="padding:10px;color:#666">Nenhum serviço encontrado</div>'; return; }
+                    const frag = document.createDocumentFragment();
+                    items.slice(0,40).forEach(it => {
+                        const div = document.createElement('div');
+                        div.style.cssText = 'padding:10px;border-bottom:1px solid #f6f6f6;cursor:pointer;';
+                        div.textContent = (it.nome || it.titulo || it.descricao || '') + (it.preco ? (' — ' + formatarMoeda(Number(String(it.preco).replace(',','.')))) : '');
+                        div.addEventListener('click', () => {
+                            // preencher campos com o item selecionado
+                            input.value = it.nome || it.titulo || it.descricao || '';
+                            input.setAttribute('data-selected-id', String(it.id));
+                            input.setAttribute('data-selected-valor', String(it.preco || it.venda || it.valor || 0));
+                            results.style.display = 'none';
+                            document.getElementById('editServiceValor').value = (it.preco || it.venda || it.valor || 0).toString().replace('.',',');
+                        });
+                        frag.appendChild(div);
+                    });
+                    results.innerHTML = '';
+                    results.appendChild(frag);
+                    results.style.display = 'block';
+                } catch (err) {
+                    if (err.name === 'AbortError') return;
+                    console.warn('Erro na busca edit modal', err);
+                    results.innerHTML = '<div style="padding:10px;color:#666">Erro na busca</div>';
+                }
+            });
+
+            const deb = (function(){let t; return function(fn,ms){ clearTimeout(t); t=setTimeout(fn,ms||250); }; })();
+            input.addEventListener('input', function(){ deb(()=>doSearch(input.value)); input.removeAttribute('data-selected-id'); input.removeAttribute('data-selected-valor'); });
+            input.addEventListener('focus', function(){ if (input.value) deb(()=>doSearch(input.value)); });
+
+            document.getElementById('btnCancelarEditarServico').addEventListener('click', close);
+            document.getElementById('fecharModalEditarServico').addEventListener('click', close);
+
+            async function onSave(){
+                try {
+                    const selId = input.getAttribute('data-selected-id');
+                    const nome = input.value.trim();
+                    const qtd = parseInt(document.getElementById('editServiceQtd').value) || 1;
+                    const rawValor = (document.getElementById('editServiceValor').value || '').toString().replace(',','.');
+                    const valorUnit = parseFloat(rawValor) || 0;
+                    const total = qtd * valorUnit;
+
+                    // atualizar DOM do item
+                    const nameEl = itemEl.querySelector('.service-name'); if (nameEl) nameEl.textContent = nome;
+                    const qtdEl = itemEl.querySelector('.col-qtd'); if (qtdEl) qtdEl.textContent = String(qtd);
+                    const unitEl = itemEl.querySelector('.col-unitario'); if (unitEl) unitEl.textContent = formatarMoeda(valorUnit);
+                    const totalEl = itemEl.querySelector('.col-total'); if (totalEl) totalEl.textContent = formatarMoeda(total);
+
+                    // atualizar agendamentoAtual.servicos (atualizar o item existente, não criar duplicata)
+                    try {
+                        // construir objeto atualizado
+                        const updatedObj = { id: selId || itemEl.dataset.serviceId || Date.now(), nome: nome, quantidade: qtd, unitario: valorUnit, valor: valorUnit, total: total };
+
+                        // Caso legado: agendamento possui apenas string concatenada em __existingServicosString ou servico
+                        const hasLegacyString = !!(agendamentoAtual && (agendamentoAtual.servico || agendamentoAtual.__existingServicosString));
+
+                        // garantir array base
+                        if (!Array.isArray(agendamentoAtual.servicos)) agendamentoAtual.servicos = Array.isArray(agendamentoAtual.__existingServicosArray) ? agendamentoAtual.__existingServicosArray.slice() : [];
+
+                        let replaced = false;
+
+                        // Se o item DOM é um item legado (dataset.serviceId === 'legacy') ou o agendamento só tinha string
+                        if ((itemEl.dataset.serviceId === 'legacy' || (!agendamentoAtual.servicos.length && hasLegacyString))) {
+                            // substituir o comportamento: remover o legado e criar o array com o novo objeto
+                            agendamentoAtual.servicos = [updatedObj];
+                            replaced = true;
+                        }
+
+                        // tentar localizar por data-service-id
+                        if (!replaced) {
+                            const sid = itemEl.dataset.serviceId;
+                            if (sid) {
+                                for (let i = 0; i < agendamentoAtual.servicos.length; i++) {
+                                    if (String(agendamentoAtual.servicos[i].id) === String(sid)) {
+                                        agendamentoAtual.servicos[i] = Object.assign({}, agendamentoAtual.servicos[i], updatedObj);
+                                        replaced = true; break;
+                                    }
+                                }
+                            }
+                        }
+
+                        // se ainda não encontrou, tentar localizar entre os serviços existentes originalmente carregados do servidor
+                        // (útil quando o DOM/element dataset foi modificado e o item original está em __existingServicosArray)
+                        if (!replaced && Array.isArray(agendamentoAtual.__existingServicosArray) && currentName) {
+                            for (let i = 0; i < agendamentoAtual.__existingServicosArray.length; i++) {
+                                const orig = agendamentoAtual.__existingServicosArray[i];
+                                if (!orig) continue;
+                                if (String(orig.nome || '').trim() === String(currentName || '').trim()) {
+                                    // localizar índice correspondente no agendamentoAtual.servicos por id (se existir) ou por nome
+                                    const targetId = orig.id;
+                                    let replacedIdx = -1;
+                                    if (targetId !== undefined && targetId !== null) {
+                                        replacedIdx = agendamentoAtual.servicos.findIndex(x => String(x.id) === String(targetId));
+                                    }
+                                    if (replacedIdx === -1) {
+                                        replacedIdx = agendamentoAtual.servicos.findIndex(x => String(x.nome || '').trim() === String(currentName || '').trim());
+                                    }
+                                    if (replacedIdx !== -1) {
+                                        agendamentoAtual.servicos[replacedIdx] = Object.assign({}, agendamentoAtual.servicos[replacedIdx], updatedObj);
+                                        replaced = true; break;
+                                    }
+                                }
+                            }
+                        }
+
+                        // fallback: localizar por nome antiga
+                        if (!replaced && currentName) {
+                            for (let i = 0; i < agendamentoAtual.servicos.length; i++) {
+                                if (String(agendamentoAtual.servicos[i].nome || '').trim() === String(currentName || '').trim()) {
+                                    agendamentoAtual.servicos[i] = Object.assign({}, agendamentoAtual.servicos[i], updatedObj);
+                                    replaced = true; break;
+                                }
+                            }
+                        }
+
+                        // fallback por posição DOM
+                        if (!replaced) {
+                            try {
+                                const category = document.querySelector('.category-section');
+                                if (category) {
+                                    const nodes = Array.from(category.querySelectorAll('.service-item'));
+                                    const idx = nodes.indexOf(itemEl);
+                                    if (idx >= 0) {
+                                        if (idx < agendamentoAtual.servicos.length) {
+                                            agendamentoAtual.servicos[idx] = updatedObj; replaced = true;
+                                        }
+                                    }
+                                }
+                            } catch (e) { /* ignore */ }
+                        }
+
+                        if (!replaced) agendamentoAtual.servicos.push(updatedObj);
+
+                        // garantir que o elemento DOM tenha o serviceId atualizado
+                        try { itemEl.dataset.serviceId = String(updatedObj.id); } catch(e){}
+
+                        // se havia string legado, atualizar também agendamentoAtual.servico para refletir novo nome
+                        try {
+                            if (hasLegacyString) {
+                                agendamentoAtual.servico = updatedObj.nome;
+                                agendamentoAtual.__existingServicosString = updatedObj.nome;
+                            }
+                        } catch(e){}
+                    } catch(e){ console.warn('Erro atualizando agendamentoAtual.servicos no editar', e); }
+
+                    // deduplicar possíveis itens DOM com o mesmo nome antigo (garantir que substituímos a linha clicada)
+                    try {
+                        const category = document.querySelector('.category-section');
+                        if (category && currentName) {
+                            const nodes = Array.from(category.querySelectorAll('.service-item'));
+                            nodes.forEach(n => {
+                                if (n === itemEl) return;
+                                const nm = n.querySelector('.service-name')?.textContent || '';
+                                if (String(nm || '').trim() === String(currentName || '').trim()) {
+                                    n.remove();
+                                }
+                            });
+                        }
+                    } catch(e) { /* ignore */ }
+
+                    // garantir que agendamentoAtual.servicos não tenha duplicatas (prefere id, fallback por nome)
+                    try {
+                        if (!Array.isArray(agendamentoAtual.servicos)) agendamentoAtual.servicos = Array.isArray(agendamentoAtual.__existingServicosArray) ? agendamentoAtual.__existingServicosArray.slice() : [];
+                        const seen = new Set();
+                        const dedup = [];
+                        for (const it of agendamentoAtual.servicos) {
+                            const key = (it && it.id) ? String(it.id) : (String(it.nome||'') + '::' + String(it.unitario||''));
+                            if (seen.has(key)) continue;
+                            seen.add(key);
+                            dedup.push(it);
+                        }
+                        agendamentoAtual.servicos = dedup;
+                    } catch(e){ console.warn('Erro deduplicando agendamentoAtual.servicos', e); }
+
+                    // persistir e recalcular
+                    await recalcAndPersistServicos();
+                    close();
+                } catch(e){ console.error('Erro ao salvar edição de item', e); }
+            }
+
+            document.getElementById('btnSalvarEditarServico').addEventListener('click', onSave);
+
+            function close(){ try{ overlay.remove(); document.body.style.overflow = ''; }catch(e){} }
+            } catch(e){ console.warn('openEditServiceModal error', e); }
+        }
+        // expor globalmente para que handlers fora desta função possam chamar
+        try { window.openEditServiceModal = openEditServiceModal; } catch(e){}
     });
     
+    // Modal de confirmação reutilizável (estilo do sistema)
+    if (typeof window.showConfirmModal === 'undefined') {
+        window.showConfirmModal = function(message){
+            return new Promise((resolve)=>{
+                try {
+                    try { const prev = document.getElementById('confirmModalOverlay'); if (prev && prev.parentNode) prev.remove(); } catch(e){}
+                    const overlay = document.createElement('div');
+                    overlay.id = 'confirmModalOverlay';
+                    overlay.style.cssText = 'position:fixed;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;z-index:1600000;';
+
+                    const modal = document.createElement('div');
+                    modal.style.cssText = 'width:420px;max-width:94%;background:white;border-radius:8px;box-shadow:0 10px 40px rgba(2,16,26,0.3);overflow:hidden;font-family:inherit;z-index:1600001;';
+                    modal.innerHTML = `
+                        <div style="background:#f5f6f8;padding:12px 16px;border-bottom:1px solid #e6e9ee;display:flex;align-items:center;justify-content:space-between;">
+                            <strong>Confirmação</strong>
+                        </div>
+                        <div style="padding:16px;color:#222">${escapeHtmlUnsafe(message)}</div>
+                        <div style="padding:12px 16px 18px;display:flex;justify-content:flex-end;gap:8px;">
+                            <button id="confirmCancel" class="btn" style="background:#6c757d;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer">Cancelar</button>
+                            <button id="confirmOk" class="btn" style="background:#dc3545;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer">Excluir</button>
+                        </div>
+                    `;
+
+                    overlay.appendChild(modal);
+                    document.body.appendChild(overlay);
+                    try{ document.body.style.overflow = 'hidden'; } catch(e){}
+
+                    function cleanup(){ try{ overlay.remove(); document.body.style.overflow = ''; } catch(e){} }
+
+                    document.getElementById('confirmCancel').addEventListener('click', function(){ cleanup(); resolve(false); });
+                    document.getElementById('confirmOk').addEventListener('click', function(){ cleanup(); resolve(true); });
+                    overlay.addEventListener('click', function(ev){ if (ev.target === overlay) { cleanup(); resolve(false); } });
+                } catch (e) { console.warn('showConfirmModal error', e); resolve(false); }
+            });
+        };
+    }
+
     if (problemas.length > 0) {
         console.error('🚨 PROBLEMAS DE IDs DUPLICADOS DETECTADOS:');
         problemas.forEach(p => console.error(`   - ${p}`));
@@ -52,6 +345,104 @@ function configurarDropdownInicioRapido() {
 
         window.dropdownConfigurado = true;
     }
+}
+
+// Profissionais cache + seletor
+let _profissionaisCache = null;
+async function ensureProfissionaisLoaded(){
+    if (Array.isArray(_profissionaisCache)) return _profissionaisCache;
+    try {
+        const resp = await fetch('/api/profissionais', { credentials: 'include' });
+        if (!resp.ok) throw new Error('Status ' + resp.status);
+        const data = await resp.json();
+        _profissionaisCache = Array.isArray(data) ? data : [];
+    } catch(e){ console.warn('Erro carregando profissionais', e); _profissionaisCache = []; }
+    return _profissionaisCache;
+}
+
+function openProfessionalSelector(anchorEl){
+    try {
+        // fechar qualquer dropdown existente
+        const prev = document.getElementById('professionalDropdownOverlay'); if (prev) prev.remove();
+        const overlay = document.createElement('div');
+        overlay.id = 'professionalDropdownOverlay';
+        overlay.style.cssText = 'position:fixed;left:0;top:0;width:100%;height:100%;z-index:1600002;';
+
+        const box = document.createElement('div');
+        box.style.cssText = 'position:absolute;min-width:240px;max-width:380px;max-height:320px;overflow:auto;background:#fff;border:1px solid #e6e9ee;border-radius:8px;box-shadow:0 10px 30px rgba(2,16,26,0.08);padding:8px;';
+        // posicionar próximo ao anchor: alinhar à mesma linha/caixa do elemento
+        const rect = anchorEl.getBoundingClientRect();
+        // colocar temporariamente fora da tela para medir
+        box.style.left = '0px';
+        box.style.top = '0px';
+        // anexar overlay e box ao DOM antes de medir
+        overlay.appendChild(box);
+        document.body.appendChild(overlay);
+        const boxRect = box.getBoundingClientRect();
+        const SHIFT_X = 15; // deslocar levemente para a esquerda
+        let left = rect.left + window.scrollX - SHIFT_X;
+        let top = rect.top + window.scrollY + Math.round((rect.height - boxRect.height) / 2);
+        // ajustar para não ultrapassar viewport
+        if (left + boxRect.width > window.scrollX + window.innerWidth - 8) left = window.scrollX + window.innerWidth - boxRect.width - 8;
+        if (left < 8) left = 8;
+        if (top + boxRect.height > window.scrollY + window.innerHeight - 8) top = window.scrollY + window.innerHeight - boxRect.height - 8;
+        if (top < 8) top = 8;
+        box.style.left = left + 'px';
+        box.style.top = top + 'px';
+        box.innerHTML = `<div style="padding:8px"><input id="profSearchInput" placeholder="Pesquisar profissional..." style="width:100%;padding:8px;border:1px solid #e6e9ee;border-radius:6px;box-sizing:border-box;"></div><div id="profListContainer" style="max-height:240px;overflow:auto;padding:4px;"></div>`;
+
+        overlay.addEventListener('click', function(ev){ if (ev.target === overlay) overlay.remove(); });
+
+        const container = document.getElementById('profListContainer');
+        const input = document.getElementById('profSearchInput');
+
+        function renderList(q){
+            const ql = (q||'').toLowerCase().trim();
+            container.innerHTML = '';
+            const list = Array.isArray(_profissionaisCache) ? _profissionaisCache : [];
+            const filtered = list.filter(p => !ql || (String(p.nome||'').toLowerCase().includes(ql)) ).slice(0,80);
+            if (filtered.length === 0) { container.innerHTML = '<div style="padding:8px;color:#666">Nenhum profissional encontrado</div>'; return; }
+            const frag = document.createDocumentFragment();
+            filtered.forEach(p => {
+                const row = document.createElement('div');
+                row.style.cssText = 'padding:8px;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:8px;';
+                row.innerHTML = `<div style="flex:1">${escapeHtmlUnsafe(p.nome||'')}<div style="font-size:12px;color:#888">${escapeHtmlUnsafe(p.cargo||'')}</div></div>`;
+                row.addEventListener('click', async function(){
+                    try {
+                        // atualizar agendamentoAtual.profissional e persistir
+                        const nome = p.nome || '';
+                        if (agendamentoAtual && agendamentoAtual.id) {
+                            const payload = { profissional: nome };
+                            console.log('Atualizando profissional via PUT', payload);
+                            const resp = await fetch(`/api/agendamentos/${agendamentoAtual.id}`, { method: 'PUT', credentials: 'include', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+                            if (resp.ok) {
+                                const updated = await resp.json().catch(()=>null);
+                                if (updated) {
+                                    agendamentoAtual.profissional = updated.profissional || nome;
+                                } else {
+                                    agendamentoAtual.profissional = nome;
+                                }
+                            } else {
+                                agendamentoAtual.profissional = nome;
+                            }
+                        }
+                        // atualizar UI
+                        try { const profSidebar = document.querySelector('.professional-section .professional-content'); if (profSidebar) { profSidebar.querySelectorAll('.prof-name').forEach(el => el.textContent = nome); } const infoProf = document.querySelector('.info-row:nth-child(2) .info-value'); if (infoProf) infoProf.textContent = nome; document.querySelectorAll('.category-section .col-profissional, .service-item .col-profissional').forEach(el => { el.textContent = nome; }); } catch(e){}
+                        // notificar outras páginas/modulos que o agendamento foi atualizado
+                        try { window.dispatchEvent(new CustomEvent('agendamento-updated', { detail: { id: agendamentoAtual.id, profissional: nome } })); } catch(e){}
+                    } catch(e){ console.warn('Erro ao setar profissional', e); }
+                    overlay.remove();
+                });
+                frag.appendChild(row);
+            });
+            container.appendChild(frag);
+        }
+
+        input.addEventListener('input', function(){ renderList(input.value); });
+        // carregar cache e renderizar
+        ensureProfissionaisLoaded().then(()=>renderList(''));
+        setTimeout(()=>input.focus(),50);
+    } catch(e){ console.warn('openProfessionalSelector error', e); }
 }
 
 function salvarEstadoSubmenu(submenuId, isOpen) {
@@ -470,6 +861,9 @@ function preencherDadosAgendamento(agendamento) {
 
                                                 const item = document.createElement('div');
                                                 item.className = 'service-item';
+                                                try { if (s && (s.id !== undefined && s.id !== null)) item.dataset.serviceId = String(s.id); } catch(e){}
+                                                // marcar id para ações (pode ser legacy)
+                                                try { if (s && (s.id !== undefined && s.id !== null)) item.dataset.serviceId = String(s.id); } catch(e){}
                                                 item.innerHTML = `
                                                         <div class="col-horario">
                                                             <i class="fas fa-clock"></i>
@@ -496,6 +890,7 @@ function preencherDadosAgendamento(agendamento) {
                                         // Se não houver array, renderiza a string concatenada como um único item
                                         const item = document.createElement('div');
                                         item.className = 'service-item';
+                                        try { item.dataset.serviceId = 'legacy'; } catch(e){}
                                         item.innerHTML = `
                                                 <div class="col-horario">
                                                     <i class="fas fa-clock"></i>
@@ -535,6 +930,13 @@ function preencherDadosAgendamento(agendamento) {
                                         nameEl.className = 'prof-name';
                                         nameEl.textContent = profName;
                                         wrapper.appendChild(nameEl);
+                                        // tornar selecionável para abrir dropdown de profissionais
+                                        wrapper.style.cursor = 'pointer';
+                                        wrapper.title = 'Clique para selecionar/trocar profissional';
+                                        wrapper.addEventListener('click', function(e){
+                                            e.stopPropagation();
+                                            openProfessionalSelector(wrapper);
+                                        });
                                         profSection.appendChild(wrapper);
                                     }
                                 } catch (e) { console.warn('Erro ao preencher Profissional:', e); }
@@ -758,7 +1160,8 @@ async function finalizarCobranca() {
         const response = await fetch(`/api/agendamentos/${agendamentoAtual.id}/status`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: 'concluido' })
+            body: JSON.stringify({ status: 'concluido' }),
+            credentials: 'include'
         });
         
         if (response.ok) {
@@ -804,7 +1207,8 @@ async function salvarStatus() {
         const response = await fetch(`/api/agendamentos/${agendamentoAtual.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: novoStatus })
+            body: JSON.stringify({ status: novoStatus }),
+            credentials: 'include'
         });
         
         if (response.ok) {
@@ -909,7 +1313,8 @@ async function salvarObservacoes() {
         const response = await fetch(`/api/agendamentos/${agendamentoAtual.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ observacoes: novasObservacoes })
+            body: JSON.stringify({ observacoes: novasObservacoes }),
+            credentials: 'include'
         });
         
         if (response.ok) {
@@ -921,6 +1326,10 @@ async function salvarObservacoes() {
         // Atualiza no localStorage
         atualizarLocalStorage();
         console.log('📝 Observações salvas');
+        try {
+            const ev = new CustomEvent('agendamento-updated', { detail: { id: agendamentoAtual.id, observacoes: novasObservacoes } });
+            window.dispatchEvent(ev);
+        } catch (e) { /* ignore */ }
         
     } catch (error) {
         console.error('Erro ao salvar observações:', error);
@@ -935,6 +1344,15 @@ function voltarParaLista() {
 
 // Abre modal pequeno centralizado para adicionar item (produto/serviço)
 function openAddItemModal() {
+    // bloquear se agendamento já estiver finalizado / check-out
+    try {
+        const normalizedStatus = String((agendamentoAtual && agendamentoAtual.status) || '').toLowerCase().replace(/_/g,'-');
+        if (['concluido','check-out','checkout','finalizado'].includes(normalizedStatus)) {
+            try { if (typeof showNotification === 'function') { showNotification('Atendimento finalizado — não é possível adicionar itens.', 'error'); } else { alert('Atendimento finalizado — não é possível adicionar itens.'); } } catch(e) { try { alert('Atendimento finalizado — não é possível adicionar itens.'); } catch(_){} }
+            return;
+        }
+    } catch(e) {}
+
     // evitar múltiplos modais
     if (document.getElementById('modalAdicionarItem')) return;
 
@@ -1013,12 +1431,18 @@ function openAddItemModal() {
                 div.setAttribute('data-id', String(it.id));
                 div.style.cssText = 'padding:10px;border-bottom:1px solid #f6f6f6;cursor:pointer;';
                 const title = document.createElement('div');
-                title.style.fontWeight = '700'; title.style.color = '#222';
+                title.style.fontWeight = '400'; title.style.color = '#222';
                 title.textContent = it.nome || it.titulo || it.descricao || '';
                 const meta = document.createElement('div');
-                meta.style.fontSize = '13px'; meta.style.color = '#6b7280';
+                meta.style.fontSize = '13px'; meta.style.color = '#6b7280'; meta.style.display = 'flex'; meta.style.justifyContent = 'space-between'; meta.style.alignItems = 'center';
                 const preco = it.preco || it.venda || it.valor || 0;
-                meta.textContent = (it.tipo ? it.tipo + ' • ' : '') + (preco ? formatarMoeda(Number(String(preco).replace(',','.'))) : '');
+                const leftSpan = document.createElement('div');
+                leftSpan.style.flex = '1';
+                leftSpan.textContent = (it.tipo ? it.tipo + ' • ' : '');
+                const priceSpan = document.createElement('div');
+                priceSpan.style.fontWeight = '700'; priceSpan.style.color = '#111'; priceSpan.style.marginLeft = '8px';
+                priceSpan.textContent = (preco ? ('R$ ' + formatarMoeda(Number(String(preco).replace(',','.')))) : '');
+                meta.appendChild(leftSpan); meta.appendChild(priceSpan);
                 div.appendChild(title); div.appendChild(meta);
                 div.addEventListener('click', function(){
                     input.value = it.nome || it.titulo || '';
@@ -1120,6 +1544,7 @@ function openAddItemModal() {
 
                 const resp = await fetch(`/api/agendamentos/${agendamentoAtual.id}`, {
                     method: 'PUT',
+                    credentials: 'include',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ servico: nomesConcat, servicos: mergedServicos, valor: newTotal })
                 });
@@ -1217,6 +1642,111 @@ function appendServiceToCategory(s){
                 } catch (e) { /* ignore */ }
         } catch(e){ console.warn('appendServiceToCategory error', e); }
 }
+
+    // Cria/retorna o menu de ações usado por cada item (singleton)
+    function getServiceItemMenu(){
+        let menu = document.getElementById('serviceItemActionsMenu');
+        if (menu) return menu;
+        menu = document.createElement('div');
+        menu.id = 'serviceItemActionsMenu';
+        menu.style.cssText = 'position:absolute;z-index:1400000;background:white;border:1px solid #e6e9ee;border-radius:8px;box-shadow:0 10px 30px rgba(2,16,26,0.08);min-width:140px;padding:6px;';
+        menu.innerHTML = `
+            <div class="sia-row" data-action="edit" style="padding:8px 10px;cursor:pointer;border-radius:6px;display:flex;align-items:center;gap:8px;">✎ <span>Editar</span></div>
+            <div class="sia-row" data-action="delete" style="padding:8px 10px;cursor:pointer;border-radius:6px;display:flex;align-items:center;gap:8px;">✖ <span>Excluir</span></div>
+        `;
+        document.body.appendChild(menu);
+
+        // listener global para cliques nas opções
+        menu.addEventListener('click', async function(e){
+            const row = e.target.closest('.sia-row');
+            if (!row) return;
+            const action = row.getAttribute('data-action');
+            const targetFor = menu.getAttribute('data-for');
+            const itemEl = targetFor ? document.querySelector(`[data-service-id="${targetFor}"]`) : null;
+            if (action === 'delete') {
+                if (!itemEl) { hideServiceItemMenu(); return; }
+                // confirmar via modal estilizado
+                try {
+                    const confirmed = await showConfirmModal('Deseja remover este item do agendamento?');
+                    if (!confirmed) { hideServiceItemMenu(); return; }
+                } catch(e){ hideServiceItemMenu(); return; }
+                // encontrar índice no agendamentoAtual.servicos e remover
+                try {
+                    const sid = itemEl.dataset.serviceId;
+                    if (Array.isArray(agendamentoAtual.servicos)) {
+                        agendamentoAtual.servicos = agendamentoAtual.servicos.filter(x => String(x.id) !== String(sid));
+                    }
+                    // remover visualmente
+                    itemEl.remove();
+                    // recalcular totals
+                    recalcAndPersistServicos();
+                } catch(e){ console.warn('Erro ao excluir item', e); }
+                hideServiceItemMenu();
+            } else if (action === 'edit') {
+                hideServiceItemMenu();
+                if (!itemEl) return;
+                // abrir modal de edição rico
+                openEditServiceModal(itemEl);
+            }
+        });
+
+        // fechar ao clicar fora
+        document.addEventListener('click', function(ev){ if (!menu.contains(ev.target) && !ev.target.closest('.btn-item-action')) hideServiceItemMenu(); });
+
+        return menu;
+    }
+
+    function hideServiceItemMenu(){
+        const m = document.getElementById('serviceItemActionsMenu'); if (m) m.style.display = 'none';
+    }
+
+    function openServiceItemMenu(buttonEl, itemEl){
+        try {
+            const menu = getServiceItemMenu();
+            // marcar para qual item está aberto (usar id)
+            const sid = itemEl.dataset.serviceId || '';
+            menu.setAttribute('data-for', sid);
+            // posicionar próximo ao botão
+            const rect = buttonEl.getBoundingClientRect();
+            const left = rect.right + window.scrollX - menu.offsetWidth;
+            const top = rect.bottom + window.scrollY + 8;
+            menu.style.left = (left > 8 ? left : rect.left + window.scrollX) + 'px';
+            menu.style.top = top + 'px';
+            menu.style.display = 'block';
+        } catch(e){ console.warn('openServiceItemMenu error', e); }
+    }
+
+    // Recalcula total e envia PUT para persistir `servicos` e `servico` concatenado
+    async function recalcAndPersistServicos(){
+        try {
+            const arr = Array.isArray(agendamentoAtual.servicos) ? agendamentoAtual.servicos : [];
+            const total = arr.reduce((acc,it)=>{ const v = parseFloat(String(it.total || it.valor || it.unitario || 0).toString().replace(',','.'))||0; return acc+v; }, 0);
+            const names = arr.map(s => s && (s.nome||s.name||s.nomeServico) ? (s.nome||s.name||s.nomeServico) : '').filter(Boolean).join(' • ');
+            // atualizar DOM dos totais
+            try { document.getElementById('totalGeral').textContent = formatarMoeda(total); document.getElementById('totalPendente').textContent = formatarMoeda(total); const amount = document.querySelector('.amount'); if(amount) amount.textContent = formatarMoeda(total); } catch(e){}
+
+            // enviar atualização para API
+            if (agendamentoAtual && agendamentoAtual.id) {
+                // log payload para debug
+                try { console.log('PUT /api/agendamentos/' + agendamentoAtual.id + ' payload:', { servicosCount: arr.length, servicos: arr, servico: names, valor: total }); } catch(e){}
+                const resp = await fetch(`/api/agendamentos/${agendamentoAtual.id}`, {
+                    method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ servicos: arr, servico: names, valor: total })
+                });
+                if (resp.ok) {
+                    const updated = await resp.json().catch(()=>null);
+                    if (updated) {
+                        agendamentoAtual.servicos = Array.isArray(updated.servicos) ? updated.servicos : arr;
+                        agendamentoAtual.servico = updated.servico || names;
+                        agendamentoAtual.valor = updated.valor !== undefined ? updated.valor : total;
+                    }
+                } else {
+                        const txt = await resp.text().catch(()=>null);
+                        console.warn('recall persist failed', resp.status, txt);
+                }
+            }
+        } catch(e){ console.warn('recalcAndPersistServicos error', e); }
+    }
 
 // Função para adicionar item (placeholder)
 function adicionarItem() {
@@ -1413,7 +1943,173 @@ document.addEventListener('DOMContentLoaded', function() {
             clearTimeout(timeoutObservacoes);
             timeoutObservacoes = setTimeout(salvarObservacoes, 1500); // Salva após 1.5s sem digitação
         });
+        // Salvar também ao sair do campo
+        observacoesText.addEventListener('blur', function() {
+            clearTimeout(timeoutObservacoes);
+            salvarObservacoes();
+        });
     }
+
+    // Botão Editar -> abrir modal de novo atendimento com dados preenchidos
+    try {
+        const btnEditar = document.querySelector('.btn-editar');
+        if (btnEditar) {
+            btnEditar.addEventListener('click', async function () {
+                try {
+                    const id = (agendamentoAtual && agendamentoAtual.id) || this.getAttribute('data-agendamento-id') || (new URLSearchParams(window.location.search).get('id'));
+                    if (!id) return showNotification('ID do agendamento não encontrado', 'error');
+
+                    // Buscar agendamento na API
+                    const resp = await fetch(`/api/agendamentos/${id}`, { credentials: 'include' });
+                    if (!resp.ok) return showNotification('Erro ao buscar agendamento', 'error');
+                    const ag = await resp.json();
+
+                    // Abrir modal global de novo agendamento
+                    try { abrirNovoAgendamentoModal(); } catch(e) { console.warn('abrirNovoAgendamentoModal não disponível', e); }
+                    
+                    // Definir ID de edição
+                    window.agendamentoEmEdicaoId = ag.id;
+                    
+                    // Ocultar botão "Salvar e Ir" no modo de edição
+                    setTimeout(() => {
+                        const btnSalvarEIr = document.getElementById('salvarEIr');
+                        if (btnSalvarEIr) {
+                            btnSalvarEIr.style.display = 'none';
+                        }
+                    }, 50);
+
+                    // Aguarda o modal ser criado no DOM
+                    setTimeout(() => {
+                        try {
+                            // Preencher campos básicos
+                            const petInput = document.getElementById('petClienteGlobal');
+                            if (petInput) {
+                                petInput.value = ag.petNome || '';
+                                if (ag.petId) {
+                                    petInput.setAttribute('data-selected-pet-id', String(ag.petId));
+                                    petInput.dataset.selectedPetId = String(ag.petId);
+                                }
+                            }
+
+                            const dataInput = document.getElementById('dataGlobal');
+                            if (dataInput) {
+                                // Converter data para formato brasileiro DD/MM/YYYY
+                                if (ag.dataAgendamento) {
+                                    // Pegar apenas a parte da data (YYYY-MM-DD)
+                                    const dataStr = ag.dataAgendamento.split('T')[0];
+                                    const [ano, mes, dia] = dataStr.split('-');
+                                    // Formato brasileiro: DD/MM/YYYY
+                                    dataInput.value = `${dia}/${mes}/${ano}`;
+                                } else {
+                                    dataInput.value = '';
+                                }
+                            }
+
+                            const horaInput = document.getElementById('horaGlobal');
+                            if (horaInput) horaInput.value = ag.horario || '';
+
+                            // Profissional - usar o input visível e remover placeholder
+                            const profInput = document.getElementById('profissionalGlobalInput');
+                            if (profInput) {
+                                profInput.value = ag.profissional || '';
+                                if (ag.profissional) {
+                                    profInput.placeholder = '';
+                                }
+                            }
+                            const profHidden = document.getElementById('profissionalGlobalId');
+                            if (profHidden && ag.profissionalId) profHidden.value = ag.profissionalId;
+
+                            const obs = document.getElementById('observacoesGlobal');
+                            if (obs) obs.value = ag.observacoes || '';
+
+                            // Preencher serviços (se existirem)
+                            try {
+                                const listaContainer = document.getElementById('listaServicos');
+                                const servicosContainer = document.getElementById('servicosAdicionados');
+                                const valorTotalElement = document.getElementById('valorTotal');
+                                const servs = ag.servicos || [];
+                                window.servicosAdicionados = servs.map(s => ({
+                                    id: s.id || s.nome,
+                                    nome: s.nome || s.description || '',
+                                    valor: parseFloat(s.total || s.valor || s.unitario || 0) || 0,
+                                    quantidade: parseFloat(s.quantidade) || 1,
+                                    unitario: parseFloat(s.unitario || s.valor || 0) || 0,
+                                    desconto: parseFloat(s.desconto) || 0
+                                }));
+
+                                if (window.servicosAdicionados.length === 0) {
+                                    if (listaContainer) listaContainer.style.display = 'none';
+                                } else {
+                                    // Usar a função global de renderização se disponível
+                                    if (typeof window.renderizarListaServicosGlobal === 'function') {
+                                        window.renderizarListaServicosGlobal();
+                                    } else {
+                                        // Fallback: renderização inline
+                                        if (listaContainer) listaContainer.style.display = 'block';
+                                        if (servicosContainer && valorTotalElement) {
+                                            // Calcular valor do serviço
+                                            const calcValor = (s) => {
+                                                const qtd = parseFloat(s.quantidade) || 1;
+                                                const unit = parseFloat(s.unitario) || parseFloat(s.valor) || 0;
+                                                const desc = parseFloat(s.desconto) || 0;
+                                                const sub = qtd * unit;
+                                                return sub - (sub * (desc / 100));
+                                            };
+                                            
+                                            servicosContainer.innerHTML = window.servicosAdicionados.map((servico, index) => {
+                                                const valorCalc = calcValor(servico);
+                                                return `\
+                                                <div style="background: white; border-radius: 6px; margin-bottom: 12px; padding: 12px; border: 1px solid #e0e0e0;">\
+                                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">\
+                                                        <span style="flex: 1; color: #333; font-weight: 600;">${servico.nome}</span>\
+                                                        <button type="button" onclick="window.removerServicoGlobal('${servico.id}')" style="background: #dc3545; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;">\
+                                                            <i class="fas fa-times"></i>\
+                                                        </button>\
+                                                    </div>\
+                                                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px;">\
+                                                        <div>\
+                                                            <label style="display: block; font-size: 11px; color: #666; margin-bottom: 4px;">Qtd. *</label>\
+                                                            <input type="number" min="0.001" step="0.001" value="${servico.quantidade || 1}" \
+                                                                onchange="window.atualizarServicoGlobal(${index}, 'quantidade', parseFloat(this.value) || 1)"\
+                                                                style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">\
+                                                        </div>\
+                                                        <div>\
+                                                            <label style="display: block; font-size: 11px; color: #666; margin-bottom: 4px;">Unitário *</label>\
+                                                            <input type="number" min="0" step="0.01" value="${(servico.unitario || servico.valor || 0).toFixed(2)}" \
+                                                                onchange="window.atualizarServicoGlobal(${index}, 'unitario', parseFloat(this.value) || 0)"\
+                                                                style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">\
+                                                        </div>\
+                                                        <div>\
+                                                            <label style="display: block; font-size: 11px; color: #666; margin-bottom: 4px;">% Desconto</label>\
+                                                            <input type="number" min="0" max="100" step="0.0001" value="${(servico.desconto || 0).toFixed(4)}" \
+                                                                onchange="window.atualizarServicoGlobal(${index}, 'desconto', parseFloat(this.value) || 0)"\
+                                                                style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">\
+                                                        </div>\
+                                                    </div>\
+                                                    <div style="text-align: right; margin-top: 8px; padding-top: 8px; border-top: 1px solid #f0f0f0;">\
+                                                        <span style="color: #666; font-size: 12px;">Subtotal: </span>\
+                                                        <span style="color: #28a745; font-weight: 600; font-size: 14px;">R$ ${valorCalc.toFixed(2).replace('.', ',')}</span>\
+                                                    </div>\
+                                                </div>`;
+                                            }).join('');
+                                            
+                                            const total = window.servicosAdicionados.reduce((acc, s) => acc + calcValor(s), 0);
+                                            valorTotalElement.textContent = `R$ ${total.toFixed(2).replace('.', ',')}`;
+                                        }
+                                    }
+                                }
+                            } catch (e) { console.warn('Erro ao preencher serviços no modal', e); }
+
+                        } catch (e) { console.error('Erro ao preencher modal de edição', e); }
+                    }, 120);
+
+                } catch (e) {
+                    console.error('Erro ao abrir edição:', e);
+                    showNotification('Erro ao abrir edição do agendamento', 'error');
+                }
+            });
+        }
+    } catch (e) { console.warn('Não foi possível vincular botão editar', e); }
     
     // Configura a primeira aba como ativa
     setTimeout(() => {
@@ -1436,6 +2132,67 @@ document.addEventListener('DOMContentLoaded', function() {
             openAddItemModal();
         });
     }
+
+    // Configurar botão + Imprimir para gerar comprovante em PDF
+    const btnImprimirComprovante = document.querySelector('.btn-imprimir-comprovante');
+    console.log('🔍 Botão Imprimir Comprovante encontrado:', !!btnImprimirComprovante);
+    if (btnImprimirComprovante) {
+        btnImprimirComprovante.addEventListener('click', async function(e) {
+            e.preventDefault();
+            console.log('🖱️ Botão Imprimir clicado!');
+            try {
+                const agendamentoId = new URLSearchParams(window.location.search).get('id');
+                console.log('📋 Agendamento ID:', agendamentoId);
+                if (!agendamentoId) {
+                    return showNotification('ID do agendamento não encontrado', 'error');
+                }
+
+                showNotification('Gerando comprovante...', 'info');
+
+                // Gerar PDF via API
+                const response = await fetch(`/api/agendamentos/${agendamentoId}/comprovante`, {
+                    credentials: 'include'
+                });
+
+                console.log('📡 Response status:', response.status);
+
+                if (!response.ok) {
+                    throw new Error('Erro ao gerar comprovante');
+                }
+
+                const blob = await response.blob();
+                const blobUrl = URL.createObjectURL(blob);
+
+                console.log('📄 PDF gerado, abrindo modal...');
+                openPdfModal(blobUrl, 'Comprovante de atendimento');
+            } catch (error) {
+                console.error('❌ Erro ao gerar comprovante:', error);
+                showNotification('Erro ao gerar comprovante', 'error');
+            }
+        });
+    } else {
+        console.warn('⚠️ Botão .btn-imprimir-comprovante não encontrado no DOM');
+    }
+
+    // Configurar botão Importar (lateral direita) - manter funcionalidade original se houver
+    const btnImport = document.querySelector('.btn-import');
+    if (btnImport) {
+        btnImport.addEventListener('click', function(e) {
+            e.preventDefault();
+            showNotification('Função de importação será implementada em breve', 'info');
+        });
+    }
+
+    // Delegation: abrir menu de ações do item (Editar / Excluir)
+    document.addEventListener('click', function(event){
+        const btn = event.target.closest('.btn-item-action');
+        if (!btn) return;
+        event.stopPropagation();
+        // localizar a service-item pai
+        const itemEl = btn.closest('.service-item');
+        if (!itemEl) return;
+        openServiceItemMenu(btn, itemEl);
+    });
     
     console.log('✅ Página de detalhes do agendamento inicializada');
 });
@@ -1532,4 +2289,73 @@ function formatCurrencyBR(value) {
 // Função para voltar à lista de agendamentos
 function voltarParaLista() {
     window.location.href = 'agendamentos-novo.html';
+}
+
+// Função para abrir modal de PDF
+function openPdfModal(blobUrl, title = 'Comprovante de atendimento') {
+    // evitar duplicados
+    if (document.getElementById('pdfModalOverlay')) return;
+
+    // inserir estilos se necessário
+    if (!document.getElementById('pdfModalStyles')) {
+        const style = document.createElement('style');
+        style.id = 'pdfModalStyles';
+        style.innerHTML = `
+            .pdf-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:14000}
+            .pdf-modal{width:92%;max-width:1150px;height:86%;background:#fff;border-radius:6px;box-shadow:0 12px 40px rgba(2,6,23,0.45);overflow:hidden;display:flex;flex-direction:column}
+            .pdf-modal-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #e6e9ee;background:#f7f7f8}
+            .pdf-modal-title{font-weight:600;color:#222}
+            .pdf-modal-toolbar{display:flex;gap:8px;align-items:center}
+            .pdf-modal-iframe{flex:1;border:0;width:100%;height:100%}
+            .pdf-modal-actions a, .pdf-modal-actions button{background:transparent;border:0;color:#1f2937;padding:6px 10px;border-radius:6px;cursor:pointer}
+            .pdf-modal-close{background:#fff;border:1px solid #ddd;padding:6px 10px;border-radius:6px}
+        `;
+        document.head.appendChild(style);
+    }
+
+    const overlay = document.createElement('div');
+    overlay.id = 'pdfModalOverlay';
+    overlay.className = 'pdf-modal-overlay';
+
+    const modal = document.createElement('div');
+    modal.className = 'pdf-modal';
+
+    const header = document.createElement('div');
+    header.className = 'pdf-modal-header';
+    const hTitle = document.createElement('div');
+    hTitle.className = 'pdf-modal-title';
+    hTitle.textContent = title;
+
+    const toolbar = document.createElement('div');
+    toolbar.className = 'pdf-modal-toolbar pdf-modal-actions';
+
+    const viewBtn = document.createElement('a');
+    viewBtn.href = '#';
+    viewBtn.textContent = 'Ver em uma nova aba';
+    viewBtn.onclick = function(ev){ ev.preventDefault(); window.open(blobUrl, '_blank'); };
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'pdf-modal-close';
+    closeBtn.textContent = '✕ Fechar';
+    closeBtn.onclick = function() { overlay.remove(); };
+
+    toolbar.appendChild(viewBtn);
+    toolbar.appendChild(closeBtn);
+
+    header.appendChild(hTitle);
+    header.appendChild(toolbar);
+
+    const iframe = document.createElement('iframe');
+    iframe.className = 'pdf-modal-iframe';
+    iframe.src = blobUrl;
+
+    modal.appendChild(header);
+    modal.appendChild(iframe);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    // Fechar ao clicar fora do modal
+    overlay.onclick = function(e) {
+        if (e.target === overlay) overlay.remove();
+    };
 }
