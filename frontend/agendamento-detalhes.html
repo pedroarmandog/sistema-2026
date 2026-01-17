@@ -747,14 +747,15 @@
               </div>
             </div>
           </div>
-          <div class="header-right">
-            <select id="statusSelect" class="status-select">
-              <option value="agendado">Agendado</option>
-              <option value="checkin">Check-in</option>
-              <option value="pronto">Pronto</option>
-              <option value="concluido">Check-out</option>
-              <option value="cancelado">Cancelado</option>
-            </select>
+          <div class="header-right agendamento-situacao">
+            <select id="statusSelect" class="status-select" aria-hidden="true" style="display:none;">
+                <option value="agendado">Agendado</option>
+                <option value="checkin">Check-in</option>
+                <option value="pronto">Pronto</option>
+                <option value="concluido">Check-out</option>
+                <option value="cancelado">Cancelado</option>
+              </select>
+              <span class="status-badge status-agendado" role="button" tabindex="0">Agendado</span>
           </div>
         </div>
 
@@ -975,6 +976,9 @@
   </div>
 
   <!-- Script do menu (copiar para sua página) -->
+  <!-- Modal de pagamento (reutilizado de nova-venda) -->
+  <script src="./api/api-client.js"></script>
+  <script src="../atendimento/nova-venda.js"></script>
   <script src="./agendamento-detalhes.js"></script>
   <!-- Script global do calendário (copia do dashboard) -->
   <script src="../novo-atendimento-global.js"></script>

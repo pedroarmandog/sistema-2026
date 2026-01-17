@@ -4,6 +4,8 @@ const path = require('path');
 const fs = require('fs');
 const { Empresa } = require('../models');
 const Produto = require('../models/Produto');
+const { Venda } = require('../models/Venda');
+const { Op } = require('sequelize');
 
 // DEBUG: confirmar que o arquivo de rotas foi carregado
 console.log('🔧 relatoriosRoutes.js carregado e router criado');
@@ -25,86 +27,61 @@ router.post('/faturamento', async (req, res) => {
         
         const { dataInicio, dataFim, relatorioPor, ordenacao } = req.body;
         
-        // Aqui você faria a consulta real no banco de dados
-        // Por enquanto, vou retornar dados de exemplo
-        
-        const dadosRelatorio = {
-            periodo: `Período: ${dataInicio || '06/11/2025'} até ${dataFim || '06/11/2025'}`,
-            produtos: [
-                {
-                    codigo: '368',
-                    produto: 'Assinatura 4 Banho/Mês - Scoot - Cláudio',
-                    qtd_vendida: 1,
-                    custo: 0.00,
-                    total_venda: 200.00,
-                    lucro: 200.00,
-                    margem: 100
-                },
-                {
-                    codigo: '125',
-                    produto: 'Consulta Veterinária',
-                    qtd_vendida: 5,
-                    custo: 50.00,
-                    total_venda: 600.00,
-                    lucro: 350.00,
-                    margem: 58.33
-                },
-                {
-                    codigo: '089',
-                    produto: 'Vacina V10',
-                    qtd_vendida: 3,
-                    custo: 35.00,
-                    total_venda: 255.00,
-                    lucro: 150.00,
-                    margem: 58.82
-                },
-                {
-                    codigo: '234',
-                    produto: 'Banho e Tosa - Pequeno',
-                    qtd_vendida: 8,
-                    custo: 20.00,
-                    total_venda: 480.00,
-                    lucro: 320.00,
-                    margem: 66.67
-                },
-                {
-                    codigo: '345',
-                    produto: 'Ração Premium - 15kg',
-                    qtd_vendida: 12,
-                    custo: 85.00,
-                    total_venda: 1680.00,
-                    lucro: 660.00,
-                    margem: 39.29
-                }
-            ]
-        };
-        
-        // Se você estiver usando Sequelize, seria algo assim:
-        /*
-        const produtos = await Produto.findAll({
-            include: [
-                {
-                    model: ItemVenda,
-                    where: {
-                        data_venda: {
-                            [Op.between]: [dataInicio, dataFim]
-                        }
-                    }
-                }
-            ],
-            attributes: [
-                'codigo',
-                'nome',
-                [sequelize.fn('SUM', sequelize.col('ItemVenda.quantidade')), 'qtd_vendida'],
-                [sequelize.fn('SUM', sequelize.col('ItemVenda.total')), 'total_venda'],
-                'custo'
-            ],
-            group: ['Produto.id'],
-            order: [[ordenacao, 'DESC']]
+        // Consultar vendas no período e agregar por produto usando o campo `itens` (JSON) das vendas.
+        const periodoTexto = `Período: ${dataInicio || ''} até ${dataFim || ''}`;
+
+        // montar filtro de datas para query
+        const where = {};
+        if (dataInicio && dataFim) {
+            const inicio = new Date(dataInicio + ' 00:00:00');
+            const fim = new Date(dataFim + ' 23:59:59');
+            where.data = { [Op.between]: [inicio, fim] };
+        }
+
+        // Buscar vendas do banco
+        let vendas = [];
+        try {
+            vendas = await Venda.findAll({ where });
+            console.log(`📦 rel-faturamento: encontradas ${vendas.length} vendas no período`);
+        } catch (e) {
+            console.warn('⚠️ Falha ao buscar vendas para relatório:', e && e.message);
+            vendas = [];
+        }
+
+        // Agregar itens por código/nome
+        const mapa = {}; // key -> { codigo, produto, qtd_vendida, total_venda }
+
+        vendas.forEach(v => {
+            const itens = Array.isArray(v.itens) ? v.itens : (v.itens || []);
+            itens.forEach(it => {
+                const codigo = it.codigo || it.id || (it.produtoId ? String(it.produtoId) : '');
+                const nome = it.descricao || it.produto || it.nome || it.titulo || 'Item sem nome';
+                const quantidade = Number(it.quantidade || it.qtd || it.qty || 0) || 0;
+                const total = Number(it.total || it.precoTotal || it.valor || 0) || 0;
+
+                const key = codigo || nome;
+                if (!mapa[key]) mapa[key] = { codigo: codigo || '', produto: nome, qtd_vendida: 0, total_venda: 0, custo: 0 };
+                mapa[key].qtd_vendida += quantidade;
+                mapa[key].total_venda += total;
+            });
         });
-        */
-        
-        res.json(dadosRelatorio);
+
+        const produtos = Object.keys(mapa).map(k => {
+            const p = mapa[k];
+            const lucro = Number((p.total_venda - (p.custo || 0)).toFixed(2));
+            const margem = p.total_venda ? Number((lucro / p.total_venda * 100).toFixed(2)) : 0;
+            return {
+                codigo: p.codigo,
+                produto: p.produto,
+                qtd_vendida: p.qtd_vendida,
+                custo: Number((p.custo || 0).toFixed(2)),
+                total_venda: Number(p.total_venda.toFixed(2)),
+                lucro: lucro,
+                margem: margem
+            };
+        });
+
+        res.json({ periodo: periodoTexto, produtos });
         
     } catch (error) {
         console.error('❌ Erro ao gerar relatório:', error);

@@ -462,8 +462,8 @@
         <div class="dashboard-content">
             <!-- Stats Cards -->
             <div class="stats-grid">
-                <div class="stat-card stat-card-cyan">
-                    <div class="stat-number">0</div>
+                <div class="stat-card stat-card-cyan" id="todayAppointmentsCard" role="button" tabindex="0" title="Ver agendamentos de hoje">
+                    <div class="stat-number" id="todayAppointmentsCount">0</div>
                     <div class="stat-label">Agendamentos Agendados para Hoje</div>
                     <div class="stat-icon">
                         <i class="fas fa-calendar-check"></i>
@@ -892,6 +892,30 @@
     </script>
 
     <script src="/inject-sidebar.js"></script>
+    <script>
+    (async function(){
+        try {
+            const pad = n => String(n).padStart(2, '0');
+            const d = new Date();
+            const dateStr = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+            const resp = await fetch(`/api/agendamentos?data=${dateStr}`);
+            let count = 0;
+            if (resp.ok) {
+                const arr = await resp.json();
+                count = Array.isArray(arr) ? arr.length : 0;
+            }
+            const el = document.getElementById('todayAppointmentsCount');
+            if (el) el.textContent = count;
+            const card = document.getElementById('todayAppointmentsCard');
+            if (card) {
+                card.addEventListener('click', function(){
+                    window.location.href = 'agendamentos-novo.html?period=today';
+                });
+                card.addEventListener('keypress', function(e){ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); window.location.href = 'agendamentos-novo.html?period=today'; } });
+            }
+        } catch (e) { console.warn('Erro ao carregar agendamentos do dashboard', e); }
+    })();
+    </script>
     <script src="dashboard-widgets.js"></script>
 </body>
 </html>

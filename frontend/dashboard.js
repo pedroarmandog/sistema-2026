@@ -363,24 +363,21 @@ function updateStatCard(index, value) {
 // Funções para buscar dados da API
 async function fetchAgendamentosHoje() {
     try {
-        const response = await fetch('http://localhost:3000/api/agendamentos');
-        
+        // Consultar diretamente agendamentos do dia atual via query param
+        const pad = n => String(n).padStart(2, '0');
+        const d = new Date();
+        const dateStr = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+        const response = await fetch(`/api/agendamentos?data=${encodeURIComponent(dateStr)}`);
         if (!response.ok) {
-            console.error('Erro na resposta da API:', response.status);
+            console.error('Erro na resposta da API (agendamentos hoje):', response.status);
             return 0;
         }
-        
         const agendamentos = await response.json();
-        
-        // Verificar se é um array
         if (!Array.isArray(agendamentos)) {
             console.error('Resposta da API não é um array:', agendamentos);
             return 0;
         }
-        
-        // Filtrar agendamentos de hoje
-        const hoje = new Date().toISOString().split('T')[0];
-        return agendamentos.filter(a => a.data && a.data.startsWith(hoje)).length;
+        return agendamentos.length;
     } catch (error) {
         console.error('Erro ao buscar agendamentos:', error);
         return 0;

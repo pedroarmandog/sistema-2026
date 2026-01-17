@@ -389,8 +389,13 @@ router.get('/:id/comprovante', async (req, res) => {
             return res.status(404).json({ error: 'Agendamento não encontrado' });
         }
 
-        // Criar PDF
-        const doc = new PDFDocument({ margin: 50, size: 'A4' });
+        // Criar PDF para impressora de cupom (ajustado para ser um pouco mais largo)
+        const mmToPt = mm => mm * 72 / 25.4;
+        const RECEIPT_MM = 72; // aumentar um pouco a largura do cupom (pouquinho mais largo que 58mm)
+        const receiptWidth = Math.round(mmToPt(RECEIPT_MM)); // mm para pontos
+        const receiptHeight = Math.round(mmToPt(300)); // altura padrão 300mm (ajustável)
+        const smallMargin = Math.round(mmToPt(2)); // 2 mm
+        const doc = new PDFDocument({ size: [receiptWidth, receiptHeight], margins: { top: smallMargin, bottom: smallMargin, left: smallMargin, right: smallMargin } });
         
         // Headers
         res.setHeader('Content-Type', 'application/pdf');
@@ -399,15 +404,16 @@ router.get('/:id/comprovante', async (req, res) => {
         doc.pipe(res);
 
         // ===== Layout em blocos com colunas fixas e controle de Y para evitar sobreposição =====
-        const left = 50;
-        const right = 545;
-        const pageWidth = 595; // A4 width approx
-        const lineHeight = 14;
+        const left = doc.page.margins.left;
+        const right = doc.page.width - doc.page.margins.right;
+        const pageWidth = doc.page.width;
+        const lineHeight = 12;
 
         // Cabeçalho: tentar usar logo da empresa (cadastro-empresa) com fallback em texto
         let logoRendered = false;
+        let empresa = null;
         try {
-            const empresa = await Empresa.findOne({ where: { ativa: true }, order: [['id', 'ASC']] });
+            empresa = await Empresa.findOne({ where: { ativa: true }, order: [['id', 'ASC']] });
             let logoPath = path.join(__dirname, '../../frontend/logos/logo_pet_cria-removebg-preview.png');
             if (empresa && empresa.logo) {
                 const candidate = path.join(__dirname, '../../uploads', empresa.logo);
@@ -415,12 +421,16 @@ router.get('/:id/comprovante', async (req, res) => {
             }
 
             if (fs.existsSync(logoPath)) {
-                const logoWidth = 90;
+                // ajustar o logo proporcionalmente à largura do cupom
+                const maxLogoWidth = Math.round(pageWidth * 0.6);
+                const logoWidth = Math.min(maxLogoWidth, Math.round(mmToPt(30)));
                 const logoX = (pageWidth - logoWidth) / 2;
-                const logoY = 30;
+                const logoY = smallMargin + 4;
                 try { doc.image(logoPath, logoX, logoY, { width: logoWidth, align: 'center' }); logoRendered = true; } catch (e) { logoRendered = false; }
-                // ajustar início do conteúdo abaixo da logo
-                var y = logoY + 70;
+                // ajustar início do conteúdo abaixo da logo — manter espaço maior para evitar sobreposição
+                const logoEstimatedHeight = Math.round(logoWidth * 0.9);
+                // reduzir ligeiramente o espaçamento para aproximar a razão social da logo
+                var y = logoY + logoEstimatedHeight + 2;
             }
         } catch (e) {
             console.warn('Erro ao buscar logo da empresa:', e && e.message);
@@ -430,9 +440,18 @@ router.get('/:id/comprovante', async (req, res) => {
             doc.fillColor('#000').fontSize(18).font('Helvetica-Bold').text('PET9', { align: 'center' });
             doc.fontSize(11).font('Helvetica-Bold').text('PET CRIA LTDA', { align: 'center' });
             doc.fontSize(9).font('Helvetica').text('Contato: (27)99910-4837', { align: 'center' });
-            // iniciar y logo -> conteúdo
+            // iniciar y logo -> conteúdo; aumentar espaçamento quando não há logo real
+            // aproximar um pouco (menos espaçamento) para a razão social
             var y = doc.y + 12;
         }
+
+        // Exibir Razão Social da empresa abaixo da logo (se disponível)
+        try {
+            if (empresa && empresa.razaoSocial) {
+                doc.fontSize(10).font('Helvetica').fillColor('#000').text(String(empresa.razaoSocial), left, y, { width: right - left, align: 'center' });
+                y += lineHeight + 6;
+            }
+        } catch (e) { /* não bloquear geração por erro de leitura */ }
 
         // Dados do cliente e emissão (blocos à esquerda e direita)
         const clienteCodigo = agendamento.pet?.cliente?.codigo || '550';
@@ -447,7 +466,9 @@ router.get('/:id/comprovante', async (req, res) => {
 
         // Emissão e Atendimento à direita, usando largura para alinhar à direita
         const rightAreaWidth = right - left;
-        doc.fontSize(9).font('Helvetica').fillColor('#000').text(`Emissão: ${dataEmissao}`, left, y, { width: rightAreaWidth, align: 'right' });
+        // reduzir fonte de 'Emissão' para evitar sobreposição
+        doc.fontSize(8).font('Helvetica').fillColor('#000').text(`Emissão: ${dataEmissao}`, left, y, { width: rightAreaWidth, align: 'right' });
+        // manter fonte regular para 'Atendimento'
         doc.fontSize(9).font('Helvetica').text(`Atendimento: ${id}`, left, y + lineHeight, { width: rightAreaWidth, align: 'right' });
 
         // Pet em nova linha, alinhado à esquerda
@@ -467,11 +488,16 @@ router.get('/:id/comprovante', async (req, res) => {
 
         y += 10;
 
-        // Definir colunas fixas
+        // Definir colunas responsivas (percentuais) para caber bem no cupom
+        const contentWidth = pageWidth - doc.page.margins.left - doc.page.margins.right;
+        const totalColWidth = Math.round(contentWidth * 0.28);
+        const unitColWidth = Math.round(contentWidth * 0.18);
+        const qtyColWidth = Math.round(contentWidth * 0.12);
+
+        const totalX = right - totalColWidth;
+        const unitX = totalX - unitColWidth;
+        const qtyX = unitX - qtyColWidth;
         const descX = left;
-        const qtyX = 360;
-        const unitX = 430;
-        const totalX = 500;
 
         // Cabeçalho da tabela
         doc.fontSize(9).font('Helvetica-Bold').fillColor('#000');
@@ -523,7 +549,6 @@ router.get('/:id/comprovante', async (req, res) => {
 
         // Espaço antes dos totais - usar fluxo (sem x/y) e bloco exclusivo para valores
         doc.moveDown(1);
-        const contentWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
         // Linha pontilhada visual (texto) para evitar uso de coordenadas absolutas
         const dashLine = Array(Math.floor(contentWidth / 6)).fill('.').join('');
@@ -531,8 +556,8 @@ router.get('/:id/comprovante', async (req, res) => {
         doc.moveDown(0.5);
 
         // Bloco de totais usando largura reduzida para deslocar visualmente o bloco para a esquerda
-        const desiredOffsetFromRight = 140; // ajuste visual: quanto afastar da borda direita
-        const totalsBlockWidth = Math.max(contentWidth - desiredOffsetFromRight, 140);
+        const desiredOffsetFromRight = Math.round(mmToPt(6)); // ~6mm
+        const totalsBlockWidth = Math.max(contentWidth - desiredOffsetFromRight, totalColWidth + 12);
 
         doc.moveDown(0.2);
         doc.fontSize(9).font('Helvetica').fillColor('#000').text(`Subtotal: R$ ${subtotal.toFixed(2)}`, { align: 'right', width: totalsBlockWidth, lineGap: 4 });
@@ -546,8 +571,6 @@ router.get('/:id/comprovante', async (req, res) => {
         doc.fontSize(9).text(separator, { align: 'right', width: totalsBlockWidth });
         doc.moveDown(0.6);
 
-        doc.fontSize(10).font('Helvetica-Bold').text(`Total do Atendimento: R$ ${subtotal.toFixed(2)}`, { align: 'right', width: totalsBlockWidth, lineGap: 6 });
-
         // Espaçamento e formas de pagamento centradas em bloco próprio
         y += lineHeight + 16;
         doc.fontSize(9).font('Helvetica-Bold').text('Formas de Pagamento', left, y, { width: right - left, align: 'center' });
@@ -558,11 +581,19 @@ router.get('/:id/comprovante', async (req, res) => {
         y += 24;
         doc.fontSize(10).font('Helvetica-Bold').text(`Total do(s) atendimento(s): R$ ${subtotal.toFixed(2)}`, left, y, { width: right - left, align: 'center' });
 
-        // Linha para assinatura
-        y += 40;
-        doc.moveTo(220, y).lineTo(380, y).stroke();
+        // Linha para assinatura (aumentar espaço para ficar mais abaixo que o total)
+        // Ajuste feito para afastar a assinatura do bloco de totais
+        // Linha para assinatura (centralizada no cupom)
+        y += 60;
+        if (y > doc.page.height - 60) {
+            doc.addPage({ size: [receiptWidth, receiptHeight], margins: { top: smallMargin, bottom: smallMargin, left: smallMargin, right: smallMargin } });
+            y = smallMargin + 20;
+        }
+        const sigLineLeft = left + 12;
+        const sigLineRight = right - 12;
+        doc.moveTo(sigLineLeft, y).lineTo(sigLineRight, y).stroke();
         y += 6;
-        doc.fontSize(9).font('Helvetica').text('Assinatura', 220, y, { width: 160, align: 'center' });
+        doc.fontSize(9).font('Helvetica').text('Assinatura', sigLineLeft, y, { width: sigLineRight - sigLineLeft, align: 'center' });
 
         doc.end();
     } catch (error) {

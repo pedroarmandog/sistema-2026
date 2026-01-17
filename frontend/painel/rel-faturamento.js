@@ -1488,6 +1488,15 @@ async function gerarPDFFaturamento(filtros) {
         console.log('✅ Vendas no período:', vendasFiltradas.length);
         
         // Agregar dados por produto
+        // DEBUG: inspecionar itens de cada venda filtrada
+        vendasFiltradas.forEach((v, idx) => {
+            try {
+                console.log(`🔎 Venda[${idx}] id=${v.id} - itens type:`, typeof v.itens, 'length:', Array.isArray(v.itens) ? v.itens.length : (v.itens ? JSON.stringify(v.itens).length : 0));
+                if (!Array.isArray(v.itens) && typeof v.itens === 'string') console.log('🔎 Venda itens (string):', v.itens.substring(0, 200));
+                if (Array.isArray(v.itens)) console.log('🔎 Primeiros itens:', v.itens.slice(0,3));
+            } catch(e){ console.warn('Erro ao inspecionar itens da venda', e); }
+        });
+
         const produtosMap = new Map();
         
         vendasFiltradas.forEach(venda => {
@@ -1528,7 +1537,17 @@ async function gerarPDFFaturamento(filtros) {
             });
         });
         
-        const produtos = Array.from(produtosMap.values()).sort((a, b) => b.total_venda - a.total_venda);
+        let produtos = Array.from(produtosMap.values()).sort((a, b) => b.total_venda - a.total_venda);
+
+        // Adicionar preço unitário de venda e custo (quando aplicável)
+        produtos = produtos.map(p => {
+            const qtd = Number(p.qtd_vendida) || 0;
+            const total = Number(p.total_venda) || 0;
+            const custoTotal = Number(p.custo_total) || 0;
+            const preco_venda = qtd > 0 ? Number((total / qtd).toFixed(2)) : Number(total.toFixed(2));
+            const preco_custo = qtd > 0 ? Number((custoTotal / qtd).toFixed(2)) : Number((custoTotal).toFixed(2));
+            return Object.assign({}, p, { preco_venda: preco_venda, preco_custo: preco_custo });
+        });
         
         console.log('📋 Produtos agregados:', produtos.length);
         

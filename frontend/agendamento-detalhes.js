@@ -827,6 +827,19 @@ function preencherDadosAgendamento(agendamento) {
             statusSelect.value = agendamento.status || 'agendado';
             atualizarClasseStatus(statusSelect);
         }
+        // Atualizar o badge visível para refletir o status atual
+        try {
+            const statusBadge = document.querySelector('.status-badge');
+            if (statusBadge) {
+                const s = String(agendamento.status || 'agendado').toLowerCase();
+                const classMap = { 'checkin': 'check-in', 'checkout': 'check-out', 'concluido': 'check-out' };
+                const statusClass = classMap[s] || s.replace(/[^a-z0-9]+/g, '-');
+                const labelMap = { agendado: 'Agendado', 'check-in': 'Check-in', pronto: 'Pronto', 'check-out': 'Check-out', cancelado: 'Cancelado' };
+                statusBadge.className = `status-badge status-${statusClass}`;
+                statusBadge.textContent = labelMap[statusClass] || agendamento.status || 'Agendado';
+            }
+            try { updateServiceIcons(agendamento.status); } catch(e){}
+        } catch(e) { console.warn('Erro atualizando status-badge ao preencher dados', e); }
         
         // Preenche observações
         const observacoes = document.getElementById('observacoes');
@@ -1146,45 +1159,115 @@ function updateServiceIcons(status) {
 
 // Função para finalizar cobrança e fazer checkout
 async function finalizarCobranca() {
+    console.log('>> finalizarCobranca invoked', agendamentoAtual && agendamentoAtual.id);
     if (!agendamentoAtual) {
         alert('Nenhum agendamento carregado');
         return;
     }
     
-    if (!confirm('Deseja finalizar a cobrança e fazer o check-out deste agendamento?')) {
-        return;
-    }
+    // removed confirmation dialog to open payment modal directly
     
     try {
-        // Atualiza status para "concluido" (check-out)
-        const response = await fetch(`/api/agendamentos/${agendamentoAtual.id}/status`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: 'concluido' }),
-            credentials: 'include'
-        });
-        
-        if (response.ok) {
-            console.log('✅ Check-out realizado com sucesso');
-            alert('Check-out realizado com sucesso!');
-            
-            // Atualiza o select visual
-            const statusSelect = document.getElementById('statusSelect');
-            if (statusSelect) {
-                statusSelect.value = 'concluido';
-                atualizarClasseStatus(statusSelect);
+        // Calcular total do agendamento (base + itens adicionados nesta sessão)
+        let baseTotal = parseFloat(agendamentoAtual.__existingTotal || agendamentoAtual.valor || agendamentoAtual.valorTotal || agendamentoAtual.total || 0) || 0;
+        let addedTotal = 0;
+        try {
+            addedTotal = (agendamentoAtual._addedServicos || []).reduce((acc, it) => {
+                const v = parseFloat(String(it.total || it.valor || it.unitario || 0).toString().replace(',', '.')) || 0;
+                return acc + v;
+            }, 0);
+        } catch (e) { addedTotal = 0; }
+
+        const totalVenda = baseTotal + addedTotal;
+
+        // Abrir o modal de pagamento (reutiliza o modal de nova-venda)
+        try {
+            // Escuta o evento único disparado quando a venda for finalizada
+            document.addEventListener('venda:finalizada', async function onVendaFinalizada(ev) {
+                try {
+                    // Ao confirmar que a venda foi salva, marcar o agendamento como concluído
+                    const response = await fetch(`/api/agendamentos/${agendamentoAtual.id}/status`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: 'concluido' }),
+                        credentials: 'include'
+                    });
+
+                    if (response.ok) {
+                        console.log('✅ Check-out realizado após pagamento');
+                        try { alert('Check-out realizado com sucesso!'); } catch(e){}
+
+                        // Atualiza o select visual
+                        const statusSelect = document.getElementById('statusSelect');
+                        if (statusSelect) {
+                            statusSelect.value = 'concluido';
+                            atualizarClasseStatus(statusSelect);
+                        }
+
+                        // Atualiza objeto local e ícones/linhas
+                        agendamentoAtual.status = 'concluido';
+                        try { atualizarLinhaListaStatus(agendamentoAtual.id, 'concluido'); } catch(e){}
+                        try { updateServiceIcons('concluido'); } catch(e){}
+
+                        // Redireciona de volta para a lista após 1 segundo
+                        setTimeout(() => { window.location.href = 'agendamentos-novo.html'; }, 1000);
+                    } else {
+                        let errText = 'Erro desconhecido';
+                        try { const errJson = await response.json(); errText = errJson.message || errText; } catch(e){}
+                        alert('Erro ao finalizar cobrança: ' + errText);
+                    }
+                } catch (err) {
+                    console.error('Erro processando venda finalizada:', err);
+                    alert('Erro ao processar finalização do agendamento após pagamento.');
+                }
+            }, { once: true });
+
+            // Chamar modal com o total do agendamento
+            try {
+                if (typeof abrirModalPagamento === 'function') {
+                    // Preparar seed com itens do agendamento (compatível com formatos legados)
+                    let seedItens = [];
+                    if (Array.isArray(agendamentoAtual.servicos) && agendamentoAtual.servicos.length > 0) {
+                        seedItens = agendamentoAtual.servicos;
+                    } else if (Array.isArray(agendamentoAtual.__existingServicosArray) && agendamentoAtual.__existingServicosArray.length > 0) {
+                        seedItens = agendamentoAtual.__existingServicosArray;
+                    } else {
+                        // tentar extrair de string legada (servico / servicosNomes)
+                        const nomes = agendamentoAtual.servicosNomes || agendamentoAtual.servicos_nome || agendamentoAtual.servico || agendamentoAtual.__existingServicosString || '';
+                        const totalLegado = parseFloat(agendamentoAtual.__existingTotal || agendamentoAtual.valor || agendamentoAtual.valorTotal || agendamentoAtual.total) || 0;
+                        if (nomes && String(nomes).trim()) {
+                            seedItens = [{
+                                id: 'legacy-' + (agendamentoAtual.id || Date.now()),
+                                produto: { nome: String(nomes).trim(), id: null },
+                                quantidade: 1,
+                                valorUnitario: totalLegado,
+                                totalBruto: totalLegado,
+                                totalFinal: totalLegado
+                            }];
+                        }
+                    }
+
+                    const seed = {
+                        itens: seedItens || [],
+                        cliente: agendamentoAtual.cliente || agendamentoAtual.clienteNome || (document.getElementById('clienteNome') ? document.getElementById('clienteNome').textContent : ''),
+                        profissional: agendamentoAtual.profissional || agendamentoAtual.profissionalNome || (document.querySelector('.professional-section .professional-content') ? document.querySelector('.professional-section .professional-content').textContent : '')
+                    };
+                    abrirModalPagamento(totalVenda, seed);
+                } else {
+                    console.warn('abrirModalPagamento não disponível');
+                    alert('Não foi possível abrir o modal de pagamento.');
+                }
+            } catch (err) {
+                console.error('Erro ao abrir modal de pagamento:', err);
+                alert('Erro ao abrir modal de pagamento.');
             }
             
-            // Atualiza objeto local
-            agendamentoAtual.status = 'concluido';
-            
-            // Redireciona de volta para a lista após 1 segundo
-            setTimeout(() => {
-                window.location.href = 'agendamentos-novo.html';
-            }, 1000);
-        } else {
-            const error = await response.json();
-            alert('Erro ao finalizar cobrança: ' + (error.message || 'Erro desconhecido'));
+            // Não prosseguir aqui; o processamento do status ocorrerá quando o evento for disparado
+            return;
+        } catch (err) {
+            console.error('Erro ao iniciar fluxo de pagamento:', err);
+            alert('Erro ao iniciar fluxo de pagamento.');
+            return;
         }
     } catch (error) {
         console.error('Erro ao finalizar cobrança:', error);
@@ -1787,6 +1870,9 @@ function setupStatusDropdown() {
     if (statusBadge._detailsStatusHandler) {
         statusBadge.removeEventListener('click', statusBadge._detailsStatusHandler);
     }
+    if (statusBadge._detailsStatusKeyHandler) {
+        statusBadge.removeEventListener('keydown', statusBadge._detailsStatusKeyHandler);
+    }
 
     const handler = (e) => {
         e.stopPropagation();
@@ -1842,14 +1928,23 @@ function setupStatusDropdown() {
                         return;
                     }
 
-                    // Atualizar o badge localmente
+                    // Atualizar o select (oculto) para manter compatibilidade
+                    const statusSelectEl = document.getElementById('statusSelect');
+                    if (statusSelectEl) statusSelectEl.value = opt.value;
+
+                    // Atualizar o badge visível
                     statusBadge.textContent = opt.label;
                     statusBadge.className = `status-badge status-${opt.value}`;
-                    
+
                     // Atualizar agendamentoAtual
                     if (agendamentoAtual) {
                         agendamentoAtual.status = opt.value;
                     }
+
+                    // Atualizar classes/estilos locais imediatamente
+                    try { if (statusSelectEl) atualizarClasseStatus(statusSelectEl); } catch(e){console.warn('falha atualizarClasseStatus', e);} 
+                    try { atualizarLinhaListaStatus(agendamentoId, opt.value); } catch(e){/* pode não existir na página */}
+                    try { updateServiceIcons(opt.value); } catch(e){console.warn('falha updateServiceIcons', e);} 
 
                     console.log('✅ Status atualizado com sucesso');
                 } catch (error) {
@@ -1915,8 +2010,69 @@ function setupStatusDropdown() {
 
     statusBadge._detailsStatusHandler = handler;
     statusBadge.addEventListener('click', handler);
+    // abrir via teclado (Enter / Space)
+    const keyHandler = function(e){ if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handler(e); } };
+    statusBadge._detailsStatusKeyHandler = keyHandler;
+    statusBadge.addEventListener('keydown', keyHandler);
     
     console.log('✅ Dropdown de status configurado');
+}
+
+// Escuta atualizações de status vindas de outras abas/janelas e atualiza a view de detalhes
+function listenForExternalStatusUpdates() {
+    try {
+        if (typeof BroadcastChannel !== 'undefined') {
+            const bc = new BroadcastChannel('agendamentos_channel');
+            bc.onmessage = (ev) => {
+                try {
+                    const data = ev.data;
+                    if (!data || data.type !== 'status-updated') return;
+                    if (!agendamentoAtual || String(agendamentoAtual.id) !== String(data.id)) return;
+                    // Aplicar novo status localmente
+                    const novo = String(data.status || '').toLowerCase();
+                    const statusSelect = document.getElementById('statusSelect');
+                    const statusBadge = document.querySelector('.status-badge');
+                    if (statusSelect) statusSelect.value = novo;
+                    if (statusBadge) {
+                        const classMap = { 'checkin': 'check-in', 'checkout': 'check-out', 'concluido': 'check-out' };
+                        const statusClass = classMap[novo] || novo.replace(/[^a-z0-9]+/g, '-');
+                        const labelMap = { agendado: 'Agendado', 'check-in': 'Check-in', pronto: 'Pronto', 'check-out': 'Check-out', cancelado: 'Cancelado' };
+                        statusBadge.className = `status-badge status-${statusClass}`;
+                        statusBadge.textContent = labelMap[statusClass] || data.status;
+                    }
+                    // atualizar objeto atual e ícones
+                    if (agendamentoAtual) agendamentoAtual.status = novo;
+                    try { updateServiceIcons(novo); } catch(e){}
+                    console.log('[agendamento-detalhes] status atualizado via BroadcastChannel:', novo);
+                } catch (e) { console.warn('Erro no listener BroadcastChannel (detalhes):', e); }
+            };
+        }
+    } catch (e) { console.warn('BroadcastChannel não disponível (detalhes):', e); }
+
+    // Fallback via postMessage
+    try {
+        window.addEventListener('message', function(ev) {
+            try {
+                const data = ev.data;
+                if (!data || data.type !== 'status-updated') return;
+                if (!agendamentoAtual || String(agendamentoAtual.id) !== String(data.id)) return;
+                const novo = String(data.status || '').toLowerCase();
+                const statusSelect = document.getElementById('statusSelect');
+                const statusBadge = document.querySelector('.status-badge');
+                if (statusSelect) statusSelect.value = novo;
+                if (statusBadge) {
+                    const classMap = { 'checkin': 'check-in', 'checkout': 'check-out', 'concluido': 'check-out' };
+                    const statusClass = classMap[novo] || novo.replace(/[^a-z0-9]+/g, '-');
+                    const labelMap = { agendado: 'Agendado', 'check-in': 'Check-in', pronto: 'Pronto', 'check-out': 'Check-out', cancelado: 'Cancelado' };
+                    statusBadge.className = `status-badge status-${statusClass}`;
+                    statusBadge.textContent = labelMap[statusClass] || data.status;
+                }
+                if (agendamentoAtual) agendamentoAtual.status = novo;
+                try { updateServiceIcons(novo); } catch(e){}
+                console.log('[agendamento-detalhes] status atualizado via postMessage:', novo);
+            } catch (e) { /* ignore */ }
+        });
+    } catch (e) { /* ignore */ }
 }
 
 // Event Listeners - configuração inicial
@@ -1934,6 +2090,15 @@ document.addEventListener('DOMContentLoaded', function() {
             salvarStatus();
         });
     }
+
+    // Escutar atualizações externas de status
+    try { listenForExternalStatusUpdates(); } catch(e){ console.warn('Não foi possível ativar listener externo de status', e); }
+
+    // Recarregar dados ao voltar ao foco/visibilidade (garante estado atual quando BroadcastChannel falhar)
+    try {
+        window.addEventListener('focus', () => { try { carregarAgendamento(); } catch(e){} });
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { try { carregarAgendamento(); } catch(e){} } });
+    } catch(e) { console.warn('Não foi possível configurar listeners de foco/visibilidade', e); }
     
     // Configura listener para observações com debounce
     const observacoesText = document.getElementById('observacoes');
@@ -2259,11 +2424,13 @@ function carregarDadosAgendamento() {
                 totalElement.textContent = formatCurrencyBR(valor);
             }
             
-            // Atualizar status do agendamento
+            // Atualizar status do agendamento (badge visível) e sincronizar select oculto
             const statusElement = document.querySelector('.status-badge');
+            const statusSelectEl = document.getElementById('statusSelect');
             if (statusElement && agendamento.status) {
                 statusElement.className = `status-badge status-${agendamento.status}`;
                 statusElement.textContent = agendamento.statusTexto || agendamento.status;
+                if (statusSelectEl) statusSelectEl.value = agendamento.status;
             }
             
             console.log('✅ Dados do agendamento carregados com sucesso');
@@ -2359,3 +2526,17 @@ function openPdfModal(blobUrl, title = 'Comprovante de atendimento') {
         if (e.target === overlay) overlay.remove();
     };
 }
+
+// Inicializar handlers de botões da sidebar direita
+document.addEventListener('DOMContentLoaded', function() {
+    try {
+        const btnCheckout = document.querySelector('.btn-checkout');
+        if (btnCheckout) {
+            try { btnCheckout.removeEventListener('click', finalizarCobranca); } catch(e){}
+            btnCheckout.addEventListener('click', function(ev){ ev.preventDefault(); try { finalizarCobranca(); } catch(e){ console.error('Erro ao chamar finalizarCobranca via botão', e); } });
+            console.log('✔️ Handler de checkout registrado');
+        } else {
+            console.log('ℹ️ Botão .btn-checkout não encontrado no DOM ao inicializar.');
+        }
+    } catch (e) { console.warn('Erro registrando handlers da sidebar:', e); }
+});

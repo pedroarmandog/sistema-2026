@@ -334,21 +334,39 @@ body {
 }
 
 .status-select {
-    background: transparent;
+    background: #fff;
     color: var(--text-primary);
-    border: 1px solid #ddd;
-    border-radius: 20px;
-    padding: 8px 16px;
+    border: 1px solid rgba(34,139,34,0.12); /* subtle green border */
+    border-radius: 18px;
+    padding: 8px 14px;
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
-    min-width: 120px;
-    transition: background-color 0.15s ease, color 0.15s ease, border 0.15s ease;
+    min-width: 140px;
+    transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: linear-gradient(45deg, transparent 50%, #666 50%), linear-gradient(135deg, #666 50%, transparent 50%);
+    background-position: calc(100% - 18px) calc(1em + 2px), calc(100% - 13px) calc(1em + 2px);
+    background-size: 6px 6px, 6px 6px;
+    background-repeat: no-repeat;
 }
 
 .status-select:focus {
     outline: none;
-    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.2);
+    box-shadow: 0 0 0 4px rgba(34,139,34,0.08);
+    border-color: rgba(34,139,34,0.4);
+}
+
+/* options styling (may vary by browser) */
+.status-select option {
+    background: #fff;
+    color: #222;
+    padding: 6px 8px;
+}
+.status-select option:hover {
+    background: rgba(34,139,34,0.06);
 }
 
 .header-actions {
@@ -465,17 +483,21 @@ body {
 
 /* Agendado - outlined blue */
 .agendamento-situacao .status-badge.status-agendado {
-    background: #ffffff !important;
+    background: #6c757d41 !important;
     color: #6c757d !important; /* cinza */
-    border: 2px solid #6c757d !important;
     box-shadow: none !important;
 }
 
-/* Check-in - light orange */
-.agendamento-situacao .status-badge.status-check-in {
-    background: #1e88e5 !important; /* azul */
+/* Check-in - blue (accept hyphenated and non-hyphenated class names) */
+.agendamento-situacao .status-badge.status-check-in,
+.agendamento-situacao .status-badge.status-checkin {
+    /* fundo levemente translúcido, manter texto branco e legível */
+    background: rgba(30, 136, 229, 0.192) !important; /* #1e88e567 equivalente */
     color: #ffffff !important;
+    -webkit-text-fill-color: #1e88e5 !important;
     border: none !important;
+    opacity: 1 !important;
+    text-shadow: 0 0 0 rgba(0,0,0,0) !important;
 }
 
 /* Pronto - light purple */
@@ -486,8 +508,11 @@ body {
 }
 
 /* Check-out / Concluido - light green */
+/* Check-out / Concluido - accept both variants */
 .agendamento-situacao .status-badge.status-check-out,
-.agendamento-situacao .status-badge.status-concluido {
+.agendamento-situacao .status-badge.status-concluido,
+.agendamento-situacao .status-badge.status-checkout,
+.agendamento-situacao .status-badge.status-check_out {
     background: #edf7ee !important;
     color: #2e7d32 !important;
     border: none !important;
@@ -495,8 +520,8 @@ body {
 
 /* Cancelado - dark solid */
 .agendamento-situacao .status-badge.status-cancelado {
-    background: #424242 !important;
-    color: #ffffff !important;
+    background: #c12b2b3a !important;
+    color: #c12b2b !important;
     border: none !important;
 }
 
@@ -1144,10 +1169,12 @@ body {
 .status-badge {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 6px 12px;
-    border-radius: 20px;
-    font-size: 12px;
+    justify-content: center;
+    gap: 10px;
+    padding: 8px 18px;
+    min-width: 120px;
+    border-radius: 22px;
+    font-size: 13px;
     font-weight: 600;
     text-transform: none;
     cursor: pointer;
@@ -1180,12 +1207,4 @@ body {
     color: #2e7d32;
 }
 
-.status-badge.status-agendado::before {
-    content: '';
-    width: 10px;
-    height: 10px;
-    background: #fff;
-    border-radius: 50%;
-    display: inline-block;
-    margin-left: -6px;
-}
+/* removed white dot before 'Agendado' in details view */

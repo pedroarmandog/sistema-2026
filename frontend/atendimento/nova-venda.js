@@ -32,6 +32,15 @@ function detectarIDsDuplicados() {
     return true;
 }
 
+// Helpers seguros para páginas que não tenham todos os campos do formulário de nova-venda
+function __safeGetValue(id) {
+    try { const el = document.getElementById(id); return el ? el.value : ''; } catch(e) { return ''; }
+}
+
+function __safeSetValue(id, val) {
+    try { const el = document.getElementById(id); if (el) el.value = val; } catch(e) { }
+}
+
 function configurarDropdownInicioRapido() {
     if (window.dropdownConfigurado) return;
     const dropdownBtn = document.getElementById('inicioRapidoBtn');
@@ -811,8 +820,8 @@ function inicializarNovaVenda() {
             
             // Limpar campos
             limparFormulario();
-            document.getElementById('pesquisarCliente').value = '';
-            document.getElementById('pesquisarProfissional').value = '';
+            __safeSetValue('pesquisarCliente', '');
+            __safeSetValue('pesquisarProfissional', '');
             document.querySelectorAll('.pagamento-section input').forEach(input => input.value = '');
             document.getElementById('observacoes').value = '';
             
@@ -1516,7 +1525,7 @@ function selecionarProfissional(profissionalCodigo) {
 // Função para remover cliente selecionado
 function removerClienteSelecionado() {
     clienteSelecionado = null;
-    document.getElementById('pesquisarCliente').value = '';
+    __safeSetValue('pesquisarCliente', '');
     document.getElementById('clienteSelecionado').style.display = 'none';
     console.log('🗑️ Cliente removido da venda');
 }
@@ -1524,7 +1533,7 @@ function removerClienteSelecionado() {
 // Função para remover profissional selecionado
 function removerProfissionalSelecionado() {
     profissionalSelecionado = null;
-    document.getElementById('pesquisarProfissional').value = '';
+    __safeSetValue('pesquisarProfissional', '');
     document.getElementById('profissionalSelecionado').style.display = 'none';
     console.log('🗑️ Profissional removido da venda');
 }
@@ -2004,11 +2013,51 @@ console.log('🔧 Função de teste disponível: testarCalculoTotais()');
 // MODAL DE PAGAMENTO
 // =============================================
 
-function abrirModalPagamento() {
+function abrirModalPagamento(totalOverride, seed) {
     console.log('💳 Abrindo modal de pagamento...');
     
-    // Calcular total da venda atual
-    const totalVenda = totais.final;
+    // Permitir semear itens/cliente/profissional quando aberto por outro fluxo (ex: agendamento)
+    try {
+        if (seed && typeof seed === 'object') {
+            if (Array.isArray(seed.itens) && seed.itens.length > 0 && (!Array.isArray(itensVenda) || itensVenda.length === 0)) {
+                console.log('🔁 Semear itens na nova venda a partir de seed (fluxo externo)');
+                itensVenda = seed.itens.map(s => {
+                    const qtd = parseFloat(s.quantidade || s.qtd || s.qtd_vendida || 1) || 1;
+                    const valor = parseFloat(String(s.unitario || s.valorUnitario || s.valor || s.preco || s.venda || 0).replace(',', '.')) || 0;
+                    const totalBruto = parseFloat(s.total || s.totalBruto) || (qtd * valor);
+                    return {
+                        id: s.id || (Date.now() + Math.floor(Math.random()*1000)),
+                        produto: (s.produto && typeof s.produto === 'object') ? s.produto : { nome: s.nome || s.produto || '', id: s.produtoId || null },
+                        quantidade: qtd,
+                        valorUnitario: valor,
+                        desconto: s.desconto || 0,
+                        totalBruto: totalBruto,
+                        totalFinal: parseFloat(s.totalFinal || s.total || totalBruto)
+                    };
+                });
+            }
+
+            if (seed.cliente) {
+                try {
+                    clienteSelecionado = (typeof seed.cliente === 'object') ? seed.cliente : { nome: String(seed.cliente) || '', id: seed.clienteId || null };
+                    const inp = document.getElementById('pesquisarCliente'); if (inp) inp.value = clienteSelecionado.nome;
+                } catch(e){}
+            }
+
+            if (seed.profissional) {
+                try {
+                    profissionalSelecionado = (typeof seed.profissional === 'object') ? seed.profissional : { nome: String(seed.profissional) || '', id: seed.profissionalId || null };
+                    const inp2 = document.getElementById('pesquisarProfissional'); if (inp2) inp2.value = profissionalSelecionado.nome;
+                } catch(e){}
+            }
+
+            // Atualizar UI se sementes foram aplicadas
+            try { renderizarItens(); atualizarTotaisGerais(); } catch(e){}
+        }
+    } catch(e) { console.warn('Erro ao aplicar seed em abrirModalPagamento', e); }
+
+    // Calcular total da venda atual (permitir override ao abrir a partir de outro fluxo)
+    const totalVenda = (typeof totalOverride === 'number' && !isNaN(totalOverride)) ? totalOverride : totais.final;
     
     if (totalVenda <= 0) {
         alert('Valor da venda deve ser maior que zero.');
@@ -2045,7 +2094,7 @@ function abrirModalPagamento() {
     const modal = document.createElement('div');
     modal.id = 'modalPagamento';
     modal.innerHTML = `
-        <div style="background: #2c5aa0; color: white; padding: 20px; display: flex; justify-content: space-between; align-items: center; border-radius: 10px 10px 0 0;">
+        <div style="background: #007bff; color: white; padding: 20px; display: flex; justify-content: space-between; align-items: center; border-radius: 10px 10px 0 0;">
             <h3 style="margin: 0; font-size: 20px;">
                 <i class="fas fa-credit-card"></i> Pagamento
             </h3>
@@ -2056,10 +2105,10 @@ function abrirModalPagamento() {
         <div style="padding: 25px;">
             
             <!-- Resumo da Venda -->
-            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 25px; border-left: 4px solid #2c5aa0;">
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 25px; border-left: 4px solid #007bff;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                     <span style="font-weight: 600; color: #333;">Total:</span>
-                    <span id="totalModalPagamento" style="font-size: 24px; font-weight: 700; color: #2c5aa0;">${totalVenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                    <span id="totalModalPagamento" style="font-size: 24px; font-weight: 700; color: #007bff;">${totalVenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                 </div>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
                     <span style="color: #666;">Total Pago:</span>
@@ -2133,8 +2182,8 @@ function abrirModalPagamento() {
                             <input type="text" id="operadora-debito" placeholder="Operadora" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; outline: none;">
                         </div>
                         <div>
-                            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">N° NSU</label>
-                            <input type="text" id="nsu-debito" placeholder="NSU" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; outline: none;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">N° NSU <i class="fas fa-lock" title="Campo bloqueado" style="margin-left:8px;color:#777;font-size:12px"></i></label>
+                            <input type="text" id="nsu-debito" placeholder="NSU" disabled title="NSU bloqueado" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; outline: none; background:#f5f5f5; cursor:not-allowed;">
                         </div>
                     </div>
                     <div style="margin-top: 15px;">
@@ -2151,8 +2200,8 @@ function abrirModalPagamento() {
                             <input type="text" id="operadora-credito" placeholder="Operadora" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; outline: none;">
                         </div>
                         <div>
-                            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">N° NSU</label>
-                            <input type="text" id="nsu-credito" placeholder="NSU" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; outline: none;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">N° NSU <i class="fas fa-lock" title="Campo bloqueado" style="margin-left:8px;color:#777;font-size:12px"></i></label>
+                            <input type="text" id="nsu-credito" placeholder="NSU" disabled title="NSU bloqueado" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; outline: none; background:#f5f5f5; cursor:not-allowed;">
                         </div>
                         <div>
                             <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">N° Parc. *</label>
@@ -2263,7 +2312,7 @@ function abrirModalPagamento() {
         box-shadow: 0 20px 60px rgba(0,0,0,0) !important;
         border-radius: 15px !important;
         overflow: visible !important;
-        border: 3px solid #2c5aa0 !important;
+        border: 3px solid #007bff !important;
         opacity: 0 !important;
         transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
     `;
@@ -2350,7 +2399,7 @@ function configurarModalPagamento(modal, overlay, totalVenda) {
             });
             
             // Selecionar forma atual
-            forma.style.borderColor = '#2c5aa0';
+            forma.style.borderColor = '#007bff';
             forma.style.background = '#f8f9fa';
             
             formaSelecionada = forma.dataset.forma;
@@ -2427,8 +2476,8 @@ function configurarModalPagamento(modal, overlay, totalVenda) {
     
     // Configurar Haver
     async function configurarHaver() {
-        // Obter cliente atual
-        const clienteAtual = document.getElementById('pesquisarCliente').value;
+        // Obter cliente atual (uso seguro caso o input não exista)
+        const clienteAtual = __safeGetValue('pesquisarCliente');
         
         // Simular saldo de haver (aqui você integraria com sua API)
         const saldoHaver = await obterSaldoHaver(clienteAtual);
@@ -2656,6 +2705,11 @@ function configurarModalPagamento(modal, overlay, totalVenda) {
         console.log('💳 Pagamento adicionado:', dadosPagamento);
     });
     
+    // helper seguro para acessar valores de inputs que podem não existir quando o modal é usado fora da página principal
+    function _safeGetValue(id) {
+        try { const el = document.getElementById(id); return el ? el.value : ''; } catch(e){ return ''; }
+    }
+
     // Finalizar pagamento
     document.getElementById('finalizarPagamento').addEventListener('click', async function() {
         // Verificar se existe pelo menos um pagamento efetuado OU uma forma selecionada com dados válidos
@@ -2700,9 +2754,9 @@ function configurarModalPagamento(modal, overlay, totalVenda) {
         // Preferir enviar o objeto selecionado (com id) quando disponível
         const dadosVenda = {
             timestamp: new Date().toISOString(),
-            cliente: clienteSelecionado ? clienteSelecionado.nome : document.getElementById('pesquisarCliente').value,
+            cliente: clienteSelecionado ? clienteSelecionado.nome : _safeGetValue('pesquisarCliente'),
             clienteId: clienteSelecionado ? clienteSelecionado.id : null,
-            profissional: profissionalSelecionado ? profissionalSelecionado.nome : document.getElementById('pesquisarProfissional').value,
+            profissional: profissionalSelecionado ? profissionalSelecionado.nome : _safeGetValue('pesquisarProfissional'),
             profissionalId: profissionalSelecionado ? profissionalSelecionado.id : null,
             itens: [...itensVenda],
             totais: { ...totais },
@@ -2715,6 +2769,10 @@ function configurarModalPagamento(modal, overlay, totalVenda) {
         const vendaSalva = await ApiClient.criarVenda(dadosVenda);
         
         console.log('✅ Venda finalizada e salva no banco:', vendaSalva);
+        // Emitir evento global para que outras partes do sistema possam reagir (ex: checkout de agendamento)
+        try {
+            document.dispatchEvent(new CustomEvent('venda:finalizada', { detail: vendaSalva }));
+        } catch (e) { console.warn('Não foi possível disparar evento venda:finalizada', e); }
         
         // Atualizar estoque após venda
         atualizarEstoque(dadosVenda.itens);
@@ -2749,8 +2807,8 @@ function limparFormulario() {
     }
     
     // Limpar campos
-    document.getElementById('pesquisarCliente').value = '';
-    document.getElementById('pesquisarProfissional').value = '';
+    __safeSetValue('pesquisarCliente', '');
+    __safeSetValue('pesquisarProfissional', '');
     document.getElementById('pesquisarProduto').value = '';
     document.getElementById('quantidade').value = '1';
     document.getElementById('valorUnitario').value = '';
@@ -2793,18 +2851,30 @@ async function atualizarEstoque(itensVendidos) {
     try {
         // Atualizar estoque de cada item vendido
         for (const itemVendido of itensVendidos) {
-            const produtoId = itemVendido.produto.id;
-            const quantidadeVendida = itemVendido.quantidade;
-            
+            const produtoObj = itemVendido.produto || {};
+            const produtoId = produtoObj.id;
+            const quantidadeVendida = itemVendido.quantidade || itemVendido.qtd || 0;
+
+            // Não tocar estoque para serviços/planos ou quando não houver id do produto
+            const tipo = produtoObj.tipo || (produtoObj.categoria && String(produtoObj.categoria).toLowerCase()) || '';
+            if (!produtoId) {
+                console.log(`⏭️ Pulando atualização de estoque (sem id): ${produtoObj.nome || produtoObj} `);
+                continue;
+            }
+            if (String(tipo).toLowerCase() === 'servico' || String(tipo).toLowerCase() === 'servico' || String(tipo).toLowerCase() === 'plano' || String(tipo).toLowerCase() === 'planos') {
+                console.log(`⏭️ Pulando atualização de estoque (tipo=${tipo}): ${produtoObj.nome || produtoObj}`);
+                continue;
+            }
+
             // Reduzir estoque via API (operação 'reduzir')
             await ApiClient.atualizarEstoque(
-                produtoId, 
-                quantidadeVendida, 
-                'reduzir', 
+                produtoId,
+                quantidadeVendida,
+                'reduzir',
                 new Date().toISOString()
             );
-            
-            console.log(`✅ Estoque reduzido via API: ${itemVendido.produto.nome} - Qtd: ${quantidadeVendida}`);
+
+            console.log(`✅ Estoque reduzido via API: ${produtoObj.nome || produtoId} - Qtd: ${quantidadeVendida}`);
         }
         
         console.log('✅ Todos os estoques atualizados via API');

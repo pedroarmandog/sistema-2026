@@ -19,6 +19,21 @@ class AgendamentosManager {
         this.viewMode = 'list';
         this.period = 'day';
         this.currentDate = new Date();
+        try {
+            const params = new URLSearchParams(window.location.search || '');
+            const periodParam = params.get('period');
+            const dateParam = params.get('date');
+            this._periodFromUrl = false;
+            if (periodParam && ['today','day','week','month'].includes(periodParam)) {
+                this.period = periodParam;
+                this._periodFromUrl = true;
+            }
+            if (dateParam) {
+                const parsed = new Date(dateParam);
+                if (!isNaN(parsed.getTime())) this.currentDate = parsed;
+            }
+            if (this.period === 'today') this.currentDate = new Date();
+        } catch(e) { console.warn('Erro lendo parâmetros de URL:', e); }
         console.log('📅 Data atual definida:', this.currentDate);
         this.init();
         console.log('✅ AgendamentosManager construído com sucesso');
@@ -887,6 +902,16 @@ class AgendamentosManager {
                             if (row) {
                                 row.setAttribute('data-status', opt.value);
                             }
+                            // Notificar outras abas/janelas sobre a mudança de status
+                            try {
+                                if (typeof BroadcastChannel !== 'undefined') {
+                                    const bc = new BroadcastChannel('agendamentos_channel');
+                                    bc.postMessage({ type: 'status-updated', id: agendamentoId, status: opt.value });
+                                    bc.close();
+                                } else if (window.opener && window.opener.postMessage) {
+                                    window.opener.postMessage({ type: 'status-updated', id: agendamentoId, status: opt.value }, '*');
+                                }
+                            } catch (e) { console.warn('Erro notificando status via BroadcastChannel', e); }
                         } catch (error) {
                             console.error('Erro ao atualizar status:', error);
                             alert('Erro ao atualizar status');
@@ -1008,6 +1033,16 @@ class AgendamentosManager {
                             if (row) {
                                 row.setAttribute('data-status', opt.value);
                             }
+                            // Notificar outras abas/janelas sobre a mudança de status
+                            try {
+                                if (typeof BroadcastChannel !== 'undefined') {
+                                    const bc = new BroadcastChannel('agendamentos_channel');
+                                    bc.postMessage({ type: 'status-updated', id: agendamentoId, status: opt.value });
+                                    bc.close();
+                                } else if (window.opener && window.opener.postMessage) {
+                                    window.opener.postMessage({ type: 'status-updated', id: agendamentoId, status: opt.value }, '*');
+                                }
+                            } catch (e) { console.warn('Erro notificando status via BroadcastChannel', e); }
                         } catch (error) {
                             console.error('Erro ao atualizar status:', error);
                             alert('Erro ao atualizar status');
@@ -2081,15 +2116,19 @@ class AgendamentosManager {
             }
             
             if (filtros && filtros.selectedPeriod) {
-                this.period = filtros.selectedPeriod;
-                // Aplicar classe active no botão correto
-                document.querySelectorAll('.view-period-btn').forEach(btn => {
-                    btn.classList.remove('active');
-                    if (btn.dataset.period === filtros.selectedPeriod) {
-                        btn.classList.add('active');
-                    }
-                });
-                console.log('✅ Período aplicado:', filtros.selectedPeriod);
+                if (!this._periodFromUrl) {
+                    this.period = filtros.selectedPeriod;
+                    // Aplicar classe active no botão correto
+                    document.querySelectorAll('.view-period-btn').forEach(btn => {
+                        btn.classList.remove('active');
+                        if (btn.dataset.period === filtros.selectedPeriod) {
+                            btn.classList.add('active');
+                        }
+                    });
+                    console.log('✅ Período aplicado:', filtros.selectedPeriod);
+                } else {
+                    console.log('ℹ️ Período salvo ignorado devido a parâmetro de URL');
+                }
             }
         } catch (error) {
             console.error('❌ Erro ao carregar período salvo:', error);
