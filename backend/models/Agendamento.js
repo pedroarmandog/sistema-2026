@@ -31,6 +31,18 @@ const Agendamento = sequelize.define('Agendamento', {
         defaultValue: [],
         comment: 'Array de serviços/produtos detalhados (cada item com nome, quantidade, valor, etc.)'
     },
+    pagamentos: {
+        type: DataTypes.JSON,
+        allowNull: true,
+        defaultValue: [],
+        comment: 'Array de pagamentos efetuados (forma, valor, detalhes)'
+    },
+    totalPago: {
+        type: DataTypes.DECIMAL(10,2),
+        allowNull: true,
+        defaultValue: 0,
+        comment: 'Total efetivamente pago no atendimento'
+    },
     observacoes: {
         type: DataTypes.TEXT,
         allowNull: true,

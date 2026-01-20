@@ -337,11 +337,11 @@ router.delete('/:id', async (req, res) => {
     }
 });
 
-// PATCH /api/agendamentos/:id/status - Atualizar apenas o status
+// PATCH /api/agendamentos/:id/status - Atualizar status e opcionalmente pagamentos
 router.patch('/:id/status', async (req, res) => {
     try {
         const { id } = req.params;
-        const { status } = req.body;
+        const { status, pagamentos, totalPago } = req.body;
 
         if (!status) {
             return res.status(400).json({ error: 'Status é obrigatório' });
@@ -359,9 +359,24 @@ router.patch('/:id/status', async (req, res) => {
             return res.status(404).json({ error: 'Agendamento não encontrado' });
         }
 
-        await agendamento.update({ status });
+        const updatePayload = { status };
+        // aceitar pagamentos opcionais e totalPago
+        if (pagamentos !== undefined) {
+            try {
+                updatePayload.pagamentos = Array.isArray(pagamentos) ? pagamentos : JSON.parse(pagamentos);
+            } catch (e) {
+                updatePayload.pagamentos = pagamentos;
+            }
+        }
 
-        res.json({ message: 'Status atualizado com sucesso', status });
+        if (totalPago !== undefined) {
+            const v = parseFloat(String(totalPago).replace(',', '.')) || 0;
+            updatePayload.totalPago = v;
+        }
+
+        await agendamento.update(updatePayload);
+
+        res.json({ message: 'Status (e pagamentos) atualizados com sucesso', status, pagamentos: updatePayload.pagamentos, totalPago: updatePayload.totalPago });
     } catch (error) {
         console.error('Erro ao atualizar status:', error);
         res.status(500).json({ error: 'Erro interno do servidor' });
@@ -462,17 +477,21 @@ router.get('/:id/comprovante', async (req, res) => {
         const petNome = agendamento.pet?.nome || 'Clark';
 
         doc.fontSize(9).font('Helvetica-Bold').fillColor('#c00').text(`Cliente: ${clienteCodigo} - ${clienteNome}`, left, y);
-        if (clienteTelefone) doc.fontSize(9).font('Helvetica').fillColor('#000').text(`Contato: ${clienteTelefone}`, left, y + lineHeight);
+        if (clienteTelefone) {
+            doc.fontSize(9).font('Helvetica').fillColor('#000').text(`Contato: ${clienteTelefone}`, left, y + lineHeight);
+        }
 
-        // Emissão e Atendimento à direita, usando largura para alinhar à direita
+        // Avançar y para evitar sobreposição antes de imprimir Emissão/Atendimento
         const rightAreaWidth = right - left;
-        // reduzir fonte de 'Emissão' para evitar sobreposição
-        doc.fontSize(8).font('Helvetica').fillColor('#000').text(`Emissão: ${dataEmissao}`, left, y, { width: rightAreaWidth, align: 'right' });
-        // manter fonte regular para 'Atendimento'
-        doc.fontSize(9).font('Helvetica').text(`Atendimento: ${id}`, left, y + lineHeight, { width: rightAreaWidth, align: 'right' });
+        const clienteLines = clienteTelefone ? 2 : 1;
+        const spacingAfterCliente = clienteLines * lineHeight;
+        // posicionar Emissão abaixo do nome/contato do cliente
+        doc.fontSize(8).font('Helvetica').fillColor('#000').text(`Emissão: ${dataEmissao}`, left, y + spacingAfterCliente, { width: rightAreaWidth, align: 'right' });
+        // manter fonte regular para 'Atendimento' logo abaixo de Emissão
+        doc.fontSize(9).font('Helvetica').text(`Atendimento: ${id}`, left, y + spacingAfterCliente + lineHeight, { width: rightAreaWidth, align: 'right' });
 
-        // Pet em nova linha, alinhado à esquerda
-        y += (clienteTelefone ? lineHeight * 2 : lineHeight) + 6;
+        // Pet em nova linha, alinhado à esquerda — avançar y considerando linhas de cliente + emissão + atendimento
+        y += spacingAfterCliente + lineHeight * 2 + 6;
         doc.fontSize(9).font('Helvetica').text(`Pet: ${petId} - ${petNome}`, left, y);
 
         // Espaçamento antes da tabela
@@ -575,10 +594,39 @@ router.get('/:id/comprovante', async (req, res) => {
         y += lineHeight + 16;
         doc.fontSize(9).font('Helvetica-Bold').text('Formas de Pagamento', left, y, { width: right - left, align: 'center' });
 
-        y += lineHeight + 20;
-        doc.save(); doc.lineWidth(0.5); doc.moveTo(left, y).lineTo(right, y).stroke(); doc.restore();
+        // Mostrar formas de pagamento salvas no agendamento, se houver
+        const pagamentos = agendamento.pagamentos || [];
+        if (Array.isArray(pagamentos) && pagamentos.length > 0) {
+            y += lineHeight + 8;
+            doc.fontSize(9).font('Helvetica').fillColor('#000');
+            // helper para mapear chave da forma para rótulo legível
+            const formaLabel = (f) => {
+                if (!f) return '';
+                const map = { dinheiro: 'Dinheiro', debito: 'Débito', credito: 'Crédito', pix: 'Pix', crediario: 'Crediário', cheque: 'Cheque', haver: 'Haver' };
+                return map[f] || String(f);
+            };
 
-        y += 24;
+            pagamentos.forEach(p => {
+                try {
+                    const label = formaLabel(p.forma || p.tipo || p.method);
+                    const valor = (p.valor !== undefined && p.valor !== null) ? `R$ ${Number(p.valor).toFixed(2)}` : '';
+                    doc.text(label, left + 6, y, { width: (right - left) - 12, align: 'left' });
+                    if (valor) doc.text(valor, left + 6, y, { width: (right - left) - 12, align: 'right' });
+                    y += lineHeight + 4;
+                } catch (e) { /* não bloquear drawing por item inválido */ }
+            });
+
+            y += 6;
+        } else {
+            // manter espaço similar quando não há pagamentos
+            y += lineHeight + 12;
+        }
+
+        // Depois das formas de pagamento, desenhar a linha separadora (assim pagamentos ficam acima dela)
+        doc.save(); doc.lineWidth(0.5); doc.moveTo(left, y).lineTo(right, y).stroke(); doc.restore();
+        y += 8;
+
+        // Total centralizado abaixo da linha
         doc.fontSize(10).font('Helvetica-Bold').text(`Total do(s) atendimento(s): R$ ${subtotal.toFixed(2)}`, left, y, { width: right - left, align: 'center' });
 
         // Linha para assinatura (aumentar espaço para ficar mais abaixo que o total)

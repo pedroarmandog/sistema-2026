@@ -1186,10 +1186,19 @@ async function finalizarCobranca() {
             document.addEventListener('venda:finalizada', async function onVendaFinalizada(ev) {
                 try {
                     // Ao confirmar que a venda foi salva, marcar o agendamento como concluído
+                    // enviar também os dados de pagamento para persistência no agendamento
+                    const vendaSalva = ev && ev.detail ? ev.detail : null;
+                    const pagamentos = vendaSalva && vendaSalva.pagamentos ? vendaSalva.pagamentos : null;
+                    const totalPago = vendaSalva && vendaSalva.totalPago ? vendaSalva.totalPago : null;
+
+                    const payload = { status: 'concluido' };
+                    if (pagamentos) payload.pagamentos = pagamentos;
+                    if (totalPago !== null && totalPago !== undefined) payload.totalPago = totalPago;
+
                     const response = await fetch(`/api/agendamentos/${agendamentoAtual.id}/status`, {
                         method: 'PATCH',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ status: 'concluido' }),
+                        body: JSON.stringify(payload),
                         credentials: 'include'
                     });
 
