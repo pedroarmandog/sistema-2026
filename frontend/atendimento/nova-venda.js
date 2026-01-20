@@ -349,12 +349,12 @@ function inicializarNovaVenda() {
         totais.desconto = totais.bruto - totais.final;
         
         // Atualizar elementos na tela
-        document.querySelector('.total-item:nth-child(1) .valor').textContent = 
-            `R$ ${totais.bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
-        document.querySelector('.total-item:nth-child(2) .valor').textContent = 
-            totais.desconto.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-        document.querySelector('.total-item:nth-child(4) .valor').textContent = 
-            `R$ ${totais.final.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+        const el1 = document.querySelector('.total-item:nth-child(1) .valor');
+        if (el1) el1.textContent = `R$ ${totais.bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+        const el2 = document.querySelector('.total-item:nth-child(2) .valor');
+        if (el2) el2.textContent = totais.desconto.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+        const el4 = document.querySelector('.total-item:nth-child(4) .valor');
+        if (el4) el4.textContent = `R$ ${totais.final.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
     }
     
     // Função para adicionar item à lista

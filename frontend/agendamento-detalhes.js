@@ -583,6 +583,17 @@ document.addEventListener('DOMContentLoaded', function() {
             try { abrirModalVacina(); } catch (err) { console.warn('Erro ao abrir modal de vacina:', err); }
         });
     })();
+    // Ligar botão "Adicionar" da sub-aba Vermífugos ao modal de Adicionar Item
+    (function attachVermifugoAddButton(){
+        const btnVermi = document.querySelector('#vermifugosSubContent .btn-add-small');
+        if (!btnVermi) return;
+        if (btnVermi.hasAttribute('data-vermi-listener')) return;
+        btnVermi.setAttribute('data-vermi-listener', 'true');
+        btnVermi.addEventListener('click', function(e){
+            e.preventDefault();
+            try { openAddItemModal(); } catch (err) { console.warn('Erro ao abrir modal de adicionar item (vermifugo):', err); }
+        });
+    })();
 });
 
 // Funções de navegação rápida (shims)
@@ -900,6 +911,13 @@ function preencherDadosAgendamento(agendamento) {
 
                                 if (servicosArray && servicosArray.length > 0) {
                                         servicosArray.forEach(s => {
+                                                // Se for um serviço especial do tipo 'vermifugo', renderizar na sub-aba Vermífugos
+                                                try {
+                                                    if (s && s.meta && String(s.meta.tipoEspecial || '').toLowerCase() === 'vermifugo') {
+                                                        try { appendServiceToCategory(s); } catch(e) { console.warn('Erro appendServiceToCategory para vermifugo ao carregar:', e); }
+                                                        return; // pular renderização padrão
+                                                    }
+                                                } catch(e) {}
                                                 const nome = s.nome || s.nomeServico || String(s).trim();
                                                 const horario = s.horario || s.time || '';
                                                 const data = s.data || s.dataServico || '';
@@ -1454,6 +1472,24 @@ async function buscarProfissionais() {
     } catch (error) {
         console.error('❌ Erro ao buscar profissionais:', error);
     }
+}
+
+// Buscar periodicidades da API (renovações)
+let periodicidadesDisponiveis = [];
+async function buscarPeriodicidades() {
+    const candidates = ['/api/periodicidades','/api/periodicidade','/api/periodicities'];
+    for (const p of candidates) {
+        try {
+            const res = await fetch(p);
+            if (!res.ok) continue;
+            const data = await res.json();
+            periodicidadesDisponiveis = Array.isArray(data) ? data : (Array.isArray(data.items) ? data.items : []);
+            console.log('⟳ Periodicidades carregadas via', p, periodicidadesDisponiveis.length);
+            return;
+        } catch (e) { continue; }
+    }
+    console.warn('⚠️ Não foi possível carregar periodicidades (nenhum endpoint respondeu)');
+    periodicidadesDisponiveis = [];
 }
 
 function abrirModalVacina() {
@@ -2178,6 +2214,8 @@ function voltarParaLista() {
 
 // Abre modal pequeno centralizado para adicionar item (produto/serviço)
 function openAddItemModal() {
+    // prevent opening when a vermifugo modal is active
+    try { if (window._vermifugoModalOpen) return; } catch(e){}
     // bloquear se agendamento já estiver finalizado / check-out
     try {
         const normalizedStatus = String((agendamentoAtual && agendamentoAtual.status) || '').toLowerCase().replace(/_/g,'-');
@@ -2278,11 +2316,27 @@ function openAddItemModal() {
                 priceSpan.textContent = (preco ? ('R$ ' + formatarMoeda(Number(String(preco).replace(',','.')))) : '');
                 meta.appendChild(leftSpan); meta.appendChild(priceSpan);
                 div.appendChild(title); div.appendChild(meta);
-                div.addEventListener('click', function(){
+                div.addEventListener('click', async function(){
                     input.value = it.nome || it.titulo || '';
                     input.setAttribute('data-selected-id', String(it.id));
                     input.setAttribute('data-selected-valor', String(preco || 0));
+                    // armazenar categoria/agrupamento para decisões posteriores
+                    const cat = (it.categoria || it.agrupamento || it.tipo || '').toString().toLowerCase();
+                    input.setAttribute('data-selected-categoria', cat);
                     results.style.display = 'none';
+                    try {
+                        // se o próprio objeto já indica vermífugo, abrir o modal imediatamente
+                        if (cat && cat.indexOf('vermifug') !== -1) {
+                            openAddVermifugoModal({ id: it.id, nome: it.nome || it.titulo, valor: preco });
+                            return;
+                        }
+                        // fallback rápido: checar nome/titulo
+                        const nameCheck = (it.nome || it.titulo || '').toString().toLowerCase();
+                        if (nameCheck.indexOf('vermifug') !== -1) {
+                            openAddVermifugoModal({ id: it.id, nome: it.nome || it.titulo, valor: preco });
+                            return;
+                        }
+                    } catch (e) { console.warn('Erro ao abrir modal de vermifugo automaticamente:', e); }
                 });
                 frag.appendChild(div);
             });
@@ -2320,6 +2374,47 @@ function openAddItemModal() {
         const selId = input.getAttribute('data-selected-id');
         const nome = input.value.trim();
         const valor = Number(String(input.getAttribute('data-selected-valor')||'0').replace(',','.')) || 0;
+        const categoriaSel = (input.getAttribute('data-selected-categoria')||'').toLowerCase();
+        // função helper para detectar 'vermifugo' em um objeto
+        const looksLikeVermifugo = (obj) => {
+            if (!obj) return false;
+            const fields = ['categoria','agrupamento','tipo','grupo','group','categoriaNome','agrupamentoNome','tags','descricao'];
+            for (let f of fields) {
+                try {
+                    const v = (obj[f] || (obj[f] && obj[f].nome) || '').toString().toLowerCase();
+                    if (v.indexOf('vermifug') !== -1) return true;
+                } catch(e){}
+            }
+            // também checar nome/titulo
+            try { if ((obj.nome||obj.titulo||'').toString().toLowerCase().indexOf('vermifug') !== -1) return true; } catch(e){}
+            return false;
+        };
+
+        // se categoria já indica vermifugo, abrir modal
+        if (categoriaSel && categoriaSel.indexOf('vermifug') !== -1) {
+            openAddVermifugoModal({ id: selId, nome, valor });
+            return;
+        }
+
+        // caso categoria não esteja disponível ou não caia no padrão, buscar detalhes do item por id e verificar
+        if (selId) {
+            try {
+                const candidatePaths = ['/api/itens/','/api/produtos/','/api/items/','/api/meus-itens/'];
+                let detail = null;
+                for (const p of candidatePaths) {
+                    try {
+                        const res = await fetch(p + encodeURIComponent(selId), { credentials: 'include' });
+                        if (!res.ok) continue;
+                        detail = await res.json();
+                        if (detail) break;
+                    } catch(e) { continue; }
+                }
+                if (looksLikeVermifugo(detail)) {
+                    openAddVermifugoModal({ id: selId, nome, valor });
+                    return;
+                }
+            } catch (e) { console.warn('Erro ao buscar detalhes do item para detectar vermifugo:', e); }
+        }
         if(!nome || (!selId && nome.length===0)){
             try { if (window.showNotification) { window.showNotification('Por favor, selecione um serviço/produto primeiro', 'error'); } else { alert('Por favor, selecione um serviço/produto primeiro'); } } catch(e){ console.warn('notify failed', e); }
             return;
@@ -2423,6 +2518,285 @@ function openAddItemModal() {
         input.focus();
     });
 
+    // Modal detalhado para vermífugo
+    function openAddVermifugoModal(itemInfo) {
+        // mark modal open to prevent other modals opening underneath
+        try { window._vermifugoModalOpen = true; } catch(e){}
+        if (!itemInfo) itemInfo = {};
+        if (document.getElementById('modalVermifugo')) return;
+        const overlay = document.createElement('div');
+        overlay.id = 'modalVermifugoOverlay';
+        overlay.style.cssText = 'position:fixed;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;z-index:1200000;';
+
+        const modal = document.createElement('div');
+        modal.id = 'modalVermifugo';
+        modal.style.cssText = 'width:820px;max-width:95%;background:white;border-radius:6px;box-shadow:0 10px 40px rgba(2,16,26,0.3);overflow:auto;font-family:inherit;max-height:90vh;';
+        const nomeVal = itemInfo.nome || '';
+        const valorVal = (itemInfo.valor !== undefined && itemInfo.valor !== null) ? itemInfo.valor : '';
+        const hoje = new Date().toISOString().slice(0,10).split('-').reverse().join('/');
+        modal.innerHTML = `
+            <div style="background:#f5f6f8;padding:12px 16px;border-bottom:1px solid #e6e9ee;display:flex;align-items:center;justify-content:space-between;">
+                <strong>Adicionar Item</strong>
+                <button id="fecharModalVermifugo" style="background:transparent;border:none;font-size:18px;cursor:pointer;color:#666">✕</button>
+            </div>
+            <div style="padding:18px;">
+                <label style="display:block;margin-bottom:6px;font-weight:600;color:#333">Item Avulso <span style="color:#c0392b">*</span></label>
+                <input id="vermifugoItemNome" type="text" value="${escapeHtmlText(nomeVal)}" style="width:100%;padding:10px;border:1px solid #dfe6ef;border-radius:4px;margin-bottom:12px;box-sizing:border-box;">
+
+                <div style="display:flex;gap:12px;">
+                    <div style="flex:1">
+                        <label>Qtd. *</label>
+                        <input id="vermifugoQtd" type="text" value="1" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
+                    </div>
+                    <div style="flex:1">
+                        <label>Unitário *</label>
+                        <input id="vermifugoUnitario" type="text" value="${escapeHtmlText(String(valorVal))}" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
+                    </div>
+                    <div style="flex:1">
+                        <label>% Desconto</label>
+                        <input id="vermifugoDesconto" type="text" value="0" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
+                    </div>
+                    <div style="flex:1">
+                        <label>Valor Final *</label>
+                        <input id="vermifugoValorFinal" type="text" value="${escapeHtmlText(String(valorVal))}" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
+                    </div>
+                </div>
+
+                <div style="margin-top:12px;display:flex;gap:12px;">
+                    <div style="flex:1">
+                        <label>Renovação</label>
+                        <input id="vermifugoRenovacao" type="text" value="" placeholder="Ex: 30 dias" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
+                    </div>
+                    <div style="flex:1">
+                        <label>Lote</label>
+                        <input id="vermifugoLote" type="text" value="" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
+                    </div>
+                </div>
+
+                <div style="margin-top:12px;display:flex;gap:12px;">
+                    <div style="flex:1">
+                        <label>Dose *</label>
+                        <input id="vermifugoDose" type="text" value="" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
+                    </div>
+                    <div style="flex:1">
+                        <label>Data Aplicação *</label>
+                        <input id="vermifugoDataAplic" type="date" value="${new Date().toISOString().slice(0,10)}" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
+                    </div>
+                    <div style="flex:1">
+                        <label>Profissional</label>
+                        <input id="vermifugoProfissional" type="text" placeholder="Digite para pesquisar profissionais" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
+                    </div>
+                </div>
+
+                <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+                    <button id="btnSalvarVermifugo" class="btn" style="background:#28a745;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer">Salvar</button>
+                    <button id="btnCancelarVermifugo" class="btn" style="background:#6c757d;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer">Cancelar</button>
+                </div>
+            </div>
+        `;
+
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        // criar dropdowns para Renovação e Profissional
+        const renovInput = document.getElementById('vermifugoRenovacao');
+        const profInput = document.getElementById('vermifugoProfissional');
+        // helper para criar dropdown container
+        function createDropdown(idFor) {
+            const d = document.createElement('div');
+            d.className = 'modal-dropdown';
+            d.style.cssText = 'position:absolute;background:#fff;border:1px solid #e6e9ee;border-radius:6px;box-shadow:0 8px 20px rgba(2,16,26,0.12);max-height:220px;overflow:auto;z-index:1300000;display:none;';
+            d.id = idFor;
+            document.body.appendChild(d);
+            return d;
+        }
+
+        const renovDropdown = createDropdown('vermifugoRenovacaoDropdown');
+        const profDropdown = createDropdown('vermifugoProfissionalDropdown');
+
+        // posicionar dropdown próximo ao input
+        function positionDropdown(inputEl, dropdownEl) {
+            try {
+                const r = inputEl.getBoundingClientRect();
+                dropdownEl.style.minWidth = Math.max(240, r.width) + 'px';
+                dropdownEl.style.left = (window.scrollX + r.left) + 'px';
+                dropdownEl.style.top = (window.scrollY + r.bottom + 6) + 'px';
+            } catch(e){}
+        }
+
+        // popular renovDropdown com periodicidades (array de objetos ou strings)
+        function showRenovDropdown(filter) {
+            if (!renovInput) return;
+            if (!Array.isArray(periodicidadesDisponiveis) || periodicidadesDisponiveis.length === 0) {
+                renovDropdown.innerHTML = '<div style="padding:8px;color:#666">Nenhuma opção</div>';
+                renovDropdown.style.display = 'block';
+                positionDropdown(renovInput, renovDropdown);
+                return;
+            }
+            const q = (filter||'').toString().toLowerCase();
+            const matches = periodicidadesDisponiveis.filter(it => {
+                const label = (it && (it.descricao||it.nome||it.label||it.titulo) ? (it.descricao||it.nome||it.label||it.titulo) : (typeof it === 'string'?it:''));
+                return String(label).toLowerCase().indexOf(q) !== -1;
+            }).slice(0,30);
+            const frag = document.createDocumentFragment();
+            matches.forEach(m => {
+                const div = document.createElement('div');
+                div.className = 'dropdown-item';
+                div.style.cssText = 'padding:8px 12px;cursor:pointer;border-bottom:1px solid #f4f6f8;';
+                const label = (m && (m.descricao||m.nome||m.label||m.titulo)) ? (m.descricao||m.nome||m.label||m.titulo) : (typeof m === 'string' ? m : JSON.stringify(m));
+                div.textContent = label;
+                div.addEventListener('click', function(){
+                    renovInput.value = label;
+                    renovInput.setAttribute('data-selected-renovacao', label);
+                    // store the id when available for later submission
+                    if (m && (m.id || m._id)) renovInput.setAttribute('data-selected-renovacao-id', String(m.id || m._id));
+                    renovDropdown.style.display = 'none';
+                });
+                frag.appendChild(div);
+            });
+            renovDropdown.innerHTML = '';
+            renovDropdown.appendChild(frag);
+            renovDropdown.style.display = 'block';
+            positionDropdown(renovInput, renovDropdown);
+        }
+
+        // popular profDropdown com profissionais
+        function showProfDropdown(filter) {
+            if (!profInput) return;
+            const q = (filter||'').toString().toLowerCase();
+            const list = Array.isArray(profissionaisDisponiveis) ? profissionaisDisponiveis : [];
+            const matches = list.filter(p => ((p.nome||p.name||'') + ' ' + (p.apelido||'')).toString().toLowerCase().indexOf(q) !== -1).slice(0,30);
+            const frag = document.createDocumentFragment();
+            if (matches.length === 0) {
+                const div = document.createElement('div'); div.style.padding='8px'; div.style.color='#666'; div.textContent = 'Nenhum profissional'; frag.appendChild(div);
+            }
+            matches.forEach(p => {
+                const div = document.createElement('div');
+                div.className = 'dropdown-item';
+                div.style.cssText = 'padding:8px 12px;cursor:pointer;border-bottom:1px solid #f4f6f8;';
+                div.textContent = p.nome || p.name || '';
+                div.addEventListener('click', function(){
+                    profInput.value = p.nome || p.name || '';
+                    profInput.setAttribute('data-selected-profissional-id', String(p.id || p._id || ''));
+                    profDropdown.style.display = 'none';
+                });
+                frag.appendChild(div);
+            });
+            profDropdown.innerHTML = '';
+            profDropdown.appendChild(frag);
+            profDropdown.style.display = 'block';
+            positionDropdown(profInput, profDropdown);
+        }
+
+        // eventos: abrir/filtrar ao digitar
+        if (renovInput) {
+            renovInput.addEventListener('focus', async function(){
+                if (periodicidadesDisponiveis.length === 0) await buscarPeriodicidades();
+                showRenovDropdown(renovInput.value || '');
+            });
+            renovInput.addEventListener('input', function(){ showRenovDropdown(this.value||''); });
+            document.addEventListener('click', function(e){ if (!renovDropdown.contains(e.target) && e.target !== renovInput) renovDropdown.style.display = 'none'; });
+        }
+
+        if (profInput) {
+            profInput.addEventListener('focus', async function(){
+                if (profissionaisDisponiveis.length === 0) await buscarProfissionais();
+                showProfDropdown(profInput.value || '');
+            });
+            profInput.addEventListener('input', function(){ showProfDropdown(this.value||''); });
+            document.addEventListener('click', function(e){ if (!profDropdown.contains(e.target) && e.target !== profInput) profDropdown.style.display = 'none'; });
+        }
+
+        document.getElementById('fecharModalVermifugo').addEventListener('click', () => { try{ window._vermifugoModalOpen = false; }catch(e){}; overlay.remove(); });
+        document.getElementById('btnCancelarVermifugo').addEventListener('click', () => { try{ window._vermifugoModalOpen = false; }catch(e){}; overlay.remove(); });
+
+        document.getElementById('btnSalvarVermifugo').addEventListener('click', async function(e){
+            try{ if (e && e.stopPropagation) e.stopPropagation(); } catch(e){}
+            const nome = document.getElementById('vermifugoItemNome').value.trim();
+            const qtd = parseFloat(String(document.getElementById('vermifugoQtd').value||'1').replace(',','.'))||1;
+            const unitario = parseFloat(String(document.getElementById('vermifugoUnitario').value||'0').replace(',','.'))||0;
+            const descontoPerc = parseFloat(String(document.getElementById('vermifugoDesconto').value||'0').replace(',','.'))||0;
+            const valorFinal = parseFloat(String(document.getElementById('vermifugoValorFinal').value||unitario).replace(',','.'))||unitario;
+            const dose = document.getElementById('vermifugoDose').value.trim();
+            const dataAplic = document.getElementById('vermifugoDataAplic').value;
+            const renovInputEl = document.getElementById('vermifugoRenovacao');
+            const renovacao = (renovInputEl && renovInputEl.value) ? renovInputEl.value.trim() : '';
+            const renovacaoId = (renovInputEl && (renovInputEl.getAttribute('data-selected-renovacao-id') || renovInputEl.getAttribute('data-selected-renovacao-id'))) ? (renovInputEl.getAttribute('data-selected-renovacao-id') || '') : '';
+            const lote = document.getElementById('vermifugoLote').value.trim();
+            const profissional = document.getElementById('vermifugoProfissional').value.trim() || ((agendamentoAtual&&agendamentoAtual.profissional)?agendamentoAtual.profissional:'-');
+
+            // criar objeto compatível com o fluxo existente
+            const s = { id: itemInfo.id || Date.now(), nome: nome, quantidade: qtd, unitario: unitario, valor: valorFinal, total: (qtd * valorFinal), profissional: profissional };
+            // adicionar metadados (dose, lote, data)
+            s.meta = { dose, lote, dataAplic, renovacao, renovacaoId, tipoEspecial: 'vermifugo' };
+
+            if(!agendamentoAtual) agendamentoAtual = {};
+            if(!Array.isArray(agendamentoAtual._addedServicos)) agendamentoAtual._addedServicos = [];
+            agendamentoAtual._addedServicos.push(s);
+
+            // anexar no DOM e persistir usando o mesmo fluxo que já existe
+            try { appendServiceToCategory(s); } catch(e){ console.warn('Erro anexando serviço na UI', e); }
+
+            // atualizar totais (reutiliza lógica do handler acima)
+            try { document.getElementById('totalGeral').textContent = formatarMoeda((parseFloat(agendamentoAtual.valor||0)||0) + (agendamentoAtual._addedServicos||[]).reduce((a,b)=>a+(parseFloat(b.total||b.valor||0)||0),0)); } catch(e){}
+
+            // Persistir imediatamente (se houver agendamentoAtual.id) e tratar resposta
+            try {
+                if (agendamentoAtual && agendamentoAtual.id) {
+                    const existingServicos = Array.isArray(agendamentoAtual.servicos) ? agendamentoAtual.servicos.slice() : (Array.isArray(agendamentoAtual.__existingServicosArray) ? agendamentoAtual.__existingServicosArray.slice() : []);
+                    const toAdd = Array.isArray(agendamentoAtual._addedServicos) ? agendamentoAtual._addedServicos.slice() : [];
+                    const combined = existingServicos.concat(toAdd || []);
+                    const seen = new Set();
+                    const mergedServicos = combined.filter(it => {
+                        const id = (it && (it.id !== undefined && it.id !== null)) ? String(it.id) : JSON.stringify(it);
+                        if (seen.has(id)) return false; seen.add(id); return true;
+                    });
+                    const nomesConcat = [String(agendamentoAtual.__existingServicosString||agendamentoAtual.servico||'')].concat((agendamentoAtual._addedServicos||[]).map(x=>x.nome)).filter(Boolean).join(' • ');
+                    const payload = { servico: nomesConcat, servicos: mergedServicos, valor: parseFloat(agendamentoAtual.valor||0) + (agendamentoAtual._addedServicos||[]).reduce((a,b)=>a+(parseFloat(b.total||b.valor||0)||0),0) };
+                    console.log('[vermifugo] Persistindo agendamento id=', agendamentoAtual && agendamentoAtual.id, 'payload=', payload);
+                    const resp = await fetch(`/api/agendamentos/${agendamentoAtual.id}`, { method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    if (resp.ok) {
+                        const updated = await resp.json().catch(()=>null);
+                        if (updated) {
+                            agendamentoAtual.valor = updated.valor !== undefined ? updated.valor : payload.valor;
+                            agendamentoAtual.servico = updated.servico || nomesConcat;
+                            agendamentoAtual.servicos = Array.isArray(updated.servicos) ? updated.servicos : mergedServicos;
+                            agendamentoAtual.__existingTotal = agendamentoAtual.valor;
+                            agendamentoAtual.__existingServicosString = agendamentoAtual.servico;
+                            // marcar itens adicionados como persistidos
+                            agendamentoAtual._addedServicos = [];
+                        } else {
+                            agendamentoAtual.valor = payload.valor;
+                            agendamentoAtual.servico = nomesConcat;
+                            agendamentoAtual.servicos = mergedServicos;
+                            agendamentoAtual.__existingTotal = agendamentoAtual.valor;
+                            agendamentoAtual.__existingServicosString = agendamentoAtual.servico;
+                            agendamentoAtual._addedServicos = [];
+                        }
+                        // Verificar estado no servidor imediatamente (GET) e logar
+                        try {
+                            const check = await fetch(`/api/agendamentos/${agendamentoAtual.id}`, { credentials: 'include' });
+                            const checkJson = await check.json().catch(()=>null);
+                            console.log('[vermifugo] GET after PUT, server returned:', check.status, checkJson);
+                        } catch(e){ console.warn('[vermifugo] erro ao GET após PUT', e); }
+                    } else {
+                        const txt = await resp.text().catch(()=>null);
+                        console.warn('PUT /api/agendamentos failed when persisting vermifugo', resp.status, txt);
+                        console.log('[vermifugo] server response (text):', txt);
+                    }
+                }
+            } catch(e){ console.warn('Erro ao persistir vermifugo', e); }
+
+            // ensure any small 'Adicionar Item' modal is closed (avoid it re-opening)
+            try {
+                const mOverlay = document.getElementById('modalAdicionarItemOverlay'); if (mOverlay) mOverlay.remove();
+                const mModal = document.getElementById('modalAdicionarItem'); if (mModal) mModal.remove();
+            } catch(e){}
+            try{ window._vermifugoModalOpen = false; }catch(e){}
+            overlay.remove();
+        });
+    }
+
     document.getElementById('btnFecharItem').addEventListener('click', closeModal);
     document.getElementById('fecharModalAdicionarItem').addEventListener('click', closeModal);
 
@@ -2430,51 +2804,100 @@ function openAddItemModal() {
 }
 
 function appendServiceToCategory(s){
-        try {
-                // elemento de categoria onde os itens são renderizados
-                const category = document.querySelector('.category-section');
-                if (!category) return;
+    try {
+        // Se for vermifugo, renderizar na sub-aba de Vermífugos
+        const isVermifugo = s && s.meta && s.meta.tipoEspecial === 'vermifugo';
+        if (isVermifugo) {
+            const container = document.querySelector('#vermifugosSubContent .historico-list');
+            if (!container) return;
+            // remover estado vazio
+            const empty = container.querySelector('.empty-state'); if (empty) empty.remove();
 
-                // montar dados do serviço recebido
-                const horario = s.horario || s.time || '';
-                const data = s.data || '';
-                const nome = s.nome || s.nomeServico || '';
-                const profissional = s.profissional || '';
-                const qtd = s.quantidade || 1;
-                const unitario = parseFloat(s.unitario || s.valor || 0) || 0;
-                const total = parseFloat(s.total || unitario * qtd) || unitario * qtd;
+            const item = document.createElement('div');
+            item.className = 'vermifugo-item';
+            item.setAttribute('data-service-id', String(s.id || ''));
 
-                const item = document.createElement('div');
-                item.className = 'service-item';
-                item.innerHTML = `
-                        <div class="col-horario">
-                            <i class="fas fa-clock"></i>
-                            <div class="time-info">
-                                <span class="time">${escapeHtmlUnsafe(horario)}</span>
-                                <small class="date">${escapeHtmlUnsafe(data)}</small>
-                            </div>
+            const nome = s.nome || '';
+            const dataAplic = (s.meta && s.meta.dataAplic) ? s.meta.dataAplic : (s.data || '');
+            const dose = (s.meta && s.meta.dose) ? s.meta.dose : '';
+            const profissional = s.profissional || '';
+            const lote = (s.meta && s.meta.lote) ? s.meta.lote : '';
+            const renovacao = (s.meta && s.meta.renovacao) ? s.meta.renovacao : '';
+
+            item.innerHTML = `
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f1f3f6;">
+                    <div style="display:flex;gap:12px;align-items:center;flex:1;">
+                        <div style="width:10px;height:38px;border-left:4px solid #28a745;border-radius:2px;margin-right:6px"></div>
+                        <div style="min-width:0;">
+                            <div style="font-weight:600;color:#222">${escapeHtmlUnsafe(nome)}</div>
+                            <div style="font-size:12px;color:#666;margin-top:4px">Dose: ${escapeHtmlUnsafe(dose || '-')} • Aplicação: ${escapeHtmlUnsafe(dataAplic || '-')}</div>
+                            <div style="font-size:12px;color:#666;margin-top:4px">Profissional: ${escapeHtmlUnsafe(profissional || '-')} ${lote?('• Lote: '+escapeHtmlUnsafe(lote)):''} ${renovacao?('• Renovação: '+escapeHtmlUnsafe(renovacao)):''}</div>
                         </div>
-                        <div class="col-descricao">
-                            <div class="service-name">${escapeHtmlUnsafe(nome)}</div>
-                        </div>
-                        <div class="col-profissional">${escapeHtmlUnsafe(profissional)}</div>
-                        <div class="col-qtd">${escapeHtmlUnsafe(qtd)}</div>
-                        <div class="col-unitario">${formatarMoeda(unitario)}</div>
-                        <div class="col-desconto">-</div>
-                        <div class="col-total">${formatarMoeda(total)}</div>
-                        <div class="col-acoes">
-                            <button class="btn-item-action" title="Mais opções"><i class="fas fa-ellipsis-v"></i></button>
-                        </div>
-                `;
+                    </div>
+                    <div style="margin-left:12px;display:flex;gap:8px;align-items:center;">
+                        <button class="btn btn-sm btn-outline" title="Remover" data-action="remove" style="background:transparent;border:1px solid #e6e9ee;padding:6px 8px;border-radius:6px;">✖</button>
+                    </div>
+                </div>
+            `;
 
-                category.appendChild(item);
-
-                // rolar até o novo item (se a área for scrollável)
+            // ligar remocao via botão
+            item.querySelector('[data-action="remove"]').addEventListener('click', async function(){
                 try {
-                        const scrollParent = getScrollParent(category);
-                        if (scrollParent && typeof item.scrollIntoView === 'function') item.scrollIntoView({ behavior: 'smooth', block: 'end' });
-                } catch (e) { /* ignore */ }
-        } catch(e){ console.warn('appendServiceToCategory error', e); }
+                    // remover do DOM
+                    item.remove();
+                    // atualizar arrays locais e persistir
+                    if (Array.isArray(agendamentoAtual.servicos)) agendamentoAtual.servicos = agendamentoAtual.servicos.filter(x => String(x.id) !== String(s.id));
+                    if (Array.isArray(agendamentoAtual._addedServicos)) agendamentoAtual._addedServicos = agendamentoAtual._addedServicos.filter(x => String(x.id) !== String(s.id));
+                    // persistir prontuario/servicos conforme o fluxo
+                    try { await recalcAndPersistServicos(); } catch(e){ console.warn('Erro ao persistir depois de remover vermifugo', e); }
+                } catch(e){ console.warn('Erro removendo vermifugo UI', e); }
+            });
+
+            container.appendChild(item);
+            try { const scrollParent = getScrollParent(container); if (scrollParent && typeof item.scrollIntoView === 'function') item.scrollIntoView({ behavior: 'smooth', block: 'end' }); } catch(e){}
+            return;
+        }
+
+        // fallback: renderizar serviço na lista genérica (categoria principal)
+        const category = document.querySelector('.category-section');
+        if (!category) return;
+
+        // montar dados do serviço recebido
+        const horario = s.horario || s.time || '';
+        const data = s.data || '';
+        const nomeG = s.nome || s.nomeServico || '';
+        const profissionalG = s.profissional || '';
+        const qtd = s.quantidade || 1;
+        const unitario = parseFloat(s.unitario || s.valor || 0) || 0;
+        const total = parseFloat(s.total || unitario * qtd) || unitario * qtd;
+
+        const item = document.createElement('div');
+        item.className = 'service-item';
+        item.setAttribute('data-service-id', String(s.id || ''));
+        item.innerHTML = `
+                <div class="col-horario">
+                    <i class="fas fa-clock"></i>
+                    <div class="time-info">
+                        <span class="time">${escapeHtmlUnsafe(horario)}</span>
+                        <small class="date">${escapeHtmlUnsafe(data)}</small>
+                    </div>
+                </div>
+                <div class="col-descricao">
+                    <div class="service-name">${escapeHtmlUnsafe(nomeG)}</div>
+                </div>
+                <div class="col-profissional">${escapeHtmlUnsafe(profissionalG)}</div>
+                <div class="col-qtd">${escapeHtmlUnsafe(qtd)}</div>
+                <div class="col-unitario">${formatarMoeda(unitario)}</div>
+                <div class="col-desconto">-</div>
+                <div class="col-total">${formatarMoeda(total)}</div>
+                <div class="col-acoes">
+                    <button class="btn-item-action" title="Mais opções"><i class="fas fa-ellipsis-v"></i></button>
+                </div>
+        `;
+
+        category.appendChild(item);
+        try { const scrollParent = getScrollParent(category); if (scrollParent && typeof item.scrollIntoView === 'function') item.scrollIntoView({ behavior: 'smooth', block: 'end' }); } catch (e) { }
+    } catch(e){ console.warn('appendServiceToCategory error', e); }
 }
 
     // Cria/retorna o menu de ações usado por cada item (singleton)
