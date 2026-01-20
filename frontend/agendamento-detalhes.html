@@ -764,9 +764,7 @@
           <button class="action-btn btn-add-item">
             <i class="fas fa-plus"></i> Item
           </button>
-          <button class="action-btn btn-uso-consumo" disabled aria-disabled="true">
-            <i class="fas fa-plus"></i> Uso e consumo
-          </button>
+          <!-- Uso e consumo removido -->
           <button class="action-btn btn-editar">
             <i class="fas fa-edit"></i> Editar
           </button>
@@ -785,7 +783,7 @@
         <div class="tabs-navigation">
           <button class="tab-btn active" onclick="alternarAba('detalhes')">DETALHES</button>
           <button class="tab-btn" onclick="alternarAba('clinica')">CLÍNICA</button>
-          <button class="tab-btn" onclick="alternarAba('uso-consumo')">USO E CONSUMO</button>
+          <!-- Aba 'Uso e Consumo' removida -->
         </div>
 
         <!-- Conteúdo das abas -->
@@ -882,17 +880,100 @@
 
           <!-- Aba Clínica -->
           <div id="clinicaContent" class="tab-content">
-            <div class="clinica-placeholder">
-              <p>Conteúdo da aba Clínica será implementado aqui</p>
+            <div class="clinica-container">
+              <!-- Lado esquerdo - Prontuário -->
+              <div class="prontuario-section">
+                <div class="prontuario-header">
+                  <h3>Prontuário</h3>
+                  <div class="prontuario-icons">
+                    <button class="icon-btn" onclick="adicionarCampoProntuario('peso')" title="Peso"><i class="fas fa-weight" style="color: #ff6b6b;"></i></button>
+                    <button class="icon-btn" onclick="adicionarCampoProntuario('banho')" title="Banho"><i class="fas fa-bath" style="color: #4ecdc4;"></i></button>
+                    <button class="icon-btn" onclick="adicionarCampoProntuario('medicacao')" title="Medicação"><i class="fas fa-pills" style="color: #ff9f43;"></i></button>
+                    <button class="icon-btn" onclick="adicionarCampoProntuario('cirurgia')" title="Cirurgia"><i class="fas fa-briefcase-medical" style="color: #a29bfe;"></i></button>
+                    <button class="icon-btn" onclick="adicionarCampoProntuario('coracao')" title="Coração"><i class="fas fa-heartbeat" style="color: #fd79a8;"></i></button>
+                    <button class="icon-btn" onclick="abrirModalVacina()" title="Vacina"><i class="fas fa-syringe" style="color: #6c5ce7;"></i></button>
+                    <button class="icon-btn" onclick="adicionarCampoProntuario('queixas')" title="Queixas e Sintomas"><i class="fas fa-comment-dots" style="color: #00b894;"></i></button>
+                    <button class="icon-btn" onclick="adicionarCampoProntuario('exames')" title="Exames"><i class="fas fa-flask" style="color: #e17055;"></i></button>
+                    <button class="icon-btn" onclick="adicionarCampoProntuario('alergias')" title="Alergias"><i class="fas fa-exclamation-triangle" style="color: #fdcb6e;"></i></button>
+                    <button class="icon-btn" onclick="adicionarCampoProntuario('temperatura')" title="Temperatura"><i class="fas fa-thermometer-half" style="color: #74b9ff;"></i></button>
+                    <button class="icon-btn" onclick="adicionarCampoProntuario('dieta')" title="Dieta"><i class="fas fa-utensils" style="color: #55efc4;"></i></button>
+                    <button class="icon-btn" onclick="adicionarCampoProntuario('compartilhar')" title="Compartilhar"><i class="fas fa-share-alt" style="color: #0984e3;"></i></button>
+                    <button class="icon-btn" onclick="adicionarCampoProntuario('anexar')" title="Anexar"><i class="fas fa-paperclip" style="color: #636e72;"></i></button>
+                  </div>
+                </div>
+
+                <!-- Container para campos dinâmicos -->
+                <div id="prontuarioCampos" class="prontuario-campos-container">
+                  <p class="empty-state">Clique em um ícone acima para adicionar informações ao prontuário</p>
+                </div>
+              </div>
+
+              <!-- Lado direito - Histórico e Abas -->
+              <div class="historico-section">
+                <!-- Sub-abas -->
+                <div class="sub-tabs">
+                  <button class="sub-tab-btn active" onclick="alternarSubAba('historico')">HISTÓRICO</button>
+                  <button class="sub-tab-btn" onclick="alternarSubAba('vacinas')">VACINAS</button>
+                  <button class="sub-tab-btn" onclick="alternarSubAba('vermifugos')">VERMÍFUGOS</button>
+                  <button class="sub-tab-btn" onclick="alternarSubAba('antiparasitarios')">ANTIPARASITÁRIOS</button>
+                </div>
+
+                <!-- Conteúdo das sub-abas -->
+                <div class="sub-tabs-content">
+                  <!-- Histórico -->
+                  <div id="historicoSubContent" class="sub-tab-content active">
+                    <div class="historico-header">
+                      <h4><i class="fas fa-history"></i> Histórico Clínico</h4>
+                      <div class="historico-actions">
+                        <button class="btn-icon" title="Recarregar"><i class="fas fa-sync-alt"></i></button>
+                        <button class="btn-icon" title="Filtrar"><i class="fas fa-filter"></i> Filtrar</button>
+                        <button class="btn-icon"><i class="fas fa-ellipsis-v"></i></button>
+                      </div>
+                    </div>
+                    <div class="historico-list">
+                      <p class="empty-state">Nenhum registro encontrado</p>
+                      <a href="#" class="ver-mais">Ver mais</a>
+                    </div>
+                  </div>
+
+                  <!-- Vacinas -->
+                  <div id="vacinasSubContent" class="sub-tab-content">
+                    <div class="historico-header">
+                      <h4><i class="fas fa-syringe"></i> Vacinas</h4>
+                      <button class="btn-add-small"><i class="fas fa-plus"></i> Adicionar</button>
+                    </div>
+                    <div class="historico-list">
+                      <p class="empty-state">Nenhuma vacina registrada</p>
+                    </div>
+                  </div>
+
+                  <!-- Vermífugos -->
+                  <div id="vermifugosSubContent" class="sub-tab-content">
+                    <div class="historico-header">
+                      <h4><i class="fas fa-pills"></i> Vermífugos</h4>
+                      <button class="btn-add-small"><i class="fas fa-plus"></i> Adicionar</button>
+                    </div>
+                    <div class="historico-list">
+                      <p class="empty-state">Nenhum vermífugo registrado</p>
+                    </div>
+                  </div>
+
+                  <!-- Antiparasitários -->
+                  <div id="antiparasitariosSubContent" class="sub-tab-content">
+                    <div class="historico-header">
+                      <h4><i class="fas fa-bug"></i> Antiparasitários</h4>
+                      <button class="btn-add-small"><i class="fas fa-plus"></i> Adicionar</button>
+                    </div>
+                    <div class="historico-list">
+                      <p class="empty-state">Nenhum antiparasitário registrado</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <!-- Aba Uso e Consumo -->
-          <div id="usoConsumoContent" class="tab-content">
-            <div class="uso-consumo-placeholder">
-              <p>Conteúdo da aba Uso e Consumo será implementado aqui</p>
-            </div>
-          </div>
+          <!-- Aba 'Uso e Consumo' removida -->
         </div>
       </div>
 
@@ -973,6 +1054,66 @@
     </div>
 
     <!-- Botão Voltar removido -->
+  </div>
+
+  <!-- Modal de Vacina -->
+  <div id="modalVacina" class="modal-vacina" style="display: none;">
+    <div class="modal-vacina-overlay"></div>
+    <div class="modal-vacina-content">
+      <div class="modal-vacina-header">
+        <div class="header-icon">
+          <i class="fas fa-syringe"></i>
+        </div>
+        <h2>Vacina</h2>
+        <button class="btn-fechar-modal" onclick="fecharModalVacina()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      
+      <div class="modal-vacina-body">
+        <div class="form-group vacina-autocomplete">
+          <label>Nome da Vacina</label>
+          <div class="vacina-input-wrapper">
+            <input type="text" id="nomeVacina" class="form-control" placeholder="Digite ou selecione uma vacina..." autocomplete="off">
+            <div id="vacinaDropdown" class="vacina-dropdown" style="display: none;"></div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Data de Aplicação</label>
+            <input type="date" id="dataAplicacao" class="form-control">
+          </div>
+          <div class="form-group">
+            <label>Próxima Dose</label>
+            <input type="date" id="proximaDose" class="form-control">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Lote</label>
+          <input type="text" id="loteVacina" class="form-control" placeholder="Número do lote">
+        </div>
+
+        <div class="form-group profissional-autocomplete">
+          <label>Veterinário</label>
+          <div class="profissional-input-wrapper">
+            <input type="text" id="veterinarioVacina" class="form-control" placeholder="Digite ou selecione um profissional..." autocomplete="off">
+            <div id="profissionalDropdown" class="profissional-dropdown" style="display: none;"></div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Observações</label>
+          <textarea id="observacoesVacina" class="form-control-textarea" rows="4" placeholder="Observações sobre a vacina..."></textarea>
+        </div>
+      </div>
+
+      <div class="modal-vacina-footer">
+        <button class="btn-cancelar" onclick="fecharModalVacina()">Cancelar</button>
+        <button class="btn-salvar-vacina" onclick="salvarVacina()">Salvar Vacina</button>
+      </div>
+    </div>
   </div>
 
   <!-- Script do menu (copiar para sua página) -->

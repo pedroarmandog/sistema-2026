@@ -2279,6 +2279,12 @@ function abrirModalPagamento(totalOverride, seed) {
                 </button>
             </div>
             
+            <!-- Lista de pagamentos adicionados -->
+            <div id="listaPagamentos" style="margin-bottom:12px; display:none;">
+                <h4 style="margin-bottom:8px; color:#333;">Pagamentos adicionados</h4>
+                <div id="listaPagamentosItems" style="background:#fff;padding:10px;border:1px solid #e9ecef;border-radius:8px;max-height:140px;overflow:auto;color:#333;"></div>
+            </div>
+
             <!-- Caixa/Conta -->
             <div style="margin-bottom: 20px;">
                 <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">Caixa/Conta</label>
@@ -2382,6 +2388,56 @@ function configurarModalPagamento(modal, overlay, totalVenda) {
             document.getElementById('faltaModal').style.color = '#dc3545';
         }
     }
+
+    // Renderizar lista de pagamentos adicionados
+    function renderListaPagamentos() {
+        const lista = document.getElementById('listaPagamentos');
+        const container = document.getElementById('listaPagamentosItems');
+        if (!container || !lista) return;
+
+        if (!Array.isArray(pagamentosEfetuados) || pagamentosEfetuados.length === 0) {
+            lista.style.display = 'none';
+            container.innerHTML = '';
+            return;
+        }
+
+        lista.style.display = 'block';
+        container.innerHTML = '';
+
+        pagamentosEfetuados.forEach((p, idx) => {
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:6px 4px;border-bottom:1px solid #f1f3f5;font-size:13px;';
+            const label = document.createElement('div');
+            const forma = (p.forma || p.tipo || p.method) || 'Forma';
+            label.textContent = `${formatarForma(forma)} ${p.parcelas ? '(' + p.parcelas + 'x)' : ''}`;
+            const right = document.createElement('div');
+            right.style.display = 'flex'; right.style.gap = '8px'; right.style.alignItems = 'center';
+            const valor = document.createElement('div');
+            valor.textContent = `R$ ${Number(p.valor || 0).toFixed(2)}`;
+            const remover = document.createElement('button');
+            remover.textContent = 'Rem';
+            remover.title = 'Remover pagamento';
+            remover.style.cssText = 'border:none;background:#ff6b6b;color:#fff;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:12px;';
+            remover.addEventListener('click', function(){
+                // remover pagamento e recalcular
+                pagamentosEfetuados.splice(idx, 1);
+                totalPago = pagamentosEfetuados.reduce((s,it) => s + (Number(it.valor||0)), 0);
+                atualizarTotais();
+                renderListaPagamentos();
+            });
+
+            right.appendChild(valor);
+            right.appendChild(remover);
+            row.appendChild(label);
+            row.appendChild(right);
+            container.appendChild(row);
+        });
+    }
+
+    function formatarForma(key) {
+        const map = { dinheiro: 'Dinheiro', debito: 'Débito', credito: 'Crédito', pix: 'Pix', crediario: 'Crediário', cheque: 'Cheque', haver: 'Haver' };
+        return map[key] || String(key || 'Outro');
+    }
     
     // Event listeners
     document.getElementById('fecharModalPagamento').addEventListener('click', fecharModal);
@@ -2426,7 +2482,8 @@ function configurarModalPagamento(modal, overlay, totalVenda) {
             // Preencher valor total automaticamente
             const campoValor = campoAtual.querySelector('input[id^="valor-"]');
             if (campoValor) {
-                campoValor.value = valorTotal.toFixed(2);
+                const restante = Math.max(0, (valorTotal - (totalPago || 0)));
+                try { campoValor.value = restante.toFixed(2); } catch(e) { campoValor.value = (valorTotal).toFixed(2); }
             }
             
             // Configurações específicas por forma de pagamento
@@ -2441,13 +2498,10 @@ function configurarModalPagamento(modal, overlay, totalVenda) {
                     // Parcelas já vem com 1 preenchido
                     break;
                 case 'pix':
-                    // Carregar chave PIX salva e focar no campo
+                    // Não usar localStorage por segurança; deixar campo em branco e focar
                     setTimeout(() => {
-                        const chaveSalva = localStorage.getItem('chavePix');
-                        if (chaveSalva) {
-                            document.getElementById('chave-pix').value = chaveSalva;
-                        }
-                        document.getElementById('chave-pix').focus();
+                        try { document.getElementById('chave-pix').value = ''; } catch(e){}
+                        try { document.getElementById('chave-pix').focus(); } catch(e){}
                     }, 100);
                     break;
             }
@@ -2586,8 +2640,7 @@ function configurarModalPagamento(modal, overlay, totalVenda) {
                     alert('Digite uma chave PIX válida.');
                     return null;
                 }
-                // Salvar chave PIX para próximas vendas
-                localStorage.setItem('chavePix', chavePix);
+                // Não salvar no localStorage por segurança; persistir no servidor se necessário
                 dadosPagamento.valor = valorPix;
                 dadosPagamento.chavePix = chavePix;
                 break;
@@ -2674,6 +2727,8 @@ function configurarModalPagamento(modal, overlay, totalVenda) {
         
         totalPago += valor;
         atualizarTotais();
+        renderListaPagamentos();
+        preencherValorRestanteNosCampos();
         
         // Resetar campos específicos
         document.querySelectorAll('.campos-forma input').forEach(input => {
@@ -2704,6 +2759,18 @@ function configurarModalPagamento(modal, overlay, totalVenda) {
         
         console.log('💳 Pagamento adicionado:', dadosPagamento);
     });
+
+    // Após adicionar um pagamento, atualizar todos os campos de valor visíveis com o restante
+    function preencherValorRestanteNosCampos() {
+        const restante = Math.max(0, totalVenda - totalPago);
+        const inputs = modal.querySelectorAll('input[id^="valor-"]');
+        inputs.forEach(inp => {
+            try { inp.value = restante.toFixed(2); } catch (e) {}
+        });
+    }
+
+    // Sempre que um pagamento for adicionado via botão ou automaticamente, atualizar os campos
+    // (chamar essa função onde apropriado)
     
     // helper seguro para acessar valores de inputs que podem não existir quando o modal é usado fora da página principal
     function _safeGetValue(id) {
@@ -2732,6 +2799,8 @@ function configurarModalPagamento(modal, overlay, totalVenda) {
                 pagamentosEfetuados.push(dadosPagamento);
                 totalPago += valor;
                 atualizarTotais();
+                renderListaPagamentos();
+                preencherValorRestanteNosCampos();
                 temPagamentoValido = true;
                 
                 console.log('💳 Pagamento adicionado automaticamente antes da finalização:', dadosPagamento);

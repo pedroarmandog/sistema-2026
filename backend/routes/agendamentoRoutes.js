@@ -111,7 +111,11 @@ router.get('/:id', async (req, res) => {
             valor: agendamento.valor,
             status: agendamento.status,
             dataAgendamento: agendamento.dataAgendamento,
-            petId: agendamento.petId
+            petId: agendamento.petId,
+            prontuario: agendamento.prontuario || [],
+            clinicaState: agendamento.clinicaState || null,
+            pagamentos: agendamento.pagamentos || [],
+            totalPago: agendamento.totalPago || 0
         };
 
         res.json(agendamentoFormatted);
@@ -379,6 +383,36 @@ router.patch('/:id/status', async (req, res) => {
         res.json({ message: 'Status (e pagamentos) atualizados com sucesso', status, pagamentos: updatePayload.pagamentos, totalPago: updatePayload.totalPago });
     } catch (error) {
         console.error('Erro ao atualizar status:', error);
+        res.status(500).json({ error: 'Erro interno do servidor' });
+    }
+});
+
+// PATCH /api/agendamentos/:id/prontuario - Salvar prontuário
+router.patch('/:id/prontuario', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { prontuario, clinicaState } = req.body;
+
+        console.log('📥 Salvando prontuário/estado clínico para agendamento:', id);
+        console.log('📝 Dados prontuário:', Array.isArray(prontuario) ? `array(${prontuario.length})` : typeof prontuario);
+        console.log('🧭 Dados clinicaState:', clinicaState);
+
+        const agendamento = await Agendamento.findByPk(id);
+        if (!agendamento) {
+            console.error('❌ Agendamento não encontrado:', id);
+            return res.status(404).json({ error: 'Agendamento não encontrado' });
+        }
+
+        const updatePayload = {};
+        if (prontuario !== undefined) updatePayload.prontuario = prontuario;
+        if (clinicaState !== undefined) updatePayload.clinicaState = clinicaState;
+
+        await agendamento.update(updatePayload);
+        console.log('✅ Prontuário/estado clínico salvo com sucesso no banco');
+
+        res.json({ message: 'Prontuário e estado clínico salvos com sucesso', prontuario: agendamento.prontuario, clinicaState: agendamento.clinicaState });
+    } catch (error) {
+        console.error('Erro ao salvar prontuário:', error);
         res.status(500).json({ error: 'Erro interno do servidor' });
     }
 });

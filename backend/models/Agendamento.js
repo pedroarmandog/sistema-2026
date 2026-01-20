@@ -43,6 +43,18 @@ const Agendamento = sequelize.define('Agendamento', {
         defaultValue: 0,
         comment: 'Total efetivamente pago no atendimento'
     },
+    prontuario: {
+        type: DataTypes.JSON,
+        allowNull: true,
+        defaultValue: [],
+        comment: 'Registros do prontuário clínico (anotações, receituário, etc.)'
+    },
+    clinicaState: {
+        type: DataTypes.JSON,
+        allowNull: true,
+        field: 'clinica_state',
+        comment: 'Estado da UI da aba clínica (ultima aba/sub-aba selecionada)'
+    },
     observacoes: {
         type: DataTypes.TEXT,
         allowNull: true,

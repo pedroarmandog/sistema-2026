@@ -595,6 +595,46 @@ body {
     color: #333;
 }
 
+/* Ajuste sutil para abas na página de detalhes (tamanho moderado) */
+.tabs-navigation {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 6px 0 10px 0;
+    background: transparent;
+}
+
+.tabs-navigation .tab-btn {
+    padding: 8px 18px;
+    font-size: 14px;
+    border-radius: 6px;
+    background: transparent;
+    border: 1px solid transparent;
+    box-shadow: none;
+    transition: all 0.18s ease;
+}
+
+.tabs-navigation .tab-btn:hover:not(.active) {
+    background: #fbfdff;
+    border-color: #eef3fb;
+}
+
+.tabs-navigation .tab-btn.active {
+    color: #28a745 !important;
+    background: #fff !important;
+    border-color: rgba(0,0,0,0.03);
+    box-shadow: none;
+    border-bottom: 3px solid #28a745;
+}
+
+/* Ajustes responsivos */
+@media (max-width: 768px) {
+    .tabs-navigation .tab-btn {
+        padding: 8px 12px;
+        font-size: 13px;
+    }
+}
+
 /* Conteúdo das abas */
 .tabs-content {
     padding: 0;
@@ -1208,3 +1248,597 @@ body {
 }
 
 /* removed white dot before 'Agendado' in details view */
+
+/* ========================================
+   ABA CLÍNICA - PRONTUÁRIO E HISTÓRICO
+   ======================================== */
+
+.clinica-container {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr;
+    gap: 20px;
+    align-items: start;
+}
+
+/* Modo clínica - aproveitar largura total quando sidebar direita está oculta */
+.details-container.clinica-mode .clinica-container {
+    grid-template-columns: 1.8fr 1fr;
+}
+
+/* Lado esquerdo - Prontuário */
+.prontuario-section {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+}
+
+.prontuario-header {
+    margin-bottom: 15px;
+    padding-bottom: 12px;
+    border-bottom: 3px solid #28a745;
+}
+
+.prontuario-header h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #333;
+    margin: 0 0 15px 0;
+}
+
+.prontuario-icons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.icon-btn {
+    background: transparent;
+    border: none;
+    padding: 8px;
+    cursor: pointer;
+    font-size: 20px;
+    border-radius: 4px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.icon-btn:hover {
+    background: #f8f9fa;
+    transform: scale(1.1);
+}
+
+
+.prontuario-campos-container {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.prontuario-campos-container .empty-state {
+    color: #999;
+    font-size: 14px;
+    text-align: center;
+    padding: 20px;
+    font-style: italic;
+}
+
+/* Estilo dos registros (cartões) do prontuário */
+.prontuario-registro {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-left: 4px solid #00b894;
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 10px;
+    transition: box-shadow 0.2s;
+}
+
+.prontuario-registro:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.registro-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.registro-titulo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+}
+
+.registro-titulo i {
+    font-size: 16px;
+}
+
+.btn-remover-registro {
+    background: transparent;
+    border: none;
+    color: #999;
+    padding: 4px 8px;
+    font-size: 14px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.btn-remover-registro:hover {
+    background: #ffe5e5;
+    color: #dc3545;
+}
+
+.registro-conteudo {
+    min-height: 40px;
+    padding: 10px;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #555;
+    background: #f8f9fa;
+    border-radius: 4px;
+    outline: none;
+    border: 1px solid transparent;
+    transition: all 0.2s;
+}
+
+.registro-conteudo:focus {
+    background: white;
+    border-color: #00b894;
+}
+
+.registro-conteudo:empty:before {
+    content: attr(data-placeholder);
+    color: #999;
+    font-style: italic;
+}
+
+.registro-footer {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #999;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.registro-footer i {
+    font-size: 11px;
+}
+
+/* Modal de Vacina */
+.modal-vacina {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-vacina-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(3px);
+}
+
+.modal-vacina-content {
+    position: relative;
+    background: white;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.modal-vacina-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 20px 24px;
+    background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
+    color: white;
+}
+
+.modal-vacina-header .header-icon {
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-vacina-header .header-icon i {
+    font-size: 20px;
+}
+
+.modal-vacina-header h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+    flex: 1;
+}
+
+.btn-fechar-modal {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+
+.btn-fechar-modal:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.modal-vacina-body {
+    padding: 24px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.vacina-autocomplete {
+    position: relative;
+}
+
+.profissional-autocomplete {
+    position: relative;
+}
+
+.vacina-input-wrapper,
+.profissional-input-wrapper {
+    position: relative;
+}
+
+.vacina-dropdown,
+.profissional-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #ddd;
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    max-height: 250px;
+    overflow-y: auto;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    margin-top: -6px;
+}
+
+.dropdown-item-vacina,
+.dropdown-item-profissional {
+    padding: 12px 14px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #f0f0f0;
+    transition: background 0.2s;
+}
+
+.dropdown-item-vacina:last-child,
+.dropdown-item-profissional:last-child {
+    border-bottom: none;
+}
+
+.dropdown-item-vacina:hover,
+.dropdown-item-profissional:hover {
+    background: #f8f9fa;
+}
+
+.vacina-nome,
+.profissional-nome {
+    font-size: 14px;
+    color: #333;
+    font-weight: 500;
+}
+
+.vacina-preco {
+    font-size: 13px;
+    color: #6c5ce7;
+    font-weight: 600;
+}
+
+.dropdown-item-empty {
+    padding: 16px;
+    text-align: center;
+    color: #999;
+    font-size: 13px;
+    font-style: italic;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 8px;
+}
+
+.form-control {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+    transition: all 0.2s;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: #6c5ce7;
+    box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.1);
+}
+
+.form-control-textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+    resize: vertical;
+    transition: all 0.2s;
+}
+
+.form-control-textarea:focus {
+    outline: none;
+    border-color: #6c5ce7;
+    box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.1);
+}
+
+.modal-vacina-footer {
+    padding: 16px 24px;
+    background: #f8f9fa;
+    border-top: 1px solid #e0e0e0;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.btn-cancelar {
+    padding: 10px 24px;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-cancelar:hover {
+    background: #f8f9fa;
+    border-color: #999;
+}
+
+.btn-salvar-vacina {
+    padding: 10px 24px;
+    background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    color: white;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-salvar-vacina:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(108, 92, 231, 0.3);
+}
+
+/* Lado direito - Histórico */
+.historico-section {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    max-height: calc(100vh - 200px);
+}
+
+/* Sub-abas */
+.sub-tabs {
+    display: flex;
+    background: #f8f9fa;
+    border-bottom: 2px solid #e0e0e0;
+}
+
+.sub-tab-btn {
+    flex: 1;
+    padding: 12px 8px;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    font-size: 11px;
+    font-weight: 600;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+}
+
+.sub-tab-btn.active {
+    color: #333;
+    border-bottom-color: #28a745;
+    background: #fff;
+}
+
+.sub-tab-btn:hover:not(.active) {
+    background: #f0f0f0;
+    color: #333;
+}
+
+/* Conteúdo das sub-abas */
+.sub-tabs-content {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.sub-tab-content {
+    display: none;
+    padding: 20px;
+}
+
+.sub-tab-content.active {
+    display: block;
+}
+
+.historico-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.historico-header h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.historico-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.btn-icon {
+    background: transparent;
+    border: 1px solid #ddd;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.btn-icon:hover {
+    background: #f8f9fa;
+    border-color: #999;
+}
+
+.btn-add-small {
+    background: #28a745;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.btn-add-small:hover {
+    background: #218838;
+}
+
+.historico-list {
+    min-height: 200px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.empty-state {
+    color: #999;
+    font-size: 14px;
+    text-align: center;
+    margin: 20px 0;
+}
+
+.ver-mais {
+    color: #28a745;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    margin-top: 10px;
+}
+
+.ver-mais:hover {
+    text-decoration: underline;
+}
+
+/* Responsivo */
+@media (max-width: 1200px) {
+    .clinica-container {
+        grid-template-columns: 1fr;
+        height: auto;
+    }
+    
+    .historico-section {
+        min-height: 400px;
+    }
+}

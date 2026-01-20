@@ -115,7 +115,6 @@ function detectarIDsDuplicados() {
                     results.innerHTML = '<div style="padding:10px;color:#666">Erro na busca</div>';
                 }
             });
-
             const deb = (function(){let t; return function(fn,ms){ clearTimeout(t); t=setTimeout(fn,ms||250); }; })();
             input.addEventListener('input', function(){ deb(()=>doSearch(input.value)); input.removeAttribute('data-selected-id'); input.removeAttribute('data-selected-valor'); });
             input.addEventListener('focus', function(){ if (input.value) deb(()=>doSearch(input.value)); });
@@ -539,6 +538,12 @@ document.addEventListener('DOMContentLoaded', function() {
     detectarIDsDuplicados();
     limparEstadoSubmenus();
 
+    // Carregar prontuário ao abrir a página
+    const agendamentoId = new URLSearchParams(window.location.search).get('id');
+    if (agendamentoId) {
+        carregarProntuario(agendamentoId);
+    }
+
     const menuToggle = document.querySelector('.menu-toggle');
     const sidebar = document.querySelector('.sidebar');
     const mainContent = document.querySelector('.main-content');
@@ -567,6 +572,17 @@ document.addEventListener('DOMContentLoaded', function() {
     configurarPersistenciaSubmenu('configuracaoMenuItem', 'configuracaoSubmenu', 'configuracao');
     configurarPersistenciaSubmenu('comprasMenuItem', 'comprasSubmenu', 'compras');
     destacarSecaoAtiva();
+    // Ligar botão "Adicionar" da sub-aba Vacinas ao modal de Vacina
+    (function attachVacinaAddButton(){
+        const btnVacinas = document.querySelector('#vacinasSubContent .btn-add-small');
+        if (!btnVacinas) return;
+        if (btnVacinas.hasAttribute('data-vacina-listener')) return;
+        btnVacinas.setAttribute('data-vacina-listener', 'true');
+        btnVacinas.addEventListener('click', function(e){
+            e.preventDefault();
+            try { abrirModalVacina(); } catch (err) { console.warn('Erro ao abrir modal de vacina:', err); }
+        });
+    })();
 });
 
 // Funções de navegação rápida (shims)
@@ -688,6 +704,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Variável para armazenar os dados do agendamento atual
 let agendamentoAtual = null;
+// Estado local da UI da aba clínica (sub-abas + aba ativa)
+let clinicaStateLocal = { activeTab: null, activeSubTab: null };
 
 // Função para carregar os dados do agendamento
 async function carregarAgendamento() {
@@ -708,17 +726,35 @@ async function carregarAgendamento() {
         // Mostrar placeholders nos itens para evitar flash de conteúdo antigo
         try { showItemsPlaceholder(); } catch (e) { /* ignore */ }
 
-        console.log(`📡 Buscando agendamento ${agendamentoId} da API...`);
-        const response = await fetch(`/api/agendamentos/${agendamentoId}`);
-        
-        if (!response.ok) {
-            throw new Error(`Erro ao carregar agendamento: ${response.status} ${response.statusText}`);
+        const url = `/api/agendamentos/${agendamentoId}`;
+        console.log(`📡 Buscando agendamento ${agendamentoId} da API...`, url);
+        try {
+            const response = await fetch(url, { cache: 'no-store' });
+            if (!response.ok) {
+                throw new Error(`Erro ao carregar agendamento: ${response.status} ${response.statusText}`);
+            }
+            agendamentoAtual = await response.json();
+        } catch (fetchErr) {
+            console.error('❌ Erro no fetch do agendamento:', fetchErr);
+            alert('Erro ao carregar dados do agendamento: ' + (fetchErr.message || fetchErr) + '\nVerifique se o servidor está rodando e se o endereço http://localhost:3000 está acessível.');
+            return;
         }
-        
-        agendamentoAtual = await response.json();
         console.log('✅ Agendamento carregado da API:', agendamentoAtual);
         
         preencherDadosAgendamento(agendamentoAtual);
+        // Restaurar estado da aba CLÍNICA (se existir) sem regravar imediatamente
+        try {
+            if (agendamentoAtual && agendamentoAtual.clinicaState) {
+                clinicaStateLocal = agendamentoAtual.clinicaState || { activeTab: null, activeSubTab: null };
+                if (clinicaStateLocal.activeTab) {
+                    // aplicar sem salvar para evitar requests desnecessários
+                    await alternarAba(clinicaStateLocal.activeTab, true);
+                }
+                if (clinicaStateLocal.activeSubTab) {
+                    alternarSubAba(clinicaStateLocal.activeSubTab, true);
+                }
+            }
+        } catch (e) { console.warn('Erro restaurando estado da aba clínica:', e); }
         
     } catch (error) {
         console.error('❌ Erro ao carregar agendamento:', error);
@@ -1049,7 +1085,7 @@ function showItemsPlaceholder() {
 }
 
 // Função para alternar abas
-function alternarAba(aba) {
+async function alternarAba(aba, skipSave = false) {
     // Remove classe active de todas as abas
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
@@ -1061,8 +1097,714 @@ function alternarAba(aba) {
     const conteudoAba = document.getElementById(`${aba}Content`);
     if (conteudoAba) conteudoAba.classList.add('active');
     
+    // Esconder sidebar direita quando estiver na aba CLÍNICA
+    const sidebarRight = document.querySelector('.sidebar-right');
+    const detailsContainer = document.querySelector('.details-container');
+    
+    if (aba === 'clinica') {
+        if (sidebarRight) sidebarRight.style.display = 'none';
+        if (detailsContainer) detailsContainer.classList.add('clinica-mode');
+    } else {
+        if (sidebarRight) sidebarRight.style.display = 'block';
+        if (detailsContainer) detailsContainer.classList.remove('clinica-mode');
+    }
+    
     console.log(`📋 Aba alterada para: ${aba}`);
+
+    // atualizar estado local e persistir no banco (sem usar localStorage)
+    try {
+        clinicaStateLocal.activeTab = aba;
+        // manter subAba atual quando alterna para clínica; caso contrário, limpar
+        if (aba !== 'clinica') clinicaStateLocal.activeSubTab = null;
+        if (!skipSave) await enviarClinicaState();
+    } catch (e) {
+        console.warn('Erro salvando estado da aba clínica:', e);
+    }
 }
+
+// Função para alternar sub-abas (dentro da aba Clínica)
+function alternarSubAba(subAba, skipSave = false) {
+    // Remove classe active de todas as sub-abas
+    document.querySelectorAll('.sub-tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.sub-tab-content').forEach(content => content.classList.remove('active'));
+    
+    // Adiciona classe active na sub-aba clicada
+    const botaoSubAba = document.querySelector(`[onclick="alternarSubAba('${subAba}')"]`);
+    if (botaoSubAba) botaoSubAba.classList.add('active');
+    
+    const conteudoSubAba = document.getElementById(`${subAba}SubContent`);
+    if (conteudoSubAba) conteudoSubAba.classList.add('active');
+    
+    console.log(`📋 Sub-aba alterada para: ${subAba}`);
+
+    // persistir sub-aba selecionada
+    try {
+        clinicaStateLocal.activeSubTab = subAba;
+        if (!skipSave) enviarClinicaState();
+    } catch (e) { console.warn('Erro salvando sub-aba clínica:', e); }
+}
+
+// Envia clinicaState para o backend (salva no campo clinica_state da tabela agendamentos)
+async function enviarClinicaState() {
+    try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const agendamentoId = urlParams.get('id');
+        if (!agendamentoId) return;
+
+        // Apenas enviar o estado da UI — backend armazena clinicaState separadamente
+        await fetch(`/api/agendamentos/${agendamentoId}/prontuario`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ clinicaState: clinicaStateLocal })
+        });
+        console.log('🔁 Estado da aba clínica enviado ao servidor:', clinicaStateLocal);
+    } catch (e) {
+        console.warn('Falha ao enviar clinicaState:', e);
+    }
+}
+
+// Variável para armazenar timeout de auto-save
+let autoSaveTimeout = null;
+
+// Função para formatar data/hora
+function formatarDataHora() {
+    const agora = new Date();
+    const data = agora.toLocaleDateString('pt-BR');
+    const hora = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    return `${data} - Hoje às ${hora}`;
+}
+
+// Função para adicionar campos ao prontuário dinamicamente
+function adicionarCampoProntuario(tipo, conteudo = '', dataEmissao = null, registroId = null) {
+    const container = document.getElementById('prontuarioCampos');
+    if (!container) return;
+    
+    // Remover mensagem de estado vazio
+    const emptyState = container.querySelector('.empty-state');
+    if (emptyState) emptyState.remove();
+    
+    // Configuração dos campos
+    const campos = {
+        peso: { label: 'Peso', icon: 'fa-weight', color: '#ff6b6b', placeholder: 'Digite o peso...', rows: 2 },
+        banho: { label: 'Banho e Tosa', icon: 'fa-bath', color: '#4ecdc4', placeholder: 'Digite informações sobre banho e tosa...', rows: 2 },
+        medicacao: { label: 'Medicação', icon: 'fa-pills', color: '#ff9f43', placeholder: 'Digite a medicação...', rows: 3 },
+        cirurgia: { label: 'Cirurgia', icon: 'fa-briefcase-medical', color: '#a29bfe', placeholder: 'Digite informações sobre cirurgia...', rows: 3 },
+        coracao: { label: 'Avaliação Cardíaca', icon: 'fa-heartbeat', color: '#fd79a8', placeholder: 'Digite avaliação cardíaca...', rows: 2 },
+        vacina: { label: 'Vacina', icon: 'fa-syringe', color: '#6c5ce7', placeholder: 'Digite informações sobre vacina...', rows: 2 },
+        queixas: { label: 'Queixas e Sintomas', icon: 'fa-comment-medical', color: '#00b894', placeholder: 'Digite as queixas e sintomas...', rows: 3 },
+        exames: { label: 'Exames', icon: 'fa-flask', color: '#e17055', placeholder: 'Digite resultados de exames...', rows: 3 },
+        alergias: { label: 'Alergias', icon: 'fa-exclamation-triangle', color: '#fdcb6e', placeholder: 'Digite alergias conhecidas...', rows: 2 },
+        temperatura: { label: 'Temperatura', icon: 'fa-thermometer-half', color: '#74b9ff', placeholder: 'Digite a temperatura...', rows: 1 },
+        dieta: { label: 'Dieta e Alimentação', icon: 'fa-utensils', color: '#55efc4', placeholder: 'Digite informações sobre dieta...', rows: 2 },
+        compartilhar: { label: 'Notas para Compartilhar', icon: 'fa-share-alt', color: '#0984e3', placeholder: 'Digite notas para compartilhar...', rows: 3 },
+        anexar: { label: 'Anexos e Documentos', icon: 'fa-paperclip', color: '#636e72', placeholder: 'Digite informações sobre anexos...', rows: 2 }
+    };
+    
+    const config = campos[tipo];
+    if (!config) return;
+    
+    // Criar ID único para o registro se não for fornecido
+    if (!registroId) registroId = `registro-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const dataHora = dataEmissao || formatarDataHora();
+    
+    // Criar elemento do registro (cartão)
+    const registroDiv = document.createElement('div');
+    registroDiv.className = 'prontuario-registro';
+    registroDiv.setAttribute('data-tipo', tipo);
+    registroDiv.setAttribute('data-registro-id', registroId);
+    registroDiv.style.borderLeftColor = config.color;
+    
+    registroDiv.innerHTML = `
+        <div class="registro-header">
+            <div class="registro-titulo">
+                <i class="fas ${config.icon}" style="color: ${config.color};"></i>
+                <span>${config.label}</span>
+            </div>
+            <button class="btn-remover-registro" onclick="removerRegistroProntuario('${registroId}')" title="Remover">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="registro-conteudo" contenteditable="true" data-placeholder="${config.placeholder}">${conteudo}</div>
+        <div class="registro-footer">
+            <i class="far fa-clock"></i> ${dataHora}
+        </div>
+    `;
+    
+    container.appendChild(registroDiv);
+    
+    // Configurar auto-save no contenteditable
+    const conteudoDiv = registroDiv.querySelector('.registro-conteudo');
+    if (conteudoDiv) {
+        // Focar apenas se for novo registro
+        if (!conteudo) {
+            conteudoDiv.focus();
+        }
+        
+        // Auto-save ao digitar (debounced)
+        conteudoDiv.addEventListener('input', () => {
+            clearTimeout(autoSaveTimeout);
+            autoSaveTimeout = setTimeout(() => {
+                salvarProntuarioAutomatico();
+            }, 1500); // Aguarda 1.5 segundos após parar de digitar
+        });
+        
+        // Salvar ao perder o foco
+        conteudoDiv.addEventListener('blur', () => {
+            clearTimeout(autoSaveTimeout);
+            salvarProntuarioAutomatico();
+        });
+    }
+    
+    console.log(`✅ Registro adicionado: ${config.label}`);
+    return registroId;
+}
+
+// Função para remover registro do prontuário
+function removerRegistroProntuario(registroId) {
+    const container = document.getElementById('prontuarioCampos');
+    if (!container) return;
+    
+    const registro = container.querySelector(`[data-registro-id="${registroId}"]`);
+    if (registro) {
+        registro.remove();
+        console.log(`🗑️ Registro removido: ${registroId}`);
+        
+        // Salvar após remoção
+        salvarProntuarioAutomatico();
+        
+        // Se não houver mais registros, mostrar mensagem vazia
+        if (container.children.length === 0) {
+            container.innerHTML = '<p class="empty-state">Clique em um ícone acima para adicionar informações ao prontuário</p>';
+        }
+    }
+}
+
+// Função para coletar dados do prontuário
+function coletarDadosProntuario() {
+    const container = document.getElementById('prontuarioCampos');
+    if (!container) return [];
+    
+    const registros = [];
+    const elementos = container.querySelectorAll('.prontuario-registro');
+    
+    elementos.forEach(el => {
+        const tipo = el.getAttribute('data-tipo');
+        const registroId = el.getAttribute('data-registro-id');
+        const conteudoDiv = el.querySelector('.registro-conteudo');
+        const footer = el.querySelector('.registro-footer');
+        
+        if (conteudoDiv && footer) {
+            // Preferimos salvar o HTML para preservar quebras de linha e formatação
+            const textoPlano = conteudoDiv.textContent.trim();
+            const conteudoHtml = conteudoDiv.innerHTML.trim();
+            // Pegar apenas o texto da data, removendo o ícone
+            const dataEmissao = footer.textContent.replace(/[^\d\/\-:\sàsA-Za-z]/g, '').trim();
+
+            if (textoPlano) { // Só salva se tiver conteúdo textual
+                registros.push({
+                    id: registroId,
+                    tipo,
+                    conteudo: conteudoHtml,
+                    dataEmissao
+                });
+            }
+        }
+    });
+    
+    console.log('📋 Dados coletados do prontuário:', registros);
+    
+    return registros;
+}
+
+// Função para salvar prontuário automaticamente
+async function salvarProntuarioAutomatico() {
+    const agendamentoId = new URLSearchParams(window.location.search).get('id');
+    if (!agendamentoId) {
+        console.warn('⚠️ ID do agendamento não encontrado');
+        return;
+    }
+    
+    const registros = coletarDadosProntuario();
+    console.log('💾 Salvando prontuário para agendamento:', agendamentoId);
+    console.log('📝 Registros a salvar:', registros);
+    
+    try {
+        const response = await fetch(`/api/agendamentos/${agendamentoId}/prontuario`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ prontuario: registros })
+        });
+        
+        console.log('📡 Response status:', response.status);
+        
+        if (response.ok) {
+            const data = await response.json();
+            console.log('✅ Prontuário salvo automaticamente:', data);
+        } else {
+            console.error('❌ Erro ao salvar prontuário:', await response.text());
+        }
+    } catch (error) {
+        console.error('❌ Erro ao salvar prontuário:', error);
+    }
+}
+
+// Função para carregar prontuário existente
+async function carregarProntuario(agendamentoId) {
+    console.log('🔄 Carregando prontuário do agendamento:', agendamentoId);
+    try {
+        const response = await fetch(`/api/agendamentos/${agendamentoId}`);
+        if (!response.ok) {
+            console.warn('⚠️ Erro ao buscar agendamento:', response.status);
+            return;
+        }
+        
+        const agendamento = await response.json();
+        console.log('📄 Agendamento carregado:', agendamento);
+        console.log('📋 Prontuário encontrado:', agendamento.prontuario);
+        
+        if (agendamento.prontuario && Array.isArray(agendamento.prontuario)) {
+            console.log(`📝 Restaurando ${agendamento.prontuario.length} registros`);
+            agendamento.prontuario.forEach(registro => {
+                // Restaurar registro no prontuário (mantendo o mesmo id salvo)
+                const restoredId = adicionarCampoProntuario(
+                    registro.tipo,
+                    registro.conteudo,
+                    registro.dataEmissao,
+                    registro.id || null
+                );
+                // se for vacina, também adicionar na lista de vacinas (aba) e manter vínculo com registro salvo
+                try {
+                    if (registro.tipo === 'vacina') {
+                        const registroId = registro.id || restoredId || null;
+                        adicionarVacinaNaListaFromConteudo(registro.conteudo, registro.dataEmissao, registroId);
+                    }
+                } catch (e) { console.warn('Erro ao adicionar vacina na lista ao carregar prontuário:', e); }
+            });
+        } else {
+            console.log('ℹ️ Nenhum prontuário encontrado ou prontuário vazio');
+        }
+    } catch (error) {
+        console.error('❌ Erro ao carregar prontuário:', error);
+    }
+}
+
+// Funções do Modal de Vacina
+let vacinasDisponiveis = [];
+let profissionaisDisponiveis = [];
+let vacinaFetchTimeout = null;
+let meusItensEndpoint = null; // cache do endpoint funcional
+const meusItensCandidates = ['/api/meus-itens','/api/produtos','/api/itens','/api/produtos/meus','/api/items','/api/items/produtos'];
+
+// Buscar vacinas da API
+async function buscarVacinas() {
+    try {
+        const response = await fetch('/api/meus-itens');
+        if (response.ok) {
+            vacinasDisponiveis = await response.json();
+            console.log('💉 Vacinas carregadas:', vacinasDisponiveis.length);
+        }
+    } catch (error) {
+        console.error('❌ Erro ao buscar vacinas:', error);
+    }
+}
+
+// Buscar vacinas por query (usa /api/meus-itens?q=...)
+async function buscarVacinasQuery(q) {
+    // tenta endpoint cacheado primeiro, senão varre candidatos
+    const tryList = meusItensEndpoint ? [meusItensEndpoint] : meusItensCandidates;
+    let lastErr = null;
+    for (const base of tryList) {
+        const url = base + '?q=' + encodeURIComponent(q);
+        try {
+            const resp = await fetch(url);
+            if (!resp.ok) {
+                lastErr = new Error(`status ${resp.status}`);
+                continue;
+            }
+            const data = await resp.json();
+            const arr = Array.isArray(data) ? data : (data.items || data.data || []);
+            // filtrar apenas itens de categoria 'Vacina' (variações)
+            const filtered = (arr||[]).filter(i => {
+                const cat = String(i.categoria || i.category || i.categoriaNome || i.agrupamento || '').toLowerCase();
+                return cat.indexOf('vacina') !== -1;
+            });
+            vacinasDisponiveis = filtered;
+            meusItensEndpoint = base; // cacheia endpoint que funcionou
+            console.log('💉 Vacinas (query) carregadas via', base, filtered.length);
+            return;
+        } catch (err) {
+            lastErr = err;
+            continue;
+        }
+    }
+    console.warn('❌ Buscar vacinas por query falhou em todos endpoints:', lastErr);
+    vacinasDisponiveis = [];
+}
+
+// Buscar profissionais da API
+async function buscarProfissionais() {
+    try {
+        const response = await fetch('/api/profissionais');
+        if (response.ok) {
+            profissionaisDisponiveis = await response.json();
+            console.log('👨‍⚕️ Profissionais carregados:', profissionaisDisponiveis.length);
+        }
+    } catch (error) {
+        console.error('❌ Erro ao buscar profissionais:', error);
+    }
+}
+
+function abrirModalVacina() {
+    const modal = document.getElementById('modalVacina');
+    if (modal) {
+        modal.style.display = 'flex';
+        // Preencher data de hoje como padrão
+        const hoje = new Date().toISOString().split('T')[0];
+        document.getElementById('dataAplicacao').value = hoje;
+        
+        // Buscar vacinas se ainda não foi feito
+        if (vacinasDisponiveis.length === 0) {
+            buscarVacinas();
+        }
+        
+        // Buscar profissionais se ainda não foi feito
+        if (profissionaisDisponiveis.length === 0) {
+            buscarProfissionais();
+        }
+        
+        // Configurar eventos do input
+        configurarAutocompleteVacina();
+        configurarAutocompleteProfissional();
+        
+        // Focar no primeiro campo
+        setTimeout(() => {
+            document.getElementById('nomeVacina').focus();
+        }, 100);
+    }
+}
+
+function configurarAutocompleteVacina() {
+    const input = document.getElementById('nomeVacina');
+    const dropdown = document.getElementById('vacinaDropdown');
+    
+    if (!input || !dropdown) return;
+    
+    // Mostrar dropdown ao clicar
+    input.addEventListener('click', function() {
+        mostrarDropdownVacinas();
+    });
+    
+    // Filtrar ao digitar (faz chamada ao servidor com debounce)
+    input.addEventListener('input', function() {
+        const texto = this.value.trim();
+        if (vacinaFetchTimeout) clearTimeout(vacinaFetchTimeout);
+        if (!texto) {
+            mostrarDropdownVacinas('');
+            return;
+        }
+        vacinaFetchTimeout = setTimeout(async () => {
+            await buscarVacinasQuery(texto);
+            mostrarDropdownVacinas(texto.toLowerCase());
+        }, 250);
+    });
+    
+    // Fechar dropdown ao clicar fora
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.vacina-autocomplete')) {
+            dropdown.style.display = 'none';
+        }
+    });
+}
+
+function mostrarDropdownVacinas(filtro = '') {
+    const dropdown = document.getElementById('vacinaDropdown');
+    if (!dropdown) return;
+    
+    const vacinasFiltradas = filtro 
+        ? vacinasDisponiveis.filter(v => v.nome.toLowerCase().includes(filtro))
+        : vacinasDisponiveis;
+    
+    if (vacinasFiltradas.length === 0) {
+        dropdown.innerHTML = '<div class="dropdown-item-empty">Nenhuma vacina encontrada</div>';
+        dropdown.style.display = 'block';
+        return;
+    }
+    
+    dropdown.innerHTML = vacinasFiltradas.map(vacina => `
+        <div class="dropdown-item-vacina" onclick="selecionarVacina(${vacina.id}, '${vacina.nome.replace(/'/g, "\\'")}')"> 
+            <div class="vacina-nome">${vacina.nome}</div>
+        </div>
+    `).join('');
+    
+    dropdown.style.display = 'block';
+}
+
+function selecionarVacina(id, nome) {
+    const input = document.getElementById('nomeVacina');
+    const dropdown = document.getElementById('vacinaDropdown');
+    
+    if (input) {
+        input.value = nome;
+        input.setAttribute('data-vacina-id', id);
+    }
+    
+    if (dropdown) {
+        dropdown.style.display = 'none';
+    }
+    
+    console.log('✅ Vacina selecionada:', nome);
+}
+
+function configurarAutocompleteProfissional() {
+    const input = document.getElementById('veterinarioVacina');
+    const dropdown = document.getElementById('profissionalDropdown');
+    
+    if (!input || !dropdown) return;
+    
+    // Mostrar dropdown ao clicar
+    input.addEventListener('click', function() {
+        mostrarDropdownProfissionais();
+    });
+    
+    // Filtrar ao digitar
+    input.addEventListener('input', function() {
+        const texto = this.value.toLowerCase();
+        mostrarDropdownProfissionais(texto);
+    });
+    
+    // Fechar dropdown ao clicar fora
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.profissional-autocomplete')) {
+            dropdown.style.display = 'none';
+        }
+    });
+}
+
+function mostrarDropdownProfissionais(filtro = '') {
+    const dropdown = document.getElementById('profissionalDropdown');
+    if (!dropdown) return;
+    
+    const profissionaisFiltrados = filtro 
+        ? profissionaisDisponiveis.filter(p => p.nome.toLowerCase().includes(filtro))
+        : profissionaisDisponiveis;
+    
+    if (profissionaisFiltrados.length === 0) {
+        dropdown.innerHTML = '<div class="dropdown-item-empty">Nenhum profissional encontrado</div>';
+        dropdown.style.display = 'block';
+        return;
+    }
+    
+    dropdown.innerHTML = profissionaisFiltrados.map(profissional => `
+        <div class="dropdown-item-profissional" onclick="selecionarProfissional(${profissional.id}, '${profissional.nome.replace(/'/g, "\\'")}')">
+            <div class="profissional-nome">${profissional.nome}</div>
+        </div>
+    `).join('');
+    
+    dropdown.style.display = 'block';
+}
+
+function selecionarProfissional(id, nome) {
+    const input = document.getElementById('veterinarioVacina');
+    const dropdown = document.getElementById('profissionalDropdown');
+    
+    if (input) {
+        input.value = nome;
+        input.setAttribute('data-profissional-id', id);
+    }
+    
+    if (dropdown) {
+        dropdown.style.display = 'none';
+    }
+    
+    console.log('✅ Profissional selecionado:', nome);
+}
+
+function fecharModalVacina() {
+    const modal = document.getElementById('modalVacina');
+    if (modal) {
+        modal.style.display = 'none';
+        // Limpar campos
+        document.getElementById('nomeVacina').value = '';
+        document.getElementById('dataAplicacao').value = '';
+        document.getElementById('proximaDose').value = '';
+        document.getElementById('loteVacina').value = '';
+        document.getElementById('veterinarioVacina').value = '';
+        document.getElementById('observacoesVacina').value = '';
+    }
+}
+
+function salvarVacina() {
+    const nomeVacina = document.getElementById('nomeVacina').value.trim();
+    const dataAplicacao = document.getElementById('dataAplicacao').value;
+    const proximaDose = document.getElementById('proximaDose').value;
+    const lote = document.getElementById('loteVacina').value.trim();
+    const veterinario = document.getElementById('veterinarioVacina').value.trim();
+    const observacoes = document.getElementById('observacoesVacina').value.trim();
+
+    if (!nomeVacina) {
+        alert('Por favor, informe o nome da vacina');
+        document.getElementById('nomeVacina').focus();
+        return;
+    }
+
+    // Formatar o conteúdo da vacina
+    let conteudo = `<strong>${nomeVacina}</strong><br>`;
+    
+    if (dataAplicacao) {
+        const dataFormatada = new Date(dataAplicacao + 'T00:00:00').toLocaleDateString('pt-BR');
+        conteudo += `📅 Aplicação: ${dataFormatada}<br>`;
+    }
+    
+    if (proximaDose) {
+        const proximaFormatada = new Date(proximaDose + 'T00:00:00').toLocaleDateString('pt-BR');
+        conteudo += `📅 Próxima dose: ${proximaFormatada}<br>`;
+    }
+    
+    if (lote) {
+        conteudo += `🏷️ Lote: ${lote}<br>`;
+    }
+    
+    if (veterinario) {
+        conteudo += `👨‍⚕️ Veterinário: ${veterinario}<br>`;
+    }
+    
+    if (observacoes) {
+        conteudo += `<br>${observacoes}`;
+    }
+
+    // Adicionar ao prontuário (capturar registroId)
+    const registroId = adicionarCampoProntuario('vacina', conteudo);
+    // Adicionar também na lista de Vacinas (sub-aba) e vincular ao registro
+    try {
+        const displayDate = dataAplicacao ? new Date(dataAplicacao + 'T00:00:00').toLocaleDateString('pt-BR') : '';
+        adicionarVacinaNaLista(nomeVacina, conteudo, displayDate, registroId);
+    } catch (e) { console.warn('Erro adicionando vacina na lista:', e); }
+    
+    // Salvar automaticamente no banco de dados
+    setTimeout(() => {
+        salvarProntuarioAutomatico();
+    }, 300);
+    
+    // Fechar modal
+    fecharModalVacina();
+    
+    console.log('💉 Vacina salva:', nomeVacina);
+}
+
+// Adiciona visualmente a vacina na lista da sub-aba 'vacinas'
+function adicionarVacinaNaLista(nome, detalhesHtml, dataAplicacao, registroId) {
+    const container = document.querySelector('#vacinasSubContent .historico-list');
+    if (!container) return;
+
+    // remover estado vazio se presente
+    const empty = container.querySelector('.empty-state');
+    if (empty) empty.remove();
+
+    const item = document.createElement('div');
+    item.className = 'historico-item';
+    if (registroId) item.dataset.registroId = registroId;
+    const dataText = dataAplicacao ? (`<div class="registro-meta">${dataAplicacao}</div>`) : '';
+
+    item.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+            <div style="font-weight:700;">${escapeHtmlText(nome)}</div>
+            <div style="display:flex;align-items:center;gap:8px;">${dataText}<button class="vacina-remove-btn" title="Remover vacina" style="background:transparent;border:none;color:#c0392b;font-weight:700;cursor:pointer;padding:4px 6px;border-radius:4px">✕</button></div>
+        </div>
+        <div style="margin-top:8px;color:#444;">${detalhesHtml || ''}</div>
+    `;
+
+    // adicionar handler de remoção
+    setTimeout(() => {
+        const btn = item.querySelector('.vacina-remove-btn');
+        if (btn) {
+            btn.addEventListener('click', function(ev){
+                ev.stopPropagation();
+                try {
+                    const rid = item.dataset.registroId;
+                    // confirmar remoção
+                    showConfirmModal('Remover esta vacina do prontuário?').then(async (ok) => {
+                        if (!ok) return;
+                        // remover visual
+                        item.remove();
+                        // remover do prontuário salvo
+                        if (rid) removerRegistroProntuarioPorId(rid);
+                        else removerRegistroProntuarioPorConteudo(nome, detalhesHtml, dataAplicacao);
+                    });
+                } catch (e) { console.warn('Erro ao processar remoção de vacina', e); }
+            });
+        }
+    }, 10);
+
+    container.appendChild(item);
+}
+
+// Extrai nome e detalhes de um conteúdo HTML salvo no prontuário e adiciona na lista
+function adicionarVacinaNaListaFromConteudo(conteudoHtml, dataEmissao, registroId) {
+    try {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = conteudoHtml || '';
+        const strong = tmp.querySelector('strong');
+        const nome = strong ? strong.textContent.trim() : (tmp.textContent || '').split('\n')[0].trim();
+        // remover a tag strong do html de detalhes
+        if (strong) strong.remove();
+        const detalhes = tmp.innerHTML.trim();
+        adicionarVacinaNaLista(nome || 'Vacina', detalhes, dataEmissao || '', registroId);
+    } catch (e) {
+        console.warn('Falha ao parsear conteúdo da vacina:', e);
+        adicionarVacinaNaLista((conteudoHtml||'').slice(0,50), conteudoHtml, dataEmissao || '');
+    }
+}
+
+// Remove um registro do prontuário pelo id e persiste a alteração
+function removerRegistroProntuarioPorId(registroId) {
+    try {
+        // Preferir usar função existente que opera no container correto
+        if (typeof removerRegistroProntuario === 'function') {
+            removerRegistroProntuario(registroId);
+            return;
+        }
+        const container = document.getElementById('prontuarioCampos');
+        if (!container) return;
+        const registro = container.querySelector(`[data-registro-id="${registroId}"]`);
+        if (registro) {
+            registro.remove();
+            salvarProntuarioAutomatico();
+        }
+    } catch (e) { console.warn('Erro ao remover registro por id:', e); }
+}
+
+// Tentativa de remoção por conteúdo (fallback quando não houver registroId)
+function removerRegistroProntuarioPorConteudo(nome, detalhesHtml, dataAplicacao) {
+    try {
+        const container = document.getElementById('prontuarioCampos');
+        if (!container) return;
+        const nodes = Array.from(container.querySelectorAll('.prontuario-registro'));
+        let removed = false;
+        nodes.forEach(node => {
+            const text = (node.innerText || '').replace(/\s+/g,' ');
+            if (text.includes((nome||'').trim()) && (dataAplicacao ? text.includes(dataAplicacao) : true)) {
+                node.remove();
+                removed = true;
+            }
+        });
+        if (removed) salvarProntuarioAutomatico();
+    } catch (e) { console.warn('Erro ao remover registro por conteudo:', e); }
+}
+
+// helper: escapar texto simples para evitar injection quando inserimos nome
+function escapeHtmlText(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// Fechar modal ao clicar no overlay
+document.addEventListener('click', function(e) {
+    const modal = document.getElementById('modalVacina');
+    if (modal && e.target.classList.contains('modal-vacina-overlay')) {
+        fecharModalVacina();
+    }
+});
 
 // Função para atualizar a classe CSS do status
 function atualizarClasseStatus(selectElement) {
@@ -2285,10 +3027,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     } catch (e) { console.warn('Não foi possível vincular botão editar', e); }
     
-    // Configura a primeira aba como ativa
-    setTimeout(() => {
-        alternarAba('detalhes');
-    }, 100);
+    // A aba inicial será restaurada a partir do servidor em `carregarAgendamento()`
     
     // Carregar dados do agendamento atual
     carregarDadosAgendamento();

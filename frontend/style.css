@@ -111,3 +111,18 @@ canvas {
     outline: 2px solid rgba(0,123,255,0.12);
     outline-offset: 2px;
 }
+
+/* Botão remover vacina (X) na lista de vacinas */
+.vacina-remove-btn {
+    background: transparent;
+    border: none;
+    color: #c0392b;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 4px;
+    transition: background-color .12s, color .12s;
+}
+.vacina-remove-btn:hover {
+    background: rgba(192, 57, 43, 0.08);
+}
