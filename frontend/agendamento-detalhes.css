@@ -1808,15 +1808,28 @@ body {
     min-height: 200px;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    align-items: stretch;
+    justify-content: flex-start;
+    padding: 12px;
+    gap: 0;
+}
+
+.vermifugo-item {
+    width: 100%;
+    margin: 0 0 12px 0;
+}
+
+.vermifugo-item:last-child {
+    margin-bottom: 0;
 }
 
 .empty-state {
     color: #999;
     font-size: 14px;
     text-align: center;
-    margin: 20px 0;
+    margin: 40px auto;
+    width: 100%;
+    align-self: center;
 }
 
 .ver-mais {

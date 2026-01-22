@@ -591,7 +591,13 @@ document.addEventListener('DOMContentLoaded', function() {
         btnVermi.setAttribute('data-vermi-listener', 'true');
         btnVermi.addEventListener('click', function(e){
             e.preventDefault();
-            try { openAddItemModal(); } catch (err) { console.warn('Erro ao abrir modal de adicionar item (vermifugo):', err); }
+            e.stopPropagation();
+            try { 
+                // Abrir modal de busca de itens - a detecção de vermífugo acontece automaticamente
+                openAddItemModal(); 
+            } catch (err) { 
+                console.warn('Erro ao abrir modal de adicionar item (vermifugo):', err); 
+            }
         });
     })();
 });
@@ -822,6 +828,9 @@ function carregarDadosExemplo() {
 function preencherDadosAgendamento(agendamento) {
     if (!agendamento) return;
     
+    // Limpar array de serviços adicionados temporários ao recarregar do banco
+    try { agendamento._addedServicos = []; } catch(e) {}
+    
     try {
         console.log('📝 Preenchendo dados:', agendamento);
         
@@ -898,7 +907,17 @@ function preencherDadosAgendamento(agendamento) {
                         if (category) {
                                 // Remove itens de exemplo existentes
                                 category.querySelectorAll('.service-item').forEach(n => n.remove());
+                        }
 
+                        // Limpar vermífugos existentes antes de recarregar do banco
+                        try {
+                            const vermifugosContainer = document.querySelector('#vermifugosSubContent .historico-list');
+                            if (vermifugosContainer) {
+                                vermifugosContainer.querySelectorAll('.vermifugo-item').forEach(n => n.remove());
+                            }
+                        } catch(e) { console.warn('Erro ao limpar vermífugos existentes:', e); }
+
+                        if (category) {
                                 // Normaliza possíveis fontes de dados
                                 const servicosArray = Array.isArray(agendamento.servicos) ? agendamento.servicos : null;
                                 // manter cópia estruturada dos serviços existentes (pode ser undefined para registros legados)
@@ -2518,7 +2537,7 @@ function openAddItemModal() {
         input.focus();
     });
 
-    // Modal detalhado para vermífugo
+    // Modal detalhado para vermífugo (tornar acessível globalmente)
     function openAddVermifugoModal(itemInfo) {
         // mark modal open to prevent other modals opening underneath
         try { window._vermifugoModalOpen = true; } catch(e){}
@@ -2725,8 +2744,8 @@ function openAddItemModal() {
             const lote = document.getElementById('vermifugoLote').value.trim();
             const profissional = document.getElementById('vermifugoProfissional').value.trim() || ((agendamentoAtual&&agendamentoAtual.profissional)?agendamentoAtual.profissional:'-');
 
-            // criar objeto compatível com o fluxo existente
-            const s = { id: itemInfo.id || Date.now(), nome: nome, quantidade: qtd, unitario: unitario, valor: valorFinal, total: (qtd * valorFinal), profissional: profissional };
+            // criar objeto compatível com o fluxo existente - sempre gerar ID único para novos vermífugos
+            const s = { id: Date.now() + Math.random(), nome: nome, quantidade: qtd, unitario: unitario, valor: valorFinal, total: (qtd * valorFinal), profissional: profissional };
             // adicionar metadados (dose, lote, data)
             s.meta = { dose, lote, dataAplic, renovacao, renovacaoId, tipoEspecial: 'vermifugo' };
 
@@ -2796,6 +2815,262 @@ function openAddItemModal() {
             overlay.remove();
         });
     }
+    
+    // Expor função globalmente para ser acessível fora do escopo
+    window.openAddVermifugoModal = openAddVermifugoModal;
+
+    // Modal de edição de vermífugo
+    function openEditVermifugoModal(servicoData, itemElement) {
+        try { window._vermifugoModalOpen = true; } catch(e){}
+        if (document.getElementById('modalEditarVermifugo')) return;
+        
+        const overlay = document.createElement('div');
+        overlay.id = 'modalEditarVermifugoOverlay';
+        overlay.style.cssText = 'position:fixed;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;z-index:1200000;';
+
+        const modal = document.createElement('div');
+        modal.id = 'modalEditarVermifugo';
+        modal.style.cssText = 'width:820px;max-width:95%;background:white;border-radius:6px;box-shadow:0 10px 40px rgba(2,16,26,0.3);overflow:auto;font-family:inherit;max-height:90vh;';
+        
+        // Extrair dados existentes
+        const nomeVal = servicoData.nome || '';
+        const qtdVal = servicoData.quantidade || 1;
+        const valorVal = servicoData.unitario || servicoData.valor || 0;
+        const descontoVal = 0;
+        const doseVal = (servicoData.meta && servicoData.meta.dose) ? servicoData.meta.dose : '';
+        const dataAplicVal = (servicoData.meta && servicoData.meta.dataAplic) ? servicoData.meta.dataAplic : new Date().toISOString().slice(0,10);
+        const renovacaoVal = (servicoData.meta && servicoData.meta.renovacao) ? servicoData.meta.renovacao : '';
+        const loteVal = (servicoData.meta && servicoData.meta.lote) ? servicoData.meta.lote : '';
+        const profissionalVal = servicoData.profissional || '';
+        
+        modal.innerHTML = `
+            <div style="background:#f5f6f8;padding:12px 16px;border-bottom:1px solid #e6e9ee;display:flex;align-items:center;justify-content:space-between;">
+                <strong>Editar Vermífugo</strong>
+                <button id="fecharModalEditarVermifugo" style="background:transparent;border:none;font-size:18px;cursor:pointer;color:#666">✕</button>
+            </div>
+            <div style="padding:18px;">
+                <label style="display:block;margin-bottom:6px;font-weight:600;color:#333">Item <span style="color:#c0392b">*</span></label>
+                <input id="editVermifugoItemNome" type="text" value="${escapeHtmlText(nomeVal)}" style="width:100%;padding:10px;border:1px solid #dfe6ef;border-radius:4px;margin-bottom:12px;box-sizing:border-box;">
+
+                <div style="display:flex;gap:12px;">
+                    <div style="flex:1">
+                        <label>Qtd. *</label>
+                        <input id="editVermifugoQtd" type="text" value="${qtdVal}" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
+                    </div>
+                    <div style="flex:1">
+                        <label>Unitário *</label>
+                        <input id="editVermifugoUnitario" type="text" value="${valorVal}" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
+                    </div>
+                    <div style="flex:1">
+                        <label>% Desconto</label>
+                        <input id="editVermifugoDesconto" type="text" value="${descontoVal}" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
+                    </div>
+                    <div style="flex:1">
+                        <label>Valor Final *</label>
+                        <input id="editVermifugoValorFinal" type="text" value="${valorVal}" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
+                    </div>
+                </div>
+
+                <div style="margin-top:12px;display:flex;gap:12px;">
+                    <div style="flex:1">
+                        <label>Renovação</label>
+                        <input id="editVermifugoRenovacao" type="text" value="${escapeHtmlText(renovacaoVal)}" placeholder="Ex: 30 dias" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
+                    </div>
+                    <div style="flex:1">
+                        <label>Lote</label>
+                        <input id="editVermifugoLote" type="text" value="${escapeHtmlText(loteVal)}" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
+                    </div>
+                </div>
+
+                <div style="margin-top:12px;display:flex;gap:12px;">
+                    <div style="flex:1">
+                        <label>Dose *</label>
+                        <input id="editVermifugoDose" type="text" value="${escapeHtmlText(doseVal)}" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
+                    </div>
+                    <div style="flex:1">
+                        <label>Data Aplicação *</label>
+                        <input id="editVermifugoDataAplic" type="date" value="${dataAplicVal}" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
+                    </div>
+                    <div style="flex:1">
+                        <label>Profissional</label>
+                        <input id="editVermifugoProfissional" type="text" value="${escapeHtmlText(profissionalVal)}" placeholder="Digite para pesquisar" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
+                    </div>
+                </div>
+
+                <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+                    <button id="btnSalvarEditarVermifugo" class="btn" style="background:#28a745;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer">Salvar</button>
+                    <button id="btnCancelarEditarVermifugo" class="btn" style="background:#6c757d;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer">Cancelar</button>
+                </div>
+            </div>
+        `;
+
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        // Configurar dropdowns para Renovação e Profissional no modal de edição
+        const renovInput = document.getElementById('editVermifugoRenovacao');
+        const profInput = document.getElementById('editVermifugoProfissional');
+        
+        // Helper para criar dropdown
+        function createDropdown(idFor) {
+            const d = document.createElement('div');
+            d.className = 'modal-dropdown';
+            d.style.cssText = 'position:absolute;background:#fff;border:1px solid #e6e9ee;border-radius:6px;box-shadow:0 8px 20px rgba(2,16,26,0.12);max-height:220px;overflow:auto;z-index:1300000;display:none;';
+            d.id = idFor;
+            document.body.appendChild(d);
+            return d;
+        }
+
+        const renovDropdown = createDropdown('editVermifugoRenovacaoDropdown');
+        const profDropdown = createDropdown('editVermifugoProfissionalDropdown');
+
+        function positionDropdown(inputEl, dropdownEl) {
+            try {
+                const r = inputEl.getBoundingClientRect();
+                dropdownEl.style.minWidth = Math.max(240, r.width) + 'px';
+                dropdownEl.style.left = (window.scrollX + r.left) + 'px';
+                dropdownEl.style.top = (window.scrollY + r.bottom + 6) + 'px';
+            } catch(e){}
+        }
+
+        function showRenovDropdown(filter) {
+            if (!renovInput) return;
+            const q = (filter||'').toString().toLowerCase();
+            const matches = (Array.isArray(periodicidadesDisponiveis) ? periodicidadesDisponiveis : []).filter(it => {
+                const label = (it && (it.descricao||it.nome||it.label||it.titulo) ? (it.descricao||it.nome||it.label||it.titulo) : (typeof it === 'string'?it:''));
+                return String(label).toLowerCase().indexOf(q) !== -1;
+            }).slice(0,30);
+            const frag = document.createDocumentFragment();
+            if (matches.length === 0) {
+                const div = document.createElement('div'); div.style.padding='8px'; div.style.color='#666'; div.textContent = 'Nenhuma opção'; frag.appendChild(div);
+            }
+            matches.forEach(m => {
+                const div = document.createElement('div');
+                div.style.cssText = 'padding:8px 12px;cursor:pointer;border-bottom:1px solid #f4f6f8;';
+                const label = (m && (m.descricao||m.nome||m.label||m.titulo)) ? (m.descricao||m.nome||m.label||m.titulo) : (typeof m === 'string' ? m : '');
+                div.textContent = label;
+                div.addEventListener('click', function(){
+                    renovInput.value = label;
+                    renovDropdown.style.display = 'none';
+                });
+                frag.appendChild(div);
+            });
+            renovDropdown.innerHTML = '';
+            renovDropdown.appendChild(frag);
+            renovDropdown.style.display = 'block';
+            positionDropdown(renovInput, renovDropdown);
+        }
+
+        function showProfDropdown(filter) {
+            if (!profInput) return;
+            const q = (filter||'').toString().toLowerCase();
+            const matches = (Array.isArray(profissionaisDisponiveis) ? profissionaisDisponiveis : []).filter(p => ((p.nome||p.name||'') + ' ' + (p.apelido||'')).toString().toLowerCase().indexOf(q) !== -1).slice(0,30);
+            const frag = document.createDocumentFragment();
+            if (matches.length === 0) {
+                const div = document.createElement('div'); div.style.padding='8px'; div.style.color='#666'; div.textContent = 'Nenhum profissional'; frag.appendChild(div);
+            }
+            matches.forEach(p => {
+                const div = document.createElement('div');
+                div.style.cssText = 'padding:8px 12px;cursor:pointer;border-bottom:1px solid #f4f6f8;';
+                div.textContent = p.nome || p.name || '';
+                div.addEventListener('click', function(){
+                    profInput.value = p.nome || p.name || '';
+                    profDropdown.style.display = 'none';
+                });
+                frag.appendChild(div);
+            });
+            profDropdown.innerHTML = '';
+            profDropdown.appendChild(frag);
+            profDropdown.style.display = 'block';
+            positionDropdown(profInput, profDropdown);
+        }
+
+        if (renovInput) {
+            renovInput.addEventListener('focus', async function(){
+                if (periodicidadesDisponiveis.length === 0) await buscarPeriodicidades();
+                showRenovDropdown(renovInput.value || '');
+            });
+            renovInput.addEventListener('input', function(){ showRenovDropdown(this.value||''); });
+            document.addEventListener('click', function(e){ if (!renovDropdown.contains(e.target) && e.target !== renovInput) renovDropdown.style.display = 'none'; });
+        }
+
+        if (profInput) {
+            profInput.addEventListener('focus', async function(){
+                if (profissionaisDisponiveis.length === 0) await buscarProfissionais();
+                showProfDropdown(profInput.value || '');
+            });
+            profInput.addEventListener('input', function(){ showProfDropdown(this.value||''); });
+            document.addEventListener('click', function(e){ if (!profDropdown.contains(e.target) && e.target !== profInput) profDropdown.style.display = 'none'; });
+        }
+
+        document.getElementById('fecharModalEditarVermifugo').addEventListener('click', () => { try{ window._vermifugoModalOpen = false; }catch(e){}; overlay.remove(); renovDropdown.remove(); profDropdown.remove(); });
+        document.getElementById('btnCancelarEditarVermifugo').addEventListener('click', () => { try{ window._vermifugoModalOpen = false; }catch(e){}; overlay.remove(); renovDropdown.remove(); profDropdown.remove(); });
+
+        document.getElementById('btnSalvarEditarVermifugo').addEventListener('click', async function(e){
+            try{ if (e && e.stopPropagation) e.stopPropagation(); } catch(e){}
+            
+            const nome = document.getElementById('editVermifugoItemNome').value.trim();
+            const qtd = parseFloat(String(document.getElementById('editVermifugoQtd').value||'1').replace(',','.'))||1;
+            const unitario = parseFloat(String(document.getElementById('editVermifugoUnitario').value||'0').replace(',','.'))||0;
+            const valorFinal = parseFloat(String(document.getElementById('editVermifugoValorFinal').value||unitario).replace(',','.'))||unitario;
+            const dose = document.getElementById('editVermifugoDose').value.trim();
+            const dataAplic = document.getElementById('editVermifugoDataAplic').value;
+            const renovacao = document.getElementById('editVermifugoRenovacao').value.trim();
+            const lote = document.getElementById('editVermifugoLote').value.trim();
+            const profissional = document.getElementById('editVermifugoProfissional').value.trim() || servicoData.profissional || '-';
+
+            // Atualizar objeto do serviço
+            servicoData.nome = nome;
+            servicoData.quantidade = qtd;
+            servicoData.unitario = unitario;
+            servicoData.valor = valorFinal;
+            servicoData.total = qtd * valorFinal;
+            servicoData.profissional = profissional;
+            servicoData.meta = { dose, lote, dataAplic, renovacao, tipoEspecial: 'vermifugo' };
+
+            // Remover item antigo do DOM e adicionar atualizado
+            if (itemElement) itemElement.remove();
+            try { appendServiceToCategory(servicoData); } catch(e){ console.warn('Erro anexando serviço atualizado na UI', e); }
+
+            // Persistir no banco
+            try {
+                if (agendamentoAtual && agendamentoAtual.id) {
+                    const existingServicos = Array.isArray(agendamentoAtual.servicos) ? agendamentoAtual.servicos : [];
+                    // Atualizar ou adicionar o serviço editado
+                    const idx = existingServicos.findIndex(x => String(x.id) === String(servicoData.id));
+                    if (idx >= 0) {
+                        existingServicos[idx] = servicoData;
+                    } else {
+                        existingServicos.push(servicoData);
+                    }
+                    agendamentoAtual.servicos = existingServicos;
+                    
+                    const nomesConcat = existingServicos.map(x=>x.nome).filter(Boolean).join(' • ');
+                    const valorTotal = existingServicos.reduce((a,b)=>a+(parseFloat(b.total||b.valor||0)||0),0);
+                    const payload = { servico: nomesConcat, servicos: existingServicos, valor: valorTotal };
+                    
+                    const resp = await fetch(`/api/agendamentos/${agendamentoAtual.id}`, { method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    if (resp.ok) {
+                        const updated = await resp.json().catch(()=>null);
+                        if (updated) {
+                            agendamentoAtual.valor = updated.valor || valorTotal;
+                            agendamentoAtual.servico = updated.servico || nomesConcat;
+                            agendamentoAtual.servicos = updated.servicos || existingServicos;
+                        }
+                        try { if (window.showNotification) window.showNotification('Vermífugo atualizado com sucesso', 'success'); } catch(e){}
+                    }
+                }
+            } catch(e){ console.warn('Erro ao persistir edição de vermifugo', e); }
+
+            try{ window._vermifugoModalOpen = false; }catch(e){}
+            overlay.remove();
+            renovDropdown.remove();
+            profDropdown.remove();
+        });
+    }
+    
+    // Expor função de edição globalmente
+    window.openEditVermifugoModal = openEditVermifugoModal;
 
     document.getElementById('btnFecharItem').addEventListener('click', closeModal);
     document.getElementById('fecharModalAdicionarItem').addEventListener('click', closeModal);
@@ -2810,6 +3085,7 @@ function appendServiceToCategory(s){
         if (isVermifugo) {
             const container = document.querySelector('#vermifugosSubContent .historico-list');
             if (!container) return;
+            
             // remover estado vazio
             const empty = container.querySelector('.empty-state'); if (empty) empty.remove();
 
@@ -2823,25 +3099,86 @@ function appendServiceToCategory(s){
             const profissional = s.profissional || '';
             const lote = (s.meta && s.meta.lote) ? s.meta.lote : '';
             const renovacao = (s.meta && s.meta.renovacao) ? s.meta.renovacao : '';
+            
+            // Formatar data de aplicação para exibição (DD/MM/YYYY)
+            let dataAplicFormatada = dataAplic || '-';
+            try {
+                if (dataAplic && dataAplic.includes('-')) {
+                    const [y, m, d] = dataAplic.split('-');
+                    dataAplicFormatada = `${d}/${m}/${y}`;
+                }
+            } catch(e) {}
+            
+            // Calcular data de renovação se houver período informado
+            let renovacaoTexto = renovacao || '';
+            let dataRenovacao = '';
+            try {
+                if (renovacao && dataAplic) {
+                    const dias = parseInt(renovacao.match(/\d+/)?.[0] || '0');
+                    if (dias > 0) {
+                        const dataBase = new Date(dataAplic);
+                        dataBase.setDate(dataBase.getDate() + dias);
+                        const dd = String(dataBase.getDate()).padStart(2, '0');
+                        const mm = String(dataBase.getMonth() + 1).padStart(2, '0');
+                        const yyyy = dataBase.getFullYear();
+                        dataRenovacao = `${dd}/${mm}/${yyyy}`;
+                        renovacaoTexto = `Renovar dia ${dataRenovacao} (${renovacao})`;
+                    }
+                }
+            } catch(e) {}
 
             item.innerHTML = `
-                <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f1f3f6;">
-                    <div style="display:flex;gap:12px;align-items:center;flex:1;">
-                        <div style="width:10px;height:38px;border-left:4px solid #28a745;border-radius:2px;margin-right:6px"></div>
-                        <div style="min-width:0;">
-                            <div style="font-weight:600;color:#222">${escapeHtmlUnsafe(nome)}</div>
-                            <div style="font-size:12px;color:#666;margin-top:4px">Dose: ${escapeHtmlUnsafe(dose || '-')} • Aplicação: ${escapeHtmlUnsafe(dataAplic || '-')}</div>
-                            <div style="font-size:12px;color:#666;margin-top:4px">Profissional: ${escapeHtmlUnsafe(profissional || '-')} ${lote?('• Lote: '+escapeHtmlUnsafe(lote)):''} ${renovacao?('• Renovação: '+escapeHtmlUnsafe(renovacao)):''}</div>
+                <div style="display:flex;align-items:stretch;justify-content:space-between;padding:16px;background:#fff;border:1px solid #e6e9ee;border-radius:8px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.05);transition:all 0.2s ease;width:100%;box-sizing:border-box;" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)'" onmouseout="this.style.boxShadow='0 1px 3px rgba(0,0,0,0.05)'">
+                    <div style="display:flex;align-items:flex-start;gap:14px;flex:1;min-width:0;">
+                        <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:linear-gradient(135deg, #28a745 0%, #20c997 100%);border-radius:8px;flex-shrink:0;color:#fff;font-weight:700;font-size:14px;">
+                            <i class="fas fa-capsules" style="font-size:18px;"></i>
+                        </div>
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-weight:700;color:#1a1d29;font-size:15px;margin-bottom:6px;line-height:1.3;">${escapeHtmlUnsafe(nome)}</div>
+                            ${renovacaoTexto ? `<div style="font-size:13px;color:#28a745;font-weight:600;margin-bottom:4px;"><i class="fas fa-sync-alt" style="font-size:11px;margin-right:4px;"></i>${escapeHtmlUnsafe(renovacaoTexto)}</div>` : ''}
+                            <div style="font-size:13px;color:#5a6c7d;margin-bottom:2px;">Dose: ${escapeHtmlUnsafe(dose || '-')} • Aplicada em: ${escapeHtmlUnsafe(dataAplicFormatada)}</div>
+                            <div style="font-size:12px;color:#7d8a99;">Profissional: ${escapeHtmlUnsafe(profissional || '-')}${lote ? (' • Lote: ' + escapeHtmlUnsafe(lote)) : ''}</div>
                         </div>
                     </div>
-                    <div style="margin-left:12px;display:flex;gap:8px;align-items:center;">
-                        <button class="btn btn-sm btn-outline" title="Remover" data-action="remove" style="background:transparent;border:1px solid #e6e9ee;padding:6px 8px;border-radius:6px;">✖</button>
+                    <div style="display:flex;gap:6px;align-items:center;margin-left:12px;flex-shrink:0;">
+                        <button class="btn-icon-action" title="Renovar" data-action="renovar" style="background:transparent;border:none;color:#6c757d;cursor:pointer;padding:8px;border-radius:6px;transition:all 0.2s ease;width:32px;height:32px;display:flex;align-items:center;justify-content:center;" onmouseover="this.style.background='#f0f2f5';this.style.color='#28a745';" onmouseout="this.style.background='transparent';this.style.color='#6c757d';">
+                            <i class="fas fa-sync-alt" style="font-size:14px;"></i>
+                        </button>
+                        <button class="btn-icon-action" title="Editar" data-action="editar" style="background:transparent;border:none;color:#6c757d;cursor:pointer;padding:8px;border-radius:6px;transition:all 0.2s ease;width:32px;height:32px;display:flex;align-items:center;justify-content:center;" onmouseover="this.style.background='#f0f2f5';this.style.color='#007bff';" onmouseout="this.style.background='transparent';this.style.color='#6c757d';">
+                            <i class="fas fa-pencil-alt" style="font-size:14px;"></i>
+                        </button>
+                        <button class="btn-icon-action" title="Remover" data-action="remove" style="background:transparent;border:none;color:#6c757d;cursor:pointer;padding:8px;border-radius:6px;transition:all 0.2s ease;width:32px;height:32px;display:flex;align-items:center;justify-content:center;" onmouseover="this.style.background='#f0f2f5';this.style.color='#dc3545';" onmouseout="this.style.background='transparent';this.style.color='#6c757d';">
+                            <i class="fas fa-times" style="font-size:16px;"></i>
+                        </button>
                     </div>
                 </div>
             `;
 
-            // ligar remocao via botão
-            item.querySelector('[data-action="remove"]').addEventListener('click', async function(){
+            // Ligar botão de renovar
+            item.querySelector('[data-action="renovar"]').addEventListener('click', async function(e){
+                e.stopPropagation();
+                try {
+                    // Abrir modal para renovar o vermífugo (adicionar nova dose)
+                    openAddVermifugoModal({ 
+                        id: Date.now(), // novo ID para nova dose
+                        nome: nome, 
+                        valor: s.unitario || s.valor || 0 
+                    });
+                } catch(e){ console.warn('Erro ao renovar vermifugo', e); }
+            });
+
+            // Ligar botão de editar
+            item.querySelector('[data-action="editar"]').addEventListener('click', async function(e){
+                e.stopPropagation();
+                try {
+                    // Abrir modal de edição (similar ao modal de adicionar, mas preenchido)
+                    openEditVermifugoModal(s, item);
+                } catch(e){ console.warn('Erro ao editar vermifugo', e); }
+            });
+
+            // Ligar botão de remover
+            item.querySelector('[data-action="remove"]').addEventListener('click', async function(e){
+                e.stopPropagation();
                 try {
                     // remover do DOM
                     item.remove();
