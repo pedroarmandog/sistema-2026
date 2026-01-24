@@ -2,6 +2,228 @@
 
 console.log('🚀 menu.js carregado (snippet do dashboard)');
 
+// Wrappers seguros para modais especiais (fila chamadas até a implementação real estar disponível)
+if (typeof window.openAddVermifugoModal !== 'function') {
+    window._openAddVermifugoModalQueue = [];
+    window.openAddVermifugoModal = function(itemInfo) {
+        if (typeof window.__realOpenAddVermifugoModal === 'function') {
+            return window.__realOpenAddVermifugoModal(itemInfo);
+        }
+        window._openAddVermifugoModalQueue.push(itemInfo);
+    };
+}
+
+if (typeof window.openAddAntiparasitarioModal !== 'function') {
+    window._openAddAntiparasitarioModalQueue = [];
+    window.openAddAntiparasitarioModal = function(itemInfo) {
+        if (typeof window.__realOpenAddAntiparasitarioModal === 'function') {
+            return window.__realOpenAddAntiparasitarioModal(itemInfo);
+        }
+        window._openAddAntiparasitarioModalQueue.push(itemInfo);
+    };
+}
+
+// ==================== FUNÇÕES DE EDIÇÃO - DEFINIDAS NO ESCOPO GLOBAL ====================
+// Estas funções precisam estar no escopo global para serem acessíveis de qualquer lugar
+
+// Função para editar vermífugo - aguarda DOMContentLoaded e então a função modal
+function openEditVermifugoModal(servicoData, itemElement) {
+    console.log('📝 openEditVermifugoModal chamada com:', servicoData);
+    
+    const executarAbertura = () => {
+        // Esperar até que a função esteja disponível (polling)
+        let tentativas = 0;
+        const maxTentativas = 50; // 5 segundos máximo
+        
+        const tentarAbrir = () => {
+            // Garantir que a implementação real dos modais esteja inicializada
+            if (typeof window.__realOpenAddVermifugoModal !== 'function' && typeof openAddItemModal === 'function') {
+                console.log('ℹ️ Inicializando modais via openAddItemModal() para expor openAddVermifugoModal');
+                try { openAddItemModal(); } catch(e){ console.warn('Erro ao chamar openAddItemModal()', e); }
+            }
+
+            if (typeof window.openAddVermifugoModal === 'function') {
+                    console.log('✅ openAddVermifugoModal disponível, preparando abertura...');
+
+                    const fillFields = () => {
+                        const modal = document.getElementById('modalVermifugo');
+                        if (!modal) return;
+                        console.log('✅ Modal encontrado, preenchendo campos...');
+                        const fields = {
+                            vermifugoItemNome: servicoData.nome || '',
+                            vermifugoQtd: servicoData.quantidade || '1',
+                            vermifugoUnitario: servicoData.unitario || servicoData.valor || '0',
+                            vermifugoValorFinal: servicoData.total || servicoData.valor || '0',
+                            vermifugoDose: (servicoData.meta && servicoData.meta.dose) || '',
+                            vermifugoDataAplic: (servicoData.meta && servicoData.meta.dataAplic) || '',
+                            vermifugoLote: (servicoData.meta && servicoData.meta.lote) || '',
+                            vermifugoRenovacao: (servicoData.meta && servicoData.meta.renovacao) || '',
+                            vermifugoProfissional: servicoData.profissional || ''
+                        };
+                        Object.keys(fields).forEach(id => {
+                            const el = document.getElementById(id);
+                            if (el) {
+                                el.value = fields[id];
+                                console.log(`✅ Campo ${id} preenchido com:`, fields[id]);
+                            } else {
+                                console.warn(`⚠️ Campo ${id} não encontrado`);
+                            }
+                        });
+                        modal.dataset.editando = 'true';
+                        modal.dataset.servicoId = String(servicoData.id || '');
+                        console.log('✅ Modal configurado para edição');
+                    };
+
+                    // Ouvir evento customizado (quando o modal for inserido no DOM)
+                    const onOpened = function() { try { fillFields(); } catch(e){} };
+                    window.addEventListener('modalVermifugoOpened', onOpened, { once: true });
+
+                    // Chamar abertura (pode disparar o evento)
+                    window.openAddVermifugoModal({ nome: servicoData.nome, valor: servicoData.unitario || servicoData.valor });
+
+                    // Fallback: polling caso evento não seja capturado
+                    let triesModal = 0;
+                    const maxModalTries = 60; // 6 segundos
+                    const waitForModal = () => {
+                        const modal = document.getElementById('modalVermifugo');
+                        if (modal) {
+                            // remover listener caso ainda exista
+                            try { window.removeEventListener('modalVermifugoOpened', onOpened); } catch(_){}
+                            fillFields();
+                        } else {
+                            triesModal++;
+                            if (triesModal < maxModalTries) {
+                                setTimeout(waitForModal, 100);
+                            } else {
+                                console.error('❌ Timeout esperando modalVermifugo aparecer');
+                            }
+                        }
+                    };
+                    waitForModal();
+                } else {
+                    tentativas++;
+                    if (tentativas < maxTentativas) {
+                        console.log(`⏳ Aguardando openAddVermifugoModal... (tentativa ${tentativas}/${maxTentativas})`);
+                        setTimeout(tentarAbrir, 100);
+                    } else {
+                        console.error('❌ Timeout: openAddVermifugoModal não ficou disponível após 5 segundos');
+                    }
+                }
+        };
+        
+        tentarAbrir();
+    };
+    
+    // Se já estamos após DOMContentLoaded, executar imediatamente
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        console.log('✅ DOM já carregado, executando abertura...');
+        executarAbertura();
+    } else {
+        // Caso contrário, aguardar DOMContentLoaded
+        console.log('⏳ Aguardando DOMContentLoaded...');
+        document.addEventListener('DOMContentLoaded', executarAbertura);
+    }
+}
+
+// Função para editar antiparasitário - aguarda DOMContentLoaded e então a função modal
+function openEditAntiparasitarioModal(servico, itemElement) {
+    console.log('📝 openEditAntiparasitarioModal chamada com:', servico);
+    
+    const executarAbertura = () => {
+        // Esperar até que a função esteja disponível (polling)
+        let tentativas = 0;
+        const maxTentativas = 50; // 5 segundos máximo
+        
+        const tentarAbrir = () => {
+                if (typeof window.openAddAntiparasitarioModal === 'function') {
+                    console.log('✅ openAddAntiparasitarioModal disponível, preparando abertura...');
+
+                    const fillFieldsA = () => {
+                        const modal = document.getElementById('modalAntiparasitario');
+                        if (!modal) return;
+                        console.log('✅ Modal encontrado, preenchendo campos...');
+                        const fields = {
+                            antiparasitarioItemNome: servico.nome || '',
+                            antiparasitarioQtd: servico.quantidade || '1',
+                            antiparasitarioUnitario: servico.unitario || servico.valor || '0',
+                            antiparasitarioValorFinal: servico.total || servico.valor || '0',
+                            antiparasitarioDose: (servico.meta && servico.meta.dose) || '',
+                            antiparasitarioDataAplic: (servico.meta && servico.meta.dataAplic) || '',
+                            antiparasitarioLote: (servico.meta && servico.meta.lote) || '',
+                            antiparasitarioRenovacao: (servico.meta && servico.meta.renovacao) || '',
+                            antiparasitarioProfissional: servico.profissional || ''
+                        };
+                        Object.keys(fields).forEach(id => {
+                            const el = document.getElementById(id);
+                            if (el) {
+                                el.value = fields[id];
+                                console.log(`✅ Campo ${id} preenchido com:`, fields[id]);
+                            } else {
+                                console.warn(`⚠️ Campo ${id} não encontrado`);
+                            }
+                        });
+                        modal.dataset.editando = 'true';
+                        modal.dataset.servicoId = String(servico.id || '');
+                        console.log('✅ Modal configurado para edição');
+                    };
+
+                    const onOpenedA = function() { try { fillFieldsA(); } catch(e){} };
+                    window.addEventListener('modalAntiparasitarioOpened', onOpenedA, { once: true });
+                    // Garantir implementação real disponível
+                    if (typeof window.__realOpenAddAntiparasitarioModal !== 'function' && typeof openAddItemModal === 'function') {
+                        console.log('ℹ️ Inicializando modais via openAddItemModal() para expor openAddAntiparasitarioModal');
+                        try { openAddItemModal(); } catch(e){ console.warn('Erro ao chamar openAddItemModal()', e); }
+                    }
+                    window.openAddAntiparasitarioModal({ nome: servico.nome, valor: servico.unitario || servico.valor });
+
+                    // Fallback polling
+                    let triesModalA = 0;
+                    const maxModalTriesA = 60;
+                    const waitForModalA = () => {
+                        const modal = document.getElementById('modalAntiparasitario');
+                        if (modal) {
+                            try { window.removeEventListener('modalAntiparasitarioOpened', onOpenedA); } catch(_){}
+                            fillFieldsA();
+                        } else {
+                            triesModalA++;
+                            if (triesModalA < maxModalTriesA) setTimeout(waitForModalA, 100);
+                            else console.error('❌ Timeout esperando modalAntiparasitario aparecer');
+                        }
+                    };
+                    waitForModalA();
+                } else {
+                    tentativas++;
+                    if (tentativas < maxTentativas) {
+                        console.log(`⏳ Aguardando openAddAntiparasitarioModal... (tentativa ${tentativas}/${maxTentativas})`);
+                        setTimeout(tentarAbrir, 100);
+                    } else {
+                        console.error('❌ Timeout: openAddAntiparasitarioModal não ficou disponível após 5 segundos');
+                    }
+                }
+            };
+            
+            tentarAbrir();
+        };
+    
+        // Se já estamos após DOMContentLoaded, executar imediatamente
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            console.log('✅ DOM já carregado, executando abertura...');
+            executarAbertura();
+        } else {
+            // Caso contrário, aguardar DOMContentLoaded
+            console.log('⏳ Aguardando DOMContentLoaded...');
+            document.addEventListener('DOMContentLoaded', executarAbertura);
+        }
+    }
+
+
+// Expor globalmente
+window.openEditVermifugoModal = openEditVermifugoModal;
+window.openEditAntiparasitarioModal = openEditAntiparasitarioModal;
+console.log('✅ Funções de edição definidas no escopo global');
+
+// ==================== FIM DAS DEFINIÇÕES GLOBAIS ====================
+
 function detectarIDsDuplicados() {
     const idsParaVerificar = [
         'clienteMenuItem', 'clienteSubmenu',
@@ -600,6 +822,23 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     })();
+    // Ligar botão "Adicionar" da sub-aba Antiparasitários ao modal de Adicionar Item
+    (function attachAntiparasitarioAddButton(){
+        const btnAnti = document.querySelector('#antiparasitariosSubContent .btn-add-small');
+        if (!btnAnti) return;
+        if (btnAnti.hasAttribute('data-anti-listener')) return;
+        btnAnti.setAttribute('data-anti-listener', 'true');
+        btnAnti.addEventListener('click', function(e){
+            e.preventDefault();
+            e.stopPropagation();
+            try { 
+                // Abrir modal de busca de itens - a detecção de antiparasitário acontece automaticamente
+                openAddItemModal(); 
+            } catch (err) { 
+                console.warn('Erro ao abrir modal de adicionar item (antiparasitario):', err); 
+            }
+        });
+    })();
 });
 
 // Funções de navegação rápida (shims)
@@ -917,6 +1156,22 @@ function preencherDadosAgendamento(agendamento) {
                             }
                         } catch(e) { console.warn('Erro ao limpar vermífugos existentes:', e); }
 
+                        // Limpar vacinas existentes antes de recarregar do banco
+                        try {
+                            const vacinasContainer = document.querySelector('#vacinasSubContent .historico-list');
+                            if (vacinasContainer) {
+                                vacinasContainer.querySelectorAll('.vacina-item').forEach(n => n.remove());
+                            }
+                        } catch(e) { console.warn('Erro ao limpar vacinas existentes:', e); }
+
+                        // Limpar antiparasitários existentes antes de recarregar do banco
+                        try {
+                            const antiparasitariosContainer = document.querySelector('#antiparasitariosSubContent .historico-list');
+                            if (antiparasitariosContainer) {
+                                antiparasitariosContainer.querySelectorAll('.antiparasitario-item').forEach(n => n.remove());
+                            }
+                        } catch(e) { console.warn('Erro ao limpar antiparasitários existentes:', e); }
+
                         if (category) {
                                 // Normaliza possíveis fontes de dados
                                 const servicosArray = Array.isArray(agendamento.servicos) ? agendamento.servicos : null;
@@ -929,11 +1184,31 @@ function preencherDadosAgendamento(agendamento) {
                                 try { agendamento.__existingServicosString = nomesConcatenados || (agendamento.servico || ''); } catch(e){}
 
                                 if (servicosArray && servicosArray.length > 0) {
-                                        servicosArray.forEach(s => {
+                                        console.log(`🔍 [preencherDados] Renderizando ${servicosArray.length} serviços:`, servicosArray);
+                                        servicosArray.forEach((s, idx) => {
+                                                console.log(`  [${idx}] ${s.nome} - tipoEspecial:`, s.meta?.tipoEspecial);
                                                 // Se for um serviço especial do tipo 'vermifugo', renderizar na sub-aba Vermífugos
                                                 try {
                                                     if (s && s.meta && String(s.meta.tipoEspecial || '').toLowerCase() === 'vermifugo') {
+                                                        console.log(`  ✅ [${idx}] Vermífugo detectado`);
                                                         try { appendServiceToCategory(s); } catch(e) { console.warn('Erro appendServiceToCategory para vermifugo ao carregar:', e); }
+                                                        return; // pular renderização padrão
+                                                    }
+                                                } catch(e) {}
+                                                // Se for um serviço especial do tipo 'vacina', renderizar via appendServiceToCategory
+                                                try {
+                                                    if (s && s.meta && String(s.meta.tipoEspecial || '').toLowerCase() === 'vacina') {
+                                                        console.log(`  ✅ [${idx}] Vacina detectada`);
+                                                        try { 
+                                                            appendServiceToCategory(s);
+                                                        } catch(e) { console.warn('Erro appendServiceToCategory para vacina ao carregar:', e); }
+                                                        return; // pular renderização padrão (appendServiceToCategory já fez tudo)
+                                                    }
+                                                } catch(e) {}
+                                                // Se for um serviço especial do tipo 'antiparasitario', renderizar na sub-aba Antiparasitários
+                                                try {
+                                                    if (s && s.meta && String(s.meta.tipoEspecial || '').toLowerCase() === 'antiparasitario') {
+                                                        try { appendServiceToCategory(s); } catch(e) { console.warn('Erro appendServiceToCategory para antiparasitario ao carregar:', e); }
                                                         return; // pular renderização padrão
                                                     }
                                                 } catch(e) {}
@@ -1055,6 +1330,21 @@ function preencherDadosAgendamento(agendamento) {
         // Atualiza ícones dos serviços conforme status
         try { updateServiceIcons(agendamento.status || agendamento.statusTexto || agendamento.status_nome); } catch(e){/* ignore */}
 
+        // 🔍 DEBUG: Verificar estado final do DOM após preencher dados
+        setTimeout(() => {
+            const vacinasContainer = document.querySelector('#vacinasSubContent .historico-list');
+            const vacinasItems = vacinasContainer ? vacinasContainer.querySelectorAll('.vacina-item') : [];
+            console.log(`🔍 [DEBUG FINAL] Container vacinas existe: ${!!vacinasContainer}`);
+            console.log(`🔍 [DEBUG FINAL] Items vacinas no DOM: ${vacinasItems.length}`);
+            if (vacinasItems.length > 0) {
+                console.log(`✅ [DEBUG FINAL] Vacinas estão no DOM!`);
+                vacinasItems.forEach((item, idx) => {
+                    const nome = item.querySelector('.vacina-nome')?.textContent || 'sem nome';
+                    console.log(`  [${idx}] ${nome}`);
+                });
+            }
+        }, 200);
+
         console.log('✅ Dados preenchidos na tela');
     } catch (error) {
         console.error('Erro ao preencher dados:', error);
@@ -1174,11 +1464,29 @@ function alternarSubAba(subAba, skipSave = false) {
     
     console.log(`📋 Sub-aba alterada para: ${subAba}`);
 
+    // 🔍 DEBUG: Verificar se vacinas estão no DOM após alternância
+    if (subAba === 'vacinas') {
+        setTimeout(() => {
+            const container = document.querySelector('#vacinasSubContent .historico-list');
+            const items = container ? container.querySelectorAll('.vacina-item') : [];
+            console.log(`🔍 [DEBUG] Após alternar para vacinas - Container existe: ${!!container}`);
+            console.log(`🔍 [DEBUG] Após alternar para vacinas - Items no DOM: ${items.length}`);
+            if (container) console.log(`🔍 [DEBUG] Container HTML:`, container.innerHTML.substring(0, 500));
+        }, 100);
+    }
+
     // persistir sub-aba selecionada
     try {
         clinicaStateLocal.activeSubTab = subAba;
         if (!skipSave) enviarClinicaState();
     } catch (e) { console.warn('Erro salvando sub-aba clínica:', e); }
+
+    // Ao abrir Histórico, carregar os registros clínicos combinados
+    try {
+        if (subAba === 'historico') {
+            try { loadClinicalHistory(); } catch(e){ console.warn('Erro carregando histórico clínico:', e); }
+        }
+    } catch(e) {}
 }
 
 // Envia clinicaState para o backend (salva no campo clinica_state da tabela agendamentos)
@@ -1436,15 +1744,33 @@ const meusItensCandidates = ['/api/meus-itens','/api/produtos','/api/itens','/ap
 
 // Buscar vacinas da API
 async function buscarVacinas() {
-    try {
-        const response = await fetch('/api/meus-itens');
-        if (response.ok) {
-            vacinasDisponiveis = await response.json();
-            console.log('💉 Vacinas carregadas:', vacinasDisponiveis.length);
+    const tryList = meusItensEndpoint ? [meusItensEndpoint] : meusItensCandidates;
+    let lastErr = null;
+    for (const base of tryList) {
+        try {
+            const resp = await fetch(base);
+            if (!resp.ok) {
+                lastErr = new Error(`status ${resp.status}`);
+                continue;
+            }
+            const data = await resp.json();
+            const arr = Array.isArray(data) ? data : (data.items || data.data || []);
+            // filtrar apenas itens de categoria 'Vacina' (variações)
+            const filtered = (arr||[]).filter(i => {
+                const cat = String(i.categoria || i.category || i.categoriaNome || i.agrupamento || '').toLowerCase();
+                return cat.indexOf('vacina') !== -1;
+            });
+            vacinasDisponiveis = filtered;
+            meusItensEndpoint = base; // cacheia endpoint que funcionou
+            console.log('💉 Vacinas carregadas via', base, filtered.length);
+            return;
+        } catch (err) {
+            lastErr = err;
+            continue;
         }
-    } catch (error) {
-        console.error('❌ Erro ao buscar vacinas:', error);
     }
+    console.warn('❌ Buscar vacinas falhou em todos endpoints:', lastErr);
+    vacinasDisponiveis = [];
 }
 
 // Buscar vacinas por query (usa /api/meus-itens?q=...)
@@ -1509,6 +1835,33 @@ async function buscarPeriodicidades() {
     }
     console.warn('⚠️ Não foi possível carregar periodicidades (nenhum endpoint respondeu)');
     periodicidadesDisponiveis = [];
+}
+
+function abrirModalVacinaParaEdicao(dados) {
+    abrirModalVacina();
+    // Preencher campos após abrir
+    setTimeout(() => {
+        const inputVacina = document.getElementById('nomeVacina');
+        const dataAplic = document.getElementById('dataAplicacao');
+        const proxDose = document.getElementById('proximaDose');
+        const loteInput = document.getElementById('loteVacina');
+        const vetInput = document.getElementById('veterinarioVacina');
+        const obsInput = document.getElementById('observacoesVacina');
+        
+        if (inputVacina) inputVacina.value = dados.nome || '';
+        if (dataAplic) dataAplic.value = dados.dataAplicacao || '';
+        if (proxDose) proxDose.value = dados.proximaDose || '';
+        if (loteInput) loteInput.value = dados.lote || '';
+        if (vetInput) vetInput.value = dados.profissional || '';
+        if (obsInput) obsInput.value = dados.observacoes || '';
+        
+        // Marcar como edição
+        const modal = document.getElementById('modalVacina');
+        if (modal) {
+            modal.dataset.editando = 'true';
+            modal.dataset.itemOriginal = dados.registroId || '';
+        }
+    }, 100);
 }
 
 function abrirModalVacina() {
@@ -1578,7 +1931,7 @@ function mostrarDropdownVacinas(filtro = '') {
     if (!dropdown) return;
     
     const vacinasFiltradas = filtro 
-        ? vacinasDisponiveis.filter(v => v.nome.toLowerCase().includes(filtro))
+        ? vacinasDisponiveis.filter(v => (v.nome || '').toLowerCase().includes(filtro))
         : vacinasDisponiveis;
     
     if (vacinasFiltradas.length === 0) {
@@ -1587,29 +1940,37 @@ function mostrarDropdownVacinas(filtro = '') {
         return;
     }
     
-    dropdown.innerHTML = vacinasFiltradas.map(vacina => `
-        <div class="dropdown-item-vacina" onclick="selecionarVacina(${vacina.id}, '${vacina.nome.replace(/'/g, "\\'")}')"> 
-            <div class="vacina-nome">${vacina.nome}</div>
-        </div>
-    `).join('');
+    dropdown.innerHTML = vacinasFiltradas.map(vacina => {
+        const preco = vacina.preco || vacina.venda || vacina.valor || 0;
+        const precoFormatado = preco > 0 ? `R$ ${formatarMoeda(Number(preco))}` : '';
+        return `
+            <div class="dropdown-item-vacina" onclick="selecionarVacina(${vacina.id}, '${(vacina.nome || '').replace(/'/g, "\\'")}', ${preco})"> 
+                <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                    <div class="vacina-nome">${vacina.nome || 'Sem nome'}</div>
+                    ${precoFormatado ? `<div style="font-weight:700; color:#111; margin-left:8px;">${precoFormatado}</div>` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
     
     dropdown.style.display = 'block';
 }
 
-function selecionarVacina(id, nome) {
+function selecionarVacina(id, nome, valor = 0) {
     const input = document.getElementById('nomeVacina');
     const dropdown = document.getElementById('vacinaDropdown');
     
     if (input) {
         input.value = nome;
         input.setAttribute('data-vacina-id', id);
+        input.setAttribute('data-vacina-valor', valor);
     }
     
     if (dropdown) {
         dropdown.style.display = 'none';
     }
     
-    console.log('✅ Vacina selecionada:', nome);
+    console.log('✅ Vacina selecionada:', nome, 'Valor:', valor);
 }
 
 function configurarAutocompleteProfissional() {
@@ -1680,23 +2041,47 @@ function fecharModalVacina() {
     const modal = document.getElementById('modalVacina');
     if (modal) {
         modal.style.display = 'none';
+        // Limpar estado de edição
+        delete modal.dataset.editando;
+        delete modal.dataset.itemOriginal;
+        
         // Limpar campos
-        document.getElementById('nomeVacina').value = '';
+        const inputVacina = document.getElementById('nomeVacina');
+        const inputVet = document.getElementById('veterinarioVacina');
+        
+        inputVacina.value = '';
+        inputVacina.removeAttribute('data-vacina-id');
+        inputVacina.removeAttribute('data-vacina-valor');
+        
         document.getElementById('dataAplicacao').value = '';
         document.getElementById('proximaDose').value = '';
         document.getElementById('loteVacina').value = '';
-        document.getElementById('veterinarioVacina').value = '';
+        
+        inputVet.value = '';
+        inputVet.removeAttribute('data-profissional-id');
+        
         document.getElementById('observacoesVacina').value = '';
+        
+        // Fechar dropdowns
+        const vacinaDropdown = document.getElementById('vacinaDropdown');
+        const profissionalDropdown = document.getElementById('profissionalDropdown');
+        if (vacinaDropdown) vacinaDropdown.style.display = 'none';
+        if (profissionalDropdown) profissionalDropdown.style.display = 'none';
     }
 }
 
-function salvarVacina() {
+async function salvarVacina() {
     const nomeVacina = document.getElementById('nomeVacina').value.trim();
     const dataAplicacao = document.getElementById('dataAplicacao').value;
     const proximaDose = document.getElementById('proximaDose').value;
     const lote = document.getElementById('loteVacina').value.trim();
     const veterinario = document.getElementById('veterinarioVacina').value.trim();
     const observacoes = document.getElementById('observacoesVacina').value.trim();
+    
+    // Obter ID e valor do produto selecionado
+    const inputVacina = document.getElementById('nomeVacina');
+    const vacinaId = inputVacina ? inputVacina.getAttribute('data-vacina-id') : null;
+    const vacinaValor = inputVacina ? parseFloat(inputVacina.getAttribute('data-vacina-valor') || '0') : 0;
 
     if (!nomeVacina) {
         alert('Por favor, informe o nome da vacina');
@@ -1704,43 +2089,156 @@ function salvarVacina() {
         return;
     }
 
-    // Formatar o conteúdo da vacina
-    let conteudo = `<strong>${nomeVacina}</strong><br>`;
-    
-    if (dataAplicacao) {
-        const dataFormatada = new Date(dataAplicacao + 'T00:00:00').toLocaleDateString('pt-BR');
-        conteudo += `📅 Aplicação: ${dataFormatada}<br>`;
-    }
-    
-    if (proximaDose) {
-        const proximaFormatada = new Date(proximaDose + 'T00:00:00').toLocaleDateString('pt-BR');
-        conteudo += `📅 Próxima dose: ${proximaFormatada}<br>`;
-    }
-    
-    if (lote) {
-        conteudo += `🏷️ Lote: ${lote}<br>`;
-    }
-    
-    if (veterinario) {
-        conteudo += `👨‍⚕️ Veterinário: ${veterinario}<br>`;
-    }
-    
-    if (observacoes) {
-        conteudo += `<br>${observacoes}`;
+    // Calcular período de renovação se houver próxima dose
+    let renovacao = '';
+    if (proximaDose && dataAplicacao) {
+        try {
+            const d1 = new Date(dataAplicacao + 'T12:00:00');
+            const d2 = new Date(proximaDose + 'T12:00:00');
+            const diffDias = Math.ceil((d2 - d1) / (1000 * 60 * 60 * 24));
+            if (diffDias > 0) {
+                renovacao = `${diffDias} dias`;
+            }
+        } catch(e) {}
     }
 
-    // Adicionar ao prontuário (capturar registroId)
-    const registroId = adicionarCampoProntuario('vacina', conteudo);
-    // Adicionar também na lista de Vacinas (sub-aba) e vincular ao registro
-    try {
-        const displayDate = dataAplicacao ? new Date(dataAplicacao + 'T00:00:00').toLocaleDateString('pt-BR') : '';
-        adicionarVacinaNaLista(nomeVacina, conteudo, displayDate, registroId);
-    } catch (e) { console.warn('Erro adicionando vacina na lista:', e); }
+    // Criar objeto de serviço compatível com o banco de dados
+    const profissional = veterinario || ((agendamentoAtual && agendamentoAtual.profissional) ? agendamentoAtual.profissional : '-');
+    // Gerar ID único sempre (timestamp + random) para permitir múltiplas vacinas iguais
+    const uniqueId = `vac-${Date.now()}-${Math.floor(Math.random() * 999999)}`;
+    const s = { 
+        id: uniqueId, 
+        nome: nomeVacina, 
+        quantidade: 1, 
+        unitario: vacinaValor, 
+        valor: vacinaValor, 
+        total: vacinaValor, 
+        profissional: profissional 
+    };
     
-    // Salvar automaticamente no banco de dados
-    setTimeout(() => {
-        salvarProntuarioAutomatico();
-    }, 300);
+    // Adicionar metadados da vacina (usar data de hoje se vazia para aparecer no histórico)
+    const _vacinaDataAplic = dataAplicacao || (new Date()).toISOString().slice(0,10);
+    s.meta = { 
+        dose: '1 dose', 
+        lote: lote || '', 
+        dataAplic: _vacinaDataAplic, 
+        renovacao: renovacao || '', 
+        proximaDose: proximaDose || '',
+        observacoes: observacoes || '',
+        tipoEspecial: 'vacina' 
+    };
+
+    // Verificar se está editando uma vacina existente
+    const modal = document.getElementById('modalVacina');
+    const estaEditando = modal && modal.dataset.editando === 'true';
+    const registroIdAntigo = modal ? modal.dataset.itemOriginal : null;
+
+    // Se está editando, remover a vacina antiga antes de adicionar a nova
+    if (estaEditando && registroIdAntigo) {
+        // Remover do DOM
+        const itemAntigo = document.querySelector(`[data-registro-id="${registroIdAntigo}"]`);
+        if (itemAntigo) itemAntigo.remove();
+        
+        // Remover do array servicos
+        if (Array.isArray(agendamentoAtual.servicos)) {
+            agendamentoAtual.servicos = agendamentoAtual.servicos.filter(serv => {
+                const idMatch = String(serv.id) === String(registroIdAntigo);
+                const isVacina = serv.meta && serv.meta.tipoEspecial === 'vacina';
+                return !(idMatch && isVacina);
+            });
+        }
+        
+        // Remover da lista de itens na categoria principal
+        const itemNaLista = document.querySelector(`.service-item[data-service-id="${registroIdAntigo}"]`);
+        if (itemNaLista) itemNaLista.remove();
+        
+        // Usar o mesmo ID da vacina antiga ao editar
+        s.id = registroIdAntigo;
+    }
+
+    // Adicionar ao buffer temporário (mesmo padrão do vermífugo/antiparasitário)
+    if (!agendamentoAtual) agendamentoAtual = {};
+    if (!Array.isArray(agendamentoAtual._addedServicos)) agendamentoAtual._addedServicos = [];
+    agendamentoAtual._addedServicos.push(s);
+
+    // Formatar conteúdo para exibição
+    let conteudo = `Dose: 1 dose<br>`;
+    if (_vacinaDataAplic) {
+        const dataFormatada = new Date(_vacinaDataAplic + 'T00:00:00').toLocaleDateString('pt-BR');
+        conteudo += `Aplicação: ${dataFormatada}<br>`;
+    }
+    if (proximaDose) {
+        const proximaFormatada = new Date(proximaDose + 'T00:00:00').toLocaleDateString('pt-BR');
+        conteudo += `Próxima dose: ${proximaFormatada}<br>`;
+    }
+    if (lote) {
+        conteudo += `Lote: ${lote}<br>`;
+    }
+    if (veterinario) {
+        conteudo += `Profissional: ${veterinario}<br>`;
+    }
+    if (observacoes) {
+        conteudo += `Obs: ${observacoes}`;
+    }
+
+    // Adicionar na lista visual (sub-aba Vacinas E lista de Itens)
+    // appendServiceToCategory detecta isVacina e faz toda a renderização necessária
+    try {
+        appendServiceToCategory(s);
+    } catch (e) { console.warn('Erro adicionando vacina:', e); }
+
+    // Persistir no banco de dados mesclando serviços existentes + adicionados (mesmo fluxo do vermifugo)
+    try {
+        if (agendamentoAtual && agendamentoAtual.id) {
+            const existingServicos = Array.isArray(agendamentoAtual.servicos) ? agendamentoAtual.servicos.slice() : (Array.isArray(agendamentoAtual.__existingServicosArray) ? agendamentoAtual.__existingServicosArray.slice() : []);
+            const toAdd = Array.isArray(agendamentoAtual._addedServicos) ? agendamentoAtual._addedServicos.slice() : [];
+            // Concatenar todos os serviços SEM deduplicação (permitir vacinas/itens duplicados)
+            const mergedServicos = existingServicos.concat(toAdd || []);
+            const nomesConcat = [String(agendamentoAtual.__existingServicosString||agendamentoAtual.servico||'')].concat((agendamentoAtual._addedServicos||[]).map(x=>x.nome)).filter(Boolean).join(' • ');
+            const payload = { servico: nomesConcat, servicos: mergedServicos, valor: parseFloat(agendamentoAtual.valor||0) + (agendamentoAtual._addedServicos||[]).reduce((a,b)=>a+(parseFloat(b.total||b.valor||0)||0),0) };
+            console.log('[vacina] Persistindo agendamento id=', agendamentoAtual && agendamentoAtual.id, 'payload=', payload);
+            const resp = await fetch(`/api/agendamentos/${agendamentoAtual.id}`, { method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            if (resp.ok) {
+                const updated = await resp.json().catch(()=>null);
+                if (updated) {
+                    // Atualizar agendamentoAtual COMPLETAMENTE com a resposta do servidor
+                    agendamentoAtual = updated;
+                    agendamentoAtual.__existingTotal = agendamentoAtual.valor;
+                    agendamentoAtual.__existingServicosString = agendamentoAtual.servico;
+                    agendamentoAtual._addedServicos = [];
+                    console.log('[vacina] ✅ Vacina salva no banco com sucesso', updated);
+                    console.log('[vacina] agendamentoAtual.servicos atualizado:', agendamentoAtual.servicos);
+                    // Atualizar histórico clínico
+                    console.log('[vacina] Verificando loadClinicalHistory:', typeof loadClinicalHistory, loadClinicalHistory);
+                    try { 
+                        console.log('[vacina] ⚡ ANTES de chamar loadClinicalHistory...');
+                        await loadClinicalHistory(); 
+                        console.log('[vacina] ✅ loadClinicalHistory() concluído');
+                    } catch(e){ console.error('[vacina] ❌ ERRO ao chamar loadClinicalHistory:', e); }
+                } else {
+                    agendamentoAtual.valor = payload.valor;
+                    agendamentoAtual.servico = nomesConcat;
+                    agendamentoAtual.servicos = mergedServicos;
+                    agendamentoAtual.__existingTotal = agendamentoAtual.valor;
+                    agendamentoAtual.__existingServicosString = agendamentoAtual.servico;
+                    agendamentoAtual._addedServicos = [];
+                    try { await loadClinicalHistory(); } catch(e){ console.warn('Erro atualizando histórico após salvar vacina', e); }
+                }
+                // GET após PUT para verificar
+                try {
+                    const check = await fetch(`/api/agendamentos/${agendamentoAtual.id}`, { credentials: 'include' });
+                    const checkJson = await check.json().catch(()=>null);
+                    console.log('[vacina] GET after PUT, server returned:', check.status, checkJson);
+                } catch(e){ console.warn('[vacina] erro ao GET após PUT', e); }
+            } else {
+                const txt = await resp.text().catch(()=>null);
+                console.warn('PUT /api/agendamentos failed when persisting vacina', resp.status, txt);
+                console.log('[vacina] server response (text):', txt);
+            }
+        }
+    } catch (e) { 
+        console.warn('Erro ao persistir vacina no banco:', e); 
+    }
     
     // Fechar modal
     fecharModalVacina();
@@ -1749,50 +2247,208 @@ function salvarVacina() {
 }
 
 // Adiciona visualmente a vacina na lista da sub-aba 'vacinas'
-function adicionarVacinaNaLista(nome, detalhesHtml, dataAplicacao, registroId) {
+function adicionarVacinaNaLista(nome, detalhesHtmlOuDados, dataAplicacao, registroId) {
+    console.log('🔍 [adicionarVacinaNaLista] Chamada com:', {nome, dataAplicacao, registroId});
     const container = document.querySelector('#vacinasSubContent .historico-list');
-    if (!container) return;
+    console.log('🔍 [adicionarVacinaNaLista] Container encontrado:', !!container);
+    if (!container) {
+        console.warn('⚠️ [adicionarVacinaNaLista] Container não encontrado! Vacina não será renderizada na sub-aba.');
+        return;
+    }
 
     // remover estado vazio se presente
+    console.log('🧽 [adicionarVacinaNaLista] Removendo estado vazio...');
     const empty = container.querySelector('.empty-state');
     if (empty) empty.remove();
 
+    console.log('🧽 [adicionarVacinaNaLista] Criando elemento item...');
     const item = document.createElement('div');
-    item.className = 'historico-item';
+    item.className = 'vacina-item';
     if (registroId) item.dataset.registroId = registroId;
-    const dataText = dataAplicacao ? (`<div class="registro-meta">${dataAplicacao}</div>`) : '';
 
-    item.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
-            <div style="font-weight:700;">${escapeHtmlText(nome)}</div>
-            <div style="display:flex;align-items:center;gap:8px;">${dataText}<button class="vacina-remove-btn" title="Remover vacina" style="background:transparent;border:none;color:#c0392b;font-weight:700;cursor:pointer;padding:4px 6px;border-radius:4px">✕</button></div>
-        </div>
-        <div style="margin-top:8px;color:#444;">${detalhesHtml || ''}</div>
-    `;
-
-    // adicionar handler de remoção
-    setTimeout(() => {
-        const btn = item.querySelector('.vacina-remove-btn');
-        if (btn) {
-            btn.addEventListener('click', function(ev){
-                ev.stopPropagation();
-                try {
-                    const rid = item.dataset.registroId;
-                    // confirmar remoção
-                    showConfirmModal('Remover esta vacina do prontuário?').then(async (ok) => {
-                        if (!ok) return;
-                        // remover visual
-                        item.remove();
-                        // remover do prontuário salvo
-                        if (rid) removerRegistroProntuarioPorId(rid);
-                        else removerRegistroProntuarioPorConteudo(nome, detalhesHtml, dataAplicacao);
-                    });
-                } catch (e) { console.warn('Erro ao processar remoção de vacina', e); }
-            });
+    // Extrair informações dos detalhes (pode ser HTML string ou objeto estruturado)
+    console.log('🧽 [adicionarVacinaNaLista] Processando detalhes...');
+    let dose = '1 dose';
+    let profissional = '';
+    let lote = '';
+    let renovacao = '';
+    let proximaDose = '';
+    
+    // Se receber um objeto estruturado (chamada interna do sistema)
+    if (typeof detalhesHtmlOuDados === 'object' && detalhesHtmlOuDados !== null) {
+        console.log('🧽 [adicionarVacinaNaLista] Detalhes são objeto estruturado:', detalhesHtmlOuDados);
+        dose = detalhesHtmlOuDados.dose || '1 dose';
+        profissional = detalhesHtmlOuDados.profissional || '';
+        lote = detalhesHtmlOuDados.lote || '';
+        proximaDose = detalhesHtmlOuDados.proximaDose || '';
+        renovacao = detalhesHtmlOuDados.renovacao || '';
+        console.log('🧽 [adicionarVacinaNaLista] Dados extraídos:', {dose, profissional, lote, proximaDose, renovacao});
+    } else {
+        // Se receber HTML string (retrocompatibilidade)
+        const detalhesHtml = detalhesHtmlOuDados || '';
+        try {
+            const tmp = document.createElement('div');
+            tmp.innerHTML = detalhesHtml;
+            const text = tmp.textContent || '';
+            
+            // Extrair dose
+            const doseMatch = text.match(/Dose[:\s]+([^\n•]+)/i);
+            if (doseMatch) dose = doseMatch[1].trim();
+            
+            // Extrair profissional
+            const profMatch = text.match(/Profissional[:\s]+([^\n•]+)/i);
+            if (profMatch) profissional = profMatch[1].trim();
+            
+            // Extrair lote
+            const loteMatch = text.match(/Lote[:\s]+([^\n•]+)/i);
+            if (loteMatch) lote = loteMatch[1].trim();
+            
+            // Extrair próxima dose
+            const proxMatch = text.match(/Próxima dose[:\s]+([^\n•]+)/i);
+            if (proxMatch) proximaDose = proxMatch[1].trim();
+        } catch(e) {
+            console.warn('Erro ao extrair detalhes da vacina:', e);
         }
-    }, 10);
+    }
 
+    // Formatar data de aplicação
+    let dataAplicFormatada = dataAplicacao || '-';
+    try {
+        if (dataAplicacao && dataAplicacao.includes('-')) {
+            const [y, m, d] = dataAplicacao.split('-');
+            dataAplicFormatada = `${d}/${m}/${y}`;
+        } else if (dataAplicacao && dataAplicacao.includes('/')) {
+            dataAplicFormatada = dataAplicacao;
+        }
+    } catch(e) {}
+    
+    // Calcular texto de renovação se houver próxima dose
+    let renovacaoTexto = '';
+    try {
+        if (proximaDose && dataAplicacao) {
+            const d1 = new Date(dataAplicacao + 'T12:00:00');
+            const d2 = new Date(proximaDose + 'T12:00:00');
+            const diffDias = Math.ceil((d2 - d1) / (1000 * 60 * 60 * 24));
+            if (diffDias > 0) {
+                // Formatar data de renovação
+                const dd = String(d2.getDate()).padStart(2, '0');
+                const mm = String(d2.getMonth() + 1).padStart(2, '0');
+                const yyyy = d2.getFullYear();
+                renovacaoTexto = `Renovar dia ${dd}/${mm}/${yyyy} (${diffDias} dias)`;
+            }
+        }
+    } catch(e) {}
+
+    console.log('🧽 [adicionarVacinaNaLista] Criando HTML do item...');
+    console.log('🧽 [adicionarVacinaNaLista] Parâmetros para HTML:', {nome, dose, dataAplicFormatada, profissional, lote, renovacaoTexto});
+    
+    // Aplicar estilos diretamente no item (sem wrapper interno)
+    item.style.cssText = 'display:flex;align-items:stretch;justify-content:space-between;padding:16px;background:#fff;border:1px solid #e6e9ee;border-radius:8px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.05);transition:all 0.2s ease;width:100%;box-sizing:border-box;';
+    item.onmouseover = function() { this.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)'; };
+    item.onmouseout = function() { this.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)'; };
+    
+    try {
+        item.innerHTML = `
+            <div style="display:flex;align-items:flex-start;gap:14px;flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);border-radius:8px;flex-shrink:0;color:#fff;font-weight:700;font-size:14px;">
+                    <i class="fas fa-syringe" style="font-size:18px;"></i>
+                </div>
+                <div style="flex:1;min-width:0;">
+                    <div class="vacina-nome" style="font-weight:700;color:#1a1d29;font-size:15px;margin-bottom:6px;line-height:1.3;">${escapeHtmlUnsafe(nome)}</div>
+                    ${renovacaoTexto ? `<div style="font-size:13px;color:#6c5ce7;font-weight:600;margin-bottom:4px;"><i class="fas fa-sync-alt" style="font-size:11px;margin-right:4px;"></i>${escapeHtmlUnsafe(renovacaoTexto)}</div>` : ''}
+                    <div style="font-size:13px;color:#5a6c7d;margin-bottom:2px;">Dose: ${escapeHtmlUnsafe(dose)} • Aplicada em: ${escapeHtmlUnsafe(dataAplicFormatada)}</div>
+                    <div style="font-size:12px;color:#7d8a99;">Profissional: ${escapeHtmlUnsafe(profissional || '-')}${lote ? (' • Lote: ' + escapeHtmlUnsafe(lote)) : ''}</div>
+                </div>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center;margin-left:12px;flex-shrink:0;">
+                <button class="btn-icon-action" title="Renovar" data-action="renovar" style="background:transparent;border:none;color:#6c757d;cursor:pointer;padding:8px;border-radius:6px;transition:all 0.2s ease;width:32px;height:32px;display:flex;align-items:center;justify-content:center;" onmouseover="this.style.background='#f0f2f5';this.style.color='#6c5ce7';" onmouseout="this.style.background='transparent';this.style.color='#6c757d';">
+                    <i class="fas fa-sync-alt" style="font-size:14px;"></i>
+                </button>
+                <button class="btn-icon-action" title="Editar" data-action="editar" style="background:transparent;border:none;color:#6c757d;cursor:pointer;padding:8px;border-radius:6px;transition:all 0.2s ease;width:32px;height:32px;display:flex;align-items:center;justify-content:center;" onmouseover="this.style.background='#f0f2f5';this.style.color='#007bff';" onmouseout="this.style.background='transparent';this.style.color='#6c757d';">
+                    <i class="fas fa-pencil-alt" style="font-size:14px;"></i>
+                </button>
+                <button class="btn-icon-action" title="Remover" data-action="remove" style="background:transparent;border:none;color:#6c757d;cursor:pointer;padding:8px;border-radius:6px;transition:all 0.2s ease;width:32px;height:32px;display:flex;align-items:center;justify-content:center;" onmouseover="this.style.background='#f0f2f5';this.style.color='#dc3545';" onmouseout="this.style.background='transparent';this.style.color='#6c757d';">
+                    <i class="fas fa-times" style="font-size:16px;"></i>
+                </button>
+            </div>
+    `;
+        
+        console.log('✅ [adicionarVacinaNaLista] HTML criado com sucesso');
+    } catch(e) {
+        console.error('❌ [adicionarVacinaNaLista] ERRO ao criar innerHTML:', e);
+        return;
+    }
+
+    console.log('🔗 [adicionarVacinaNaLista] Adicionando event listeners...');
+    // Ligar botão de renovar
+    item.querySelector('[data-action="renovar"]').addEventListener('click', async function(e){
+        e.stopPropagation();
+        try {
+            abrirModalVacina();
+        } catch(e){ console.warn('Erro ao renovar vacina', e); }
+    });
+
+    // Ligar botão de editar
+    item.querySelector('[data-action="editar"]').addEventListener('click', async function(e){
+        e.stopPropagation();
+        try {
+            // Abrir modal com dados preenchidos
+            abrirModalVacinaParaEdicao({
+                nome: nome,
+                dataAplicacao: dataAplicacao,
+                proximaDose: detalhesHtmlOuDados?.proximaDose || '',
+                lote: detalhesHtmlOuDados?.lote || lote || '',
+                profissional: detalhesHtmlOuDados?.profissional || profissional || '',
+                observacoes: '',
+                itemOriginal: item,
+                registroId: registroId
+            });
+        } catch(e){ console.warn('Erro ao editar vacina', e); }
+    });
+
+    // Ligar botão de remover
+    item.querySelector('[data-action="remove"]').addEventListener('click', async function(ev){
+        ev.stopPropagation();
+        try {
+            const confirmed = await showConfirmModal('Remover esta vacina?');
+            if (!confirmed) return;
+            
+            // Remover do DOM (sub-aba)
+            item.remove();
+            
+            // Encontrar e remover a vacina do array servicos pelo nome, data e lote
+            if (Array.isArray(agendamentoAtual.servicos)) {
+                agendamentoAtual.servicos = agendamentoAtual.servicos.filter(s => {
+                    if (!s.meta || s.meta.tipoEspecial !== 'vacina') return true;
+                    // Remove se corresponder aos mesmos dados
+                    const mesmoNome = s.nome === nome;
+                    const mesmaData = s.meta.dataAplic === dataAplicacao;
+                    const mesmoLote = s.meta.lote === lote;
+                    return !(mesmoNome && mesmaData && mesmoLote);
+                });
+            }
+            
+            // Remover também da lista de itens
+            const itensVacina = document.querySelectorAll('.service-item');
+            itensVacina.forEach(itemEl => {
+                const servicoNome = itemEl.querySelector('.service-name')?.textContent || '';
+                if (servicoNome === nome) {
+                    itemEl.remove();
+                }
+            });
+            
+            // Persistir a remoção no banco
+            await recalcAndPersistServicos();
+            console.log('✅ Vacina removida do banco de dados');
+        } catch (e) { console.warn('Erro ao processar remoção de vacina', e); }
+    });
+
+    console.log('📌 [adicionarVacinaNaLista] Adicionando item ao container...');
     container.appendChild(item);
+    console.log('✅ [adicionarVacinaNaLista] Item adicionado com sucesso!');
+    
+    try { const scrollParent = getScrollParent(container); if (scrollParent && typeof item.scrollIntoView === 'function') item.scrollIntoView({ behavior: 'smooth', block: 'end' }); } catch(e){}
+    console.log('🎉 [adicionarVacinaNaLista] FUNÇÃO CONCLUÍDA COM SUCESSO');
 }
 
 // Extrai nome e detalhes de um conteúdo HTML salvo no prontuário e adiciona na lista
@@ -2394,6 +3050,7 @@ function openAddItemModal() {
         const nome = input.value.trim();
         const valor = Number(String(input.getAttribute('data-selected-valor')||'0').replace(',','.')) || 0;
         const categoriaSel = (input.getAttribute('data-selected-categoria')||'').toLowerCase();
+        
         // função helper para detectar 'vermifugo' em um objeto
         const looksLikeVermifugo = (obj) => {
             if (!obj) return false;
@@ -2409,9 +3066,30 @@ function openAddItemModal() {
             return false;
         };
 
+        // função helper para detectar 'antiparasitario' em um objeto
+        const looksLikeAntiparasitario = (obj) => {
+            if (!obj) return false;
+            const fields = ['categoria','agrupamento','tipo','grupo','group','categoriaNome','agrupamentoNome','tags','descricao'];
+            for (let f of fields) {
+                try {
+                    const v = (obj[f] || (obj[f] && obj[f].nome) || '').toString().toLowerCase();
+                    if (v.indexOf('antiparasit') !== -1) return true;
+                } catch(e){}
+            }
+            // também checar nome/titulo
+            try { if ((obj.nome||obj.titulo||'').toString().toLowerCase().indexOf('antiparasit') !== -1) return true; } catch(e){}
+            return false;
+        };
+
         // se categoria já indica vermifugo, abrir modal
         if (categoriaSel && categoriaSel.indexOf('vermifug') !== -1) {
             openAddVermifugoModal({ id: selId, nome, valor });
+            return;
+        }
+
+        // se categoria já indica antiparasitário, abrir modal
+        if (categoriaSel && categoriaSel.indexOf('antiparasit') !== -1) {
+            openAddAntiparasitarioModal({ id: selId, nome, valor });
             return;
         }
 
@@ -2432,7 +3110,11 @@ function openAddItemModal() {
                     openAddVermifugoModal({ id: selId, nome, valor });
                     return;
                 }
-            } catch (e) { console.warn('Erro ao buscar detalhes do item para detectar vermifugo:', e); }
+                if (looksLikeAntiparasitario(detail)) {
+                    openAddAntiparasitarioModal({ id: selId, nome, valor });
+                    return;
+                }
+            } catch (e) { console.warn('Erro ao buscar detalhes do item para detectar categoria:', e); }
         }
         if(!nome || (!selId && nome.length===0)){
             try { if (window.showNotification) { window.showNotification('Por favor, selecione um serviço/produto primeiro', 'error'); } else { alert('Por favor, selecione um serviço/produto primeiro'); } } catch(e){ console.warn('notify failed', e); }
@@ -2616,6 +3298,7 @@ function openAddItemModal() {
 
         overlay.appendChild(modal);
         document.body.appendChild(overlay);
+        try { window.dispatchEvent(new CustomEvent('modalVermifugoOpened', { detail: { id: itemInfo && itemInfo.id } })); } catch(e){}
 
         // criar dropdowns para Renovação e Profissional
         const renovInput = document.getElementById('vermifugoRenovacao');
@@ -2726,8 +3409,24 @@ function openAddItemModal() {
             document.addEventListener('click', function(e){ if (!profDropdown.contains(e.target) && e.target !== profInput) profDropdown.style.display = 'none'; });
         }
 
-        document.getElementById('fecharModalVermifugo').addEventListener('click', () => { try{ window._vermifugoModalOpen = false; }catch(e){}; overlay.remove(); });
-        document.getElementById('btnCancelarVermifugo').addEventListener('click', () => { try{ window._vermifugoModalOpen = false; }catch(e){}; overlay.remove(); });
+        document.getElementById('fecharModalVermifugo').addEventListener('click', () => { 
+            try{ window._vermifugoModalOpen = false; }catch(e){}; 
+            overlay.remove(); 
+            // Remover modal "Adicionar Item" e overlay se existirem
+            const modalAdicionarItemOverlay = document.getElementById('modalAdicionarItemOverlay');
+            if (modalAdicionarItemOverlay) modalAdicionarItemOverlay.remove();
+            const modalAdicionarItem = document.getElementById('modalAdicionarItem');
+            if (modalAdicionarItem) modalAdicionarItem.remove();
+        });
+        document.getElementById('btnCancelarVermifugo').addEventListener('click', () => { 
+            try{ window._vermifugoModalOpen = false; }catch(e){}; 
+            overlay.remove(); 
+            // Remover modal "Adicionar Item" e overlay se existirem
+            const modalAdicionarItemOverlay = document.getElementById('modalAdicionarItemOverlay');
+            if (modalAdicionarItemOverlay) modalAdicionarItemOverlay.remove();
+            const modalAdicionarItem = document.getElementById('modalAdicionarItem');
+            if (modalAdicionarItem) modalAdicionarItem.remove();
+        });
 
         document.getElementById('btnSalvarVermifugo').addEventListener('click', async function(e){
             try{ if (e && e.stopPropagation) e.stopPropagation(); } catch(e){}
@@ -2744,17 +3443,47 @@ function openAddItemModal() {
             const lote = document.getElementById('vermifugoLote').value.trim();
             const profissional = document.getElementById('vermifugoProfissional').value.trim() || ((agendamentoAtual&&agendamentoAtual.profissional)?agendamentoAtual.profissional:'-');
 
-            // criar objeto compatível com o fluxo existente - sempre gerar ID único para novos vermífugos
+            // criar objeto compatível com o fluxo existente
             const s = { id: Date.now() + Math.random(), nome: nome, quantidade: qtd, unitario: unitario, valor: valorFinal, total: (qtd * valorFinal), profissional: profissional };
             // adicionar metadados (dose, lote, data)
             s.meta = { dose, lote, dataAplic, renovacao, renovacaoId, tipoEspecial: 'vermifugo' };
 
-            if(!agendamentoAtual) agendamentoAtual = {};
-            if(!Array.isArray(agendamentoAtual._addedServicos)) agendamentoAtual._addedServicos = [];
-            agendamentoAtual._addedServicos.push(s);
+            // detectar se estamos em modo de edição (modal marcado previamente)
+            const modalV = document.getElementById('modalVermifugo');
+            const isEditV = modalV && modalV.dataset && String(modalV.dataset.editando) === 'true';
 
-            // anexar no DOM e persistir usando o mesmo fluxo que já existe
-            try { appendServiceToCategory(s); } catch(e){ console.warn('Erro anexando serviço na UI', e); }
+            if (!agendamentoAtual) agendamentoAtual = {};
+
+            if (isEditV) {
+                const servicoId = (modalV.dataset && modalV.dataset.servicoId) ? String(modalV.dataset.servicoId) : '';
+                if (servicoId) s.id = servicoId;
+
+                // substituir item em agendamentoAtual.servicos ou em _addedServicos
+                if (!Array.isArray(agendamentoAtual.servicos)) agendamentoAtual.servicos = Array.isArray(agendamentoAtual.__existingServicosArray) ? agendamentoAtual.__existingServicosArray.slice() : [];
+                let replaced = false;
+                if (Array.isArray(agendamentoAtual.servicos)) {
+                    agendamentoAtual.servicos = agendamentoAtual.servicos.map(it => {
+                        if (String(it && it.id) === String(servicoId)) { replaced = true; return s; }
+                        return it;
+                    });
+                }
+                if (!replaced && Array.isArray(agendamentoAtual._addedServicos)) {
+                    agendamentoAtual._addedServicos = agendamentoAtual._addedServicos.map(it => String(it && it.id) === String(servicoId) ? s : it);
+                }
+
+                // atualizar DOM: remover elementos antigos com esse id e re-renderizar o item atualizado
+                try {
+                    const olds = document.querySelectorAll(`[data-service-id="${s.id}"]`);
+                    olds.forEach(el => el.remove());
+                    appendServiceToCategory(s);
+                } catch(e){ console.warn('Erro ao atualizar UI do vermifugo editado', e); }
+            } else {
+                if(!Array.isArray(agendamentoAtual._addedServicos)) agendamentoAtual._addedServicos = [];
+                agendamentoAtual._addedServicos.push(s);
+
+                // anexar no DOM e persistir usando o mesmo fluxo que já existe
+                try { appendServiceToCategory(s); } catch(e){ console.warn('Erro anexando serviço na UI', e); }
+            }
 
             // atualizar totais (reutiliza lógica do handler acima)
             try { document.getElementById('totalGeral').textContent = formatarMoeda((parseFloat(agendamentoAtual.valor||0)||0) + (agendamentoAtual._addedServicos||[]).reduce((a,b)=>a+(parseFloat(b.total||b.valor||0)||0),0)); } catch(e){}
@@ -2816,102 +3545,140 @@ function openAddItemModal() {
         });
     }
     
-    // Expor função globalmente para ser acessível fora do escopo
+    // Expor função real e flush da fila (se o wrapper já enfileirou chamadas)
+    window.__realOpenAddVermifugoModal = openAddVermifugoModal;
     window.openAddVermifugoModal = openAddVermifugoModal;
+    window._openAddVermifugoModal = openAddVermifugoModal; // Alias para uso interno
+    console.log('✅ openAddVermifugoModal definida e exposta globalmente');
+    if (Array.isArray(window._openAddVermifugoModalQueue) && window._openAddVermifugoModalQueue.length) {
+        console.log('🔁 Flush da fila de openAddVermifugoModal:', window._openAddVermifugoModalQueue.length);
+        window._openAddVermifugoModalQueue.forEach(args => {
+            try { openAddVermifugoModal(args); } catch(e){ console.warn('Erro ao processar fila openAddVermifugoModal', e); }
+        });
+        window._openAddVermifugoModalQueue = [];
+    }
 
     // Modal de edição de vermífugo
     function openEditVermifugoModal(servicoData, itemElement) {
-        try { window._vermifugoModalOpen = true; } catch(e){}
-        if (document.getElementById('modalEditarVermifugo')) return;
+        // Abrir modal de adição com dados preenchidos
+        openAddVermifugoModal({ nome: servicoData.nome, valor: servicoData.unitario || servicoData.valor });
         
+        // Preencher campos após modal abrir
+        setTimeout(() => {
+            const nomeInput = document.getElementById('vermifugoItemNome');
+            const qtdInput = document.getElementById('vermifugoQtd');
+            const unitInput = document.getElementById('vermifugoUnitario');
+            const valorInput = document.getElementById('vermifugoValorFinal');
+            const doseInput = document.getElementById('vermifugoDose');
+            const dataInput = document.getElementById('vermifugoDataAplic');
+            const loteInput = document.getElementById('vermifugoLote');
+            const renovInput = document.getElementById('vermifugoRenovacao');
+            const profInput = document.getElementById('vermifugoProfissional');
+            
+            if (nomeInput) nomeInput.value = servicoData.nome || '';
+            if (qtdInput) qtdInput.value = servicoData.quantidade || '1';
+            if (unitInput) unitInput.value = servicoData.unitario || servicoData.valor || '0';
+            if (valorInput) valorInput.value = servicoData.total || servicoData.valor || '0';
+            if (doseInput) doseInput.value = (servicoData.meta && servicoData.meta.dose) || '';
+            if (dataInput) dataInput.value = (servicoData.meta && servicoData.meta.dataAplic) || '';
+            if (loteInput) loteInput.value = (servicoData.meta && servicoData.meta.lote) || '';
+            if (renovInput) renovInput.value = (servicoData.meta && servicoData.meta.renovacao) || '';
+            if (profInput) profInput.value = servicoData.profissional || '';
+            
+            // Marcar como edição para remover item antigo ao salvar
+            const modal = document.getElementById('modalVermifugo');
+            if (modal) {
+                modal.dataset.editando = 'true';
+                modal.dataset.servicoId = String(servicoData.id || '');
+            }
+        }, 200);
+    }
+
+    // Modal detalhado para antiparasitário (similar ao vermífugo, mas com tipoEspecial: 'antiparasitario')
+    function openAddAntiparasitarioModal(itemInfo) {
+        // mark modal open to prevent other modals opening underneath
+        try { window._antiparasitarioModalOpen = true; } catch(e){}
+        if (!itemInfo) itemInfo = {};
+        if (document.getElementById('modalAntiparasitario')) return;
         const overlay = document.createElement('div');
-        overlay.id = 'modalEditarVermifugoOverlay';
+        overlay.id = 'modalAntiparasitarioOverlay';
         overlay.style.cssText = 'position:fixed;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;z-index:1200000;';
 
         const modal = document.createElement('div');
-        modal.id = 'modalEditarVermifugo';
+        modal.id = 'modalAntiparasitario';
         modal.style.cssText = 'width:820px;max-width:95%;background:white;border-radius:6px;box-shadow:0 10px 40px rgba(2,16,26,0.3);overflow:auto;font-family:inherit;max-height:90vh;';
-        
-        // Extrair dados existentes
-        const nomeVal = servicoData.nome || '';
-        const qtdVal = servicoData.quantidade || 1;
-        const valorVal = servicoData.unitario || servicoData.valor || 0;
-        const descontoVal = 0;
-        const doseVal = (servicoData.meta && servicoData.meta.dose) ? servicoData.meta.dose : '';
-        const dataAplicVal = (servicoData.meta && servicoData.meta.dataAplic) ? servicoData.meta.dataAplic : new Date().toISOString().slice(0,10);
-        const renovacaoVal = (servicoData.meta && servicoData.meta.renovacao) ? servicoData.meta.renovacao : '';
-        const loteVal = (servicoData.meta && servicoData.meta.lote) ? servicoData.meta.lote : '';
-        const profissionalVal = servicoData.profissional || '';
-        
+        const nomeVal = itemInfo.nome || '';
+        const valorVal = (itemInfo.valor !== undefined && itemInfo.valor !== null) ? itemInfo.valor : '';
         modal.innerHTML = `
             <div style="background:#f5f6f8;padding:12px 16px;border-bottom:1px solid #e6e9ee;display:flex;align-items:center;justify-content:space-between;">
-                <strong>Editar Vermífugo</strong>
-                <button id="fecharModalEditarVermifugo" style="background:transparent;border:none;font-size:18px;cursor:pointer;color:#666">✕</button>
+                <strong>Adicionar Antiparasitário</strong>
+                <button id="fecharModalAntiparasitario" style="background:transparent;border:none;font-size:18px;cursor:pointer;color:#666">✕</button>
             </div>
             <div style="padding:18px;">
-                <label style="display:block;margin-bottom:6px;font-weight:600;color:#333">Item <span style="color:#c0392b">*</span></label>
-                <input id="editVermifugoItemNome" type="text" value="${escapeHtmlText(nomeVal)}" style="width:100%;padding:10px;border:1px solid #dfe6ef;border-radius:4px;margin-bottom:12px;box-sizing:border-box;">
+                <label style="display:block;margin-bottom:6px;font-weight:600;color:#333">Item Avulso <span style="color:#c0392b">*</span></label>
+                <input id="antiparasitarioItemNome" type="text" value="${escapeHtmlText(nomeVal)}" style="width:100%;padding:10px;border:1px solid #dfe6ef;border-radius:4px;margin-bottom:12px;box-sizing:border-box;">
 
                 <div style="display:flex;gap:12px;">
                     <div style="flex:1">
                         <label>Qtd. *</label>
-                        <input id="editVermifugoQtd" type="text" value="${qtdVal}" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
+                        <input id="antiparasitarioQtd" type="text" value="1" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
                     </div>
                     <div style="flex:1">
                         <label>Unitário *</label>
-                        <input id="editVermifugoUnitario" type="text" value="${valorVal}" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
+                        <input id="antiparasitarioUnitario" type="text" value="${escapeHtmlText(String(valorVal))}" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
                     </div>
                     <div style="flex:1">
                         <label>% Desconto</label>
-                        <input id="editVermifugoDesconto" type="text" value="${descontoVal}" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
+                        <input id="antiparasitarioDesconto" type="text" value="0" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
                     </div>
                     <div style="flex:1">
                         <label>Valor Final *</label>
-                        <input id="editVermifugoValorFinal" type="text" value="${valorVal}" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
+                        <input id="antiparasitarioValorFinal" type="text" value="${escapeHtmlText(String(valorVal))}" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
                     </div>
                 </div>
 
                 <div style="margin-top:12px;display:flex;gap:12px;">
                     <div style="flex:1">
                         <label>Renovação</label>
-                        <input id="editVermifugoRenovacao" type="text" value="${escapeHtmlText(renovacaoVal)}" placeholder="Ex: 30 dias" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
+                        <input id="antiparasitarioRenovacao" type="text" value="" placeholder="Ex: 30 dias" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
                     </div>
                     <div style="flex:1">
                         <label>Lote</label>
-                        <input id="editVermifugoLote" type="text" value="${escapeHtmlText(loteVal)}" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
+                        <input id="antiparasitarioLote" type="text" value="" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
                     </div>
                 </div>
 
                 <div style="margin-top:12px;display:flex;gap:12px;">
                     <div style="flex:1">
                         <label>Dose *</label>
-                        <input id="editVermifugoDose" type="text" value="${escapeHtmlText(doseVal)}" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
+                        <input id="antiparasitarioDose" type="text" value="" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
                     </div>
                     <div style="flex:1">
                         <label>Data Aplicação *</label>
-                        <input id="editVermifugoDataAplic" type="date" value="${dataAplicVal}" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
+                        <input id="antiparasitarioDataAplic" type="date" value="${new Date().toISOString().slice(0,10)}" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
                     </div>
                     <div style="flex:1">
                         <label>Profissional</label>
-                        <input id="editVermifugoProfissional" type="text" value="${escapeHtmlText(profissionalVal)}" placeholder="Digite para pesquisar" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
+                        <input id="antiparasitarioProfissional" type="text" placeholder="Digite para pesquisar profissionais" style="width:100%;padding:8px;border:1px solid #dfe6ef;border-radius:4px;">
                     </div>
                 </div>
 
                 <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
-                    <button id="btnSalvarEditarVermifugo" class="btn" style="background:#28a745;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer">Salvar</button>
-                    <button id="btnCancelarEditarVermifugo" class="btn" style="background:#6c757d;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer">Cancelar</button>
+                    <button id="btnSalvarAntiparasitario" class="btn" style="background:#e74c3c;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer">Salvar</button>
+                    <button id="btnCancelarAntiparasitario" class="btn" style="background:#6c757d;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer">Cancelar</button>
                 </div>
             </div>
         `;
 
         overlay.appendChild(modal);
         document.body.appendChild(overlay);
+        try { window.dispatchEvent(new CustomEvent('modalAntiparasitarioOpened', { detail: { id: itemInfo && itemInfo.id } })); } catch(e){}
 
-        // Configurar dropdowns para Renovação e Profissional no modal de edição
-        const renovInput = document.getElementById('editVermifugoRenovacao');
-        const profInput = document.getElementById('editVermifugoProfissional');
+        // criar dropdowns para Renovação e Profissional
+        const renovInput = document.getElementById('antiparasitarioRenovacao');
+        const profInput = document.getElementById('antiparasitarioProfissional');
         
-        // Helper para criar dropdown
+        // helper para criar dropdown container
         function createDropdown(idFor) {
             const d = document.createElement('div');
             d.className = 'modal-dropdown';
@@ -2921,9 +3688,10 @@ function openAddItemModal() {
             return d;
         }
 
-        const renovDropdown = createDropdown('editVermifugoRenovacaoDropdown');
-        const profDropdown = createDropdown('editVermifugoProfissionalDropdown');
+        const renovDropdown = createDropdown('antiparasitarioRenovacaoDropdown');
+        const profDropdown = createDropdown('antiparasitarioProfissionalDropdown');
 
+        // posicionar dropdown próximo ao input
         function positionDropdown(inputEl, dropdownEl) {
             try {
                 const r = inputEl.getBoundingClientRect();
@@ -2933,24 +3701,31 @@ function openAddItemModal() {
             } catch(e){}
         }
 
+        // popular renovDropdown com periodicidades
         function showRenovDropdown(filter) {
             if (!renovInput) return;
+            if (!Array.isArray(periodicidadesDisponiveis) || periodicidadesDisponiveis.length === 0) {
+                renovDropdown.innerHTML = '<div style="padding:8px;color:#666">Nenhuma opção</div>';
+                renovDropdown.style.display = 'block';
+                positionDropdown(renovInput, renovDropdown);
+                return;
+            }
             const q = (filter||'').toString().toLowerCase();
-            const matches = (Array.isArray(periodicidadesDisponiveis) ? periodicidadesDisponiveis : []).filter(it => {
+            const matches = periodicidadesDisponiveis.filter(it => {
                 const label = (it && (it.descricao||it.nome||it.label||it.titulo) ? (it.descricao||it.nome||it.label||it.titulo) : (typeof it === 'string'?it:''));
                 return String(label).toLowerCase().indexOf(q) !== -1;
             }).slice(0,30);
             const frag = document.createDocumentFragment();
-            if (matches.length === 0) {
-                const div = document.createElement('div'); div.style.padding='8px'; div.style.color='#666'; div.textContent = 'Nenhuma opção'; frag.appendChild(div);
-            }
             matches.forEach(m => {
                 const div = document.createElement('div');
+                div.className = 'dropdown-item';
                 div.style.cssText = 'padding:8px 12px;cursor:pointer;border-bottom:1px solid #f4f6f8;';
-                const label = (m && (m.descricao||m.nome||m.label||m.titulo)) ? (m.descricao||m.nome||m.label||m.titulo) : (typeof m === 'string' ? m : '');
+                const label = (m && (m.descricao||m.nome||m.label||m.titulo)) ? (m.descricao||m.nome||m.label||m.titulo) : (typeof m === 'string' ? m : JSON.stringify(m));
                 div.textContent = label;
                 div.addEventListener('click', function(){
                     renovInput.value = label;
+                    renovInput.setAttribute('data-selected-renovacao', label);
+                    if (m && (m.id || m._id)) renovInput.setAttribute('data-selected-renovacao-id', String(m.id || m._id));
                     renovDropdown.style.display = 'none';
                 });
                 frag.appendChild(div);
@@ -2961,20 +3736,24 @@ function openAddItemModal() {
             positionDropdown(renovInput, renovDropdown);
         }
 
+        // popular profDropdown com profissionais
         function showProfDropdown(filter) {
             if (!profInput) return;
             const q = (filter||'').toString().toLowerCase();
-            const matches = (Array.isArray(profissionaisDisponiveis) ? profissionaisDisponiveis : []).filter(p => ((p.nome||p.name||'') + ' ' + (p.apelido||'')).toString().toLowerCase().indexOf(q) !== -1).slice(0,30);
+            const list = Array.isArray(profissionaisDisponiveis) ? profissionaisDisponiveis : [];
+            const matches = list.filter(p => ((p.nome||p.name||'') + ' ' + (p.apelido||'')).toString().toLowerCase().indexOf(q) !== -1).slice(0,30);
             const frag = document.createDocumentFragment();
             if (matches.length === 0) {
                 const div = document.createElement('div'); div.style.padding='8px'; div.style.color='#666'; div.textContent = 'Nenhum profissional'; frag.appendChild(div);
             }
             matches.forEach(p => {
                 const div = document.createElement('div');
+                div.className = 'dropdown-item';
                 div.style.cssText = 'padding:8px 12px;cursor:pointer;border-bottom:1px solid #f4f6f8;';
                 div.textContent = p.nome || p.name || '';
                 div.addEventListener('click', function(){
                     profInput.value = p.nome || p.name || '';
+                    profInput.setAttribute('data-selected-profissional-id', String(p.id || p._id || ''));
                     profDropdown.style.display = 'none';
                 });
                 frag.appendChild(div);
@@ -2985,6 +3764,7 @@ function openAddItemModal() {
             positionDropdown(profInput, profDropdown);
         }
 
+        // eventos: abrir/filtrar ao digitar
         if (renovInput) {
             renovInput.addEventListener('focus', async function(){
                 if (periodicidadesDisponiveis.length === 0) await buscarPeriodicidades();
@@ -3003,74 +3783,173 @@ function openAddItemModal() {
             document.addEventListener('click', function(e){ if (!profDropdown.contains(e.target) && e.target !== profInput) profDropdown.style.display = 'none'; });
         }
 
-        document.getElementById('fecharModalEditarVermifugo').addEventListener('click', () => { try{ window._vermifugoModalOpen = false; }catch(e){}; overlay.remove(); renovDropdown.remove(); profDropdown.remove(); });
-        document.getElementById('btnCancelarEditarVermifugo').addEventListener('click', () => { try{ window._vermifugoModalOpen = false; }catch(e){}; overlay.remove(); renovDropdown.remove(); profDropdown.remove(); });
+        document.getElementById('fecharModalAntiparasitario').addEventListener('click', () => { 
+            try{ window._antiparasitarioModalOpen = false; }catch(e){}; 
+            overlay.remove(); 
+            renovDropdown.remove(); 
+            profDropdown.remove(); 
+            // Remover modal "Adicionar Item" e overlay se existirem
+            const modalAdicionarItemOverlay = document.getElementById('modalAdicionarItemOverlay');
+            if (modalAdicionarItemOverlay) modalAdicionarItemOverlay.remove();
+            const modalAdicionarItem = document.getElementById('modalAdicionarItem');
+            if (modalAdicionarItem) modalAdicionarItem.remove();
+        });
+        document.getElementById('btnCancelarAntiparasitario').addEventListener('click', () => { 
+            try{ window._antiparasitarioModalOpen = false; }catch(e){}; 
+            overlay.remove(); 
+            renovDropdown.remove(); 
+            profDropdown.remove(); 
+            // Remover modal "Adicionar Item" e overlay se existirem
+            const modalAdicionarItemOverlay = document.getElementById('modalAdicionarItemOverlay');
+            if (modalAdicionarItemOverlay) modalAdicionarItemOverlay.remove();
+            const modalAdicionarItem = document.getElementById('modalAdicionarItem');
+            if (modalAdicionarItem) modalAdicionarItem.remove();
+        });
 
-        document.getElementById('btnSalvarEditarVermifugo').addEventListener('click', async function(e){
+        document.getElementById('btnSalvarAntiparasitario').addEventListener('click', async function(e){
             try{ if (e && e.stopPropagation) e.stopPropagation(); } catch(e){}
-            
-            const nome = document.getElementById('editVermifugoItemNome').value.trim();
-            const qtd = parseFloat(String(document.getElementById('editVermifugoQtd').value||'1').replace(',','.'))||1;
-            const unitario = parseFloat(String(document.getElementById('editVermifugoUnitario').value||'0').replace(',','.'))||0;
-            const valorFinal = parseFloat(String(document.getElementById('editVermifugoValorFinal').value||unitario).replace(',','.'))||unitario;
-            const dose = document.getElementById('editVermifugoDose').value.trim();
-            const dataAplic = document.getElementById('editVermifugoDataAplic').value;
-            const renovacao = document.getElementById('editVermifugoRenovacao').value.trim();
-            const lote = document.getElementById('editVermifugoLote').value.trim();
-            const profissional = document.getElementById('editVermifugoProfissional').value.trim() || servicoData.profissional || '-';
+            const nome = document.getElementById('antiparasitarioItemNome').value.trim();
+            const qtd = parseFloat(String(document.getElementById('antiparasitarioQtd').value||'1').replace(',','.'))||1;
+            const unitario = parseFloat(String(document.getElementById('antiparasitarioUnitario').value||'0').replace(',','.'))||0;
+            const valorFinal = parseFloat(String(document.getElementById('antiparasitarioValorFinal').value||unitario).replace(',','.'))||unitario;
+            const dose = document.getElementById('antiparasitarioDose').value.trim();
+            const dataAplic = document.getElementById('antiparasitarioDataAplic').value;
+            const renovacao = document.getElementById('antiparasitarioRenovacao').value.trim();
+            const lote = document.getElementById('antiparasitarioLote').value.trim();
+            const profissional = document.getElementById('antiparasitarioProfissional').value.trim() || ((agendamentoAtual&&agendamentoAtual.profissional)?agendamentoAtual.profissional:'-');
 
-            // Atualizar objeto do serviço
-            servicoData.nome = nome;
-            servicoData.quantidade = qtd;
-            servicoData.unitario = unitario;
-            servicoData.valor = valorFinal;
-            servicoData.total = qtd * valorFinal;
-            servicoData.profissional = profissional;
-            servicoData.meta = { dose, lote, dataAplic, renovacao, tipoEspecial: 'vermifugo' };
+            // criar objeto compatível com o fluxo existente
+            const s = { id: Date.now() + Math.random(), nome: nome, quantidade: qtd, unitario: unitario, valor: valorFinal, total: (qtd * valorFinal), profissional: profissional };
+            s.meta = { dose, lote, dataAplic, renovacao, tipoEspecial: 'antiparasitario' };
 
-            // Remover item antigo do DOM e adicionar atualizado
-            if (itemElement) itemElement.remove();
-            try { appendServiceToCategory(servicoData); } catch(e){ console.warn('Erro anexando serviço atualizado na UI', e); }
+            // detectar se estamos em modo de edição (modal marcado previamente)
+            const modalA = document.getElementById('modalAntiparasitario');
+            const isEditA = modalA && modalA.dataset && String(modalA.dataset.editando) === 'true';
 
-            // Persistir no banco
+            if (!agendamentoAtual) agendamentoAtual = {};
+
+            if (isEditA) {
+                const servicoId = (modalA.dataset && modalA.dataset.servicoId) ? String(modalA.dataset.servicoId) : '';
+                if (servicoId) s.id = servicoId;
+
+                if (!Array.isArray(agendamentoAtual.servicos)) agendamentoAtual.servicos = Array.isArray(agendamentoAtual.__existingServicosArray) ? agendamentoAtual.__existingServicosArray.slice() : [];
+                let replaced = false;
+                if (Array.isArray(agendamentoAtual.servicos)) {
+                    agendamentoAtual.servicos = agendamentoAtual.servicos.map(it => {
+                        if (String(it && it.id) === String(servicoId)) { replaced = true; return s; }
+                        return it;
+                    });
+                }
+                if (!replaced && Array.isArray(agendamentoAtual._addedServicos)) {
+                    agendamentoAtual._addedServicos = agendamentoAtual._addedServicos.map(it => String(it && it.id) === String(servicoId) ? s : it);
+                }
+
+                // atualizar DOM: remover elementos antigos com esse id e re-renderizar o item atualizado
+                try {
+                    const olds = document.querySelectorAll(`[data-service-id="${s.id}"]`);
+                    olds.forEach(el => el.remove());
+                    appendServiceToCategory(s);
+                } catch(e){ console.warn('Erro ao atualizar UI do antiparasitario editado', e); }
+            } else {
+                if(!Array.isArray(agendamentoAtual._addedServicos)) agendamentoAtual._addedServicos = [];
+                agendamentoAtual._addedServicos.push(s);
+
+                try { appendServiceToCategory(s); } catch(e){ console.warn('Erro anexando antiparasitário na UI', e); }
+            }
+
+            // Persistir imediatamente
             try {
                 if (agendamentoAtual && agendamentoAtual.id) {
-                    const existingServicos = Array.isArray(agendamentoAtual.servicos) ? agendamentoAtual.servicos : [];
-                    // Atualizar ou adicionar o serviço editado
-                    const idx = existingServicos.findIndex(x => String(x.id) === String(servicoData.id));
-                    if (idx >= 0) {
-                        existingServicos[idx] = servicoData;
-                    } else {
-                        existingServicos.push(servicoData);
-                    }
-                    agendamentoAtual.servicos = existingServicos;
-                    
-                    const nomesConcat = existingServicos.map(x=>x.nome).filter(Boolean).join(' • ');
-                    const valorTotal = existingServicos.reduce((a,b)=>a+(parseFloat(b.total||b.valor||0)||0),0);
-                    const payload = { servico: nomesConcat, servicos: existingServicos, valor: valorTotal };
+                    const existingServicos = Array.isArray(agendamentoAtual.servicos) ? agendamentoAtual.servicos.slice() : (Array.isArray(agendamentoAtual.__existingServicosArray) ? agendamentoAtual.__existingServicosArray.slice() : []);
+                    const toAdd = Array.isArray(agendamentoAtual._addedServicos) ? agendamentoAtual._addedServicos.slice() : [];
+                    const combined = existingServicos.concat(toAdd || []);
+                    const seen = new Set();
+                    const mergedServicos = combined.filter(it => {
+                        const id = (it && (it.id !== undefined && it.id !== null)) ? String(it.id) : JSON.stringify(it);
+                        if (seen.has(id)) return false; seen.add(id); return true;
+                    });
+                    const nomesConcat = [String(agendamentoAtual.__existingServicosString||agendamentoAtual.servico||'')].concat((agendamentoAtual._addedServicos||[]).map(x=>x.nome)).filter(Boolean).join(' • ');
+                    const payload = { servico: nomesConcat, servicos: mergedServicos, valor: parseFloat(agendamentoAtual.valor||0) + (agendamentoAtual._addedServicos||[]).reduce((a,b)=>a+(parseFloat(b.total||b.valor||0)||0),0) };
                     
                     const resp = await fetch(`/api/agendamentos/${agendamentoAtual.id}`, { method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                     if (resp.ok) {
                         const updated = await resp.json().catch(()=>null);
                         if (updated) {
-                            agendamentoAtual.valor = updated.valor || valorTotal;
+                            agendamentoAtual.valor = updated.valor !== undefined ? updated.valor : payload.valor;
                             agendamentoAtual.servico = updated.servico || nomesConcat;
-                            agendamentoAtual.servicos = updated.servicos || existingServicos;
+                            agendamentoAtual.servicos = Array.isArray(updated.servicos) ? updated.servicos : mergedServicos;
+                            agendamentoAtual.__existingTotal = agendamentoAtual.valor;
+                            agendamentoAtual.__existingServicosString = agendamentoAtual.servico;
+                            agendamentoAtual._addedServicos = [];
+                        } else {
+                            agendamentoAtual.valor = payload.valor;
+                            agendamentoAtual.servico = nomesConcat;
+                            agendamentoAtual.servicos = mergedServicos;
+                            agendamentoAtual.__existingTotal = agendamentoAtual.valor;
+                            agendamentoAtual.__existingServicosString = agendamentoAtual.servico;
+                            agendamentoAtual._addedServicos = [];
                         }
-                        try { if (window.showNotification) window.showNotification('Vermífugo atualizado com sucesso', 'success'); } catch(e){}
                     }
                 }
-            } catch(e){ console.warn('Erro ao persistir edição de vermifugo', e); }
+            } catch(e){ console.warn('Erro ao persistir antiparasitário', e); }
 
-            try{ window._vermifugoModalOpen = false; }catch(e){}
+            // Fechar todos os modais abertos
+            try {
+                const mOverlay = document.getElementById('modalAdicionarItemOverlay'); 
+                if (mOverlay) mOverlay.remove();
+                const mModal = document.getElementById('modalAdicionarItem'); 
+                if (mModal) mModal.remove();
+            } catch(e){}
+            
+            try{ window._antiparasitarioModalOpen = false; }catch(e){}
             overlay.remove();
             renovDropdown.remove();
             profDropdown.remove();
         });
     }
     
-    // Expor função de edição globalmente
-    window.openEditVermifugoModal = openEditVermifugoModal;
+    // Expor função real e flush da fila (se o wrapper já enfileirou chamadas)
+    window.__realOpenAddAntiparasitarioModal = openAddAntiparasitarioModal;
+    window.openAddAntiparasitarioModal = openAddAntiparasitarioModal;
+    window._openAddAntiparasitarioModal = openAddAntiparasitarioModal; // Alias para uso interno
+    console.log('✅ openAddAntiparasitarioModal definida e exposta globalmente');
+    if (Array.isArray(window._openAddAntiparasitarioModalQueue) && window._openAddAntiparasitarioModalQueue.length) {
+        console.log('🔁 Flush da fila de openAddAntiparasitarioModal:', window._openAddAntiparasitarioModalQueue.length);
+        window._openAddAntiparasitarioModalQueue.forEach(args => {
+            try { openAddAntiparasitarioModal(args); } catch(e){ console.warn('Erro ao processar fila openAddAntiparasitarioModal', e); }
+        });
+        window._openAddAntiparasitarioModalQueue = [];
+    }
+
+    // Função para editar antiparasitário existente
+    function openEditAntiparasitarioModal(servico, itemElement) {
+        // Abrir modal de adição com dados preenchidos
+        openAddAntiparasitarioModal({ nome: servico.nome, valor: servico.unitario || servico.valor });
+        
+        // Preencher campos após modal abrir
+        setTimeout(() => {
+            const doseInput = document.getElementById('antiparasitarioDose');
+            const dataInput = document.getElementById('antiparasitarioDataAplic');
+            const loteInput = document.getElementById('antiparasitarioLote');
+            const renovInput = document.getElementById('antiparasitarioRenovacao');
+            const profInput = document.getElementById('antiparasitarioProfissional');
+            const qtdInput = document.getElementById('antiparasitarioQtd');
+            
+            if (doseInput) doseInput.value = (servico.meta && servico.meta.dose) || '';
+            if (dataInput) dataInput.value = (servico.meta && servico.meta.dataAplic) || '';
+            if (loteInput) loteInput.value = (servico.meta && servico.meta.lote) || '';
+            if (renovInput) renovInput.value = (servico.meta && servico.meta.renovacao) || '';
+            if (profInput) profInput.value = servico.profissional || '';
+            if (qtdInput) qtdInput.value = servico.quantidade || '1';
+            
+            // Marcar como edição para remover item antigo ao salvar
+            const modal = document.getElementById('modalAntiparasitario');
+            if (modal) {
+                modal.dataset.editando = 'true';
+                modal.dataset.servicoId = String(servico.id || '');
+            }
+        }, 200);
+    }
 
     document.getElementById('btnFecharItem').addEventListener('click', closeModal);
     document.getElementById('fecharModalAdicionarItem').addEventListener('click', closeModal);
@@ -3080,8 +3959,12 @@ function openAddItemModal() {
 
 function appendServiceToCategory(s){
     try {
-        // Se for vermifugo, renderizar na sub-aba de Vermífugos
+        // Se for vermifugo, vacina ou antiparasitário, renderizar tanto na sub-aba específica quanto na lista de itens
         const isVermifugo = s && s.meta && s.meta.tipoEspecial === 'vermifugo';
+        const isVacina = s && s.meta && s.meta.tipoEspecial === 'vacina';
+        const isAntiparasitario = s && s.meta && s.meta.tipoEspecial === 'antiparasitario';
+        const isItemEspecial = isVermifugo || isVacina || isAntiparasitario;
+        
         if (isVermifugo) {
             const container = document.querySelector('#vermifugosSubContent .historico-list');
             if (!container) return;
@@ -3116,7 +3999,7 @@ function appendServiceToCategory(s){
                 if (renovacao && dataAplic) {
                     const dias = parseInt(renovacao.match(/\d+/)?.[0] || '0');
                     if (dias > 0) {
-                        const dataBase = new Date(dataAplic);
+                        const dataBase = new Date(dataAplic + 'T12:00:00');
                         dataBase.setDate(dataBase.getDate() + dias);
                         const dd = String(dataBase.getDate()).padStart(2, '0');
                         const mm = String(dataBase.getMonth() + 1).padStart(2, '0');
@@ -3172,16 +4055,23 @@ function appendServiceToCategory(s){
                 e.stopPropagation();
                 try {
                     // Abrir modal de edição (similar ao modal de adicionar, mas preenchido)
-                    openEditVermifugoModal(s, item);
+                    console.log('🔍 Tentando abrir modal de edição de vermífugo, função existe?', typeof window.openEditVermifugoModal);
+                    window.openEditVermifugoModal(s, item);
                 } catch(e){ console.warn('Erro ao editar vermifugo', e); }
             });
 
-            // Ligar botão de remover
+            // Ligar botão de remover (agora com confirmação)
             item.querySelector('[data-action="remove"]').addEventListener('click', async function(e){
                 e.stopPropagation();
                 try {
-                    // remover do DOM
+                    const confirmed = await showConfirmModal('Remover este vermífugo?');
+                    if (!confirmed) return;
+
+                    // remover do DOM (sub-aba)
                     item.remove();
+                    // remover também da lista de itens
+                    const itemNaLista = document.querySelector(`.service-item[data-service-id="${s.id}"]`);
+                    if (itemNaLista) itemNaLista.remove();
                     // atualizar arrays locais e persistir
                     if (Array.isArray(agendamentoAtual.servicos)) agendamentoAtual.servicos = agendamentoAtual.servicos.filter(x => String(x.id) !== String(s.id));
                     if (Array.isArray(agendamentoAtual._addedServicos)) agendamentoAtual._addedServicos = agendamentoAtual._addedServicos.filter(x => String(x.id) !== String(s.id));
@@ -3192,10 +4082,153 @@ function appendServiceToCategory(s){
 
             container.appendChild(item);
             try { const scrollParent = getScrollParent(container); if (scrollParent && typeof item.scrollIntoView === 'function') item.scrollIntoView({ behavior: 'smooth', block: 'end' }); } catch(e){}
-            return;
+            // NÃO usar return aqui - continuar para adicionar também na lista de itens
         }
 
-        // fallback: renderizar serviço na lista genérica (categoria principal)
+        // Se for antiparasitário, renderizar na sub-aba de Antiparasitários
+        if (isAntiparasitario) {
+            const container = document.querySelector('#antiparasitariosSubContent .historico-list');
+            if (!container) return;
+            
+            // remover estado vazio
+            const empty = container.querySelector('.empty-state'); if (empty) empty.remove();
+
+            const item = document.createElement('div');
+            item.className = 'antiparasitario-item';
+            item.setAttribute('data-service-id', String(s.id || ''));
+
+            const nome = s.nome || '';
+            const dataAplic = (s.meta && s.meta.dataAplic) ? s.meta.dataAplic : (s.data || '');
+            const dose = (s.meta && s.meta.dose) ? s.meta.dose : '';
+            const profissional = s.profissional || '';
+            const lote = (s.meta && s.meta.lote) ? s.meta.lote : '';
+            const renovacao = (s.meta && s.meta.renovacao) ? s.meta.renovacao : '';
+            
+            // Formatar data de aplicação para exibição (DD/MM/YYYY)
+            let dataAplicFormatada = dataAplic || '-';
+            try {
+                if (dataAplic && dataAplic.includes('-')) {
+                    const [y, m, d] = dataAplic.split('-');
+                    dataAplicFormatada = `${d}/${m}/${y}`;
+                }
+            } catch(e) {}
+            
+            // Calcular data de renovação se houver período informado
+            let renovacaoTexto = renovacao || '';
+            let dataRenovacao = '';
+            try {
+                if (renovacao && dataAplic) {
+                    const dias = parseInt(renovacao.match(/\d+/)?.[0] || '0');
+                    if (dias > 0) {
+                        const dataBase = new Date(dataAplic + 'T12:00:00');
+                        dataBase.setDate(dataBase.getDate() + dias);
+                        const dd = String(dataBase.getDate()).padStart(2, '0');
+                        const mm = String(dataBase.getMonth() + 1).padStart(2, '0');
+                        const yyyy = dataBase.getFullYear();
+                        dataRenovacao = `${dd}/${mm}/${yyyy}`;
+                        renovacaoTexto = `Renovar dia ${dataRenovacao} (${renovacao})`;
+                    }
+                }
+            } catch(e) {}
+
+            item.innerHTML = `
+                <div style="display:flex;align-items:stretch;justify-content:space-between;padding:16px;background:#fff;border:1px solid #e6e9ee;border-radius:8px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.05);transition:all 0.2s ease;width:100%;box-sizing:border-box;" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)'" onmouseout="this.style.boxShadow='0 1px 3px rgba(0,0,0,0.05)'">
+                    <div style="display:flex;align-items:flex-start;gap:14px;flex:1;min-width:0;">
+                        <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:linear-gradient(135deg, #e74c3c 0%, #f39c12 100%);border-radius:8px;flex-shrink:0;color:#fff;font-weight:700;font-size:14px;">
+                            <i class="fas fa-shield-virus" style="font-size:18px;"></i>
+                        </div>
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-weight:700;color:#1a1d29;font-size:15px;margin-bottom:6px;line-height:1.3;">${escapeHtmlUnsafe(nome)}</div>
+                            ${renovacaoTexto ? `<div style="font-size:13px;color:#e74c3c;font-weight:600;margin-bottom:4px;"><i class="fas fa-sync-alt" style="font-size:11px;margin-right:4px;"></i>${escapeHtmlUnsafe(renovacaoTexto)}</div>` : ''}
+                            <div style="font-size:13px;color:#5a6c7d;margin-bottom:2px;">Dose: ${escapeHtmlUnsafe(dose || '-')} • Aplicada em: ${escapeHtmlUnsafe(dataAplicFormatada)}</div>
+                            <div style="font-size:12px;color:#7d8a99;">Profissional: ${escapeHtmlUnsafe(profissional || '-')}${lote ? (' • Lote: ' + escapeHtmlUnsafe(lote)) : ''}</div>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:6px;align-items:center;margin-left:12px;flex-shrink:0;">
+                        <button class="btn-icon-action" title="Renovar" data-action="renovar" style="background:transparent;border:none;color:#6c757d;cursor:pointer;padding:8px;border-radius:6px;transition:all 0.2s ease;width:32px;height:32px;display:flex;align-items:center;justify-content:center;" onmouseover="this.style.background='#f0f2f5';this.style.color='#e74c3c';" onmouseout="this.style.background='transparent';this.style.color='#6c757d';">
+                            <i class="fas fa-sync-alt" style="font-size:14px;"></i>
+                        </button>
+                        <button class="btn-icon-action" title="Editar" data-action="editar" style="background:transparent;border:none;color:#6c757d;cursor:pointer;padding:8px;border-radius:6px;transition:all 0.2s ease;width:32px;height:32px;display:flex;align-items:center;justify-content:center;" onmouseover="this.style.background='#f0f2f5';this.style.color='#007bff';" onmouseout="this.style.background='transparent';this.style.color='#6c757d';">
+                            <i class="fas fa-pencil-alt" style="font-size:14px;"></i>
+                        </button>
+                        <button class="btn-icon-action" title="Remover" data-action="remove" style="background:transparent;border:none;color:#6c757d;cursor:pointer;padding:8px;border-radius:6px;transition:all 0.2s ease;width:32px;height:32px;display:flex;align-items:center;justify-content:center;" onmouseover="this.style.background='#f0f2f5';this.style.color='#dc3545';" onmouseout="this.style.background='transparent';this.style.color='#6c757d';">
+                            <i class="fas fa-times" style="font-size:16px;"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            // Ligar botão de renovar
+            item.querySelector('[data-action="renovar"]').addEventListener('click', async function(e){
+                e.stopPropagation();
+                try {
+                    // Abrir modal para renovar o antiparasitário
+                    openAddItemModal();
+                } catch(e){ console.warn('Erro ao renovar antiparasitario', e); }
+            });
+
+            // Ligar botão de editar
+            item.querySelector('[data-action="editar"]').addEventListener('click', async function(e){
+                e.stopPropagation();
+                try {
+                    // Abrir modal de edição com dados preenchidos
+                    console.log('🔍 Tentando abrir modal de edição de antiparasitário, função existe?', typeof window.openEditAntiparasitarioModal);
+                    window.openEditAntiparasitarioModal(s, item);
+                } catch(e){ console.warn('Erro ao editar antiparasitario', e); }
+            });
+
+            // Ligar botão de remover (agora com confirmação)
+            item.querySelector('[data-action="remove"]').addEventListener('click', async function(e){
+                e.stopPropagation();
+                try {
+                    const confirmed = await showConfirmModal('Remover este antiparasitário?');
+                    if (!confirmed) return;
+
+                    // remover do DOM (sub-aba)
+                    item.remove();
+                    // remover também da lista de itens
+                    const itemNaLista = document.querySelector(`.service-item[data-service-id="${s.id}"]`);
+                    if (itemNaLista) itemNaLista.remove();
+                    // atualizar arrays locais e persistir
+                    if (Array.isArray(agendamentoAtual.servicos)) agendamentoAtual.servicos = agendamentoAtual.servicos.filter(x => String(x.id) !== String(s.id));
+                    if (Array.isArray(agendamentoAtual._addedServicos)) agendamentoAtual._addedServicos = agendamentoAtual._addedServicos.filter(x => String(x.id) !== String(s.id));
+                    // persistir prontuario/servicos conforme o fluxo
+                    try { await recalcAndPersistServicos(); } catch(e){ console.warn('Erro ao persistir depois de remover antiparasitario', e); }
+                } catch(e){ console.warn('Erro removendo antiparasitario UI', e); }
+            });
+
+            container.appendChild(item);
+            try { const scrollParent = getScrollParent(container); if (scrollParent && typeof item.scrollIntoView === 'function') item.scrollIntoView({ behavior: 'smooth', block: 'end' }); } catch(e){}
+            // NÃO usar return aqui - continuar para adicionar também na lista de itens
+        }
+
+        // Se for vacina, renderizar na sub-aba de Vacinas
+        if (isVacina) {
+            console.log('💉 [appendServiceToCategory] Vacina detectada:', s.nome);
+            const nome = s.nome || '';
+            const dataAplic = (s.meta && s.meta.dataAplic) ? s.meta.dataAplic : '';
+            const lote = (s.meta && s.meta.lote) ? s.meta.lote : '';
+            const profissional = s.profissional || '';
+            const proximaDose = (s.meta && s.meta.proximaDose) ? s.meta.proximaDose : '';
+            const dose = (s.meta && s.meta.dose) ? s.meta.dose : '1 dose';
+            console.log('💉 [appendServiceToCategory] Dados da vacina:', {nome, dataAplic, lote, profissional, proximaDose, dose});
+            
+            const dadosVacina = {
+                dose: dose,
+                profissional: profissional,
+                lote: lote,
+                proximaDose: proximaDose
+            };
+            
+            try {
+                adicionarVacinaNaLista(nome, dadosVacina, dataAplic, s.id);
+            } catch(e) {
+                console.warn('Erro ao adicionar vacina na sub-aba:', e);
+            }
+            // NÃO usar return aqui - continuar para adicionar também na lista de itens
+        }
+
+        // Renderizar serviço na lista de itens (categoria principal)
         const category = document.querySelector('.category-section');
         if (!category) return;
 
@@ -3268,7 +4301,48 @@ function appendServiceToCategory(s){
                 try {
                     const sid = itemEl.dataset.serviceId;
                     if (Array.isArray(agendamentoAtual.servicos)) {
+                        // Verificar se é item especial antes de remover
+                        const servicoRemovido = agendamentoAtual.servicos.find(x => String(x.id) === String(sid));
                         agendamentoAtual.servicos = agendamentoAtual.servicos.filter(x => String(x.id) !== String(sid));
+                        
+                        // Se for item especial, remover também das sub-abas correspondentes
+                        if (servicoRemovido && servicoRemovido.meta && servicoRemovido.meta.tipoEspecial) {
+                            const tipo = servicoRemovido.meta.tipoEspecial;
+                            if (tipo === 'vacina') {
+                                // Remover card de vacina
+                                const vacinaCards = document.querySelectorAll('.vacina-item');
+                                vacinaCards.forEach(card => {
+                                    const cardData = card.dataset;
+                                    if (cardData.dose === servicoRemovido.meta.dose &&
+                                        cardData.lote === servicoRemovido.meta.lote &&
+                                        cardData.dataAplic === servicoRemovido.meta.dataAplic) {
+                                        card.remove();
+                                    }
+                                });
+                            } else if (tipo === 'vermifugo') {
+                                // Remover card de vermífugo
+                                const vermifugoCards = document.querySelectorAll('.vermifugo-item');
+                                vermifugoCards.forEach(card => {
+                                    const cardData = card.dataset;
+                                    if (cardData.dose === servicoRemovido.meta.dose &&
+                                        cardData.lote === servicoRemovido.meta.lote &&
+                                        cardData.dataAplic === servicoRemovido.meta.dataAplic) {
+                                        card.remove();
+                                    }
+                                });
+                            } else if (tipo === 'antiparasitario') {
+                                // Remover card de antiparasitário
+                                const antiparasitarioCards = document.querySelectorAll('.antiparasitario-item');
+                                antiparasitarioCards.forEach(card => {
+                                    const cardData = card.dataset;
+                                    if (cardData.dose === servicoRemovido.meta.dose &&
+                                        cardData.lote === servicoRemovido.meta.lote &&
+                                        cardData.dataAplic === servicoRemovido.meta.dataAplic) {
+                                        card.remove();
+                                    }
+                                });
+                            }
+                        }
                     }
                     // remover visualmente
                     itemEl.remove();
@@ -3346,6 +4420,157 @@ function appendServiceToCategory(s){
 function adicionarItem() {
     console.log('🔧 Função adicionar item será implementada');
     alert('Função de adicionar item será implementada em breve!');
+}
+
+// Carrega histórico clínico combinado (vacinas, vermífugos, antiparasitários)
+async function loadClinicalHistory(){
+    console.log('[loadClinicalHistory] 🚀 FUNÇÃO EXECUTADA - Linha 4138');
+    console.log('[loadClinicalHistory] Iniciando carregamento do histórico clínico...');
+    try{
+        console.log('[loadClinicalHistory] Procurando container #historicoSubContent .historico-list...');
+        const container = document.querySelector('#historicoSubContent .historico-list');
+        console.log('[loadClinicalHistory] Container resultado:', container);
+        if(!container) {
+            console.error('[loadClinicalHistory] ❌ Container #historicoSubContent .historico-list NÃO ENCONTRADO! Abortando.');
+            return;
+        }
+        console.log('[loadClinicalHistory] Container encontrado, limpando conteúdo...');
+        // limpar
+        container.innerHTML = '';
+
+        const entries = [];
+
+        // 1) registros do prontuário (se houver)
+        try{
+            if (agendamentoAtual && Array.isArray(agendamentoAtual.prontuario)){
+                agendamentoAtual.prontuario.forEach(reg => {
+                    const tipoRaw = (reg.tipo || '').toString().toLowerCase();
+                    let tipo = null;
+                    if (tipoRaw.indexOf('vacina') !== -1) tipo = 'vacina';
+                    else if (tipoRaw.indexOf('vermifug') !== -1) tipo = 'vermifugo';
+                    else if (tipoRaw.indexOf('antiparasit') !== -1) tipo = 'antiparasitario';
+                    if (tipo) entries.push({ source: 'prontuario', tipo, data: reg.dataEmissao || reg.data || null, registro: reg });
+                });
+            }
+        }catch(e){ console.warn('Erro coletando prontuário para histórico:', e); }
+
+        // 2) serviços do agendamento com meta.tipoEspecial
+        try{
+            const servs = Array.isArray(agendamentoAtual && agendamentoAtual.servicos) ? agendamentoAtual.servicos : [];
+            servs.forEach(s => {
+                try{
+                    const tipo = s && s.meta && s.meta.tipoEspecial ? s.meta.tipoEspecial : null;
+                    if (tipo && ['vacina','vermifugo','antiparasitario'].includes(tipo)){
+                        const data = (s.meta && s.meta.dataAplic) ? s.meta.dataAplic : (s.data || null);
+                        entries.push({ source: 'servico', tipo, data, servico: s });
+                    }
+                }catch(e){}
+            });
+        }catch(e){ console.warn('Erro coletando serviços para histórico:', e); }
+
+        // ordenar do mais recente para o mais antigo
+        const parseDateToTs = (d) => {
+            if (!d) return 0;
+            try{
+                if (typeof d === 'number') return d;
+                if (d.indexOf && d.indexOf('-') !== -1) return new Date(d).getTime();
+                if (d.indexOf && d.indexOf('/') !== -1) {
+                    // dd/mm/yyyy
+                    const parts = d.split('/');
+                    if (parts.length===3) return new Date(parts[2] + '-' + parts[1] + '-' + parts[0]).getTime();
+                }
+                return new Date(d).getTime() || 0;
+            }catch(e){ return 0; }
+        };
+
+        entries.sort((a,b)=> parseDateToTs(b.data) - parseDateToTs(a.data));
+
+        console.log(`[loadClinicalHistory] Total de ${entries.length} entradas encontradas:`, entries);
+
+        if (entries.length === 0){
+            console.log('[loadClinicalHistory] Nenhuma entrada encontrada, exibindo estado vazio');
+            container.innerHTML = '<p class="empty-state">Nenhum registro encontrado</p>';
+            return;
+        }
+
+        // helper para criar cards seguindo o mesmo estilo (sem ícones de ação)
+        const createCard = (tipo, nome, dataAplic, profissional, lote, dose, renovacao, sourceObj) => {
+            const item = document.createElement('div');
+            item.className = 'historico-card';
+            // escolher paleta e ícone
+            let gradient = 'linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%)';
+            let icon = 'fas fa-syringe';
+            if (tipo === 'vermifugo') { gradient = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)'; icon = 'fas fa-capsules'; }
+            if (tipo === 'antiparasitario') { gradient = 'linear-gradient(135deg, #e74c3c 0%, #f39c12 100%)'; icon = 'fas fa-shield-virus'; }
+
+            let dataFormat = dataAplic || '-';
+            try{ if (dataAplic && dataAplic.indexOf('-')!==-1){ const [y,m,d]=dataAplic.split('-'); dataFormat = `${d}/${m}/${y}`; } }catch(e){}
+
+            item.innerHTML = `
+                <div style="display:flex;align-items:stretch;justify-content:space-between;padding:16px;background:#fff;border:1px solid #e6e9ee;border-radius:8px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.05);transition:all 0.2s ease;width:100%;box-sizing:border-box;">
+                    <div style="display:flex;align-items:flex-start;gap:14px;flex:1;min-width:0;">
+                        <div style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;background:${gradient};border-radius:8px;flex-shrink:0;color:#fff;font-weight:700;font-size:14px;">
+                            <i class="${icon}" style="font-size:18px;"></i>
+                        </div>
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-weight:700;color:#1a1d29;font-size:15px;margin-bottom:6px;line-height:1.3;">${escapeHtmlUnsafe(nome)}</div>
+                            <div style="font-size:13px;color:#5a6c7d;margin-bottom:2px;">Dose: ${escapeHtmlUnsafe(dose||'-')} • Aplicada em: ${escapeHtmlUnsafe(dataFormat)}</div>
+                            <div style="font-size:12px;color:#7d8a99;">Profissional: ${escapeHtmlUnsafe(profissional||'-')}${lote?(' • Lote: '+escapeHtmlUnsafe(lote)):''}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            return item;
+        };
+
+        // montar e anexar
+        for (const en of entries){
+            try{
+                if (en.source === 'servico'){
+                    const s = en.servico;
+                    const nome = s.nome || '';
+                    const data = (s.meta && s.meta.dataAplic) ? s.meta.dataAplic : (s.data || '');
+                    const profissional = s.profissional || '';
+                    const lote = (s.meta && s.meta.lote) ? s.meta.lote : '';
+                    const dose = (s.meta && s.meta.dose) ? s.meta.dose : '';
+                    const card = createCard(en.tipo, nome, data, profissional, lote, dose, (s.meta && s.meta.renovacao) ? s.meta.renovacao : '', en);
+                    container.appendChild(card);
+                } else if (en.source === 'prontuario'){
+                    // para prontuário precisamos extrair nome/detalhes do HTML salvo — reutilizar função existente
+                    try{
+                        if (en.tipo === 'vacina'){
+                            // usar parsing existente: adicionarVacinaNaListaFromConteudo cria vacina-item — mas queremos o card no histórico
+                            // então vamos extrair o nome e usar o conteúdo
+                            const tmp = document.createElement('div'); tmp.innerHTML = en.registro.conteudo || '';
+                            const strong = tmp.querySelector('strong');
+                            const nome = strong ? strong.textContent.trim() : (tmp.textContent || '').split('\n')[0].trim();
+                            // extrair alguns detalhes do conteúdo simplificadamente
+                            let profissional = '';
+                            let lote = '';
+                            let dose = '';
+                            const txt = (tmp.textContent||'');
+                            try{ const profMatch = txt.match(/Profissional[:\s]+([^\n•]+)/i); if (profMatch) profissional = profMatch[1].trim(); }catch(e){}
+                            try{ const loteMatch = txt.match(/Lote[:\s]+([^\n•]+)/i); if (loteMatch) lote = loteMatch[1].trim(); }catch(e){}
+                            try{ const doseMatch = txt.match(/Dose[:\s]+([^\n•]+)/i); if (doseMatch) dose = doseMatch[1].trim(); }catch(e){}
+                            const card = createCard(en.tipo, nome || 'Vacina', en.data || '', profissional, lote, dose, '', en);
+                            container.appendChild(card);
+                        } else {
+                            // para outros tipos do prontuário, renderizar título simples
+                            const tmp = document.createElement('div'); tmp.innerHTML = en.registro.conteudo || '';
+                            const title = tmp.textContent ? (tmp.textContent||'').split('\n')[0].trim() : (en.registro.conteudo||'Registro');
+                            const card = createCard(en.tipo, title, en.data || '', '', '', '', '', en);
+                            container.appendChild(card);
+                        }
+                    }catch(e){ console.warn('Erro renderizando registro do prontuário no histórico:', e); }
+                }
+            }catch(e){ console.warn('Erro anexando entrada ao histórico:', e); }
+        }
+
+        // adicionar botão ver-mais ao final
+        const more = document.createElement('a'); more.href = '#'; more.className = 'ver-mais'; more.textContent = 'Ver mais'; container.appendChild(more);
+
+    }catch(e){ console.error('[loadClinicalHistory] ERRO:', e); }
 }
 
 // Função para encontrar o elemento scrollável pai
