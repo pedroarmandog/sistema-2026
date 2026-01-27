@@ -4497,6 +4497,7 @@ async function loadClinicalHistory(){
         const createCard = (tipo, nome, dataAplic, profissional, lote, dose, renovacao, sourceObj) => {
             const item = document.createElement('div');
             item.className = 'historico-card';
+            item.dataset.tipo = tipo; // Adicionar atributo data-tipo para filtros
             // escolher paleta e ícone
             let gradient = 'linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%)';
             let icon = 'fas fa-syringe';
@@ -4570,7 +4571,167 @@ async function loadClinicalHistory(){
         // adicionar botão ver-mais ao final
         const more = document.createElement('a'); more.href = '#'; more.className = 'ver-mais'; more.textContent = 'Ver mais'; container.appendChild(more);
 
+        // Aplicar filtros ativos se houverem
+        if (window._historicoFiltrosAtivos && window._historicoFiltrosAtivos.length > 0) {
+            aplicarFiltrosHistorico(window._historicoFiltrosAtivos);
+        }
+
     }catch(e){ console.error('[loadClinicalHistory] ERRO:', e); }
+}
+
+// Variável global para armazenar os filtros ativos
+window._historicoFiltrosAtivos = [];
+
+// Função para abrir modal de filtros do histórico
+function abrirModalFiltrosHistorico() {
+    // Evitar duplicados
+    if (document.getElementById('modalFiltrosHistorico')) return;
+    
+    // Criar overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'modalFiltrosHistoricoOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:10000;';
+    
+    // Criar modal
+    const modal = document.createElement('div');
+    modal.id = 'modalFiltrosHistorico';
+    modal.style.cssText = 'background:#fff;border-radius:8px;padding:24px;width:90%;max-width:400px;box-shadow:0 4px 20px rgba(0,0,0,0.15);';
+    
+    // Tipos disponíveis para filtrar
+    const tipos = [
+        { value: 'consulta', label: 'Consultas e Retornos' },
+        { value: 'procedimento', label: 'Procedimentos' },
+        { value: 'exame', label: 'Exames' },
+        { value: 'receita', label: 'Receitas' },
+        { value: 'vacina', label: 'Vacinas' },
+        { value: 'vermifugo', label: 'Vermífugos' },
+        { value: 'antiparasitario', label: 'Antiparasitas' }
+    ];
+    
+    // Construir HTML do modal
+    let checkboxesHTML = '';
+    tipos.forEach(tipo => {
+        const checked = window._historicoFiltrosAtivos.includes(tipo.value) ? 'checked' : '';
+        checkboxesHTML += `
+            <div style="display:flex;align-items:center;margin-bottom:12px;">
+                <input type="checkbox" id="filtro_${tipo.value}" value="${tipo.value}" ${checked} style="margin-right:8px;width:18px;height:18px;cursor:pointer;">
+                <label for="filtro_${tipo.value}" style="cursor:pointer;font-size:14px;color:#333;">${tipo.label}</label>
+            </div>
+        `;
+    });
+    
+    modal.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid #e0e0e0;">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <i class="fas fa-filter" style="color:#007bff;"></i>
+                <h3 style="margin:0;font-size:18px;font-weight:600;color:#333;">Filtrar</h3>
+            </div>
+            <button id="fecharModalFiltros" style="background:transparent;border:none;font-size:20px;cursor:pointer;color:#666;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:4px;transition:background 0.2s;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'">✕</button>
+        </div>
+        <div style="margin-bottom:24px;">
+            ${checkboxesHTML}
+        </div>
+        <div style="margin-top:20px;">
+            <a href="#" id="limparFiltrosHistorico" style="color:#007bff;text-decoration:none;font-size:14px;display:inline-block;margin-bottom:16px;transition:color 0.2s;" onmouseover="this.style.color='#0056b3'" onmouseout="this.style.color='#007bff'">Limpar Filtros</a>
+        </div>
+        <div style="display:flex;gap:12px;justify-content:flex-end;">
+            <button id="btnCancelarFiltros" style="background:#6c757d;color:#fff;border:none;padding:10px 24px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:500;transition:background 0.2s;" onmouseover="this.style.background='#5a6268'" onmouseout="this.style.background='#6c757d'">Cancelar</button>
+            <button id="btnOkFiltros" style="background:#007bff;color:#fff;border:none;padding:10px 24px;border-radius:6px;cursor:pointer;font-size:14px;font-weight:500;transition:background 0.2s;" onmouseover="this.style.background='#0056b3'" onmouseout="this.style.background='#007bff'">OK</button>
+        </div>
+    `;
+    
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    
+    // Handlers
+    document.getElementById('fecharModalFiltros').addEventListener('click', () => overlay.remove());
+    document.getElementById('btnCancelarFiltros').addEventListener('click', () => overlay.remove());
+    
+    document.getElementById('limparFiltrosHistorico').addEventListener('click', (e) => {
+        e.preventDefault();
+        tipos.forEach(tipo => {
+            const checkbox = document.getElementById(`filtro_${tipo.value}`);
+            if (checkbox) checkbox.checked = false;
+        });
+    });
+    
+    document.getElementById('btnOkFiltros').addEventListener('click', () => {
+        // Coletar filtros selecionados
+        const filtrosSelecionados = [];
+        tipos.forEach(tipo => {
+            const checkbox = document.getElementById(`filtro_${tipo.value}`);
+            if (checkbox && checkbox.checked) {
+                filtrosSelecionados.push(tipo.value);
+            }
+        });
+        
+        // Salvar filtros ativos
+        window._historicoFiltrosAtivos = filtrosSelecionados;
+        
+        // Aplicar filtros
+        aplicarFiltrosHistorico(filtrosSelecionados);
+        
+        // Fechar modal
+        overlay.remove();
+    });
+    
+    // Fechar ao clicar fora
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) overlay.remove();
+    });
+}
+
+// Função para aplicar filtros no histórico
+function aplicarFiltrosHistorico(filtros) {
+    const container = document.querySelector('#historicoSubContent .historico-list');
+    if (!container) return;
+    
+    const cards = container.querySelectorAll('.historico-card');
+    let visibleCount = 0;
+    
+    cards.forEach(card => {
+        // Pegar o tipo do card (pode estar em data-tipo ou precisamos detectar pelo conteúdo)
+        let tipoCard = card.dataset.tipo;
+        
+        // Se não tiver data-tipo, tentar detectar pelo ícone ou conteúdo
+        if (!tipoCard) {
+            const icon = card.querySelector('i');
+            if (icon) {
+                if (icon.classList.contains('fa-syringe')) tipoCard = 'vacina';
+                else if (icon.classList.contains('fa-capsules')) tipoCard = 'vermifugo';
+                else if (icon.classList.contains('fa-shield-virus')) tipoCard = 'antiparasitario';
+            }
+        }
+        
+        // Se nenhum filtro está ativo (todos selecionados), mostrar tudo
+        if (filtros.length === 0 || filtros.length === 7) {
+            card.style.display = '';
+            visibleCount++;
+        }
+        // Senão, mostrar apenas os que correspondem ao filtro
+        else if (tipoCard && filtros.includes(tipoCard)) {
+            card.style.display = '';
+            visibleCount++;
+        } else {
+            card.style.display = 'none';
+        }
+    });
+    
+    // Atualizar mensagem de vazio se necessário
+    const emptyState = container.querySelector('.empty-state');
+    if (emptyState) {
+        if (visibleCount === 0 && cards.length > 0) {
+            emptyState.textContent = 'Nenhum registro encontrado com os filtros selecionados';
+            emptyState.style.display = 'block';
+        } else if (visibleCount === 0) {
+            emptyState.textContent = 'Nenhum registro encontrado';
+            emptyState.style.display = 'block';
+        } else {
+            emptyState.style.display = 'none';
+        }
+    }
+    
+    console.log(`✅ Filtros aplicados: ${filtros.join(', ')} - ${visibleCount} cards visíveis`);
 }
 
 // Função para encontrar o elemento scrollável pai
@@ -4825,6 +4986,16 @@ document.addEventListener('DOMContentLoaded', function() {
             atualizarClasseStatus(this);
             salvarStatus();
         });
+    }
+
+    // Configurar botão de filtrar histórico
+    const btnFiltrarHistorico = document.getElementById('btnFiltrarHistorico');
+    if (btnFiltrarHistorico) {
+        btnFiltrarHistorico.addEventListener('click', (e) => {
+            e.preventDefault();
+            abrirModalFiltrosHistorico();
+        });
+        console.log('✅ Botão de filtrar histórico configurado');
     }
 
     // Escutar atualizações externas de status
