@@ -328,22 +328,27 @@ class AgendamentosManager {
             this.saveAgendamento();
         });
 
-        // Submenu Cliente
+        // Submenu Cliente - não adicionar listener se já configurado globalmente
         const clienteMenuItem = document.getElementById('clienteMenuItem');
         const clienteSubmenu = document.getElementById('clienteSubmenu');
         const clienteMenuContainer = clienteMenuItem?.parentElement;
-        
+
         if (clienteMenuItem && clienteSubmenu && clienteMenuContainer) {
-            clienteMenuItem.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                // Toggle submenu
-                clienteMenuContainer.classList.toggle('open');
-                clienteSubmenu.classList.toggle('open');
-                
-                console.log('Submenu cliente toggled');
-            });
+            if (!clienteMenuItem.hasAttribute('data-listener-added')) {
+                clienteMenuItem.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    // Toggle submenu
+                    clienteMenuContainer.classList.toggle('open');
+                    clienteSubmenu.classList.toggle('open');
+
+                    console.log('Submenu cliente toggled');
+                });
+                clienteMenuItem.setAttribute('data-listener-added', 'true');
+            } else {
+                console.log('Submenu cliente listener já configurado pelo script global — pulando listener local');
+            }
         }
     }
 
@@ -2278,6 +2283,51 @@ class AgendamentosManager {
         }
     }
 }
+
+// --- Garantir fechamento de dropdowns/menus ao voltar com o botão do navegador ---
+function _closeAllOpenMenus() {
+    try {
+        // fechar elementos com classes comuns de dropdown/menu
+        const selectors = ['.dropdown.show', '.dropdown.open', '.submenu.open', '.menu.open', '.popover.show'];
+        selectors.forEach(sel => {
+            document.querySelectorAll(sel).forEach(el => {
+                el.classList.remove('show');
+                el.classList.remove('open');
+                try { el.style.display = 'none'; } catch(e){}
+                try { el.style.opacity = ''; el.style.visibility = ''; } catch(e){}
+            });
+        });
+
+        // fechar .dropdown-menu e .submenu individualmente e limpar estilos inline
+        document.querySelectorAll('.dropdown-menu, .submenu, .popover').forEach(el => {
+            el.classList.remove('show');
+            el.classList.remove('open');
+            try { el.style.display = 'none'; } catch(e){}
+            try { el.style.opacity = ''; el.style.visibility = ''; } catch(e){}
+            try { el.removeAttribute('aria-hidden'); } catch(e){}
+        });
+
+        // ajustar toggles com aria-expanded
+        document.querySelectorAll('[aria-expanded="true"]').forEach(t => {
+            try { t.setAttribute('aria-expanded', 'false'); } catch(e){}
+            try { t.classList.remove('show'); } catch(e){}
+        });
+
+        // limpar toggles especificos (ex.: inicioRapidoBtn)
+        try {
+            const inicioBtn = document.getElementById('inicioRapidoBtn');
+            const inicioMenu = document.getElementById('inicioRapidoMenu');
+            if (inicioBtn) try { inicioBtn.classList.remove('show'); inicioBtn.setAttribute('aria-expanded','false'); } catch(e){}
+            if (inicioMenu) try { inicioMenu.classList.remove('show'); inicioMenu.style.display = 'none'; } catch(e){}
+        } catch(e) {}
+    } catch (e) { console.warn('_closeAllOpenMenus error', e); }
+}
+
+// Executar ao voltar/forward do navegador
+try {
+    window.addEventListener('pageshow', (ev) => { try { _closeAllOpenMenus(); } catch(e){} });
+    window.addEventListener('popstate', () => { try { _closeAllOpenMenus(); } catch(e){} });
+} catch(e) { console.warn('Navigation listeners not attached (global)', e); }
 
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {

@@ -13,6 +13,135 @@ if (typeof window.openAddVermifugoModal !== 'function') {
     };
 }
 
+// Reverter check-out (desfazer) — atualiza no banco e na UI
+async function desfazerCheckout() {
+    try {
+        if (!window.agendamentoAtual || !window.agendamentoAtual.id) {
+            // usar modal simples se necessário
+            try { alert('Nenhum agendamento carregado'); } catch(e){}
+            return;
+        }
+
+        // confirmar ação com modal estilizado
+        const confirmar = await showConfirmDialog({
+            title: 'Cancelar Check-out',
+            message: 'Deseja realmente cancelar o check-out deste atendimento? Essa ação reverterá o status para o estado anterior.',
+            okText: 'OK',
+            cancelText: 'Cancelar'
+        });
+
+        if (!confirmar) return;
+
+        const agId = window.agendamentoAtual.id;
+        // decidir status anterior
+        const previous = window.agendamentoAtual.__prevStatus || 'agendado';
+
+        const resp = await fetch(`/api/agendamentos/${agId}/status`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ status: previous })
+        });
+
+        if (resp.ok) {
+            try { await carregarAgendamento(); } catch(e) { console.warn('Erro recarregando agendamento após desfazer:', e); }
+            window.agendamentoAtual.status = previous;
+            try { if (typeof updateCheckoutVisibility === 'function') updateCheckoutVisibility(); } catch(e){}
+            try { alert('Check-out desfeito com sucesso'); } catch(e){}
+        } else {
+            let txt = 'Erro desconhecido';
+            try { const j = await resp.json(); txt = j.message || txt; } catch(e){}
+            try { alert('Erro ao desfazer check-out: ' + txt); } catch(e){}
+        }
+    } catch (e) {
+        console.error('Erro em desfazerCheckout():', e);
+        try { alert('Erro ao desfazer check-out. Verifique sua conexão.'); } catch(e){}
+    }
+}
+
+// Exibe um modal de confirmação centralizado estilizado conforme sistema.
+// Recebe um objeto: { title, message, okText, cancelText }
+function showConfirmDialog(opts) {
+    return new Promise((resolve) => {
+        const { title = 'Confirmação', message = '', okText = 'OK', cancelText = 'Cancelar' } = opts || {};
+
+        // Evitar múltiplos modais
+        if (document.getElementById('confirmOverlay')) return resolve(false);
+
+        const overlay = document.createElement('div');
+        overlay.id = 'confirmOverlay';
+        overlay.style.position = 'fixed';
+        overlay.style.inset = '0';
+        overlay.style.background = 'rgba(0,0,0,0.45)';
+        overlay.style.display = 'flex';
+        overlay.style.alignItems = 'center';
+        overlay.style.justifyContent = 'center';
+        overlay.style.zIndex = '15000';
+
+        const modal = document.createElement('div');
+        modal.style.width = '480px';
+        modal.style.maxWidth = '92%';
+        modal.style.background = '#fff';
+        modal.style.borderRadius = '8px';
+        modal.style.boxShadow = '0 12px 40px rgba(2,6,23,0.45)';
+        modal.style.padding = '18px';
+        modal.style.fontFamily = 'inherit';
+
+        const h = document.createElement('div');
+        h.style.fontSize = '18px';
+        h.style.fontWeight = 600;
+        h.style.marginBottom = '8px';
+        h.textContent = title;
+
+        const p = document.createElement('div');
+        p.style.color = '#333';
+        p.style.marginBottom = '18px';
+        p.textContent = message;
+
+        const actions = document.createElement('div');
+        actions.style.display = 'flex';
+        actions.style.justifyContent = 'flex-end';
+        actions.style.gap = '8px';
+
+        const btnCancel = document.createElement('button');
+        btnCancel.textContent = cancelText;
+        btnCancel.style.background = '#d9534f';
+        btnCancel.style.color = '#fff';
+        btnCancel.style.border = 'none';
+        btnCancel.style.padding = '8px 14px';
+        btnCancel.style.borderRadius = '6px';
+        btnCancel.style.cursor = 'pointer';
+
+        const btnOk = document.createElement('button');
+        btnOk.textContent = okText;
+        btnOk.style.background = '#28a745';
+        btnOk.style.color = '#fff';
+        btnOk.style.border = 'none';
+        btnOk.style.padding = '8px 14px';
+        btnOk.style.borderRadius = '6px';
+        btnOk.style.cursor = 'pointer';
+
+        actions.appendChild(btnCancel);
+        actions.appendChild(btnOk);
+
+        modal.appendChild(h);
+        modal.appendChild(p);
+        modal.appendChild(actions);
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        const cleanup = () => { try { overlay.remove(); } catch(e){} };
+
+        btnCancel.addEventListener('click', function() { cleanup(); resolve(false); });
+        btnOk.addEventListener('click', function() { cleanup(); resolve(true); });
+
+        // fechar ao clicar fora
+        overlay.addEventListener('click', function(e) {
+            if (e.target === overlay) { cleanup(); resolve(false); }
+        });
+    });
+}
+
 if (typeof window.openAddAntiparasitarioModal !== 'function') {
     window._openAddAntiparasitarioModalQueue = [];
     window.openAddAntiparasitarioModal = function(itemInfo) {
@@ -679,38 +808,53 @@ function obterEstadoSubmenu(submenuId) {
 }
 
 function configurarPersistenciaSubmenu(menuItemId, submenuId, submenuName) {
-    const menuItems = document.querySelectorAll(`#${menuItemId}`);
-    const submenus = document.querySelectorAll(`#${submenuId}`);
-    if (menuItems.length > 1) {
-        for (let i = 1; i < menuItems.length; i++) {
-            const duplicateElement = menuItems[i].closest('.nav-item-with-submenu');
-            if (duplicateElement) duplicateElement.remove();
-        }
-    }
-    if (submenus.length > 1) { for (let i = 1; i < submenus.length; i++) submenus[i].remove(); }
+    // Attach listeners to all matching menu item instances (robust against duplicated IDs)
+    const menuItems = Array.from(document.querySelectorAll(`#${menuItemId}`));
+    const submenus = Array.from(document.querySelectorAll(`#${submenuId}`));
 
-    const menuItem = document.getElementById(menuItemId);
-    const submenu = document.getElementById(submenuId);
-    const menuContainer = menuItem?.parentElement;
-    if (menuItem && submenu && menuContainer) {
-        if (menuItem.getAttribute('data-listener-added')) return;
-        menuItem.addEventListener('click', function(e) {
+    // Remove extra submenu elements if present (keep first)
+    if (submenus.length > 1) {
+        for (let i = 1; i < submenus.length; i++) submenus[i].remove();
+    }
+
+    const submenuEl = document.getElementById(submenuId);
+    if (!submenuEl || menuItems.length === 0) return;
+
+    menuItems.forEach(menuItemEl => {
+        const menuContainer = menuItemEl.closest('.nav-item-with-submenu') || menuItemEl.parentElement;
+        if (!menuContainer) return;
+        if (menuItemEl.getAttribute('data-listener-added')) return;
+
+        menuItemEl.addEventListener('click', function(e) {
             e.preventDefault(); e.stopPropagation();
             if (e.target.closest('.submenu-item')) return;
             fecharOutrosSubmenus(submenuName);
             const isNowOpen = !menuContainer.classList.contains('open');
             menuContainer.classList.toggle('open');
-            submenu.classList.toggle('open');
+            submenuEl.classList.toggle('open');
             salvarEstadoSubmenu(submenuName, isNowOpen);
         });
 
-        const submenuItems = submenu.querySelectorAll('.submenu-item[href]');
-        submenuItems.forEach(item => item.addEventListener('click', function(e) { e.stopPropagation(); setTimeout(()=>{ menuContainer.classList.remove('open'); submenu.classList.remove('open'); salvarEstadoSubmenu(submenuName, false); }, 150); }));
-        const submenuItemsSemHref = submenu.querySelectorAll('.submenu-item:not([href])');
-        submenuItemsSemHref.forEach(item => item.addEventListener('click', function(e) { e.stopPropagation(); menuContainer.classList.remove('open'); submenu.classList.remove('open'); salvarEstadoSubmenu(submenuName, false); }));
+        menuItemEl.setAttribute('data-listener-added', 'true');
+    });
 
-        menuItem.setAttribute('data-listener-added', 'true');
-    }
+    // Ensure submenu item clicks close the menu
+    const submenuItems = submenuEl.querySelectorAll('.submenu-item[href]');
+    submenuItems.forEach(item => item.addEventListener('click', function(e) {
+        e.stopPropagation();
+        setTimeout(() => {
+            document.querySelectorAll('.nav-item-with-submenu.open').forEach(c => c.classList.remove('open'));
+            submenuEl.classList.remove('open');
+            salvarEstadoSubmenu(submenuName, false);
+        }, 150);
+    }));
+    const submenuItemsSemHref = submenuEl.querySelectorAll('.submenu-item:not([href])');
+    submenuItemsSemHref.forEach(item => item.addEventListener('click', function(e) {
+        e.stopPropagation();
+        document.querySelectorAll('.nav-item-with-submenu.open').forEach(c => c.classList.remove('open'));
+        submenuEl.classList.remove('open');
+        salvarEstadoSubmenu(submenuName, false);
+    }));
 }
 
 function fecharOutrosSubmenus(submenuAtual) {
@@ -990,6 +1134,8 @@ async function carregarAgendamento() {
                 throw new Error(`Erro ao carregar agendamento: ${response.status} ${response.statusText}`);
             }
             agendamentoAtual = await response.json();
+            // garantir que handlers que usam window.agendamentoAtual vejam o mesmo objeto
+            try { window.agendamentoAtual = agendamentoAtual; } catch(e) { /* ambiente restrito */ }
         } catch (fetchErr) {
             console.error('❌ Erro no fetch do agendamento:', fetchErr);
             alert('Erro ao carregar dados do agendamento: ' + (fetchErr.message || fetchErr) + '\nVerifique se o servidor está rodando e se o endereço http://localhost:3000 está acessível.');
@@ -998,6 +1144,7 @@ async function carregarAgendamento() {
         console.log('✅ Agendamento carregado da API:', agendamentoAtual);
         
         preencherDadosAgendamento(agendamentoAtual);
+        try { if (typeof updateCheckoutVisibility === 'function') updateCheckoutVisibility(); } catch(e){}
         // Restaurar estado da aba CLÍNICA (se existir) sem regravar imediatamente
         try {
             if (agendamentoAtual && agendamentoAtual.clinicaState) {
@@ -1431,9 +1578,47 @@ async function alternarAba(aba, skipSave = false) {
     if (aba === 'clinica') {
         if (sidebarRight) sidebarRight.style.display = 'none';
         if (detailsContainer) detailsContainer.classList.add('clinica-mode');
+        // esconder botão de Vacina na área do prontuário quando entrar na aba Clínica
+        try {
+            const vacinaBtn = document.querySelector('.prontuario-icons .icon-btn[title="Vacina"]') || (document.querySelector('.prontuario-icons i.fa-syringe') && document.querySelector('.prontuario-icons i.fa-syringe').closest('button'));
+            if (vacinaBtn) vacinaBtn.style.display = 'none';
+        } catch(e) { console.warn('Erro ao esconder botão Vacina na aba Clínica', e); }
     } else {
         if (sidebarRight) sidebarRight.style.display = 'block';
         if (detailsContainer) detailsContainer.classList.remove('clinica-mode');
+
+        // restaurar visibilidade do botão Vacina ao sair da aba Clínica
+        try {
+            const vacinaBtn = document.querySelector('.prontuario-icons .icon-btn[title="Vacina"]') || (document.querySelector('.prontuario-icons i.fa-syringe') && document.querySelector('.prontuario-icons i.fa-syringe').closest('button'));
+            if (vacinaBtn) vacinaBtn.style.display = '';
+        } catch(e) { console.warn('Erro ao restaurar botão Vacina fora da aba Clínica', e); }
+
+        // Atualizar a UI com dados já carregados em memória quando possível
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const agendamentoId = urlParams.get('id');
+
+            // Se já temos o agendamento em memória, reaplicar os dados
+            if (window.agendamentoAtual && String(window.agendamentoAtual.id) === String(agendamentoId)) {
+                try { preencherDadosAgendamento(window.agendamentoAtual); } catch (e) { console.warn('Erro preencherDadosAgendamento (memória):', e); }
+            } else if (agendamentoId) {
+                // Caso não exista em memória, buscar do servidor silenciosamente (sem alertas)
+                try {
+                    const resp = await fetch(`/api/agendamentos/${agendamentoId}`, { cache: 'no-store' });
+                    if (resp && resp.ok) {
+                        const fresh = await resp.json();
+                        try { preencherDadosAgendamento(fresh); } catch (e) { console.warn('Erro preencherDadosAgendamento (fetch):', e); }
+                    } else {
+                        console.warn('Resposta inválida ao buscar agendamento ao alternar aba:', resp && resp.status);
+                    }
+                } catch (err) {
+                    // Falha na rede: não exibir alert para o usuário aqui, apenas logar
+                    console.warn('Falha ao buscar agendamento ao alternar aba (silencioso):', err);
+                }
+            }
+        } catch (e) {
+            console.warn('Erro recarregando agendamento ao alternar para detalhes:', e);
+        }
     }
     
     console.log(`📋 Aba alterada para: ${aba}`);
@@ -2657,6 +2842,13 @@ async function finalizarCobranca() {
 
                     if (response.ok) {
                         console.log('✅ Check-out realizado após pagamento');
+
+                        // Recarregar do servidor para garantir que o status/pagamentos foram persistidos
+                        try {
+                            await carregarAgendamento();
+                            console.log('Agendamento recarregado após PATCH status');
+                        } catch(e) { console.warn('Erro recarregando agendamento após PATCH:', e); }
+
                         try { alert('Check-out realizado com sucesso!'); } catch(e){}
 
                         // Atualiza o select visual
@@ -2666,10 +2858,11 @@ async function finalizarCobranca() {
                             atualizarClasseStatus(statusSelect);
                         }
 
-                        // Atualiza objeto local e ícones/linhas
+                        // Atualiza objeto local e ícones/linhas (já atualizado por carregarAgendamento, mas garantir)
                         agendamentoAtual.status = 'concluido';
                         try { atualizarLinhaListaStatus(agendamentoAtual.id, 'concluido'); } catch(e){}
                         try { updateServiceIcons('concluido'); } catch(e){}
+                        try { if (typeof updateCheckoutVisibility === 'function') updateCheckoutVisibility(); } catch(e){}
 
                         // Redireciona de volta para a lista após 1 segundo
                         setTimeout(() => { window.location.href = 'agendamentos-novo.html'; }, 1000);
@@ -2781,11 +2974,13 @@ async function salvarStatus() {
         // Atualiza no localStorage
         atualizarLocalStorage();
         console.log(`📊 Status alterado para: ${novoStatus}`);
+        try { if (typeof updateCheckoutVisibility === 'function') updateCheckoutVisibility(); } catch(e){}
         
     } catch (error) {
         console.error('Erro ao salvar status:', error);
         // Atualiza apenas no localStorage em caso de erro
         atualizarLocalStorage();
+        try { if (typeof updateCheckoutVisibility === 'function') updateCheckoutVisibility(); } catch(e){}
     }
 }
 
@@ -5437,10 +5632,78 @@ document.addEventListener('DOMContentLoaded', function() {
         const btnCheckout = document.querySelector('.btn-checkout');
         if (btnCheckout) {
             try { btnCheckout.removeEventListener('click', finalizarCobranca); } catch(e){}
-            btnCheckout.addEventListener('click', function(ev){ ev.preventDefault(); try { finalizarCobranca(); } catch(e){ console.error('Erro ao chamar finalizarCobranca via botão', e); } });
+            btnCheckout.addEventListener('click', async function(ev){
+                ev.preventDefault();
+                try {
+                    if (!window.agendamentoAtual) window.agendamentoAtual = {};
+                    window.agendamentoAtual.__prevStatus = window.agendamentoAtual.status || 'agendado';
+
+                    // Abrir modal de pagamento; a confirmação e o PATCH são tratados dentro de `finalizarCobranca()`
+                    finalizarCobranca();
+                } catch(e){ console.error('Erro ao chamar finalizarCobranca via botão', e); }
+            });
             console.log('✔️ Handler de checkout registrado');
         } else {
             console.log('ℹ️ Botão .btn-checkout não encontrado no DOM ao inicializar.');
         }
+        // Mover o botão "Desfazer Checkout" (se existir) para a mesma área do botão "Fazer Checkout"
+        try {
+            const sidebarActions = document.querySelector('.sidebar-right .action-buttons');
+            if (sidebarActions) {
+                // Criar um novo botão Desfazer na sidebar (garante posição correta)
+                const existingSidebarDesfazer = sidebarActions.querySelector('.btn-desfazer');
+                    if (!existingSidebarDesfazer) {
+                    const newBtn = document.createElement('button');
+                    // copiar classes do btnCheckout para manter aparência, se existir
+                    try { newBtn.className = btnCheckout ? Array.from(btnCheckout.classList).join(' ') : 'btn-checkout'; } catch(e) { newBtn.className = 'btn-checkout'; }
+                    newBtn.classList.add('btn-desfazer');
+                    newBtn.innerHTML = '<i class="fas fa-undo"></i> Desfazer Checkout';
+                    // inserir antes do botão de import
+                    const btnImport = sidebarActions.querySelector('.btn-import');
+                    // iniciar oculto; visibilidade será controlada por updateCheckoutVisibility()
+                    newBtn.style.display = 'none';
+                    if (btnImport) sidebarActions.insertBefore(newBtn, btnImport);
+                    else sidebarActions.appendChild(newBtn);
+                    // listener
+                    window.__desfazerListener = function(ev){ ev.preventDefault(); try { if (typeof desfazerCheckout === 'function') desfazerCheckout(); } catch(err){ console.error('Erro ao executar desfazerCheckout()', err); } };
+                    newBtn.addEventListener('click', window.__desfazerListener);
+                    console.log('✔️ Botão Desfazer (novo) inserido na sidebar direita');
+                }
+
+                // esconder o botão original no header (se existir) para evitar duplicação visual
+                try {
+                    const headerDesfazer = document.querySelector('.action-buttons-container .btn-desfazer');
+                    if (headerDesfazer) headerDesfazer.style.display = 'none';
+                } catch(e){}
+            } else {
+                console.log('ℹ️ Container .sidebar-right .action-buttons não encontrado.');
+            }
+        } catch (e) { console.warn('Erro ao inserir botão Desfazer na sidebar:', e); }
     } catch (e) { console.warn('Erro registrando handlers da sidebar:', e); }
 });
+
+// Atualiza visibilidade entre botões Fazer Checkout / Desfazer Checkout
+function updateCheckoutVisibility() {
+    try {
+        const btnCheckout = document.querySelector('.sidebar-right .action-buttons .btn-checkout');
+        // .btn-desfazer pode ter sido renomeado/copiado — procurar por texto ou classe original
+        let btnDesfazer = document.querySelector('.sidebar-right .action-buttons .btn-desfazer');
+        if (!btnDesfazer) {
+            // fallback: procurar por botão com texto 'Desfazer' dentro da sidebar
+            const candidates = Array.from(document.querySelectorAll('.sidebar-right .action-buttons button'));
+            btnDesfazer = candidates.find(b => /desfazer/i.test(b.textContent || '')) || null;
+        }
+
+        const status = (window.agendamentoAtual && window.agendamentoAtual.status) ? String(window.agendamentoAtual.status).toLowerCase() : '';
+        console.log('🔁 updateCheckoutVisibility:', { status, btnCheckoutExists: !!btnCheckout, btnDesfazerExists: !!btnDesfazer });
+        const isChecked = ['concluido', 'check-out', 'checkout'].includes(status);
+
+        if (isChecked) {
+            if (btnCheckout) btnCheckout.style.display = 'none';
+            if (btnDesfazer) btnDesfazer.style.display = '';
+        } else {
+            if (btnCheckout) btnCheckout.style.display = '';
+            if (btnDesfazer) btnDesfazer.style.display = 'none';
+        }
+    } catch (e) { console.warn('Erro updateCheckoutVisibility', e); }
+}

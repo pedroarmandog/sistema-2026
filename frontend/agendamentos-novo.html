@@ -11,6 +11,10 @@
     <link rel="stylesheet" href="colors.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.5/main.min.css" rel="stylesheet">
+    <style>
+        /* Estilo para o botão de toggle de filtros (deixar escuro e não clicável) */
+        .view-btn[disabled] { background: #343a40 !important; color: #fff !important; cursor: not-allowed !important; opacity: 0.95 !important; }
+    </style>
 </head>
 <body>
      <!-- Sidebar -->
@@ -704,7 +708,7 @@
         </header>
 
         <!-- Agendamentos Content -->
-        <div class="agendamentos-container">
+        <div class="agendamentos-container filters-collapsed">
             <!-- Filters Sidebar -->
             <div class="filters-sidebar">
                 <!-- header controls moved to date-navigation (Atualizar / view-toggle / calendario) -->
@@ -794,7 +798,7 @@
                     <div class="date-top-row">
                         <div class="mini-controls">
                             <div class="view-toggle">
-                                <button class="view-btn active" data-view="list">
+                                <button id="filtersToggleButton" class="view-btn active" data-view="list" disabled>
                                     <i class="fas fa-list"></i>
                                 </button>
                                 <button class="view-btn" data-view="calendar">
@@ -1171,14 +1175,13 @@
 
                 // Buscar estado salvo e aplicar (refetch em load/timeouts para garantir atualização após POST)
                 function applySavedState(value) {
+                    // Forçar comportamento: apenas aplicar collapsed quando verdadeiro.
+                    // Não reabrir automaticamente com base no estado salvo — queremos o painel sempre fechado.
                     if (value === true) {
                         container.classList.add('filters-collapsed');
                         console.log('[agendamentos-novo] aplicar COLLAPSED');
-                    } else if (value === false) {
-                        container.classList.remove('filters-collapsed');
-                        console.log('[agendamentos-novo] aplicar EXPANDED');
                     } else {
-                        console.log('[agendamentos-novo] nenhum estado salvo encontrado');
+                        console.log('[agendamentos-novo] mantendo COLLAPSED por configuração atual');
                     }
                 }
 

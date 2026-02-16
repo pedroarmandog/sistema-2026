@@ -693,14 +693,33 @@ function abrirNovoAgendamentoModal() {
     // FUNÇÕES PARA MÚLTIPLOS SERVIÇOS
     // =============================================
     
-    function adicionarServicoALista() {
-        const servicoInput = document.getElementById('servicoGlobal');
-        const servicoNome = servicoInput.value.trim();
-        const servicoId = servicoInput.getAttribute('data-selected-id');
-        const servicoValor = parseFloat(servicoInput.getAttribute('data-selected-valor') || '0');
+    function adicionarServicoALista(selectedObj) {
+        try { console.debug('[novo-atendimento-global] adicionarServicoALista called', !!selectedObj); } catch(e){}
+        let servicoInput = document.getElementById('servicoGlobal');
+        let servicoNome = '';
+        let servicoId = '';
+        let servicoValor = 0;
+        if (selectedObj && typeof selectedObj === 'object') {
+            servicoId = String(selectedObj.id || selectedObj._id || '');
+            servicoNome = String(selectedObj.nome || selectedObj.titulo || selectedObj.name || selectedObj.label || '');
+            servicoValor = Number(String(selectedObj.valor || selectedObj.preco || selectedObj.venda || 0).replace(',', '.')) || 0;
+            // set attributes so UI stays in sync
+            try { if (servicoInput) { servicoInput.value = servicoNome; servicoInput.setAttribute('data-selected-id', servicoId); servicoInput.setAttribute('data-selected-valor', String(servicoValor)); } } catch(e){}
+        } else {
+            if (servicoInput) {
+                servicoNome = (servicoInput.value || '').trim();
+                try { servicoId = servicoInput.getAttribute('data-selected-id') || ''; } catch(e){}
+                try { servicoValor = parseFloat(servicoInput.getAttribute('data-selected-valor') || '0') || 0; } catch(e){}
+            }
+        }
         
+        // Exigir que o serviço tenha sido selecionado a partir do dropdown (data-selected-id)
+        if (!servicoId || String(servicoId).trim() === '') {
+            showNotification('Por favor, selecione um serviço', 'error');
+            return;
+        }
         if (!servicoNome) {
-            showNotification('Por favor, selecione um serviço primeiro', 'error');
+            showNotification('Por favor, selecione um serviço', 'error');
             return;
         }
         
@@ -1718,33 +1737,40 @@ async function searchPetsClientesGlobal(query){
 
             // attach click handlers
             Array.from(container.querySelectorAll('.resultado-servico-item')).forEach(el => {
-                el.onclick = async function(){
-                        const id = this.getAttribute('data-id');
-                        try { await ensureMeusItensLoaded(); } catch(e){}
-                        const all = Array.isArray(window.__meusItensCache) ? window.__meusItensCache : [];
-                        const obj = all.find(x => String(x.id) === String(id));
-                        if(obj){
-                            input.value = obj.nome || obj.titulo || obj.name || '';
-                            input.setAttribute('data-selected-id', String(obj.id));
+                el.onclick = async function(ev){
+                            try { ev.stopPropagation(); ev.preventDefault(); } catch(e){}
+                            console.log('[novo-atendimento-global] resultado item clicado');
+                            const id = this.getAttribute('data-id');
+                            try { await ensureMeusItensLoaded(); } catch(e){}
+                            const all = Array.isArray(window.__meusItensCache) ? window.__meusItensCache : [];
+                            const obj = all.find(x => String(x.id) === String(id));
+                            if(obj){
+                                input.value = obj.nome || obj.titulo || obj.name || '';
+                                input.setAttribute('data-selected-id', String(obj.id));
                             
-                            // Armazenar o valor do serviço para uso posterior
-                            const preco = obj.preco || obj.venda || obj.valor || 0;
-                            const valor = Number(String(preco).replace(',', '.')) || 0;
-                            input.setAttribute('data-selected-valor', String(valor));
-                        } else {
-                            // fallback: set visible text
-                            input.value = this.textContent.trim();
-                            input.removeAttribute('data-selected-id');
-                            input.removeAttribute('data-selected-valor');
-                        }
-                    // esconder e evitar reabrir imediatamente por causa do focus handler
-                    container.style.display = 'none';
-                    container.innerHTML = '';
-                    try{ input.dataset.skipOpen = '1'; } catch(e){}
-                    // manter foco no input mas evitar que o evento focus reabra o dropdown
-                    try{ input.focus(); } catch(e){}
-                    setTimeout(()=>{ try{ delete input.dataset.skipOpen; } catch(e){} }, 400);
-                };
+                                // Armazenar o valor do serviço para uso posterior
+                                const preco = obj.preco || obj.venda || obj.valor || 0;
+                                const valor = Number(String(preco).replace(',', '.')) || 0;
+                                input.setAttribute('data-selected-valor', String(valor));
+                            } else {
+                                // fallback: set visible text
+                                input.value = this.textContent.trim();
+                                input.removeAttribute('data-selected-id');
+                                input.removeAttribute('data-selected-valor');
+                            }
+                        // esconder e evitar reabrir imediatamente por causa do focus handler
+                        container.style.display = 'none';
+                        container.innerHTML = '';
+                        try{ input.dataset.skipOpen = '1'; } catch(e){}
+                        // adicionar automaticamente o serviço selecionado (passar o objeto para evitar leituras race)
+                        try {
+                            console.log('[novo-atendimento-global] clique item, chamando window.adicionarServicoGlobal com obj id=', obj && obj.id);
+                            try { if (window && typeof window.adicionarServicoGlobal === 'function') { window.adicionarServicoGlobal(obj); } else { console.warn('[novo-atendimento-global] window.adicionarServicoGlobal não disponível'); } } catch(e) { console.warn('[novo-atendimento-global] erro ao chamar adicionarServicoGlobal', e); }
+                        } catch(e) { console.warn('[novo-atendimento-global] falha ao adicionar automaticamente', e); }
+                        // manter foco no input mas evitar que o evento focus reabra o dropdown
+                        try{ input.focus(); } catch(e){}
+                        setTimeout(()=>{ try{ delete input.dataset.skipOpen; } catch(e){} }, 400);
+                    };
             });
         }
 

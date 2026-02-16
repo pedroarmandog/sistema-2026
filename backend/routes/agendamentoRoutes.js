@@ -14,17 +14,29 @@ router.get('/', async (req, res) => {
         
         const whereClause = {};
         
-        // Filtro por data - usar SQL DATE() para ignorar timezone
+        // Filtro por data - usar intervalo com offset -03:00 para evitar
+        // discrepâncias de timezone/UTC ao armazenar timestamps.
         if (data) {
-            const { Sequelize } = require('sequelize');
-            whereClause[Op.and] = [
-                Sequelize.where(
-                    Sequelize.fn('DATE', Sequelize.col('dataAgendamento')),
-                    '=',
-                    data
-                )
-            ];
-            console.log('📅 Filtro de data aplicado:', data);
+            try {
+                const start = new Date(`${data}T00:00:00-03:00`);
+                const next = new Date(start);
+                next.setDate(start.getDate() + 1);
+                whereClause.dataAgendamento = {
+                    [Op.gte]: start,
+                    [Op.lt]: next
+                };
+                console.log('📅 Filtro de data aplicado (range):', start.toISOString(), next.toISOString());
+            } catch (e) {
+                console.warn('⚠️ Erro ao aplicar filtro de data como range, fallback para DATE():', e);
+                const { Sequelize } = require('sequelize');
+                whereClause[Op.and] = [
+                    Sequelize.where(
+                        Sequelize.fn('DATE', Sequelize.col('dataAgendamento')),
+                        '=',
+                        data
+                    )
+                ];
+            }
         }
         
         // Filtro por status
@@ -143,20 +155,49 @@ router.post('/', async (req, res) => {
             return res.status(404).json({ error: 'Pet não encontrado' });
         }
 
-        // Combinar data e hora
-        const dataAgendamento = new Date(`${data}T${hora}:00`);
+        // Combinar data e hora (adicionar explicitamente o offset de São Paulo)
+        // Isso evita problemas de conversão de timezone que movem o dia para frente/para trás
+        // quando a string é interpretada como UTC pelo engine de JS/DB.
+        const dataAgendamento = new Date(`${data}T${hora}:00-03:00`);
 
         // Verificar conflitos de horário (mesmo PET no mesmo horário)
-        // Permitir agendamentos diferentes ao mesmo horário para pets distintos
-        const conflito = await Agendamento.findOne({
-            where: {
-                dataAgendamento: dataAgendamento,
-                petId: petId,
-                status: {
-                    [Op.not]: 'cancelado'
+        // Usar intervalo (start <= dataAgendamento < next) com offset -03:00
+        let conflito = null;
+        try {
+            const start = new Date(`${data}T00:00:00-03:00`);
+            const next = new Date(start);
+            next.setDate(start.getDate() + 1);
+            conflito = await Agendamento.findOne({
+                where: {
+                    petId: petId,
+                    horario: hora,
+                    dataAgendamento: {
+                        [Op.gte]: start,
+                        [Op.lt]: next
+                    },
+                    status: {
+                        [Op.not]: 'cancelado'
+                    }
                 }
-            }
-        });
+            });
+        } catch (e) {
+            console.warn('⚠️ fallback conflito por DATE():', e);
+            const { Sequelize } = require('sequelize');
+            conflito = await Agendamento.findOne({
+                where: {
+                    petId: petId,
+                    horario: hora,
+                    [Op.and]: Sequelize.where(
+                        Sequelize.fn('DATE', Sequelize.col('dataAgendamento')),
+                        '=',
+                        data
+                    ),
+                    status: {
+                        [Op.not]: 'cancelado'
+                    }
+                }
+            });
+        }
 
         if (conflito) {
             return res.status(409).json({ 
@@ -233,8 +274,8 @@ router.put('/:id', async (req, res) => {
             }
             // Se já tem 3 partes (HH:MM:SS), usar como está
             
-            const dataString = `${data}T${horaNormalizada}`;
-            console.log('🕐 Criando data:', dataString);
+            const dataString = `${data}T${horaNormalizada}-03:00`;
+            console.log('🕐 Criando data (com offset -03:00):', dataString);
             const dataObj = new Date(dataString);
             console.log('📅 Data criada:', dataObj, 'isValid:', !isNaN(dataObj.getTime()));
             

@@ -1349,6 +1349,29 @@ body {
     margin-bottom: 10px;
 }
 
+/* Conteúdo editável do registro: crescer verticalmente até um limite, depois rolagem interna.
+   Evita quebra do layout quando o usuário cola longas linhas sem espaços. */
+.prontuario-registro .registro-conteudo {
+    width: 100%;
+    box-sizing: border-box;
+    white-space: pre-wrap; /* preservar quebras e quebrar linhas longas */
+    overflow-wrap: break-word;
+    word-break: break-word;
+    /* altura mínima (aprox. 2 linhas) e máxima (limite antes de rolagem interna) */
+    min-height: 44px;
+    max-height: 140px; /* ajuste visual: ~200 caracteres em linhas normais */
+    overflow: auto;
+    padding: 6px 8px;
+    border-radius: 4px;
+    border: 1px solid #f0f0f0;
+    background: #fafafa;
+}
+
+.prontuario-registro .registro-conteudo:empty:before {
+    content: attr(data-placeholder);
+    color: #999;
+}
+
 .registro-titulo {
     display: flex;
     align-items: center;
