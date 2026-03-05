@@ -481,6 +481,7 @@ body {
   cursor: pointer;
   transition: background 120ms, color 120ms, border-color 120ms;
 }
+.pill-button[data-historico-type="todos"].active,
 .pill-button[data-historico-type="clinico"].active,
 .pill-button[data-historico-type="estetico"].active {
   background: var(--color-primary, #0d6efd);
@@ -564,7 +565,7 @@ body {
   display: inline-flex;
   gap: 6px;
   align-items: center;
-  padding: 4px 6px; /* mais compacto */
+  padding: 4px 6px;
   border-radius: 10px;
   font-size: 0.9rem;
   cursor: pointer;
@@ -573,7 +574,265 @@ body {
 .link-periodicos i { color: var(--color-primary, #2d9cff); font-size: 0.85rem; }
 
 /* Hover igual ao botão de vacinas (fundo suave) */
+
+/* ======= HISTÓRICO: CARDS AGRUPADOS ======= */
+#hist-dynamic-list { padding: 4px 0 8px; }
+
+.hist-loading {
+  padding: 24px;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 0.92rem;
+  gap: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.hist-loading i { font-size: 1.1rem; }
+
+.hist-empty {
+  padding: 32px 20px;
+  text-align: center;
+  color: #b0b8c4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.hist-empty i { font-size: 2rem; opacity: 0.45; }
+.hist-empty p { margin: 0; font-size: 0.92rem; }
+
+/* Grupo (card de atendimento) */
+.hist-group {
+  margin-bottom: 12px;
+  border-radius: 10px;
+  border: 1px solid #e5e9f0;
+  overflow: hidden;
+  cursor: pointer;
+  transition: box-shadow 130ms, transform 80ms;
+  background: #fff;
+}
+.hist-group:hover {
+  box-shadow: 0 3px 14px rgba(0,0,0,0.10);
+  transform: translateY(-1px);
+}
+.hist-group:active { transform: translateY(0); }
+
+/* Cabeçalho do grupo */
+.hist-group-header {
+  background: #eef2f7;
+  padding: 9px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #e0e6ee;
+}
+.hist-group-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  font-size: 0.8rem;
+  color: #607080;
+}
+.hist-atend-label {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.75rem;
+  color: #8a98a8;
+}
+.atend-id {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1e2a38;
+}
+.hist-sep { color: #b0bec8; }
+.hist-date { color: #4a5a6a; font-weight: 500; font-size: 0.82rem; }
+.hist-rel { color: #9ca3af; font-size: 0.78rem; font-style: italic; }
+.hist-chevron { color: #c0cad4; font-size: 0.82rem; transition: color 120ms; }
+.hist-group:hover .hist-chevron { color: #7a8fa0; }
+
+/* Corpo do grupo */
+.hist-group-body {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Card de serviço */
+.hist-service-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #f0f2f6;
+  background: #fafbfc;
+  border-left-width: 3px;
+}
+
+/* Estético: verde */
+.hist-service-card.categoria-estetico {
+  border-left-color: #10b981;
+}
+.hist-service-card.categoria-estetico .hist-service-icon {
+  background: #d1fae5;
+  color: #059669;
+}
+
+/* Clínico: azul */
+.hist-service-card.categoria-clinico {
+  border-left-color: #3b82f6;
+}
+.hist-service-card.categoria-clinico .hist-service-icon {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.hist-service-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 1rem;
+}
+
+.hist-service-info { flex: 1; min-width: 0; }
+.hist-service-name {
+  font-weight: 600;
+  color: #1e2a38;
+  font-size: 0.92rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hist-service-pro {
+  color: #6b7280;
+  font-size: 0.81rem;
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.hist-service-pro i { font-size: 0.72rem; color: #9ca3af; }
+.hist-service-time {
+  color: #9ca3af;
+  font-size: 0.79rem;
+  margin-top: 3px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.hist-service-time i { font-size: 0.72rem; }
+.hist-rel-small {
+  font-style: italic;
+  color: #b0b8c4;
+}
 .link-periodicos:hover { background: rgba(46,168,122,0.06); }
+
+/* ======= DOCUMENTOS ======= */
+.docs-group {
+  margin-bottom: 16px;
+  border: 1px solid #e5e9f0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+.docs-group-header {
+  background: #eef2f7;
+  padding: 9px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid #e0e6ee;
+  flex-wrap: wrap;
+}
+.docs-group-label {
+  font-size: 0.76rem;
+  letter-spacing: 0.04em;
+  color: #7a8fa0;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.docs-group-label strong { color: #1e2a38; font-size: 0.9rem; }
+.docs-group-date {
+  font-size: 0.81rem;
+  color: #4a5a6a;
+  font-weight: 500;
+}
+.docs-group-link {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: var(--color-primary, #2563eb);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.docs-group-link:hover { text-decoration: underline; }
+.docs-group-files {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Card de arquivo */
+.doc-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid #f0f2f6;
+  background: #fafbfc;
+  cursor: pointer;
+  transition: box-shadow 120ms, transform 80ms;
+}
+.doc-card:hover {
+  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+  transform: translateY(-1px);
+}
+.doc-card:active { transform: translateY(0); }
+
+.doc-card-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--doc-color, #6b7280) 12%, white);
+  color: var(--doc-color, #6b7280);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+.doc-card-info { flex: 1; min-width: 0; }
+.doc-card-name {
+  font-weight: 600;
+  color: #1e2a38;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.doc-card-meta {
+  font-size: 0.78rem;
+  color: #9ca3af;
+  margin-top: 2px;
+}
+.doc-card-open {
+  color: #c0cad4;
+  font-size: 0.8rem;
+  flex-shrink: 0;
+  transition: color 120ms;
+}
+.doc-card:hover .doc-card-open { color: var(--color-primary, #2563eb); }
 
 /* ======= TAB CONTENTS ======= */
 .tab-content {

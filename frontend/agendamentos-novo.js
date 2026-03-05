@@ -266,6 +266,17 @@ class AgendamentosManager {
             console.log('⚠️ Botão .btn-filter não encontrado');
         }
 
+        // Filtros Pet/Cliente e Profissional: filtra em tempo real ao digitar
+        let _filterDebounce = null;
+        const inputPet = document.getElementById('filterPetCliente');
+        const inputProf = document.getElementById('filterProfissional');
+        const onFilterInput = () => {
+            clearTimeout(_filterDebounce);
+            _filterDebounce = setTimeout(() => { this.applyFilters(); }, 300);
+        };
+        if (inputPet) inputPet.addEventListener('input', onFilterInput);
+        if (inputProf) inputProf.addEventListener('input', onFilterInput);
+
         // Refresh button
         const btnRefresh = document.querySelector('.btn-refresh');
         if (btnRefresh) {
@@ -446,8 +457,24 @@ class AgendamentosManager {
             const pad = (n) => String(n).padStart(2, '0');
             const dateStr = `${this.currentDate.getFullYear()}-${pad(this.currentDate.getMonth()+1)}-${pad(this.currentDate.getDate())}`;
             console.log('📅 Data formatada (local):', dateStr);
-            
-            const response = await fetch(`/api/agendamentos?data=${dateStr}`);
+
+            // Montar URL com filtros de status ativos
+            let url = `/api/agendamentos?data=${dateStr}`;
+            const statusAtivos = (this.filtros && this.filtros.status && this.filtros.status.length > 0)
+                ? this.filtros.status
+                : [];
+            // Se filtro de texto (pet/profissional) estiver ativo, sempre incluir cancelados
+            // para que agendamentos cancelados apareçam nos resultados de busca por texto
+            const temFiltroTexto = !!(this.filtros && (this.filtros.petCliente || this.filtros.profissional));
+            if (statusAtivos.includes('cancelado') || temFiltroTexto) {
+                url += '&incluirCancelados=true';
+            }
+            // Quando há filtro(s) de status específicos (sem filtro de texto), passar para a API
+            if (statusAtivos.length > 0 && !temFiltroTexto) {
+                statusAtivos.forEach(s => { url += `&status[]=${encodeURIComponent(s)}`; });
+            }
+
+            const response = await fetch(url);
             console.log('📡 Response status:', response.status);
             
             if (response.ok) {
@@ -594,7 +621,7 @@ class AgendamentosManager {
                         <button class="action-icon" title="Compartilhar" onclick="agendamentosManager.shareAgendamento(${agendamento.id})">
                             <i class="fas fa-external-link-alt"></i>
                         </button>
-                        <button class="action-icon" title="Mais opções" onclick="agendamentosManager.showMoreOptions(${agendamento.id}, event)">
+                        <button class="action-icon" title="Mais opções" disabled style="cursor:default;opacity:1;color:#555;pointer-events:none;">
                             <i class="fas fa-ellipsis-v"></i>
                         </button>
                     </div>
@@ -768,7 +795,7 @@ class AgendamentosManager {
                             <div class="agendamento-actions">
                                 <button class="action-icon" title="Check-in" onclick="(function(e){e.stopPropagation(); if(window.agendamentosManager){agendamentosManager.marcarCheckin(${agendamento.id})}})(event)"><i class="fas fa-map-marker-alt"></i></button>
                                 <button class="action-icon" title="Compartilhar" onclick="agendamentosManager.shareAgendamento(${agendamento.id})"><i class="fas fa-external-link-alt"></i></button>
-                                <button class="action-icon" title="Mais opções" onclick="agendamentosManager.showMoreOptions(${agendamento.id}, event)"><i class="fas fa-ellipsis-v"></i></button>
+                                <button class="action-icon" title="Mais opções" disabled style="cursor:default;opacity:1;color:#555;pointer-events:none;"><i class="fas fa-ellipsis-v"></i></button>
                             </div>
                         </div>
                     </div>`;
@@ -883,6 +910,33 @@ class AgendamentosManager {
                     item.innerHTML = `<span class="dot" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${opt.dot};margin-right:8px;vertical-align:middle;"></span> ${opt.label}`;
                     item.addEventListener('click', async (ev) => {
                         ev.stopPropagation();
+
+                        // Check-out deve ser feito na página de detalhes (requer pagamento)
+                        if (opt.value === 'concluido') {
+                            removeMenu();
+                            window.location.href = `agendamento-detalhes.html?id=${encodeURIComponent(agendamentoId)}`;
+                            return;
+                        }
+
+                        // Cancelar: fluxo com dois modais + credenciais de gerente
+                        if (opt.value === 'cancelado') {
+                            removeMenu();
+                            if (typeof window.iniciarFluxoCancelamento === 'function') {
+                                window.iniciarFluxoCancelamento(agendamentoId, () => {
+                                    // Atualizar badge para Cancelado visualmente, depois recarregar
+                                    const rowEl = row || document.querySelector(`[data-agendamento-id="${agendamentoId}"]`);
+                                    if (rowEl) {
+                                        const b = rowEl.querySelector('.status-badge');
+                                        if (b) { b.textContent = 'Cancelado'; b.className = 'status-badge status-cancelado'; }
+                                    }
+                                    setTimeout(() => {
+                                        if (window.agendamentosManager) window.agendamentosManager.loadAgendamentos();
+                                    }, 800);
+                                });
+                            }
+                            return;
+                        }
+
                         try {
                             const res = await fetch(`/api/agendamentos/${agendamentoId}/status`, {
                                 method: 'PATCH',
@@ -1012,6 +1066,33 @@ class AgendamentosManager {
                     item.innerHTML = `<span class="dot" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${opt.dot};margin-right:8px;vertical-align:middle;"></span> ${opt.label}`;
                     item.addEventListener('click', async (ev) => {
                         ev.stopPropagation();
+
+                        // Check-out deve ser concluído na página de detalhes (requer pagamento)
+                        if (opt.value === 'concluido') {
+                            removeMenu();
+                            window.location.href = `agendamento-detalhes.html?id=${encodeURIComponent(agendamentoId)}`;
+                            return;
+                        }
+
+                        // Cancelar: fluxo com dois modais + credenciais de gerente
+                        if (opt.value === 'cancelado') {
+                            removeMenu();
+                            if (typeof window.iniciarFluxoCancelamento === 'function') {
+                                window.iniciarFluxoCancelamento(agendamentoId, () => {
+                                    // Atualizar badge para Cancelado visualmente, depois recarregar
+                                    const rowEl = badge.closest('.agendamento-row');
+                                    if (rowEl) {
+                                        const b = rowEl.querySelector('.status-badge');
+                                        if (b) { b.textContent = 'Cancelado'; b.className = 'status-badge status-cancelado'; }
+                                    }
+                                    setTimeout(() => {
+                                        if (window.agendamentosManager) window.agendamentosManager.loadAgendamentos();
+                                    }, 800);
+                                });
+                            }
+                            return;
+                        }
+
                         // Chamar API para atualizar status
                         try {
                             const res = await fetch(`/api/agendamentos/${agendamentoId}/status`, {
@@ -1244,7 +1325,10 @@ class AgendamentosManager {
     }
 
     applyFilters() {
+        // Preservar filtros de status (controlados pelas tags, não pelo form)
+        const statusAtual = this.filtros && this.filtros.status ? this.filtros.status : [];
         this.filtros = {
+            status: statusAtual,
             petCliente: document.getElementById('filterPetCliente').value,
             profissional: document.getElementById('filterProfissional').value,
             numero: document.getElementById('filterNumero').value,
@@ -1256,6 +1340,12 @@ class AgendamentosManager {
             andamento: document.getElementById('filterAndamento').checked,
             exibirEndereco: document.getElementById('filterExibirEnerco').checked
         };
+
+        // Persistir filtros de texto no localStorage
+        try {
+            localStorage.setItem('ag_filtro_petCliente', this.filtros.petCliente || '');
+            localStorage.setItem('ag_filtro_profissional', this.filtros.profissional || '');
+        } catch(e) {}
 
         // Recarregar conforme o período atual (day/week/month)
         this.handlePeriodChange(this.period || 'day');
@@ -1272,6 +1362,12 @@ class AgendamentosManager {
         document.getElementById('filterHorario').value = '';
         document.getElementById('filterAndamento').checked = false;
         document.getElementById('filterExibirEnerco').checked = false;
+
+        // Limpar persistência
+        try {
+            localStorage.removeItem('ag_filtro_petCliente');
+            localStorage.removeItem('ag_filtro_profissional');
+        } catch(e) {}
 
         this.filtros = {};
         this.loadAgendamentos();
@@ -1411,7 +1507,14 @@ class AgendamentosManager {
     // Helper: buscar agendamentos para uma data (YYYY-MM-DD)
     async fetchAgendamentosForDate(dateStr) {
         try {
-            const res = await fetch(`/api/agendamentos?data=${encodeURIComponent(dateStr)}`);
+            let url = `/api/agendamentos?data=${encodeURIComponent(dateStr)}`;
+            // Incluir cancelados quando filtro de texto ativo ou status cancelado selecionado
+            const temFiltroTexto = !!(this.filtros && (this.filtros.petCliente || this.filtros.profissional));
+            const temCancelado = !!(this.filtros && this.filtros.status && this.filtros.status.includes('cancelado'));
+            if (temFiltroTexto || temCancelado) {
+                url += '&incluirCancelados=true';
+            }
+            const res = await fetch(url);
             if (!res.ok) return [];
             const data = await res.json();
             return Array.isArray(data) ? data : (data.rows || data.agendamentos || []);
@@ -2032,6 +2135,22 @@ class AgendamentosManager {
         } catch (error) {
             console.error('❌ Erro ao carregar filtros salvos:', error);
         }
+
+        // Restaurar filtros de texto do localStorage
+        try {
+            const savedPet = localStorage.getItem('ag_filtro_petCliente') || '';
+            const savedProf = localStorage.getItem('ag_filtro_profissional') || '';
+            if (savedPet) {
+                this.filtros.petCliente = savedPet;
+                const elPet = document.getElementById('filterPetCliente');
+                if (elPet) elPet.value = savedPet;
+            }
+            if (savedProf) {
+                this.filtros.profissional = savedProf;
+                const elProf = document.getElementById('filterProfissional');
+                if (elProf) elProf.value = savedProf;
+            }
+        } catch(e) {}
     }
     
     applyStatusFilters(statusArray) {

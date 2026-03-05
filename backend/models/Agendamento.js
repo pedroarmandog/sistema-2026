@@ -77,6 +77,12 @@ const Agendamento = sequelize.define('Agendamento', {
         defaultValue: 'agendado',
         comment: 'Status do agendamento'
     },
+    taxidog: {
+        type: DataTypes.BOOLEAN,
+        allowNull: true,
+        defaultValue: false,
+        comment: 'Indica se o agendamento teve serviço de taxi dog'
+    },
     petId: {
         type: DataTypes.INTEGER,
         allowNull: false,

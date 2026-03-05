@@ -855,7 +855,7 @@ function gerarHTMLRelatorio(dados) {
                 <th>Pet</th>
                 <th>Plano</th>
                 <th>Dia da Semana</th>
-                <th>Leva & Traz</th>
+                <th>Taxi Dog</th>
                 <th>Vlr Leva &</th>
                 <th>Valor</th>
             </tr>
@@ -902,7 +902,7 @@ function gerarHTMLRelatorio(dados) {
             
             // Preparar dados para o Excel
             const wsData = [
-                ['Nº', 'Ativo', 'Cliente', 'Pet', 'Plano', 'Dia da Semana', 'Leva & Traz', 'Vlr Leva &', 'Valor'],
+                ['Nº', 'Ativo', 'Cliente', 'Pet', 'Plano', 'Dia da Semana', 'Taxi Dog', 'Vlr Taxi', 'Valor'],
                 ...dados.map(contrato => [
                     contrato.numero,
                     contrato.ativo,
@@ -927,7 +927,7 @@ function gerarHTMLRelatorio(dados) {
                 {wch: 30}, // Pet
                 {wch: 50}, // Plano
                 {wch: 15}, // Dia da Semana
-                {wch: 12}, // Leva & Traz
+                {wch: 12}, // Taxi Dog
                 {wch: 12}, // Vlr Leva &
                 {wch: 12}  // Valor
             ];

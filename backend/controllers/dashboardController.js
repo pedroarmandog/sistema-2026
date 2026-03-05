@@ -161,7 +161,7 @@ exports.oportunidadesVenda = async (req, res) => {
     }
 };
 
-// Leva & Traz (agendamentos com serviço de transporte para hoje)
+// Taxi Dog (agendamentos com serviço de transporte para hoje)
 exports.levaTraz = async (req, res) => {
     try {
         const hoje = new Date();
@@ -219,7 +219,7 @@ exports.levaTraz = async (req, res) => {
         
         res.json(levaTrazList);
     } catch (error) {
-        console.error('Erro ao buscar leva & traz:', error);
+        console.error('Erro ao buscar Taxi Dog:', error);
         res.status(500).json({ erro: 'Erro ao buscar agendamentos' });
     }
 };

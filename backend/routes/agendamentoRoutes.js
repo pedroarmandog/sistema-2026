@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { Agendamento, Pet, Cliente, Empresa } = require('../models');
+const { Agendamento, Pet, Cliente, Empresa, Usuario } = require('../models');
 const fs = require('fs');
 const path = require('path');
 const { Op } = require('sequelize');
@@ -41,10 +41,16 @@ router.get('/', async (req, res) => {
         
         // Filtro por status
         if (status && Array.isArray(status) && status.length > 0) {
-            whereClause.status = {
-                [Op.in]: status
-            };
+            // Filtro explícito: mostrar apenas os status solicitados (incluindo cancelado se pedido)
+            whereClause.status = { [Op.in]: status };
+        } else if (status && !Array.isArray(status)) {
+            // status como string única
+            whereClause.status = status;
+        } else if (req.query.incluirCancelados !== 'true') {
+            // Sem filtro de status e sem flag especial: ocultar cancelados por padrão
+            whereClause.status = { [Op.ne]: 'cancelado' };
         }
+        // Se incluirCancelados=true e sem status[], retorna tudo (inclusive cancelados)
 
         const agendamentos = await Agendamento.findAll({
             where: whereClause,
@@ -124,10 +130,12 @@ router.get('/:id', async (req, res) => {
             status: agendamento.status,
             dataAgendamento: agendamento.dataAgendamento,
             petId: agendamento.petId,
+            clienteId: agendamento.pet?.cliente?.id || null,
             prontuario: agendamento.prontuario || [],
             clinicaState: agendamento.clinicaState || null,
             pagamentos: agendamento.pagamentos || [],
-            totalPago: agendamento.totalPago || 0
+            totalPago: agendamento.totalPago || 0,
+            taxidog: agendamento.taxidog || false
         };
 
         res.json(agendamentoFormatted);
@@ -252,7 +260,7 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { data, hora, petId, servico, servicos, observacoes, profissional, valor, status } = req.body;
+        const { data, hora, petId, servico, servicos, observacoes, profissional, valor, status, taxidog } = req.body;
 
         console.log('📥 PUT /api/agendamentos/:id - Dados recebidos:', { id, data, hora, petId, servico, observacoes, profissional, valor, status });
 
@@ -321,6 +329,7 @@ router.put('/:id', async (req, res) => {
         if (profissional !== undefined) updateData.profissional = profissional;
         if (valor !== undefined) updateData.valor = valor;
         if (status) updateData.status = status;
+        if (taxidog !== undefined) updateData.taxidog = taxidog;
 
         await agendamento.update(updateData);
 
@@ -346,6 +355,7 @@ router.put('/:id', async (req, res) => {
             profissional: agendamentoAtualizado.profissional,
             valor: agendamentoAtualizado.valor,
             status: agendamentoAtualizado.status,
+            taxidog: agendamentoAtualizado.taxidog || false,
             dataAgendamento: agendamentoAtualizado.dataAgendamento
         };
 
@@ -359,6 +369,50 @@ router.put('/:id', async (req, res) => {
             message: error.message,
             details: error.stack
         });
+    }
+});
+
+// POST /api/agendamentos/:id/cancelar - Cancela e DELETA agendamento após validar credenciais de gerente
+router.post('/:id/cancelar', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { usuario: usuarioLogin, senha } = req.body;
+
+        if (!usuarioLogin || !senha) {
+            return res.status(400).json({ error: 'Usuário e senha são obrigatórios' });
+        }
+
+        const user = await Usuario.findOne({ where: { usuario: usuarioLogin } });
+        if (!user || !user.ativo) {
+            return res.status(401).json({ error: 'Usuário não encontrado ou inativo' });
+        }
+
+        const bcrypt = require('bcryptjs');
+        const senhaValida = await bcrypt.compare(senha, user.senha);
+        if (!senhaValida) {
+            return res.status(401).json({ error: 'Credenciais inválidas' });
+        }
+
+        // Regra de autorização: pode cancelar quem tiver id = 1 (gerente principal)
+        // ou cujo nome seja "LOGIN INICIAL" (usuário master do sistema)
+        const isLoginInicial = (user.nome || '').trim().toUpperCase() === 'LOGIN INICIAL';
+        const isGerente = user.id === 1;
+        if (!isGerente && !isLoginInicial) {
+            return res.status(403).json({ error: 'Apenas o gerente principal (usuário 1) ou o LOGIN INICIAL podem autorizar o cancelamento.' });
+        }
+
+        const agendamento = await Agendamento.findByPk(id);
+        if (!agendamento) {
+            return res.status(404).json({ error: 'Agendamento não encontrado' });
+        }
+
+        await agendamento.update({ status: 'cancelado' });
+
+        console.log(`🚫 Agendamento ${id} cancelado por gerente: ${user.nome}`);
+        res.json({ message: 'Agendamento cancelado com sucesso' });
+    } catch (error) {
+        console.error('Erro ao cancelar agendamento:', error);
+        res.status(500).json({ error: 'Erro interno do servidor' });
     }
 });
 
@@ -613,10 +667,11 @@ router.get('/:id/comprovante', async (req, res) => {
         for (let i = 0; i < servicos.length; i++) {
             const servico = servicos[i];
             const quantidade = parseFloat(servico.quantidade) || 1;
-            const unitario = parseFloat(servico.unitario || servico.valor) || 0;
-            const desconto = parseFloat(servico.desconto) || 0;
-            const valorComDesconto = unitario * (1 - desconto / 100);
-            const total = quantidade * valorComDesconto;
+            // "Vlr Unit" = valor unitário cadastrado original do serviço/produto (nunca muda com desconto/acréscimo)
+            const unitarioCadastrado = parseFloat(servico.unitario) || parseFloat(servico.valor) || 0;
+            // "Total" = valor final já calculado com desconto/acréscimo (salvo no banco)
+            // Prioriza servico.total; fallback: valor × qtd
+            const total = parseFloat(servico.total) || (parseFloat(servico.valor || servico.unitario) * quantidade) || (unitarioCadastrado * quantidade);
             subtotal += total;
 
             const descricao = servico.nome || '';
@@ -632,9 +687,9 @@ router.get('/:id/comprovante', async (req, res) => {
             const descHeight = doc.heightOfString(descricao, { width: descWidth });
             doc.text(descricao, descX, y, { width: descWidth });
 
-            // Quantidade, Valor Unitário e Total alinhados nas colunas
+            // Quantidade, Valor Unitário (cadastrado) e Total alinhados nas colunas
             doc.text(String(quantidade), qtyX, y, { width: unitX - qtyX, align: 'center' });
-            doc.text(`R$ ${valorComDesconto.toFixed(2)}`, unitX, y, { width: totalX - unitX, align: 'right' });
+            doc.text(`R$ ${unitarioCadastrado.toFixed(2)}`, unitX, y, { width: totalX - unitX, align: 'right' });
             doc.text(`R$ ${total.toFixed(2)}`, totalX, y, { width: right - totalX, align: 'right' });
 
             // avançar y pela maior altura entre descrição e linha simples
@@ -722,6 +777,298 @@ router.get('/:id/comprovante', async (req, res) => {
     } catch (error) {
         console.error('Erro ao gerar comprovante:', error);
         res.status(500).json({ error: 'Erro ao gerar comprovante' });
+    }
+});
+
+// ====== PRONTUÁRIO — PDF COMPLETO ======
+router.get('/:id/prontuario/pdf', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const PDFDocument = require('pdfkit');
+
+        // Buscar agendamento com Pet + Cliente
+        const agendamento = await Agendamento.findByPk(id, {
+            include: [{ model: Pet, as: 'pet', include: [{ model: Cliente, as: 'cliente' }] }]
+        });
+        if (!agendamento) return res.status(404).json({ error: 'Agendamento não encontrado' });
+
+        // Buscar empresa ativa
+        let empresa = null;
+        try { empresa = await Empresa.findOne({ where: { ativa: true }, order: [['id', 'ASC']] }); } catch(e) {}
+
+        // Helper: strip HTML tags
+        const stripHtml = (str) => String(str || '').replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ').trim();
+
+        // PDF A4
+        const mmToPt = mm => mm * 72 / 25.4;
+        const A4W = 595.28, A4H = 841.89;
+        const marginX = mmToPt(18), marginTop = mmToPt(14), marginBottom = mmToPt(14);
+        const contentW = A4W - marginX * 2;
+
+        const doc = new PDFDocument({ size: 'A4', margins: { top: marginTop, bottom: marginBottom, left: marginX, right: marginX }, autoFirstPage: true });
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename=prontuario-${id}.pdf`);
+        doc.pipe(res);
+
+        const left = marginX, right = A4W - marginX;
+        let y = marginTop;
+
+        // ── CABEÇALHO: logo ──────────────────────────────────────────────
+        let logoRendered = false;
+        try {
+            let logoPath = path.join(__dirname, '../../frontend/logos/logo_pet_cria-removebg-preview.png');
+            if (empresa && empresa.logo) {
+                const candidate = path.join(__dirname, '../../uploads', empresa.logo);
+                if (fs.existsSync(candidate)) logoPath = candidate;
+            }
+            if (fs.existsSync(logoPath)) {
+                const maxH = Math.round(mmToPt(18));
+                const maxW = Math.round(mmToPt(28));
+                const logoX = (A4W - maxW) / 2;
+                doc.image(logoPath, logoX, y, { fit: [maxW, maxH], align: 'center', valign: 'top' });
+                y += maxH + Math.round(mmToPt(4));
+                logoRendered = true;
+            }
+        } catch(e) {}
+        if (!logoRendered) {
+            doc.fontSize(20).font('Helvetica-Bold').fillColor('#2c3e50').text('PETSHOP', left, y, { align: 'center', width: contentW });
+            y += 26;
+        }
+
+        // Nome empresa
+        if (empresa && empresa.razaoSocial) {
+            doc.fontSize(12).font('Helvetica-Bold').fillColor('#2c3e50').text(empresa.razaoSocial, left, y, { align: 'center', width: contentW });
+            y += 16;
+        }
+        // Contato empresa
+        const contatoEmp = [empresa && empresa.cnpj ? `CNPJ: ${empresa.cnpj}` : '', empresa && empresa.telefone ? `Tel: ${empresa.telefone}` : '', empresa && empresa.email ? empresa.email : ''].filter(Boolean).join('   ');
+        if (contatoEmp) {
+            doc.fontSize(8.5).font('Helvetica').fillColor('#636e72').text(contatoEmp, left, y, { align: 'center', width: contentW });
+            y += 13;
+        }
+        if (empresa && empresa.endereco) {
+            let endStr = '';
+            try {
+                const e = typeof empresa.endereco === 'string' ? JSON.parse(empresa.endereco) : empresa.endereco;
+                if (typeof e === 'object' && e !== null) {
+                    endStr = [e.logradouro || e.rua || e.endereco, e.numero, e.bairro, e.cidade ? `${e.cidade}${e.estado ? '/' + e.estado : ''}` : '', e.cep ? `CEP: ${e.cep}` : ''].filter(Boolean).join(', ');
+                } else {
+                    endStr = String(e);
+                }
+            } catch(e2) { endStr = String(empresa.endereco); }
+            if (endStr) {
+                doc.fontSize(8).font('Helvetica').fillColor('#636e72').text(endStr, left, y, { align: 'center', width: contentW });
+                y += 13;
+            }
+        }
+
+        // Linha divisória grossa
+        y += 6;
+        doc.save().rect(left, y, contentW, 2).fill('#2c3e50').restore();
+        y += 10;
+
+        // ── TÍTULO ────────────────────────────────────────────────────────
+        doc.fontSize(15).font('Helvetica-Bold').fillColor('#2c3e50').text('PRONTUÁRIO DO PET', left, y, { align: 'center', width: contentW });
+        y += 22;
+
+        // ── DADOS DO AGENDAMENTO ─────────────────────────────────────────
+        const dataAg = agendamento.dataAgendamento ? new Date(agendamento.dataAgendamento).toLocaleDateString('pt-BR') : '—';
+        const horaAg = agendamento.horario || '—';
+        const petNome = agendamento.pet?.nome || '—';
+        const petRaca = agendamento.pet?.raca || '—';
+        const petGenero = agendamento.pet?.genero || '—';
+        const petPorte = agendamento.pet?.porte || '—';
+        const petNasc = agendamento.pet?.data_nascimento ? new Date(agendamento.pet.data_nascimento).toLocaleDateString('pt-BR') : '—';
+        const clienteNome = agendamento.pet?.cliente?.nome || '—';
+        const clienteTel = agendamento.pet?.cliente?.telefone || agendamento.pet?.cliente?.celular || '—';
+        const profissional = agendamento.profissional || '—';
+        const servicos = (agendamento.servicos || []).map(s => s.nome || s.servico || '').filter(Boolean).join(', ') || '—';
+
+        // Caixa de informações do pet (fundo cinza suave)
+        const boxH = 126;
+        // 1) fundo cinza
+        doc.save().roundedRect(left, y, contentW, boxH, 6).fill('#f8f9fa').restore();
+        // 2) header colorido: topo arredondado + retângulo cobre cantos inferiores do roundedRect
+        doc.save().roundedRect(left, y, contentW, 26, 6).fill('#2c3e50').restore();
+        doc.save().rect(left, y + 6, contentW, 20).fill('#2c3e50').restore();
+        // 3) stroke por cima de tudo — borda limpa sem artefato
+        doc.save().lineWidth(1).roundedRect(left, y, contentW, boxH, 6).stroke('#c8cfd6').restore();
+        doc.fontSize(10).font('Helvetica-Bold').fillColor('#ffffff').text('INFORMAÇÕES DO PET', left + 10, y + 8, { width: contentW - 20 });
+        y += 30;
+
+        // Duas colunas de info
+        const col1X = left + 10, col2X = left + contentW / 2 + 5;
+        const colW = contentW / 2 - 15;
+        const lineH = 15;
+
+        const labelStyle = () => doc.fontSize(8).font('Helvetica-Bold').fillColor('#636e72');
+        const valueStyle = () => doc.fontSize(9).font('Helvetica').fillColor('#2c3e50');
+
+        const drawField = (label, value, x, curY) => {
+            labelStyle().text(label.toUpperCase(), x, curY, { width: colW });
+            valueStyle().text(value, x, curY + 9, { width: colW });
+        };
+
+        drawField('Nome do Pet', petNome, col1X, y);
+        drawField('Tutor', clienteNome, col2X, y);
+        y += lineH * 2 + 2;
+        drawField('Raça', petRaca, col1X, y);
+        drawField('Telefone', clienteTel, col2X, y);
+        y += lineH * 2 + 2;
+        drawField('Gênero / Porte', `${petGenero} / ${petPorte}`, col1X, y);
+        drawField('Nascimento', petNasc, col2X, y);
+        y += lineH * 2 + 8;
+
+        // Segunda caixa: dados do atendimento
+        const boxH2 = 96;
+        // 1) fundo cinza
+        doc.save().roundedRect(left, y, contentW, boxH2, 6).fill('#f8f9fa').restore();
+        // 2) header colorido
+        doc.save().roundedRect(left, y, contentW, 26, 6).fill('#4a90d9').restore();
+        doc.save().rect(left, y + 6, contentW, 20).fill('#4a90d9').restore();
+        // 3) stroke por cima
+        doc.save().lineWidth(1).roundedRect(left, y, contentW, boxH2, 6).stroke('#b0bec5').restore();
+        doc.fontSize(10).font('Helvetica-Bold').fillColor('#ffffff').text('DADOS DO ATENDIMENTO', left + 10, y + 8, { width: contentW - 20 });
+        y += 30;
+
+        drawField('Número', `#${id}`, col1X, y);
+        drawField('Profissional', profissional, col2X, y);
+        y += lineH * 2 + 2;
+        drawField('Data / Hora', `${dataAg} às ${horaAg}`, col1X, y);
+        drawField('Serviços', servicos, col2X, y);
+        y += lineH * 2 + 14;
+
+        // ── REGISTROS DO PRONTUÁRIO ────────────────────────────────────
+        const prontuario = agendamento.prontuario || [];
+
+        // Mapa de labels e cores por tipo
+        const tipoMeta = {
+            peso:          { label: 'Peso',                 color: '#ff6b6b' },
+            banho:         { label: 'Banho e Tosa',          color: '#4ecdc4' },
+            medicacao:     { label: 'Medicação',             color: '#ff9f43' },
+            cirurgia:      { label: 'Cirurgia',             color: '#a29bfe' },
+            coracao:       { label: 'Avaliação Cardíaca',   color: '#fd79a8' },
+            vacina:        { label: 'Vacina',               color: '#6c5ce7' },
+            queixas:       { label: 'Queixas e Sintomas',   color: '#00b894' },
+            exames:        { label: 'Exames',               color: '#e17055' },
+            alergias:      { label: 'Alergias',             color: '#fdcb6e' },
+            temperatura:   { label: 'Temperatura',          color: '#74b9ff' },
+            dieta:         { label: 'Dieta e Alimentação',  color: '#55efc4' },
+            compartilhar:  { label: 'Notas para Compartilhar', color: '#0984e3' },
+            anexar:        { label: 'Anexos e Documentos',  color: '#636e72' }
+        };
+
+        if (prontuario.length === 0) {
+            doc.fontSize(10).font('Helvetica').fillColor('#aaa').text('Nenhum registro no prontuário.', left, y, { align: 'center', width: contentW });
+            y += 20;
+        }
+
+        for (const reg of prontuario) {
+            const meta = tipoMeta[reg.tipo] || { label: reg.tipo, color: '#6c757d' };
+            const conteudo = stripHtml(reg.conteudo);
+            const dataReg = reg.dataEmissao || '';
+
+            // Verificar se é tipo anexar
+            if (reg.tipo === 'anexar') {
+                const arquivos = reg.arquivos || [];
+                if (arquivos.length === 0) continue;
+
+                // Estimar altura do card
+                const cardH = 32 + arquivos.length * 14 + 12;
+                if (y + cardH > A4H - marginBottom - 40) { doc.addPage(); y = marginTop; }
+
+                // Borda colorida lateral
+                doc.save().rect(left, y, 4, cardH).fill(meta.color).restore();
+                doc.save().roundedRect(left, y, contentW, cardH, 4).stroke('#dee2e6').restore();
+
+                // Título
+                doc.fontSize(9.5).font('Helvetica-Bold').fillColor(meta.color).text(meta.label, left + 12, y + 8, { width: contentW - 80 });
+                if (dataReg) doc.fontSize(7.5).font('Helvetica').fillColor('#aaa').text(dataReg, left + 12, y + 8, { width: contentW - 20, align: 'right' });
+                y += 24;
+
+                // Arquivos
+                arquivos.forEach(arq => {
+                    const nome = arq.name || arq.url || 'Arquivo';
+                    doc.fontSize(8.5).font('Helvetica').fillColor('#2c3e50').text(`• ${nome}`, left + 16, y, { width: contentW - 24 });
+                    y += 14;
+                });
+                y += 10;
+                continue;
+            }
+
+            if (!conteudo) continue;
+
+            // Calcular altura do conteúdo de texto
+            const textH = doc.heightOfString(conteudo, { width: contentW - 24, fontSize: 9 });
+            const cardH = 32 + textH + 14;
+
+            if (y + cardH > A4H - marginBottom - 40) { doc.addPage(); y = marginTop; }
+
+            // Card com borda colorida lateral
+            doc.save().rect(left, y, 4, cardH).fill(meta.color).restore();
+            doc.save().roundedRect(left, y, contentW, cardH, 4).stroke('#dee2e6').restore();
+
+            // Título do card
+            doc.fontSize(9.5).font('Helvetica-Bold').fillColor(meta.color).text(meta.label, left + 12, y + 8, { width: contentW - 80 });
+            if (dataReg) doc.fontSize(7.5).font('Helvetica').fillColor('#aaa').text(dataReg, left + 12, y + 8, { width: contentW - 20, align: 'right' });
+
+            // Conteúdo
+            doc.fontSize(9).font('Helvetica').fillColor('#2c3e50').text(conteudo, left + 12, y + 24, { width: contentW - 24 });
+
+            y += cardH + 8;
+        }
+
+        // ── RODAPÉ ────────────────────────────────────────────────────────
+        if (y > A4H - marginBottom - 50) { doc.addPage(); y = marginTop; }
+        y += 10;
+        doc.save().moveTo(left, y).lineTo(right, y).lineWidth(0.5).stroke('#dee2e6').restore();
+        y += 8;
+        const agora = new Date().toLocaleString('pt-BR');
+        doc.fontSize(8).font('Helvetica').fillColor('#aaa').text(`Documento gerado em ${agora}`, left, y, { align: 'center', width: contentW });
+
+        doc.end();
+    } catch (error) {
+        console.error('Erro ao gerar PDF do prontuário:', error);
+        res.status(500).json({ error: 'Erro ao gerar PDF do prontuário' });
+    }
+});
+
+// ====== PRONTUÁRIO — UPLOAD DE ANEXOS ======
+const multer = require('multer');
+
+const storageProntuario = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const dir = path.join(__dirname, '../../uploads/prontuario');
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        cb(null, dir);
+    },
+    filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname);
+        const base = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_\-]/g, '_');
+        cb(null, `ag${req.params.id}_${Date.now()}_${base}${ext}`);
+    }
+});
+
+const uploadProntuario = multer({
+    storage: storageProntuario,
+    limits: { fileSize: 20 * 1024 * 1024 } // 20 MB
+});
+
+// POST /api/agendamentos/:id/prontuario/anexos
+router.post('/:id/prontuario/anexos', uploadProntuario.single('arquivo'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+        const url = `/uploads/prontuario/${req.file.filename}`;
+        res.json({
+            id: `anexo-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+            url,
+            name: req.file.originalname,
+            type: req.file.mimetype,
+            size: req.file.size
+        });
+    } catch (error) {
+        console.error('Erro ao fazer upload de anexo do prontuário:', error);
+        res.status(500).json({ error: 'Erro ao salvar arquivo' });
     }
 });
 

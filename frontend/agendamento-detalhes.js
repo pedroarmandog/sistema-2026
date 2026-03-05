@@ -40,14 +40,13 @@ async function desfazerCheckout() {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ status: previous })
+            body: JSON.stringify({ status: previous, totalPago: 0, pagamentos: [] })
         });
 
         if (resp.ok) {
             try { await carregarAgendamento(); } catch(e) { console.warn('Erro recarregando agendamento após desfazer:', e); }
             window.agendamentoAtual.status = previous;
             try { if (typeof updateCheckoutVisibility === 'function') updateCheckoutVisibility(); } catch(e){}
-            try { alert('Check-out desfeito com sucesso'); } catch(e){}
         } else {
             let txt = 'Erro desconhecido';
             try { const j = await resp.json(); txt = j.message || txt; } catch(e){}
@@ -407,8 +406,23 @@ function detectarIDsDuplicados() {
                             <input id="editServiceQtd" type="number" value="${escapeHtmlUnsafe(currentQtd)}" min="1" style="width:100%;padding:10px;border:1px solid #dfe6ef;border-radius:6px;">
                         </div>
                         <div style="flex:1">
-                            <label style="display:block;margin-bottom:6px;font-weight:600;color:#333">Valor unitário</label>
-                            <input id="editServiceValor" type="text" value="${escapeHtmlUnsafe(currentUnit)}" style="width:100%;padding:10px;border:1px solid #dfe6ef;border-radius:6px;">
+                            <label style="display:block;margin-bottom:6px;font-weight:600;color:#333">Unitário (cadastrado)</label>
+                            <input id="editServiceUnitario" type="text" value="${escapeHtmlUnsafe(currentUnit)}" readonly style="width:100%;padding:10px;border:1px solid #dfe6ef;border-radius:6px;background:#f7f7f7;">
+                        </div>
+                    </div>
+
+                    <div style="display:flex;gap:8px;margin-top:8px;">
+                        <div style="flex:1">
+                            <label style="display:block;margin-bottom:6px;font-weight:600;color:#333">Valor final</label>
+                            <input id="editServiceValorFinal" type="text" value="${escapeHtmlUnsafe(currentUnit)}" style="width:100%;padding:10px;border:1px solid #dfe6ef;border-radius:6px;">
+                        </div>
+                        <div style="width:160px">
+                            <label style="display:block;margin-bottom:6px;font-weight:600;color:#333">% Desconto</label>
+                            <input id="editServiceDescontoPercent" type="number" min="0" max="100" step="0.0001" value="0" style="width:100%;padding:10px;border:1px solid #dfe6ef;border-radius:6px;">
+                        </div>
+                        <div style="width:160px;display:flex;flex-direction:column;justify-content:flex-end;">
+                            <label style="display:block;margin-bottom:6px;font-weight:600;color:#333">Desconto R$</label>
+                            <div id="editServiceDescontoReais" style="padding:10px;border:1px solid #f1f5f9;border-radius:6px;background:#fafafa;">-</div>
                         </div>
                     </div>
 
@@ -447,13 +461,14 @@ function detectarIDsDuplicados() {
                         const div = document.createElement('div');
                         div.style.cssText = 'padding:10px;border-bottom:1px solid #f6f6f6;cursor:pointer;';
                         div.textContent = (it.nome || it.titulo || it.descricao || '') + (it.preco ? (' — ' + formatarMoeda(Number(String(it.preco).replace(',','.')))) : '');
-                        div.addEventListener('click', () => {
+                            div.addEventListener('click', () => {
                             // preencher campos com o item selecionado
                             input.value = it.nome || it.titulo || it.descricao || '';
                             input.setAttribute('data-selected-id', String(it.id));
                             input.setAttribute('data-selected-valor', String(it.preco || it.venda || it.valor || 0));
                             results.style.display = 'none';
-                            document.getElementById('editServiceValor').value = (it.preco || it.venda || it.valor || 0).toString().replace('.',',');
+                            const ev = (it.preco || it.venda || it.valor || 0).toString().replace('.',',');
+                            const elVal = document.getElementById('editServiceValorFinal'); if (elVal) elVal.value = ev;
                         });
                         frag.appendChild(div);
                     });
@@ -473,25 +488,119 @@ function detectarIDsDuplicados() {
             document.getElementById('btnCancelarEditarServico').addEventListener('click', close);
             document.getElementById('fecharModalEditarServico').addEventListener('click', close);
 
+            // Vincular recálculo dinâmico do desconto e do valor final
+            try {
+                const valFinalEl = document.getElementById('editServiceValorFinal');
+                const percEl = document.getElementById('editServiceDescontoPercent');
+                const reaisEl = document.getElementById('editServiceDescontoReais');
+                const unitElModal = document.getElementById('editServiceUnitario');
+
+                // tentar inferir unitário cadastrado a partir do texto atual
+                let registeredUnitModal = null;
+                try {
+                    const raw = (unitElModal && unitElModal.value) ? String(unitElModal.value).replace(',','.') : (currentUnit || '0');
+                    registeredUnitModal = parseFloat(String(raw).replace(',','.')) || null;
+                } catch(e){ registeredUnitModal = null; }
+
+                // se possível, tentar buscar unitário registrado entre dados do agendamento
+                try {
+                    const sid = itemEl.dataset.serviceId;
+                    if ((registeredUnitModal === null || registeredUnitModal === 0) && sid && Array.isArray(agendamentoAtual && agendamentoAtual.servicos)) {
+                        const found = agendamentoAtual.servicos.find(x => String(x.id) === String(sid));
+                        if (found) registeredUnitModal = parseFloat(found.unitario || found.valor || 0) || registeredUnitModal;
+                    }
+                    if ((registeredUnitModal === null || registeredUnitModal === 0) && Array.isArray(agendamentoAtual && agendamentoAtual.__existingServicosArray)) {
+                        const found2 = agendamentoAtual.__existingServicosArray.find(x => String(x.nome || '').trim() === String(currentName || '').trim());
+                        if (found2) registeredUnitModal = parseFloat(found2.unitario || found2.valor || 0) || registeredUnitModal;
+                    }
+                } catch(e){}
+
+                function formatMoney(v){ try{ return formatarMoeda(Number(v)||0); }catch(e){return '0,00';} }
+
+                function recalcFromValor() {
+                    try {
+                        const raw = (valFinalEl.value||'').toString().replace(',','.');
+                        const finalUnit = parseFloat(raw) || 0;
+                        const qtdNow = parseFloat(document.getElementById('editServiceQtd').value) || 1;
+                        let descontoReaisNow = 0;
+                        let descontoPercNow = 0;
+                        if (registeredUnitModal && registeredUnitModal > 0 && finalUnit < registeredUnitModal) {
+                            descontoReaisNow = (registeredUnitModal - finalUnit) * qtdNow;
+                            descontoPercNow = ((registeredUnitModal - finalUnit) / registeredUnitModal) * 100;
+                        }
+                        if (percEl) percEl.value = descontoPercNow.toFixed(4);
+                        if (reaisEl) reaisEl.textContent = descontoReaisNow > 0 ? formatMoney(descontoReaisNow) : '-';
+                    } catch(e){ console.warn('recalcFromValor error', e); }
+                }
+
+                function recalcFromPercent() {
+                    try {
+                        const p = parseFloat(percEl.value) || 0;
+                        const qtdNow = parseFloat(document.getElementById('editServiceQtd').value) || 1;
+                        const unitCad = registeredUnitModal || 0;
+                        const finalUnit = unitCad * (1 - (p/100));
+                        if (valFinalEl) valFinalEl.value = (finalUnit||0).toFixed(2).toString().replace('.',',');
+                        const descontoReaisNow = Math.max(0, (unitCad - finalUnit) * qtdNow);
+                        if (reaisEl) reaisEl.textContent = descontoReaisNow > 0 ? formatMoney(descontoReaisNow) : '-';
+                    } catch(e){ console.warn('recalcFromPercent error', e); }
+                }
+
+                if (valFinalEl) valFinalEl.addEventListener('input', recalcFromValor);
+                if (percEl) percEl.addEventListener('input', recalcFromPercent);
+
+                // inicializar valores
+                try { if (valFinalEl) { valFinalEl.value = (currentUnit || '').toString().replace('.',','); recalcFromValor(); } } catch(e){}
+            } catch(e){ console.warn('Erro ao vincular recalc modal edit:', e); }
+
             async function onSave(){
                 try {
                     const selId = input.getAttribute('data-selected-id');
                     const nome = input.value.trim();
                     const qtd = parseInt(document.getElementById('editServiceQtd').value) || 1;
-                    const rawValor = (document.getElementById('editServiceValor').value || '').toString().replace(',','.');
-                    const valorUnit = parseFloat(rawValor) || 0;
-                    const total = qtd * valorUnit;
+                    const rawValor = (document.getElementById('editServiceValorFinal').value || '').toString().replace(',','.');
+                    const enteredUnit = parseFloat(rawValor) || 0;
+                    const finalTotal = qtd * enteredUnit;
+
+                    // localizar unitário cadastrado (preservar valor cadastrado como unitario exibido)
+                    let registeredUnit = null;
+                    try {
+                        const sid = itemEl.dataset.serviceId;
+                        if (sid && Array.isArray(agendamentoAtual && agendamentoAtual.servicos)) {
+                            const found = agendamentoAtual.servicos.find(x => String(x.id) === String(sid));
+                            if (found) registeredUnit = parseFloat(found.unitario || found.valor || 0) || null;
+                        }
+                        if (registeredUnit === null && Array.isArray(agendamentoAtual && agendamentoAtual.__existingServicosArray)) {
+                            const found2 = agendamentoAtual.__existingServicosArray.find(x => String(x.nome || '').trim() === String(currentName || '').trim());
+                            if (found2) registeredUnit = parseFloat(found2.unitario || found2.valor || 0) || null;
+                        }
+                    } catch(e){ /* ignore */ }
+                    if (registeredUnit === null) registeredUnit = enteredUnit;
+
+                    // calcular desconto: somente considerar desconto quando o valor inserido for menor
+                    const descontoRaw = (registeredUnit - enteredUnit) * qtd;
+                    const descontoAmt = descontoRaw > 0 ? descontoRaw : 0;
+                    const descontoPercent = (registeredUnit > 0 && descontoAmt > 0) ? ((registeredUnit - enteredUnit) / registeredUnit) * 100 : 0;
 
                     // atualizar DOM do item
                     const nameEl = itemEl.querySelector('.service-name'); if (nameEl) nameEl.textContent = nome;
                     const qtdEl = itemEl.querySelector('.col-qtd'); if (qtdEl) qtdEl.textContent = String(qtd);
-                    const unitEl = itemEl.querySelector('.col-unitario'); if (unitEl) unitEl.textContent = formatarMoeda(valorUnit);
-                    const totalEl = itemEl.querySelector('.col-total'); if (totalEl) totalEl.textContent = formatarMoeda(total);
+                    const unitEl = itemEl.querySelector('.col-unitario'); if (unitEl) unitEl.textContent = formatarMoeda(registeredUnit);
+                    const descontoEl = itemEl.querySelector('.col-desconto'); if (descontoEl) descontoEl.textContent = descontoPercent > 0 ? (descontoPercent.toFixed(4).replace('.',',') + '%') : (descontoAmt === 0 ? '-' : formatarMoeda(descontoAmt));
+                    const totalEl = itemEl.querySelector('.col-total'); if (totalEl) totalEl.textContent = formatarMoeda(finalTotal);
 
                     // atualizar agendamentoAtual.servicos (atualizar o item existente, não criar duplicata)
                     try {
                         // construir objeto atualizado
-                        const updatedObj = { id: selId || itemEl.dataset.serviceId || Date.now(), nome: nome, quantidade: qtd, unitario: valorUnit, valor: valorUnit, total: total };
+                        const updatedObj = {
+                            id: selId || itemEl.dataset.serviceId || Date.now(),
+                            nome: nome,
+                            quantidade: qtd,
+                            unitario: registeredUnit,
+                            valor: enteredUnit,
+                            descontoPercent: descontoPercent,
+                            desconto: descontoAmt,
+                            total: finalTotal
+                        };
 
                         // Caso legado: agendamento possui apenas string concatenada em __existingServicosString ou servico
                         const hasLegacyString = !!(agendamentoAtual && (agendamentoAtual.servico || agendamentoAtual.__existingServicosString));
@@ -1229,6 +1338,11 @@ function preencherDadosAgendamento(agendamento) {
         if (petNome) {
             const nomePet = agendamento.petNome || agendamento.pet?.nome || agendamento.Pet?.nome || '-';
             petNome.textContent = nomePet;
+            if (agendamento.petId) {
+                petNome.style.cursor = 'pointer';
+                petNome.title = 'Ver ficha do pet';
+                petNome.onclick = () => { window.location.href = `/pets/pet-details.html?id=${agendamento.petId}`; };
+            }
         }
         
         const petIdade = document.getElementById('petIdade');
@@ -1248,6 +1362,11 @@ function preencherDadosAgendamento(agendamento) {
         if (clienteNome) {
             const nomeCliente = agendamento.clienteNome || agendamento.pet?.cliente?.nome || agendamento.Cliente?.nome || '-';
             clienteNome.textContent = nomeCliente;
+            if (agendamento.clienteId) {
+                clienteNome.style.cursor = 'pointer';
+                clienteNome.title = 'Ver ficha do cliente';
+                clienteNome.onclick = () => { window.location.href = `/client-details.html?id=${agendamento.clienteId}`; };
+            }
         }
         
         const boxInfo = document.getElementById('boxInfo');
@@ -1286,7 +1405,9 @@ function preencherDadosAgendamento(agendamento) {
         // Preenche observações
         const observacoes = document.getElementById('observacoes');
         if (observacoes) observacoes.value = agendamento.observacoes || '';
-        
+
+        // Renderiza badge Taxi Dog
+        try { renderizarTaxidog(agendamento); } catch(e) { console.warn('Erro ao renderizar taxidog:', e); }
                 // Renderiza a lista de serviços/produtos na seção "Serviços e Produtos"
                 try {
                         const category = document.querySelector('.category-section');
@@ -1419,12 +1540,47 @@ function preencherDadosAgendamento(agendamento) {
                                 }
 
                                 // Atualiza totais laterais
-                                const totalGeral = document.getElementById('totalGeral');
-                                if (totalGeral) totalGeral.textContent = formatarMoeda(valorTotalAgendamento);
-                                const totalPendente = document.getElementById('totalPendente');
-                                if (totalPendente) totalPendente.textContent = formatarMoeda(valorTotalAgendamento);
-                                const amount = document.querySelector('.amount');
-                                if (amount) amount.textContent = formatarMoeda(valorTotalAgendamento);
+                                try {
+                                    const totalGeral = document.getElementById('totalGeral');
+                                    if (totalGeral) totalGeral.textContent = formatarMoeda(valorTotalAgendamento);
+                                    const totalPendente = document.getElementById('totalPendente');
+                                    const _totalPago1 = parseFloat(agendamento.totalPago) || 0;
+                                    if (totalPendente) totalPendente.textContent = formatarMoeda(Math.max(0, valorTotalAgendamento - _totalPago1));
+                                    const amount = document.querySelector('.amount');
+                                    if (amount) amount.textContent = formatarMoeda(valorTotalAgendamento);
+                                } catch(e){}
+
+                                // Calcular e mostrar desconto agregado (em % e R$)
+                                try {
+                                    const listExisting = Array.isArray(agendamento.servicos) ? agendamento.servicos.slice() : [];
+                                    const listAdded = Array.isArray(agendamento._addedServicos) ? agendamento._addedServicos.slice() : [];
+                                    const map = new Map();
+                                    listExisting.concat(listAdded).forEach(s => {
+                                        try {
+                                            const key = (s && (s.id !== undefined && s.id !== null)) ? String(s.id) : JSON.stringify(s);
+                                            if (!map.has(key)) map.set(key, s);
+                                        } catch(e){}
+                                    });
+                                    const all = Array.from(map.values());
+
+                                    let totalUnitario = 0;
+                                    let totalFinal = 0;
+                                    all.forEach(s => {
+                                        const qtd = parseFloat(s.quantidade || 1) || 1;
+                                        const unitCad = parseFloat(s.unitario || s.valor || 0) || 0;
+                                        const finalUnit = (s.valor !== undefined && s.valor !== null) ? parseFloat(s.valor) : unitCad;
+                                        totalUnitario += qtd * unitCad;
+                                        totalFinal += qtd * finalUnit;
+                                    });
+
+                                    const descontoReais = Math.max(0, (totalUnitario - totalFinal));
+                                    const descontoPercent = (totalUnitario > 0) ? (descontoReais / totalUnitario) * 100 : 0;
+
+                                    const elPerc = document.getElementById('descontoPercent');
+                                    const elReais = document.getElementById('descontoReais');
+                                    if (elPerc) elPerc.textContent = descontoPercent.toFixed(3).replace('.', ',');
+                                    if (elReais) elReais.textContent = formatarMoeda(descontoReais);
+                                } catch (e) { console.warn('Erro calculando desconto lateral:', e); }
 
                                 // Atualiza Profissional Responsável na barra lateral (puxa da API/agendamento)
                                 try {
@@ -1696,8 +1852,8 @@ async function enviarClinicaState() {
 // Variável para armazenar timeout de auto-save
 let autoSaveTimeout = null;
 
-// Função para formatar data/hora
-function formatarDataHora() {
+// Função para formatar data/hora atual (sem parâmetros)
+function formatarDataHoraAgora() {
     const agora = new Date();
     const data = agora.toLocaleDateString('pt-BR');
     const hora = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -1705,7 +1861,7 @@ function formatarDataHora() {
 }
 
 // Função para adicionar campos ao prontuário dinamicamente
-function adicionarCampoProntuario(tipo, conteudo = '', dataEmissao = null, registroId = null) {
+function adicionarCampoProntuario(tipo, conteudo = '', dataEmissao = null, registroId = null, arquivos = null) {
     const container = document.getElementById('prontuarioCampos');
     if (!container) return;
     
@@ -1735,7 +1891,7 @@ function adicionarCampoProntuario(tipo, conteudo = '', dataEmissao = null, regis
     
     // Criar ID único para o registro se não for fornecido
     if (!registroId) registroId = `registro-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const dataHora = dataEmissao || formatarDataHora();
+    const dataHora = dataEmissao || formatarDataHoraAgora();
     
     // Criar elemento do registro (cartão)
     const registroDiv = document.createElement('div');
@@ -1744,6 +1900,42 @@ function adicionarCampoProntuario(tipo, conteudo = '', dataEmissao = null, regis
     registroDiv.setAttribute('data-registro-id', registroId);
     registroDiv.style.borderLeftColor = config.color;
     
+    // Card especial para Anexos e Documentos
+    if (tipo === 'anexar') {
+        registroDiv.innerHTML = `
+            <div class="registro-header">
+                <div class="registro-titulo">
+                    <i class="fas fa-paperclip" style="color: #636e72;"></i>
+                    <span>Anexos e Documentos</span>
+                </div>
+                <button class="btn-remover-registro" onclick="removerRegistroProntuario('${registroId}')" title="Remover">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="registro-conteudo" contenteditable="false" data-files="[]" style="display:none;"></div>
+            <div class="registro-body-anexo">
+                <div class="anexo-file-list" id="anexoList-${registroId}"></div>
+                <label class="btn-upload-anexo" title="Adicionar arquivo">
+                    <i class="fas fa-plus"></i> Adicionar arquivo
+                    <input type="file" multiple style="display:none" onchange="uploadAnexoFile(this, '${registroId}')">
+                </label>
+            </div>
+            <div class="registro-footer">
+                <i class="far fa-clock"></i> ${dataHora}
+            </div>
+        `;
+        container.appendChild(registroDiv);
+        // Restaurar arquivos salvos
+        const filesParaRestaurar = arquivos && Array.isArray(arquivos) ? arquivos : [];
+        if (filesParaRestaurar.length) {
+            const conteudoDiv = registroDiv.querySelector('.registro-conteudo');
+            if (conteudoDiv) conteudoDiv.setAttribute('data-files', JSON.stringify(filesParaRestaurar));
+            filesParaRestaurar.forEach(f => _renderAnexoChip(registroId, f));
+        }
+        console.log('✅ Registro adicionado: Anexos e Documentos');
+        return registroId;
+    }
+
     registroDiv.innerHTML = `
         <div class="registro-header">
             <div class="registro-titulo">
@@ -1824,13 +2016,20 @@ function coletarDadosProntuario() {
         const footer = el.querySelector('.registro-footer');
         
         if (conteudoDiv && footer) {
-            // Preferimos salvar o HTML para preservar quebras de linha e formatação
-            const textoPlano = conteudoDiv.textContent.trim();
-            const conteudoHtml = conteudoDiv.innerHTML.trim();
-            // Pegar apenas o texto da data, removendo o ícone
             const dataEmissao = footer.textContent.replace(/[^\d\/\-:\sàsA-Za-z]/g, '').trim();
 
-            if (textoPlano) { // Só salva se tiver conteúdo textual
+            // Card de anexos: salvar arquivos separadamente
+            if (tipo === 'anexar') {
+                let arquivos = [];
+                try { arquivos = JSON.parse(conteudoDiv.getAttribute('data-files') || '[]'); } catch(e) {}
+                registros.push({ id: registroId, tipo, conteudo: '', dataEmissao, arquivos });
+                return; // forEach callback return
+            }
+
+            // Cards normais
+            const textoPlano = conteudoDiv.textContent.trim();
+            const conteudoHtml = conteudoDiv.innerHTML.trim();
+            if (textoPlano) {
                 registros.push({
                     id: registroId,
                     tipo,
@@ -1902,7 +2101,8 @@ async function carregarProntuario(agendamentoId) {
                     registro.tipo,
                     registro.conteudo,
                     registro.dataEmissao,
-                    registro.id || null
+                    registro.id || null,
+                    registro.arquivos || null
                 );
                 // se for vacina, também adicionar na lista de vacinas (aba) e manter vínculo com registro salvo
                 try {
@@ -2849,8 +3049,6 @@ async function finalizarCobranca() {
                             console.log('Agendamento recarregado após PATCH status');
                         } catch(e) { console.warn('Erro recarregando agendamento após PATCH:', e); }
 
-                        try { alert('Check-out realizado com sucesso!'); } catch(e){}
-
                         // Atualiza o select visual
                         const statusSelect = document.getElementById('statusSelect');
                         if (statusSelect) {
@@ -2863,9 +3061,6 @@ async function finalizarCobranca() {
                         try { atualizarLinhaListaStatus(agendamentoAtual.id, 'concluido'); } catch(e){}
                         try { updateServiceIcons('concluido'); } catch(e){}
                         try { if (typeof updateCheckoutVisibility === 'function') updateCheckoutVisibility(); } catch(e){}
-
-                        // Redireciona de volta para a lista após 1 segundo
-                        setTimeout(() => { window.location.href = 'agendamentos-novo.html'; }, 1000);
                     } else {
                         let errText = 'Erro desconhecido';
                         try { const errJson = await response.json(); errText = errJson.message || errText; } catch(e){}
@@ -3349,7 +3544,7 @@ function openAddItemModal() {
         const nomesConcat = [existingNames].concat(addedNames).filter(Boolean).join(' • ');
 
         // atualizar totais no DOM imediatamente
-        try { document.getElementById('totalGeral').textContent = formatarMoeda(newTotal); document.getElementById('totalPendente').textContent = formatarMoeda(newTotal); const amount = document.querySelector('.amount'); if(amount) amount.textContent = formatarMoeda(newTotal); } catch(e){}
+        try { const _tp2 = parseFloat((agendamentoAtual && agendamentoAtual.totalPago) || 0) || 0; document.getElementById('totalGeral').textContent = formatarMoeda(newTotal); document.getElementById('totalPendente').textContent = formatarMoeda(Math.max(0, newTotal - _tp2)); const amount = document.querySelector('.amount'); if(amount) amount.textContent = formatarMoeda(newTotal); } catch(e){}
 
         // Enviar atualização para o backend (PUT) para persistir o novo serviço e novo valor
         try {
@@ -4583,10 +4778,36 @@ function appendServiceToCategory(s){
     async function recalcAndPersistServicos(){
         try {
             const arr = Array.isArray(agendamentoAtual.servicos) ? agendamentoAtual.servicos : [];
+            // calcular total considerando 'total', 'valor' ou 'unitario'
             const total = arr.reduce((acc,it)=>{ const v = parseFloat(String(it.total || it.valor || it.unitario || 0).toString().replace(',','.'))||0; return acc+v; }, 0);
             const names = arr.map(s => s && (s.nome||s.name||s.nomeServico) ? (s.nome||s.name||s.nomeServico) : '').filter(Boolean).join(' • ');
+
+            // calcular totais para desconto (unitario cadastrado x valor final)
+            let totalUnitario = 0;
+            let totalFinal = 0;
+            try {
+                arr.forEach(s => {
+                    const qtd = parseFloat(s.quantidade || 1) || 1;
+                    const unitCad = parseFloat(s.unitario || s.valor || 0) || 0;
+                    const finalUnit = (s.valor !== undefined && s.valor !== null) ? parseFloat(s.valor) : unitCad;
+                    totalUnitario += qtd * unitCad;
+                    totalFinal += qtd * finalUnit;
+                });
+            } catch(e) { totalUnitario = 0; totalFinal = total; }
+
+            const descontoReais = Math.max(0, (totalUnitario - totalFinal));
+            const descontoPercent = (totalUnitario > 0) ? (descontoReais / totalUnitario) * 100 : 0;
+
             // atualizar DOM dos totais
-            try { document.getElementById('totalGeral').textContent = formatarMoeda(total); document.getElementById('totalPendente').textContent = formatarMoeda(total); const amount = document.querySelector('.amount'); if(amount) amount.textContent = formatarMoeda(total); } catch(e){}
+            try {
+                const _tp3 = parseFloat((agendamentoAtual && agendamentoAtual.totalPago) || 0) || 0;
+                document.getElementById('totalGeral').textContent = formatarMoeda(total);
+                document.getElementById('totalPendente').textContent = formatarMoeda(Math.max(0, total - _tp3));
+                const amount = document.querySelector('.amount'); if(amount) amount.textContent = formatarMoeda(total);
+
+                const elPerc = document.getElementById('descontoPercent'); if (elPerc) elPerc.textContent = descontoPercent.toFixed(3).replace('.', ',');
+                const elReais = document.getElementById('descontoReais'); if (elReais) elReais.textContent = formatarMoeda(descontoReais);
+            } catch(e){}
 
             // enviar atualização para API
             if (agendamentoAtual && agendamentoAtual.id) {
@@ -5005,6 +5226,58 @@ function setupStatusDropdown() {
             item.innerHTML = `<span class="dot" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${opt.dot};margin-right:8px;vertical-align:middle;"></span> ${opt.label}`;
             item.addEventListener('click', async (ev) => {
                 ev.stopPropagation();
+
+                // Check-out só pode ser feito na aba Detalhes (requer pagamento)
+                if (opt.value === 'concluido') {
+                    const abaAtiva = (typeof clinicaStateLocal !== 'undefined' && clinicaStateLocal.activeTab)
+                        ? clinicaStateLocal.activeTab
+                        : (document.querySelector('.tab-btn.active')?.dataset?.tab || '');
+
+                    if (abaAtiva === 'clinica') {
+                        console.log('⚠️ Check-out bloqueado: aba Clínica ativa. Redirecionando para aba Detalhes.');
+                        removeMenu();
+                        if (typeof alternarAba === 'function') {
+                            await alternarAba('detalhes');
+                        } else {
+                            const btnDetalhes = document.querySelector('[onclick*="alternarAba"][onclick*="detalhes"], [data-tab="detalhes"]');
+                            if (btnDetalhes) btnDetalhes.click();
+                        }
+                        return;
+                    }
+
+                    // Bloquear checkout se atendimento estiver cancelado
+                    if (agendamentoAtual && agendamentoAtual.status === 'cancelado') {
+                        removeMenu();
+                        try {
+                            if (typeof showNotification === 'function') {
+                                showNotification('Não é possível realizar o check-out. Este atendimento foi cancelado.', 'warning');
+                            }
+                        } catch(e) {}
+                        return;
+                    }
+
+                    // Aba Detalhes ativa: abrir modal de pagamento via finalizarCobranca()
+                    removeMenu();
+                    try {
+                        if (!window.agendamentoAtual) window.agendamentoAtual = {};
+                        window.agendamentoAtual.__prevStatus = window.agendamentoAtual.status || 'agendado';
+                        finalizarCobranca();
+                    } catch(e) { console.error('Erro ao chamar finalizarCobranca via StatusMenu:', e); }
+                    return;
+                }
+
+                // Cancelar: fluxo com dois modais + credenciais de gerente
+                if (opt.value === 'cancelado') {
+                    removeMenu();
+                    if (typeof window.iniciarFluxoCancelamento === 'function') {
+                        window.iniciarFluxoCancelamento(agendamentoId, () => {
+                            // Redirecionar de volta para a lista de agendamentos
+                            window.location.href = 'agendamentos-novo.html';
+                        });
+                    }
+                    return;
+                }
+
                 try {
                     const res = await fetch(`/api/agendamentos/${agendamentoId}/status`, {
                         method: 'PATCH',
@@ -5223,6 +5496,18 @@ document.addEventListener('DOMContentLoaded', function() {
         if (btnEditar) {
             btnEditar.addEventListener('click', async function () {
                 try {
+                    // Bloquear edição se o checkout já foi feito
+                    if (agendamentoAtual && agendamentoAtual.status === 'concluido') {
+                        try {
+                            if (typeof showNotification === 'function') {
+                                showNotification('Não é possível editar um atendimento com Check-out realizado. Desfaça o checkout primeiro.', 'error');
+                            } else {
+                                alert('Não é possível editar um atendimento com Check-out realizado. Desfaça o checkout primeiro.');
+                            }
+                        } catch(e) { alert('Não é possível editar um atendimento com Check-out realizado.'); }
+                        return;
+                    }
+
                     const id = (agendamentoAtual && agendamentoAtual.id) || this.getAttribute('data-agendamento-id') || (new URLSearchParams(window.location.search).get('id'));
                     if (!id) return showNotification('ID do agendamento não encontrado', 'error');
 
@@ -5635,6 +5920,33 @@ document.addEventListener('DOMContentLoaded', function() {
             btnCheckout.addEventListener('click', async function(ev){
                 ev.preventDefault();
                 try {
+                    // Se a aba ativa for "clínica", redirecionar para aba "detalhes" sem fazer checkout
+                    const abaAtiva = (typeof clinicaStateLocal !== 'undefined' && clinicaStateLocal.activeTab)
+                        ? clinicaStateLocal.activeTab
+                        : (document.querySelector('.tab-btn.active')?.dataset?.tab || '');
+
+                    if (abaAtiva === 'clinica') {
+                        console.log('⚠️ Check-out bloqueado: aba Clínica ativa. Redirecionando para aba Detalhes.');
+                        if (typeof alternarAba === 'function') {
+                            await alternarAba('detalhes');
+                        } else {
+                            // fallback: clicar no botão da aba detalhes diretamente
+                            const btnDetalhes = document.querySelector('[onclick*="alternarAba"][onclick*="detalhes"], [data-tab="detalhes"]');
+                            if (btnDetalhes) btnDetalhes.click();
+                        }
+                        return;
+                    }
+
+                    // Bloquear checkout se atendimento estiver cancelado
+                    if (window.agendamentoAtual && window.agendamentoAtual.status === 'cancelado') {
+                        try {
+                            if (typeof showNotification === 'function') {
+                                showNotification('Não é possível realizar o check-out. Este atendimento foi cancelado.', 'warning');
+                            }
+                        } catch(e) {}
+                        return;
+                    }
+
                     if (!window.agendamentoAtual) window.agendamentoAtual = {};
                     window.agendamentoAtual.__prevStatus = window.agendamentoAtual.status || 'agendado';
 
@@ -5707,3 +6019,202 @@ function updateCheckoutVisibility() {
         }
     } catch (e) { console.warn('Erro updateCheckoutVisibility', e); }
 }
+
+// ====================== ANEXOS DO PRONTUÁRIO ======================
+
+/**
+ * Renderiza um chip de arquivo dentro do card de Anexos do prontuário.
+ */
+function _renderAnexoChip(registroId, fileInfo) {
+    const list = document.getElementById(`anexoList-${registroId}`);
+    if (!list) return;
+
+    const type = (fileInfo.type || '').toLowerCase();
+    let icon = 'fa-file';
+    if (type.startsWith('image/')) icon = 'fa-file-image';
+    else if (type === 'application/pdf') icon = 'fa-file-pdf';
+    else if (type.includes('word') || type.includes('document')) icon = 'fa-file-word';
+    else if (type.includes('excel') || type.includes('spreadsheet')) icon = 'fa-file-excel';
+
+    const chip = document.createElement('div');
+    chip.className = 'anexo-chip';
+    const fid = fileInfo.id || '';
+    chip.setAttribute('data-file-id', fid);
+    chip.innerHTML = `
+        <span class="anexo-chip-inner" onclick="abrirAnexo('${fileInfo.url}')" title="Clique para visualizar">
+            <i class="fas ${icon}"></i>
+            <span class="anexo-chip-name">${fileInfo.name}</span>
+        </span>
+        <button class="anexo-chip-remove" onclick="removerAnexoChip(this,'${registroId}','${fid}')" title="Remover">
+            <i class="fas fa-times"></i>
+        </button>
+    `;
+    list.appendChild(chip);
+}
+
+/** Abre um anexo em nova aba */
+function abrirAnexo(url) {
+    window.open(url, '_blank');
+}
+
+/** Remove um chip de anexo e atualiza data-files */
+function removerAnexoChip(btn, registroId, fileId) {
+    const chip = btn.closest('.anexo-chip');
+    if (chip) chip.remove();
+    const registro = document.querySelector(`[data-registro-id="${registroId}"]`);
+    if (registro) {
+        const conteudoDiv = registro.querySelector('.registro-conteudo');
+        if (conteudoDiv) {
+            let files = [];
+            try { files = JSON.parse(conteudoDiv.getAttribute('data-files') || '[]'); } catch(e) {}
+            files = files.filter(f => f.id !== fileId);
+            conteudoDiv.setAttribute('data-files', JSON.stringify(files));
+        }
+    }
+    salvarProntuarioAutomatico();
+}
+
+/** Faz upload de um ou mais arquivos e adiciona os chips */
+async function uploadAnexoFile(input, registroId) {
+    const agendamentoId = new URLSearchParams(window.location.search).get('id');
+    if (!agendamentoId) return;
+    const files = Array.from(input.files);
+    if (!files.length) return;
+
+    for (const file of files) {
+        const formData = new FormData();
+        formData.append('arquivo', file);
+        try {
+            const resp = await fetch(`/api/agendamentos/${agendamentoId}/prontuario/anexos`, {
+                method: 'POST',
+                body: formData
+            });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const fileInfo = await resp.json();
+
+            _renderAnexoChip(registroId, fileInfo);
+
+            const registro = document.querySelector(`[data-registro-id="${registroId}"]`);
+            if (registro) {
+                const conteudoDiv = registro.querySelector('.registro-conteudo');
+                if (conteudoDiv) {
+                    let arr = [];
+                    try { arr = JSON.parse(conteudoDiv.getAttribute('data-files') || '[]'); } catch(e) {}
+                    arr.push(fileInfo);
+                    conteudoDiv.setAttribute('data-files', JSON.stringify(arr));
+                }
+            }
+        } catch (e) {
+            console.error('Erro ao enviar arquivo:', e);
+            try { showNotification('Erro ao enviar arquivo: ' + file.name, 'error'); } catch(_) {}
+        }
+    }
+    input.value = '';
+    salvarProntuarioAutomatico();
+}
+
+// ======================== PRONTUÁRIO PDF ========================
+async function gerarPdfProntuario() {
+    // Salvar antes de gerar para garantir dados atualizados
+    await salvarProntuarioAutomatico();
+
+    const agendamentoId = new URLSearchParams(window.location.search).get('id');
+    if (!agendamentoId) {
+        showNotification('ID do agendamento não encontrado.', 'error');
+        return;
+    }
+
+    const prontuarioData = coletarDadosProntuario();
+    if (!prontuarioData || prontuarioData.length === 0) {
+        showNotification('O prontuário está vazio. Adicione registros antes de gerar o PDF.', 'warning');
+        return;
+    }
+
+    showNotification('Gerando PDF do prontuário...', 'info');
+    window.open(`/api/agendamentos/${agendamentoId}/prontuario/pdf`, '_blank');
+}
+
+// ====================== TAXI DOG ======================
+
+/**
+ * Renderiza o badge de Taxi Dog com base no agendamento atual.
+ * Bloqueia a interação quando o status for 'concluido'.
+ */
+function renderizarTaxidog(agendamento) {
+    const valorEl = document.getElementById('taxidogValor');
+    const display = document.getElementById('taxidogDisplay');
+    const chevron = document.getElementById('taxidogChevron');
+    if (!valorEl || !display) return;
+
+    const ativo = !!(agendamento && agendamento.taxidog);
+    valorEl.textContent = ativo ? 'Sim' : 'Não';
+    valorEl.className = ativo ? 'taxidog-sim' : 'taxidog-nao';
+
+    const bloqueado = !!(agendamento && agendamento.status === 'concluido');
+    display.setAttribute('data-bloqueado', bloqueado ? 'true' : 'false');
+    display.title = bloqueado ? 'Desfaça o checkout para alterar o Taxi Dog' : 'Clique para alterar';
+    if (chevron) chevron.style.display = bloqueado ? 'none' : '';
+}
+
+/**
+ * Abre/fecha o dropdown de Taxi Dog.
+ * Não permite abrir se o checkout już foi feito.
+ */
+function toggleTaxidogDropdown() {
+    if (agendamentoAtual && agendamentoAtual.status === 'concluido') {
+        try {
+            if (typeof showNotification === 'function') {
+                showNotification('Desfaça o checkout antes de alterar o Taxi Dog.', 'error');
+            } else {
+                alert('Desfaça o checkout antes de alterar o Taxi Dog.');
+            }
+        } catch(e) { alert('Desfaça o checkout antes de alterar o Taxi Dog.'); }
+        return;
+    }
+    const dropdown = document.getElementById('taxidogDropdown');
+    const chevron = document.getElementById('taxidogChevron');
+    if (!dropdown) return;
+    const aberto = dropdown.style.display !== 'none';
+    dropdown.style.display = aberto ? 'none' : 'block';
+    if (chevron) chevron.classList.toggle('open', !aberto);
+}
+
+/**
+ * Salva a opção de Taxi Dog no banco via API e atualiza o badge.
+ * @param {boolean} valor - true = Sim, false = Não
+ */
+async function salvarTaxidog(valor) {
+    const dropdown = document.getElementById('taxidogDropdown');
+    const chevron = document.getElementById('taxidogChevron');
+    if (dropdown) dropdown.style.display = 'none';
+    if (chevron) chevron.classList.remove('open');
+
+    if (!agendamentoAtual) return;
+
+    try {
+        const resp = await fetch(`/api/agendamentos/${agendamentoAtual.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ taxidog: valor })
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        agendamentoAtual.taxidog = valor;
+        try { window.agendamentoAtual = agendamentoAtual; } catch(e) {}
+        renderizarTaxidog(agendamentoAtual);
+        console.log('✅ Taxidog salvo:', valor ? 'Sim' : 'Não');
+    } catch (e) {
+        console.error('Erro salvando taxidog:', e);
+        alert('Erro ao salvar o Taxi Dog: ' + e.message);
+    }
+}
+
+// Fecha o dropdown de taxidog ao clicar fora
+document.addEventListener('click', function(e) {
+    const container = document.getElementById('taxidogContainer');
+    const dropdown = document.getElementById('taxidogDropdown');
+    const chevron = document.getElementById('taxidogChevron');
+    if (dropdown && container && !container.contains(e.target)) {
+        dropdown.style.display = 'none';
+        if (chevron) chevron.classList.remove('open');
+    }
+});

@@ -11,7 +11,7 @@ router.get('/aniversariantes', dashboardController.aniversariantes);
 // Rota para oportunidades de venda
 router.get('/oportunidades-venda', dashboardController.oportunidadesVenda);
 
-// Rota para leva & traz do dia
+// Rota para Taxi Dog do dia
 router.get('/leva-traz', dashboardController.levaTraz);
 
 // Rota para produtos próximos do vencimento

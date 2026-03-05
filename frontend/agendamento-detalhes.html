@@ -897,7 +897,7 @@
                     <button class="icon-btn" onclick="adicionarCampoProntuario('alergias')" title="Alergias"><i class="fas fa-exclamation-triangle" style="color: #fdcb6e;"></i></button>
                     <button class="icon-btn" onclick="adicionarCampoProntuario('temperatura')" title="Temperatura"><i class="fas fa-thermometer-half" style="color: #74b9ff;"></i></button>
                     <button class="icon-btn" onclick="adicionarCampoProntuario('dieta')" title="Dieta"><i class="fas fa-utensils" style="color: #55efc4;"></i></button>
-                    <button class="icon-btn" onclick="adicionarCampoProntuario('compartilhar')" title="Compartilhar"><i class="fas fa-share-alt" style="color: #0984e3;"></i></button>
+                    <button class="icon-btn" onclick="gerarPdfProntuario()" title="Gerar PDF do Prontuário"><i class="fas fa-share-alt" style="color: #0984e3;"></i></button>
                     <button class="icon-btn" onclick="adicionarCampoProntuario('anexar')" title="Anexar"><i class="fas fa-paperclip" style="color: #636e72;"></i></button>
                   </div>
                 </div>
@@ -1013,15 +1013,15 @@
           <div class="summary-details">
             <div class="summary-item">
               <span class="label">Desconto %</span>
-              <span class="value">0,000</span>
+              <span class="value" id="descontoPercent">0,000</span>
             </div>
             <div class="summary-item">
               <span class="label">Desconto R$</span>
-              <span class="value">0,00</span>
+              <span class="value" id="descontoReais">0,00</span>
             </div>
             <div class="summary-item">
               <span class="label">Arredondou R$</span>
-              <span class="value">0,00</span>
+              <span class="value" id="arredondouReais">0,00</span>
             </div>
           </div>
         </div>
@@ -1034,22 +1034,28 @@
           </div>
         </div>
 
-        <!-- Leva e Traz -->
+        <!-- Taxi Dog -->
         <div class="transport-section">
-          <h4><i class="fas fa-car"></i> Leva e Traz</h4>
+          <h4><i class="fas fa-car"></i> Taxi Dog</h4>
           <div class="transport-options">
-            <label class="radio-option">
-              <input type="radio" name="transport" value="nao" checked>
-              <span class="radio-custom"></span>
-              Não
-            </label>
+            <div id="taxidogContainer" class="taxidog-container">
+              <div id="taxidogDisplay" class="taxidog-display" onclick="toggleTaxidogDropdown()">
+                <span id="taxidogValor">Não</span>
+                <i class="fas fa-chevron-down taxidog-chevron" id="taxidogChevron"></i>
+              </div>
+              <div id="taxidogDropdown" class="taxidog-dropdown" style="display:none;">
+                <div class="taxidog-option" onclick="salvarTaxidog(true)">
+                  <i class="fas fa-check" style="color:#27ae60;margin-right:6px;"></i> Sim
+                </div>
+                <div class="taxidog-option" onclick="salvarTaxidog(false)">
+                  <i class="fas fa-times" style="color:#e74c3c;margin-right:6px;"></i> Não
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <!-- Adiamento -->
-        <div class="adiamento-section">
-          <span class="adiamento-text">$ Adiamento</span>
-        </div>
+        <!-- Adiamento removido -->
       </div>
     </div>
 

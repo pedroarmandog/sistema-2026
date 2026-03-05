@@ -161,7 +161,7 @@ async function carregarOportunidadesVenda() {
 }
 
 // ========================================
-// LEVA & TRAZ
+// TAXI DOG
 // ========================================
 async function carregarLevaTraz() {
     const widget = document.querySelectorAll('.widget')[5]; // 6º widget
@@ -169,7 +169,7 @@ async function carregarLevaTraz() {
     
     try {
         const response = await fetch(`${API_BASE}/dashboard/leva-traz`);
-        if (!response.ok) throw new Error('Erro ao carregar leva & traz');
+        if (!response.ok) throw new Error('Erro ao carregar Taxi Dog');
         
         const agendamentos = await response.json();
         
@@ -196,7 +196,7 @@ async function carregarLevaTraz() {
         content.innerHTML = `<div class="levatraz-list">${html}</div>`;
         
     } catch (error) {
-        console.error('Erro ao carregar leva & traz:', error);
+        console.error('Erro ao carregar Taxi Dog:', error);
         content.innerHTML = '<div class="error-state"><p>Erro ao carregar dados</p></div>';
     }
 }

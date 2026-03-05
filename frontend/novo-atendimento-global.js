@@ -12,14 +12,21 @@ function showNotification(message, type = 'error') {
         const existing = document.querySelector('.notification-toast');
         if (existing) existing.remove();
 
+        const colors = {
+            error:   { icon: 'fa-exclamation-circle', iconColor: '#7b1f2d', textColor: '#661426', bg: '' },
+            success: { icon: 'fa-check-circle',        iconColor: '#1e7e34', textColor: '#0b6435', bg: '' },
+            warning: { icon: 'fa-exclamation-triangle', iconColor: '#856404', textColor: '#533f03', bg: 'background:#fff8e1;border:1px solid #ffe082;' }
+        };
+        const c = colors[type] || colors.error;
+
         const n = document.createElement('div');
         n.className = `notification-toast notification-${type}`;
-        n.style.cssText = 'position:fixed;right:18px;top:18px;z-index:1200010;min-width:220px;max-width:420px;padding:12px 16px;border-radius:8px;box-shadow:0 8px 24px rgba(2,16,26,0.12);font-weight:400;display:flex;align-items:center;gap:12px;opacity:0;transition:opacity .18s,transform .18s;';
+        n.style.cssText = `position:fixed;right:18px;top:18px;z-index:1200010;min-width:220px;max-width:420px;padding:12px 16px;border-radius:8px;box-shadow:0 8px 24px rgba(2,16,26,0.12);font-weight:400;display:flex;align-items:center;gap:12px;opacity:0;transition:opacity .18s,transform .18s;${c.bg}`;
         n.innerHTML = `
-            <div style="flex:0 0 28px;text-align:center;font-size:18px;color:${type==='error'?'#7b1f2d':'#1e7e34'};">
-                <i class="fas ${type==='error'?'fa-exclamation-circle':'fa-check-circle'}"></i>
+            <div style="flex:0 0 28px;text-align:center;font-size:18px;color:${c.iconColor};">
+                <i class="fas ${c.icon}"></i>
             </div>
-            <div style="flex:1;color:${type==='error'?'#661426':'#0b6435'};">${message}</div>
+            <div style="flex:1;color:${c.textColor};">${message}</div>
             <button style="background:transparent;border:none;color:#999;cursor:pointer;font-size:14px;" onclick="this.parentElement.remove()">✕</button>
         `;
         document.body.appendChild(n);
@@ -739,6 +746,10 @@ function abrirNovoAgendamentoModal() {
             unitario: servicoValor,
             desconto: 0
         });
+        try {
+            const last = window.servicosAdicionados[window.servicosAdicionados.length - 1];
+            if (last) last.total = calcularValorServico(last);
+        } catch(e){}
         
         // Limpar campo
         servicoInput.value = '';
@@ -777,7 +788,7 @@ function abrirNovoAgendamentoModal() {
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; margin-top: 8px;">
                     <div>
                         <label style="display: block; font-size: 11px; color: #666; margin-bottom: 4px;">Qtd. *</label>
                         <input type="number" min="0.001" step="0.001" value="${servico.quantidade || 1}" 
@@ -787,7 +798,13 @@ function abrirNovoAgendamentoModal() {
                     <div>
                         <label style="display: block; font-size: 11px; color: #666; margin-bottom: 4px;">Unitário *</label>
                         <input type="number" min="0" step="0.01" value="${(servico.unitario || servico.valor || 0).toFixed(2)}" 
-                            onchange="window.atualizarServicoGlobal(${index}, 'unitario', parseFloat(this.value) || 0)"
+                            readonly
+                            style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;background:#f7f7f7;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 4px;">Valor final *</label>
+                        <input type="number" min="0" step="0.01" value="${(servico.valor || servico.unitario || 0).toFixed(2)}" 
+                            onchange="window.atualizarServicoGlobal(${index}, 'valor', parseFloat(this.value) || 0)"
                             style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                     </div>
                     <div>
@@ -810,25 +827,56 @@ function abrirNovoAgendamentoModal() {
         valorTotalElement.textContent = `R$ ${total.toFixed(2).replace('.', ',')}`;
     }
     
-    // Função para calcular valor do serviço (quantidade * unitario - desconto%)
+    // Função para calcular valor do serviço (quantidade * valor final) e aplicar desconto% quando configurado
     function calcularValorServico(servico) {
         const qtd = parseFloat(servico.quantidade) || 1;
-        const unitario = parseFloat(servico.unitario) || parseFloat(servico.valor) || 0;
-        const desconto = parseFloat(servico.desconto) || 0;
-        
-        const subtotal = qtd * unitario;
-        const valorDesconto = subtotal * (desconto / 100);
-        return subtotal - valorDesconto;
+        // 'unitario' é o valor cadastrado (fixo). 'valor' é o unitário final (pode ser alterado pelo usuário).
+        const finalUnit = (servico.valor !== undefined && servico.valor !== null) ? parseFloat(servico.valor) : parseFloat(servico.unitario || 0);
+        const descontoPercent = parseFloat(servico.desconto) || 0;
+
+        // O subtotal deve ser quantidade * valor final (valor editado pelo usuário).
+        // O campo `desconto` é apenas informativo (mostra a diferença percentual
+        // entre o `unitario` cadastrado e o `valor` final). Não aplicamos o desconto
+        // novamente sobre o `valor` final — assim o subtotal fica exatamente o valor
+        // que o usuário informou.
+        const subtotal = qtd * finalUnit;
+        return subtotal;
     }
     
     // Função para atualizar campo de um serviço
     window.atualizarServicoGlobal = function(index, campo, valor) {
-        if (window.servicosAdicionados[index]) {
-            window.servicosAdicionados[index][campo] = valor;
-            // Recalcular valor total
-            window.servicosAdicionados[index].valor = calcularValorServico(window.servicosAdicionados[index]);
-            renderizarListaServicos();
+        if (!window.servicosAdicionados[index]) return;
+        const serv = window.servicosAdicionados[index];
+
+        // tratar 'unitario' como edição do valor final quando chamada (compatibilidade com outras views)
+        if (campo === 'unitario') campo = 'valor';
+
+        if (campo === 'quantidade') {
+            serv.quantidade = valor;
+        } else if (campo === 'valor') {
+            // valor = unitário final inserido pelo usuário
+            serv.valor = valor;
+            // recalcular % desconto (somente se houve redução)
+            const unitCad = parseFloat(serv.unitario || 0) || 0;
+            if (unitCad > 0 && valor < unitCad) {
+                serv.desconto = ((unitCad - valor) / unitCad) * 100;
+            } else {
+                serv.desconto = 0;
+            }
+        } else if (campo === 'desconto') {
+            // desconto é percentual; aplicar sobre unitario cadastrado para definir valor final
+            serv.desconto = Math.max(0, Math.min(100, valor));
+            const unitCad = parseFloat(serv.unitario || 0) || 0;
+            serv.valor = unitCad * (1 - (serv.desconto / 100));
+        } else {
+            // campos inesperados: gravar direto
+            serv[campo] = valor;
         }
+
+        // Recalcular total do item (subtotal já considera quantidade e desconto percentual)
+        serv.total = calcularValorServico(serv);
+
+        renderizarListaServicos();
     };
     
     // Expor funções globalmente
@@ -904,9 +952,21 @@ function abrirNovoAgendamentoModal() {
 // =============================================
 // FUNÇÕES AUXILIARES
 // =============================================
+// Garantir função global de cálculo para compatibilidade entre escopos
+if (typeof window.calcularValorServico !== 'function') {
+    window.calcularValorServico = function(servico) {
+        try {
+            const qtd = parseFloat(servico.quantidade) || 1;
+            const finalUnit = (servico.valor !== undefined && servico.valor !== null) ? parseFloat(servico.valor) : parseFloat(servico.unitario || 0);
+            // Subtotal = quantidade * valor final. Desconto é informativo apenas.
+            const subtotal = qtd * finalUnit;
+            return subtotal;
+        } catch (e) { return 0; }
+    };
+}
 function coletarDadosFormulario() {
-    // Calcular valor total dos serviços
-    const valorTotal = (window.servicosAdicionados || []).reduce((acc, s) => acc + s.valor, 0);
+    // Calcular valor total dos serviços (usar função de cálculo para refletir desconto/valor final)
+    const valorTotal = (window.servicosAdicionados || []).reduce((acc, s) => acc + calcularValorServico(s), 0);
     
     const dados = {
         petCliente: document.getElementById('petClienteGlobal').value,
@@ -2927,5 +2987,203 @@ window.selecionarAnoCompacto = function(ano) {
     // Após selecionar ano, mostrar seletor de meses
     mostrarSeletorMeses();
 }
+
+// ==============================================================
+// FLUXO DE CANCELAMENTO DE AGENDAMENTO COM AUTENTICAÇÃO GERENTE
+// ==============================================================
+// Disponível globalmente para agendamentos-novo e agendamento-detalhes
+window.iniciarFluxoCancelamento = function(agendamentoId, onSuccess) {
+    // ---- ESTILOS COMPARTILHADOS ----
+    const estiloOverlay = {
+        position: 'fixed', inset: '0',
+        background: 'rgba(0,0,0,0.50)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        zIndex: '20000'
+    };
+    const estiloModal = {
+        width: '460px', maxWidth: '94%',
+        background: '#fff', borderRadius: '10px',
+        boxShadow: '0 16px 48px rgba(2,6,23,0.40)',
+        padding: '28px 28px 22px', fontFamily: 'inherit'
+    };
+    const estiloTitulo = {
+        fontSize: '17px', fontWeight: '700',
+        marginBottom: '10px', color: '#1a1a2e'
+    };
+    const estiloMensagem = {
+        fontSize: '14px', color: '#444',
+        marginBottom: '22px', lineHeight: '1.55'
+    };
+    const estiloBtn = (bg, color) => ({
+        background: bg, color: color || '#fff',
+        border: 'none', padding: '9px 20px',
+        borderRadius: '6px', cursor: 'pointer',
+        fontSize: '14px', fontWeight: '600'
+    });
+    function aplicarEstilo(el, obj) {
+        Object.assign(el.style, obj);
+    }
+
+    // ---- MODAL 1: CONFIRMAÇÃO ----
+    const ov1 = document.createElement('div');
+    aplicarEstilo(ov1, estiloOverlay);
+
+    const m1 = document.createElement('div');
+    aplicarEstilo(m1, estiloModal);
+
+    const titulo1 = document.createElement('div');
+    aplicarEstilo(titulo1, estiloTitulo);
+    titulo1.innerHTML = '<span style="color:#c12b2b">&#9888;</span> Cancelar Agendamento';
+
+    const msg1 = document.createElement('div');
+    aplicarEstilo(msg1, estiloMensagem);
+    msg1.textContent = 'Tem certeza que deseja cancelar este agendamento? Esta ação não poderá ser desfeita e o registro será removido permanentemente.';
+
+    const sep1 = document.createElement('hr');
+    sep1.style.cssText = 'border:none;border-top:1px solid #e5e7eb;margin:0 0 18px';
+
+    const acoes1 = document.createElement('div');
+    acoes1.style.cssText = 'display:flex;justify-content:flex-end;gap:10px';
+
+    const btnNao = document.createElement('button');
+    aplicarEstilo(btnNao, estiloBtn('#6c757d'));
+    btnNao.textContent = 'Não, voltar';
+
+    const btnSim = document.createElement('button');
+    aplicarEstilo(btnSim, estiloBtn('#c12b2b'));
+    btnSim.textContent = 'Sim, cancelar';
+
+    acoes1.appendChild(btnNao);
+    acoes1.appendChild(btnSim);
+    m1.appendChild(titulo1);
+    m1.appendChild(msg1);
+    m1.appendChild(sep1);
+    m1.appendChild(acoes1);
+    ov1.appendChild(m1);
+    document.body.appendChild(ov1);
+
+    btnNao.addEventListener('click', () => ov1.remove());
+    ov1.addEventListener('click', e => { if (e.target === ov1) ov1.remove(); });
+
+    btnSim.addEventListener('click', () => {
+        ov1.remove();
+
+        // ---- MODAL 2: CREDENCIAIS DO GERENTE ----
+        const ov2 = document.createElement('div');
+        aplicarEstilo(ov2, estiloOverlay);
+
+        const m2 = document.createElement('div');
+        aplicarEstilo(m2, estiloModal);
+
+        const titulo2 = document.createElement('div');
+        aplicarEstilo(titulo2, estiloTitulo);
+        titulo2.textContent = 'Autorização do Gerente';
+
+        const msg2 = document.createElement('div');
+        aplicarEstilo(msg2, estiloMensagem);
+        msg2.textContent = 'Para confirmar o cancelamento, insira as credenciais do gerente principal ou do LOGIN INICIAL.';
+
+        const estiloLabel = 'display:block;font-size:13px;font-weight:600;color:#333;margin-bottom:4px';
+        const estiloInput = 'width:100%;box-sizing:border-box;border:1px solid #d1d5db;border-radius:6px;padding:9px 11px;font-size:14px;margin-bottom:14px;outline:none';
+
+        const lblUsuario = document.createElement('label');
+        lblUsuario.style.cssText = estiloLabel;
+        lblUsuario.textContent = 'Usuário';
+        const inputUsuario = document.createElement('input');
+        inputUsuario.type = 'text';
+        inputUsuario.placeholder = 'Login do gerente';
+        inputUsuario.style.cssText = estiloInput;
+        inputUsuario.autocomplete = 'off';
+
+        const lblSenha = document.createElement('label');
+        lblSenha.style.cssText = estiloLabel;
+        lblSenha.textContent = 'Senha';
+        const inputSenha = document.createElement('input');
+        inputSenha.type = 'password';
+        inputSenha.placeholder = 'Senha do gerente';
+        inputSenha.style.cssText = estiloInput;
+
+        const msgErro = document.createElement('div');
+        msgErro.style.cssText = 'color:#c12b2b;font-size:13px;margin-bottom:12px;display:none';
+
+        const sep2 = document.createElement('hr');
+        sep2.style.cssText = 'border:none;border-top:1px solid #e5e7eb;margin:4px 0 18px';
+
+        const acoes2 = document.createElement('div');
+        acoes2.style.cssText = 'display:flex;justify-content:flex-end;gap:10px';
+
+        const btnCancelar2 = document.createElement('button');
+        aplicarEstilo(btnCancelar2, estiloBtn('#6c757d'));
+        btnCancelar2.textContent = 'Cancelar';
+
+        const btnConfirmar = document.createElement('button');
+        aplicarEstilo(btnConfirmar, estiloBtn('#c12b2b'));
+        btnConfirmar.textContent = 'Confirmar cancelamento';
+
+        acoes2.appendChild(btnCancelar2);
+        acoes2.appendChild(btnConfirmar);
+
+        m2.appendChild(titulo2);
+        m2.appendChild(msg2);
+        m2.appendChild(lblUsuario);
+        m2.appendChild(inputUsuario);
+        m2.appendChild(lblSenha);
+        m2.appendChild(inputSenha);
+        m2.appendChild(msgErro);
+        m2.appendChild(sep2);
+        m2.appendChild(acoes2);
+        ov2.appendChild(m2);
+        document.body.appendChild(ov2);
+
+        setTimeout(() => inputUsuario.focus(), 80);
+
+        btnCancelar2.addEventListener('click', () => ov2.remove());
+
+        async function submeter() {
+            const usuario = inputUsuario.value.trim();
+            const senha = inputSenha.value;
+            if (!usuario || !senha) {
+                msgErro.textContent = 'Preencha o usuário e a senha.';
+                msgErro.style.display = 'block';
+                return;
+            }
+            btnConfirmar.disabled = true;
+            btnConfirmar.textContent = 'Aguarde...';
+            msgErro.style.display = 'none';
+            try {
+                const res = await fetch(`/api/agendamentos/${agendamentoId}/cancelar`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ usuario, senha })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (res.ok) {
+                    ov2.remove();
+                    try {
+                        if (typeof showNotification === 'function') showNotification('Agendamento cancelado. Ele aparecerá no filtro "Cancelado".', 'success');
+                    } catch(e){}
+                    if (typeof onSuccess === 'function') onSuccess();
+                } else {
+                    msgErro.textContent = data.error || 'Credenciais inválidas ou sem permissão.';
+                    msgErro.style.display = 'block';
+                    btnConfirmar.disabled = false;
+                    btnConfirmar.textContent = 'Confirmar cancelamento';
+                }
+            } catch(e) {
+                msgErro.textContent = 'Erro de conexão. Tente novamente.';
+                msgErro.style.display = 'block';
+                btnConfirmar.disabled = false;
+                btnConfirmar.textContent = 'Confirmar cancelamento';
+            }
+        }
+
+        btnConfirmar.addEventListener('click', submeter);
+        // submeter com Enter
+        [inputUsuario, inputSenha].forEach(inp => {
+            inp.addEventListener('keydown', e => { if (e.key === 'Enter') submeter(); });
+        });
+    });
+};
 
 console.log('🌟 Sistema Global de Novo Atendimento configurado!');
