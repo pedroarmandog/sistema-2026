@@ -1,11 +1,13 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const comissaoController = require('../controllers/comissaoController');
+const comissaoController = require("../controllers/comissaoController");
 
-router.get('/', comissaoController.getAll);
-router.get('/:id', comissaoController.getById);
-router.post('/', comissaoController.create);
-router.put('/:id', comissaoController.update);
-router.delete('/:id', comissaoController.delete);
+router.get("/por-perfil", comissaoController.porPerfil);
+router.get("/calcular", comissaoController.calcular);
+router.get("/", comissaoController.getAll);
+router.get("/:id", comissaoController.getById);
+router.post("/", comissaoController.create);
+router.put("/:id", comissaoController.update);
+router.delete("/:id", comissaoController.delete);
 
 module.exports = router;
