@@ -1,1075 +1,1587 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const { Agendamento, Pet, Cliente, Empresa, Usuario } = require('../models');
-const fs = require('fs');
-const path = require('path');
-const { Op } = require('sequelize');
+const { Agendamento, Pet, Cliente, Empresa, Usuario } = require("../models");
+const fs = require("fs");
+const path = require("path");
+const { Op } = require("sequelize");
 
 // GET /api/agendamentos - Listar agendamentos
-router.get('/', async (req, res) => {
-    try {
-        const { data, status, petCliente, profissional } = req.query;
-        
-        console.log('🔍 GET /api/agendamentos - Params:', { data, status, petCliente, profissional });
-        
-        const whereClause = {};
-        
-        // Filtro por data - usar intervalo com offset -03:00 para evitar
-        // discrepâncias de timezone/UTC ao armazenar timestamps.
-        if (data) {
-            try {
-                const start = new Date(`${data}T00:00:00-03:00`);
-                const next = new Date(start);
-                next.setDate(start.getDate() + 1);
-                whereClause.dataAgendamento = {
-                    [Op.gte]: start,
-                    [Op.lt]: next
-                };
-                console.log('📅 Filtro de data aplicado (range):', start.toISOString(), next.toISOString());
-            } catch (e) {
-                console.warn('⚠️ Erro ao aplicar filtro de data como range, fallback para DATE():', e);
-                const { Sequelize } = require('sequelize');
-                whereClause[Op.and] = [
-                    Sequelize.where(
-                        Sequelize.fn('DATE', Sequelize.col('dataAgendamento')),
-                        '=',
-                        data
-                    )
-                ];
-            }
-        }
-        
-        // Filtro por status
-        if (status && Array.isArray(status) && status.length > 0) {
-            // Filtro explícito: mostrar apenas os status solicitados (incluindo cancelado se pedido)
-            whereClause.status = { [Op.in]: status };
-        } else if (status && !Array.isArray(status)) {
-            // status como string única
-            whereClause.status = status;
-        } else if (req.query.incluirCancelados !== 'true') {
-            // Sem filtro de status e sem flag especial: ocultar cancelados por padrão
-            whereClause.status = { [Op.ne]: 'cancelado' };
-        }
-        // Se incluirCancelados=true e sem status[], retorna tudo (inclusive cancelados)
+router.get("/", async (req, res) => {
+  try {
+    const { data, status, petCliente, profissional } = req.query;
 
-        const agendamentos = await Agendamento.findAll({
-            where: whereClause,
-            include: [
-                {
-                    model: Pet,
-                    as: 'pet',
-                    include: [
-                        {
-                            model: Cliente,
-                            as: 'cliente'
-                        }
-                    ],
-                    where: petCliente ? {
-                        nome: {
-                            [Op.like]: `%${petCliente}%`
-                        }
-                    } : undefined
-                }
-            ],
-            order: [['dataAgendamento', 'ASC'], ['horario', 'ASC']]
-        });
+    console.log("🔍 GET /api/agendamentos - Params:", {
+      data,
+      status,
+      petCliente,
+      profissional,
+    });
 
-        // Formatando os dados para o frontend (usar aliases corretos em minúsculas)
-        const agendamentosFormatted = agendamentos.map(agendamento => ({
-            id: agendamento.id,
-            horario: agendamento.horario,
-            petNome: agendamento.pet?.nome || 'Pet não encontrado',
-            clienteNome: agendamento.pet?.cliente?.nome || 'Cliente não encontrado',
-            servico: agendamento.servico,
-            servicos: agendamento.servicos || [],
-            observacoes: agendamento.observacoes,
-            petObservacao: agendamento.pet?.observacao || null,
-            profissional: agendamento.profissional,
-            valor: agendamento.valor,
-            status: agendamento.status,
-            dataAgendamento: agendamento.dataAgendamento
-        }));
+    const whereClause = {
+      // Excluir registros internos de prontuário (vacina/vermifugo/antiparasitário de pet-details)
+      servico: {
+        [Op.notIn]: ["vacina", "vermifugo", "antiparasitario", "documento"],
+      },
+    };
 
-        res.json(agendamentosFormatted);
-    } catch (error) {
-        console.error('Erro ao buscar agendamentos:', error);
-        res.status(500).json({ error: 'Erro interno do servidor' });
+    // Filtro por data - usar intervalo com offset -03:00 para evitar
+    // discrepâncias de timezone/UTC ao armazenar timestamps.
+    if (data) {
+      try {
+        const start = new Date(`${data}T00:00:00-03:00`);
+        const next = new Date(start);
+        next.setDate(start.getDate() + 1);
+        whereClause.dataAgendamento = {
+          [Op.gte]: start,
+          [Op.lt]: next,
+        };
+        console.log(
+          "📅 Filtro de data aplicado (range):",
+          start.toISOString(),
+          next.toISOString(),
+        );
+      } catch (e) {
+        console.warn(
+          "⚠️ Erro ao aplicar filtro de data como range, fallback para DATE():",
+          e,
+        );
+        const { Sequelize } = require("sequelize");
+        whereClause[Op.and] = [
+          Sequelize.where(
+            Sequelize.fn("DATE", Sequelize.col("dataAgendamento")),
+            "=",
+            data,
+          ),
+        ];
+      }
     }
+
+    // Filtro por status
+    if (status && Array.isArray(status) && status.length > 0) {
+      // Filtro explícito: mostrar apenas os status solicitados (incluindo cancelado se pedido)
+      whereClause.status = { [Op.in]: status };
+    } else if (status && !Array.isArray(status)) {
+      // status como string única
+      whereClause.status = status;
+    } else if (req.query.incluirCancelados !== "true") {
+      // Sem filtro de status e sem flag especial: ocultar cancelados por padrão
+      whereClause.status = { [Op.ne]: "cancelado" };
+    }
+    // Se incluirCancelados=true e sem status[], retorna tudo (inclusive cancelados)
+
+    const agendamentos = await Agendamento.findAll({
+      where: whereClause,
+      include: [
+        {
+          model: Pet,
+          as: "pet",
+          include: [
+            {
+              model: Cliente,
+              as: "cliente",
+            },
+          ],
+          where: petCliente
+            ? {
+                nome: {
+                  [Op.like]: `%${petCliente}%`,
+                },
+              }
+            : undefined,
+        },
+      ],
+      order: [
+        ["dataAgendamento", "ASC"],
+        ["horario", "ASC"],
+      ],
+    });
+
+    // Formatando os dados para o frontend (usar aliases corretos em minúsculas)
+    const agendamentosFormatted = agendamentos.map((agendamento) => ({
+      id: agendamento.id,
+      horario: agendamento.horario,
+      petNome: agendamento.pet?.nome || "Pet não encontrado",
+      clienteNome: agendamento.pet?.cliente?.nome || "Cliente não encontrado",
+      servico: agendamento.servico,
+      servicos: agendamento.servicos || [],
+      observacoes: agendamento.observacoes,
+      petObservacao: agendamento.pet?.observacao || null,
+      profissional: agendamento.profissional,
+      valor: agendamento.valor,
+      status: agendamento.status,
+      dataAgendamento: agendamento.dataAgendamento,
+    }));
+
+    res.json(agendamentosFormatted);
+  } catch (error) {
+    console.error("Erro ao buscar agendamentos:", error);
+    res.status(500).json({ error: "Erro interno do servidor" });
+  }
 });
 
 // GET /api/agendamentos/:id - Buscar agendamento por ID
-router.get('/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        
-        const agendamento = await Agendamento.findByPk(id, {
-            include: [
-                {
-                    model: Pet,
-                    as: 'pet',
-                    include: [{ model: Cliente, as: 'cliente' }]
-                }
-            ]
-        });
+router.get("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
 
-        if (!agendamento) {
-            return res.status(404).json({ error: 'Agendamento não encontrado' });
-        }
+    const agendamento = await Agendamento.findByPk(id, {
+      include: [
+        {
+          model: Pet,
+          as: "pet",
+          include: [{ model: Cliente, as: "cliente" }],
+        },
+      ],
+    });
 
-        const agendamentoFormatted = {
-            id: agendamento.id,
-            horario: agendamento.horario,
-            petNome: agendamento.pet?.nome || 'Pet não encontrado',
-            clienteNome: agendamento.pet?.cliente?.nome || 'Cliente não encontrado',
-            servico: agendamento.servico,
-            servicos: agendamento.servicos || [],
-            observacoes: agendamento.observacoes,
-            petObservacao: agendamento.pet?.observacao || null,
-            profissional: agendamento.profissional,
-            valor: agendamento.valor,
-            status: agendamento.status,
-            dataAgendamento: agendamento.dataAgendamento,
-            petId: agendamento.petId,
-            clienteId: agendamento.pet?.cliente?.id || null,
-            prontuario: agendamento.prontuario || [],
-            clinicaState: agendamento.clinicaState || null,
-            pagamentos: agendamento.pagamentos || [],
-            totalPago: agendamento.totalPago || 0,
-            taxidog: agendamento.taxidog || false
-        };
-
-        res.json(agendamentoFormatted);
-    } catch (error) {
-        console.error('Erro ao buscar agendamento:', error);
-        res.status(500).json({ error: 'Erro interno do servidor' });
+    if (!agendamento) {
+      return res.status(404).json({ error: "Agendamento não encontrado" });
     }
+
+    const agendamentoFormatted = {
+      id: agendamento.id,
+      horario: agendamento.horario,
+      petNome: agendamento.pet?.nome || "Pet não encontrado",
+      clienteNome: agendamento.pet?.cliente?.nome || "Cliente não encontrado",
+      servico: agendamento.servico,
+      servicos: agendamento.servicos || [],
+      observacoes: agendamento.observacoes,
+      petObservacao: agendamento.pet?.observacao || null,
+      profissional: agendamento.profissional,
+      valor: agendamento.valor,
+      status: agendamento.status,
+      dataAgendamento: agendamento.dataAgendamento,
+      petId: agendamento.petId,
+      clienteId: agendamento.pet?.cliente?.id || null,
+      prontuario: agendamento.prontuario || [],
+      clinicaState: agendamento.clinicaState || null,
+      pagamentos: agendamento.pagamentos || [],
+      totalPago: agendamento.totalPago || 0,
+      taxidog: agendamento.taxidog || false,
+    };
+
+    res.json(agendamentoFormatted);
+  } catch (error) {
+    console.error("Erro ao buscar agendamento:", error);
+    res.status(500).json({ error: "Erro interno do servidor" });
+  }
 });
 
 // POST /api/agendamentos - Criar novo agendamento
-router.post('/', async (req, res) => {
-    try {
-        const { data, hora, petId, servico, servicos, observacoes, profissional, valor } = req.body;
+router.post("/", async (req, res) => {
+  try {
+    const {
+      data,
+      hora,
+      petId,
+      servico,
+      servicos,
+      observacoes,
+      profissional,
+      valor,
+    } = req.body;
 
-        // Validações básicas
-        if (!data || !hora || !petId || !servico) {
-            return res.status(400).json({ 
-                error: 'Campos obrigatórios: data, hora, petId e servico' 
-            });
-        }
-
-        // Verificar se o pet existe
-        const pet = await Pet.findByPk(petId);
-        if (!pet) {
-            return res.status(404).json({ error: 'Pet não encontrado' });
-        }
-
-        // Combinar data e hora (adicionar explicitamente o offset de São Paulo)
-        // Isso evita problemas de conversão de timezone que movem o dia para frente/para trás
-        // quando a string é interpretada como UTC pelo engine de JS/DB.
-        const dataAgendamento = new Date(`${data}T${hora}:00-03:00`);
-
-        // Verificar conflitos de horário (mesmo PET no mesmo horário)
-        // Usar intervalo (start <= dataAgendamento < next) com offset -03:00
-        let conflito = null;
-        try {
-            const start = new Date(`${data}T00:00:00-03:00`);
-            const next = new Date(start);
-            next.setDate(start.getDate() + 1);
-            conflito = await Agendamento.findOne({
-                where: {
-                    petId: petId,
-                    horario: hora,
-                    dataAgendamento: {
-                        [Op.gte]: start,
-                        [Op.lt]: next
-                    },
-                    status: {
-                        [Op.not]: 'cancelado'
-                    }
-                }
-            });
-        } catch (e) {
-            console.warn('⚠️ fallback conflito por DATE():', e);
-            const { Sequelize } = require('sequelize');
-            conflito = await Agendamento.findOne({
-                where: {
-                    petId: petId,
-                    horario: hora,
-                    [Op.and]: Sequelize.where(
-                        Sequelize.fn('DATE', Sequelize.col('dataAgendamento')),
-                        '=',
-                        data
-                    ),
-                    status: {
-                        [Op.not]: 'cancelado'
-                    }
-                }
-            });
-        }
-
-        if (conflito) {
-            return res.status(409).json({ 
-                error: 'Já existe um agendamento para este pet no mesmo horário' 
-            });
-        }
-
-        const novoAgendamento = await Agendamento.create({
-            dataAgendamento,
-            horario: hora,
-            petId,
-            servico,
-            servicos: Array.isArray(servicos) ? servicos : (servico ? [{ nome: servico, valor: valor || 0 }] : []),
-            observacoes: observacoes || '',
-            profissional: profissional || '',
-            valor: valor || 0,
-            status: 'agendado'
-        });
-
-        // Buscar o agendamento criado com os dados relacionados
-        const agendamentoCriado = await Agendamento.findByPk(novoAgendamento.id, {
-            include: [
-                {
-                    model: Pet,
-                    as: 'pet',
-                    include: [{ model: Cliente, as: 'cliente' }]
-                }
-            ]
-        });
-
-        const agendamentoFormatted = {
-            id: agendamentoCriado.id,
-            horario: agendamentoCriado.horario,
-            petNome: agendamentoCriado.pet?.nome || 'Pet não encontrado',
-            clienteNome: agendamentoCriado.pet?.cliente?.nome || 'Cliente não encontrado',
-            servico: agendamentoCriado.servico,
-            observacoes: agendamentoCriado.observacoes,
-            profissional: agendamentoCriado.profissional,
-            valor: agendamentoCriado.valor,
-            status: agendamentoCriado.status,
-            dataAgendamento: agendamentoCriado.dataAgendamento
-        };
-
-        res.status(201).json(agendamentoFormatted);
-    } catch (error) {
-        console.error('Erro ao criar agendamento:', error);
-        res.status(500).json({ error: 'Erro interno do servidor' });
+    // Validações básicas
+    if (!data || !hora || !petId || !servico) {
+      return res.status(400).json({
+        error: "Campos obrigatórios: data, hora, petId e servico",
+      });
     }
+
+    // Verificar se o pet existe
+    const pet = await Pet.findByPk(petId);
+    if (!pet) {
+      return res.status(404).json({ error: "Pet não encontrado" });
+    }
+
+    // Combinar data e hora (adicionar explicitamente o offset de São Paulo)
+    // Isso evita problemas de conversão de timezone que movem o dia para frente/para trás
+    // quando a string é interpretada como UTC pelo engine de JS/DB.
+    const dataAgendamento = new Date(`${data}T${hora}:00-03:00`);
+
+    // Verificar conflitos de horário (mesmo PET no mesmo horário)
+    // Usar intervalo (start <= dataAgendamento < next) com offset -03:00
+    let conflito = null;
+    try {
+      const start = new Date(`${data}T00:00:00-03:00`);
+      const next = new Date(start);
+      next.setDate(start.getDate() + 1);
+      conflito = await Agendamento.findOne({
+        where: {
+          petId: petId,
+          horario: hora,
+          dataAgendamento: {
+            [Op.gte]: start,
+            [Op.lt]: next,
+          },
+          status: {
+            [Op.not]: "cancelado",
+          },
+        },
+      });
+    } catch (e) {
+      console.warn("⚠️ fallback conflito por DATE():", e);
+      const { Sequelize } = require("sequelize");
+      conflito = await Agendamento.findOne({
+        where: {
+          petId: petId,
+          horario: hora,
+          [Op.and]: Sequelize.where(
+            Sequelize.fn("DATE", Sequelize.col("dataAgendamento")),
+            "=",
+            data,
+          ),
+          status: {
+            [Op.not]: "cancelado",
+          },
+        },
+      });
+    }
+
+    if (conflito) {
+      return res.status(409).json({
+        error: "Já existe um agendamento para este pet no mesmo horário",
+      });
+    }
+
+    const novoAgendamento = await Agendamento.create({
+      dataAgendamento,
+      horario: hora,
+      petId,
+      servico,
+      servicos: Array.isArray(servicos)
+        ? servicos
+        : servico
+          ? [{ nome: servico, valor: valor || 0 }]
+          : [],
+      observacoes: observacoes || "",
+      profissional: profissional || "",
+      valor: valor || 0,
+      status: "agendado",
+    });
+
+    // Buscar o agendamento criado com os dados relacionados
+    const agendamentoCriado = await Agendamento.findByPk(novoAgendamento.id, {
+      include: [
+        {
+          model: Pet,
+          as: "pet",
+          include: [{ model: Cliente, as: "cliente" }],
+        },
+      ],
+    });
+
+    const agendamentoFormatted = {
+      id: agendamentoCriado.id,
+      horario: agendamentoCriado.horario,
+      petNome: agendamentoCriado.pet?.nome || "Pet não encontrado",
+      clienteNome:
+        agendamentoCriado.pet?.cliente?.nome || "Cliente não encontrado",
+      servico: agendamentoCriado.servico,
+      observacoes: agendamentoCriado.observacoes,
+      profissional: agendamentoCriado.profissional,
+      valor: agendamentoCriado.valor,
+      status: agendamentoCriado.status,
+      dataAgendamento: agendamentoCriado.dataAgendamento,
+    };
+
+    res.status(201).json(agendamentoFormatted);
+  } catch (error) {
+    console.error("Erro ao criar agendamento:", error);
+    res.status(500).json({ error: "Erro interno do servidor" });
+  }
 });
 
 // PUT /api/agendamentos/:id - Atualizar agendamento
-router.put('/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { data, hora, petId, servico, servicos, observacoes, profissional, valor, status, taxidog } = req.body;
+router.put("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      data,
+      hora,
+      petId,
+      servico,
+      servicos,
+      observacoes,
+      profissional,
+      valor,
+      status,
+      taxidog,
+    } = req.body;
 
-        console.log('📥 PUT /api/agendamentos/:id - Dados recebidos:', { id, data, hora, petId, servico, observacoes, profissional, valor, status });
+    console.log("📥 PUT /api/agendamentos/:id - Dados recebidos:", {
+      id,
+      data,
+      hora,
+      petId,
+      servico,
+      observacoes,
+      profissional,
+      valor,
+      status,
+    });
 
-        const agendamento = await Agendamento.findByPk(id);
-        if (!agendamento) {
-            return res.status(404).json({ error: 'Agendamento não encontrado' });
-        }
-
-        // Preparar dados para atualização
-        const updateData = {};
-        
-        if (data && hora) {
-            // Normalizar hora: se não tem segundos, adicionar :00
-            let horaNormalizada = hora;
-            const partesHora = hora.split(':');
-            if (partesHora.length === 2) {
-                // Formato HH:MM, adicionar segundos
-                horaNormalizada = `${hora}:00`;
-            }
-            // Se já tem 3 partes (HH:MM:SS), usar como está
-            
-            const dataString = `${data}T${horaNormalizada}-03:00`;
-            console.log('🕐 Criando data (com offset -03:00):', dataString);
-            const dataObj = new Date(dataString);
-            console.log('📅 Data criada:', dataObj, 'isValid:', !isNaN(dataObj.getTime()));
-            
-            if (isNaN(dataObj.getTime())) {
-                console.error('❌ Data inválida gerada:', { data, hora, horaNormalizada, dataString });
-                return res.status(400).json({ error: 'Data ou hora inválida', details: { data, hora } });
-            }
-            
-            updateData.dataAgendamento = dataObj;
-            updateData.horario = hora;
-        } else {
-            console.log('⚠️ Data ou hora não fornecida, mantendo valores atuais');
-        }
-        
-        if (petId) updateData.petId = petId;
-        if (servico) updateData.servico = servico;
-        // Se o cliente enviar um array estruturado de serviços, persista também no campo JSON
-        if (servicos && Array.isArray(servicos)) {
-            console.log('PUT /api/agendamentos/:id received servicos payload:', { id, servicosLength: servicos.length });
-            // Tratar o array enviado pelo cliente como autoritativo: sobrescrever o que está no banco
-            try {
-                // Deduplicar apenas os itens enviados pelo cliente (por id quando disponível, fallback por JSON)
-                const seen = new Map();
-                for (const it of servicos) {
-                    try {
-                        const key = (it && (it.id !== undefined && it.id !== null)) ? String(it.id) : JSON.stringify(it);
-                        if (!seen.has(key)) seen.set(key, it);
-                    } catch (e) {
-                        const key = JSON.stringify(it);
-                        if (!seen.has(key)) seen.set(key, it);
-                    }
-                }
-                const merged = Array.from(seen.values());
-                updateData.servicos = merged;
-                // atualizar campo texto concatenado para compatibilidade com views legadas
-                const names = merged.map(s => s && (s.nome || s.name || s.nomeServico) ? (s.nome || s.name || s.nomeServico) : '').filter(Boolean);
-                updateData.servico = names.join(', ');
-            } catch (e) {
-                updateData.servicos = servicos;
-            }
-        }
-        if (observacoes !== undefined) updateData.observacoes = observacoes;
-        if (profissional !== undefined) updateData.profissional = profissional;
-        if (valor !== undefined) updateData.valor = valor;
-        if (status) updateData.status = status;
-        if (taxidog !== undefined) updateData.taxidog = taxidog;
-
-        await agendamento.update(updateData);
-
-        // Buscar o agendamento atualizado com os dados relacionados
-        const agendamentoAtualizado = await Agendamento.findByPk(id, {
-            include: [
-                {
-                    model: Pet,
-                    as: 'pet',
-                    include: [{ model: Cliente, as: 'cliente' }]
-                }
-            ]
-        });
-
-        const agendamentoFormatted = {
-            id: agendamentoAtualizado.id,
-            horario: agendamentoAtualizado.horario,
-            petNome: agendamentoAtualizado.pet?.nome || 'Pet não encontrado',
-            clienteNome: agendamentoAtualizado.pet?.cliente?.nome || 'Cliente não encontrado',
-            servico: agendamentoAtualizado.servico,
-            servicos: agendamentoAtualizado.servicos || [],
-            observacoes: agendamentoAtualizado.observacoes,
-            profissional: agendamentoAtualizado.profissional,
-            valor: agendamentoAtualizado.valor,
-            status: agendamentoAtualizado.status,
-            taxidog: agendamentoAtualizado.taxidog || false,
-            dataAgendamento: agendamentoAtualizado.dataAgendamento
-        };
-
-        res.json(agendamentoFormatted);
-    } catch (error) {
-        console.error('❌ Erro ao atualizar agendamento:', error);
-        console.error('Stack trace:', error.stack);
-        console.error('Payload recebido:', req.body);
-        res.status(500).json({ 
-            error: 'Erro interno do servidor',
-            message: error.message,
-            details: error.stack
-        });
+    const agendamento = await Agendamento.findByPk(id);
+    if (!agendamento) {
+      return res.status(404).json({ error: "Agendamento não encontrado" });
     }
+
+    // Preparar dados para atualização
+    const updateData = {};
+
+    if (data && hora) {
+      // Normalizar hora: se não tem segundos, adicionar :00
+      let horaNormalizada = hora;
+      const partesHora = hora.split(":");
+      if (partesHora.length === 2) {
+        // Formato HH:MM, adicionar segundos
+        horaNormalizada = `${hora}:00`;
+      }
+      // Se já tem 3 partes (HH:MM:SS), usar como está
+
+      const dataString = `${data}T${horaNormalizada}-03:00`;
+      console.log("🕐 Criando data (com offset -03:00):", dataString);
+      const dataObj = new Date(dataString);
+      console.log(
+        "📅 Data criada:",
+        dataObj,
+        "isValid:",
+        !isNaN(dataObj.getTime()),
+      );
+
+      if (isNaN(dataObj.getTime())) {
+        console.error("❌ Data inválida gerada:", {
+          data,
+          hora,
+          horaNormalizada,
+          dataString,
+        });
+        return res
+          .status(400)
+          .json({ error: "Data ou hora inválida", details: { data, hora } });
+      }
+
+      updateData.dataAgendamento = dataObj;
+      updateData.horario = hora;
+    } else {
+      console.log("⚠️ Data ou hora não fornecida, mantendo valores atuais");
+    }
+
+    if (petId) updateData.petId = petId;
+    if (servico) updateData.servico = servico;
+    // Se o cliente enviar um array estruturado de serviços, persista também no campo JSON
+    if (servicos && Array.isArray(servicos)) {
+      console.log("PUT /api/agendamentos/:id received servicos payload:", {
+        id,
+        servicosLength: servicos.length,
+      });
+      // Tratar o array enviado pelo cliente como autoritativo: sobrescrever o que está no banco
+      try {
+        // Deduplicar apenas os itens enviados pelo cliente (por id quando disponível, fallback por JSON)
+        const seen = new Map();
+        for (const it of servicos) {
+          try {
+            const key =
+              it && it.id !== undefined && it.id !== null
+                ? String(it.id)
+                : JSON.stringify(it);
+            if (!seen.has(key)) seen.set(key, it);
+          } catch (e) {
+            const key = JSON.stringify(it);
+            if (!seen.has(key)) seen.set(key, it);
+          }
+        }
+        const merged = Array.from(seen.values());
+        updateData.servicos = merged;
+        // atualizar campo texto concatenado para compatibilidade com views legadas
+        const names = merged
+          .map((s) =>
+            s && (s.nome || s.name || s.nomeServico)
+              ? s.nome || s.name || s.nomeServico
+              : "",
+          )
+          .filter(Boolean);
+        updateData.servico = names.join(", ");
+      } catch (e) {
+        updateData.servicos = servicos;
+      }
+    }
+    if (observacoes !== undefined) updateData.observacoes = observacoes;
+    if (profissional !== undefined) updateData.profissional = profissional;
+    if (valor !== undefined) updateData.valor = valor;
+    if (status) updateData.status = status;
+    if (taxidog !== undefined) updateData.taxidog = taxidog;
+
+    await agendamento.update(updateData);
+
+    // Buscar o agendamento atualizado com os dados relacionados
+    const agendamentoAtualizado = await Agendamento.findByPk(id, {
+      include: [
+        {
+          model: Pet,
+          as: "pet",
+          include: [{ model: Cliente, as: "cliente" }],
+        },
+      ],
+    });
+
+    const agendamentoFormatted = {
+      id: agendamentoAtualizado.id,
+      horario: agendamentoAtualizado.horario,
+      petNome: agendamentoAtualizado.pet?.nome || "Pet não encontrado",
+      clienteNome:
+        agendamentoAtualizado.pet?.cliente?.nome || "Cliente não encontrado",
+      servico: agendamentoAtualizado.servico,
+      servicos: agendamentoAtualizado.servicos || [],
+      observacoes: agendamentoAtualizado.observacoes,
+      profissional: agendamentoAtualizado.profissional,
+      valor: agendamentoAtualizado.valor,
+      status: agendamentoAtualizado.status,
+      taxidog: agendamentoAtualizado.taxidog || false,
+      dataAgendamento: agendamentoAtualizado.dataAgendamento,
+    };
+
+    res.json(agendamentoFormatted);
+  } catch (error) {
+    console.error("❌ Erro ao atualizar agendamento:", error);
+    console.error("Stack trace:", error.stack);
+    console.error("Payload recebido:", req.body);
+    res.status(500).json({
+      error: "Erro interno do servidor",
+      message: error.message,
+      details: error.stack,
+    });
+  }
 });
 
 // POST /api/agendamentos/:id/cancelar - Cancela e DELETA agendamento após validar credenciais de gerente
-router.post('/:id/cancelar', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { usuario: usuarioLogin, senha } = req.body;
+router.post("/:id/cancelar", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { usuario: usuarioLogin, senha } = req.body;
 
-        if (!usuarioLogin || !senha) {
-            return res.status(400).json({ error: 'Usuário e senha são obrigatórios' });
-        }
-
-        const user = await Usuario.findOne({ where: { usuario: usuarioLogin } });
-        if (!user || !user.ativo) {
-            return res.status(401).json({ error: 'Usuário não encontrado ou inativo' });
-        }
-
-        const bcrypt = require('bcryptjs');
-        const senhaValida = await bcrypt.compare(senha, user.senha);
-        if (!senhaValida) {
-            return res.status(401).json({ error: 'Credenciais inválidas' });
-        }
-
-        // Regra de autorização: pode cancelar quem tiver id = 1 (gerente principal)
-        // ou cujo nome seja "LOGIN INICIAL" (usuário master do sistema)
-        const isLoginInicial = (user.nome || '').trim().toUpperCase() === 'LOGIN INICIAL';
-        const isGerente = user.id === 1;
-        if (!isGerente && !isLoginInicial) {
-            return res.status(403).json({ error: 'Apenas o gerente principal (usuário 1) ou o LOGIN INICIAL podem autorizar o cancelamento.' });
-        }
-
-        const agendamento = await Agendamento.findByPk(id);
-        if (!agendamento) {
-            return res.status(404).json({ error: 'Agendamento não encontrado' });
-        }
-
-        await agendamento.update({ status: 'cancelado' });
-
-        console.log(`🚫 Agendamento ${id} cancelado por gerente: ${user.nome}`);
-        res.json({ message: 'Agendamento cancelado com sucesso' });
-    } catch (error) {
-        console.error('Erro ao cancelar agendamento:', error);
-        res.status(500).json({ error: 'Erro interno do servidor' });
+    if (!usuarioLogin || !senha) {
+      return res
+        .status(400)
+        .json({ error: "Usuário e senha são obrigatórios" });
     }
+
+    const user = await Usuario.findOne({ where: { usuario: usuarioLogin } });
+    if (!user || !user.ativo) {
+      return res
+        .status(401)
+        .json({ error: "Usuário não encontrado ou inativo" });
+    }
+
+    const bcrypt = require("bcryptjs");
+    const senhaValida = await bcrypt.compare(senha, user.senha);
+    if (!senhaValida) {
+      return res.status(401).json({ error: "Credenciais inválidas" });
+    }
+
+    // Regra de autorização: pode cancelar quem tiver id = 1 (gerente principal)
+    // ou cujo nome seja "LOGIN INICIAL" (usuário master do sistema)
+    const isLoginInicial =
+      (user.nome || "").trim().toUpperCase() === "LOGIN INICIAL";
+    const isGerente = user.id === 1;
+    if (!isGerente && !isLoginInicial) {
+      return res.status(403).json({
+        error:
+          "Apenas o gerente principal (usuário 1) ou o LOGIN INICIAL podem autorizar o cancelamento.",
+      });
+    }
+
+    const agendamento = await Agendamento.findByPk(id);
+    if (!agendamento) {
+      return res.status(404).json({ error: "Agendamento não encontrado" });
+    }
+
+    await agendamento.update({ status: "cancelado" });
+
+    console.log(`🚫 Agendamento ${id} cancelado por gerente: ${user.nome}`);
+    res.json({ message: "Agendamento cancelado com sucesso" });
+  } catch (error) {
+    console.error("Erro ao cancelar agendamento:", error);
+    res.status(500).json({ error: "Erro interno do servidor" });
+  }
 });
 
 // DELETE /api/agendamentos/:id - Deletar agendamento (cancelar)
-router.delete('/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
+router.delete("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
 
-        const agendamento = await Agendamento.findByPk(id);
-        if (!agendamento) {
-            return res.status(404).json({ error: 'Agendamento não encontrado' });
-        }
-
-        // Em vez de deletar, vamos cancelar o agendamento
-        await agendamento.update({ status: 'cancelado' });
-
-        res.json({ message: 'Agendamento cancelado com sucesso' });
-    } catch (error) {
-        console.error('Erro ao cancelar agendamento:', error);
-        res.status(500).json({ error: 'Erro interno do servidor' });
+    const agendamento = await Agendamento.findByPk(id);
+    if (!agendamento) {
+      return res.status(404).json({ error: "Agendamento não encontrado" });
     }
+
+    // Em vez de deletar, vamos cancelar o agendamento
+    await agendamento.update({ status: "cancelado" });
+
+    res.json({ message: "Agendamento cancelado com sucesso" });
+  } catch (error) {
+    console.error("Erro ao cancelar agendamento:", error);
+    res.status(500).json({ error: "Erro interno do servidor" });
+  }
 });
 
 // PATCH /api/agendamentos/:id/status - Atualizar status e opcionalmente pagamentos
-router.patch('/:id/status', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { status, pagamentos, totalPago } = req.body;
+router.patch("/:id/status", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, pagamentos, totalPago } = req.body;
 
-        if (!status) {
-            return res.status(400).json({ error: 'Status é obrigatório' });
-        }
-
-        const validStatuses = ['agendado', 'checkin', 'pronto', 'concluido', 'cancelado'];
-        if (!validStatuses.includes(status)) {
-            return res.status(400).json({ 
-                error: 'Status inválido. Valores aceitos: ' + validStatuses.join(', ')
-            });
-        }
-
-        const agendamento = await Agendamento.findByPk(id);
-        if (!agendamento) {
-            return res.status(404).json({ error: 'Agendamento não encontrado' });
-        }
-
-        const updatePayload = { status };
-        // aceitar pagamentos opcionais e totalPago
-        if (pagamentos !== undefined) {
-            try {
-                updatePayload.pagamentos = Array.isArray(pagamentos) ? pagamentos : JSON.parse(pagamentos);
-            } catch (e) {
-                updatePayload.pagamentos = pagamentos;
-            }
-        }
-
-        if (totalPago !== undefined) {
-            const v = parseFloat(String(totalPago).replace(',', '.')) || 0;
-            updatePayload.totalPago = v;
-        }
-
-        await agendamento.update(updatePayload);
-
-        res.json({ message: 'Status (e pagamentos) atualizados com sucesso', status, pagamentos: updatePayload.pagamentos, totalPago: updatePayload.totalPago });
-    } catch (error) {
-        console.error('Erro ao atualizar status:', error);
-        res.status(500).json({ error: 'Erro interno do servidor' });
+    if (!status) {
+      return res.status(400).json({ error: "Status é obrigatório" });
     }
+
+    const validStatuses = [
+      "agendado",
+      "checkin",
+      "pronto",
+      "concluido",
+      "cancelado",
+    ];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        error: "Status inválido. Valores aceitos: " + validStatuses.join(", "),
+      });
+    }
+
+    const agendamento = await Agendamento.findByPk(id);
+    if (!agendamento) {
+      return res.status(404).json({ error: "Agendamento não encontrado" });
+    }
+
+    const updatePayload = { status };
+    // aceitar pagamentos opcionais e totalPago
+    if (pagamentos !== undefined) {
+      try {
+        updatePayload.pagamentos = Array.isArray(pagamentos)
+          ? pagamentos
+          : JSON.parse(pagamentos);
+      } catch (e) {
+        updatePayload.pagamentos = pagamentos;
+      }
+    }
+
+    if (totalPago !== undefined) {
+      const v = parseFloat(String(totalPago).replace(",", ".")) || 0;
+      updatePayload.totalPago = v;
+    }
+
+    await agendamento.update(updatePayload);
+
+    res.json({
+      message: "Status (e pagamentos) atualizados com sucesso",
+      status,
+      pagamentos: updatePayload.pagamentos,
+      totalPago: updatePayload.totalPago,
+    });
+  } catch (error) {
+    console.error("Erro ao atualizar status:", error);
+    res.status(500).json({ error: "Erro interno do servidor" });
+  }
 });
 
 // PATCH /api/agendamentos/:id/prontuario - Salvar prontuário
-router.patch('/:id/prontuario', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { prontuario, clinicaState } = req.body;
+router.patch("/:id/prontuario", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { prontuario, clinicaState } = req.body;
 
-        console.log('📥 Salvando prontuário/estado clínico para agendamento:', id);
-        console.log('📝 Dados prontuário:', Array.isArray(prontuario) ? `array(${prontuario.length})` : typeof prontuario);
-        console.log('🧭 Dados clinicaState:', clinicaState);
+    console.log("📥 Salvando prontuário/estado clínico para agendamento:", id);
+    console.log(
+      "📝 Dados prontuário:",
+      Array.isArray(prontuario)
+        ? `array(${prontuario.length})`
+        : typeof prontuario,
+    );
+    console.log("🧭 Dados clinicaState:", clinicaState);
 
-        const agendamento = await Agendamento.findByPk(id);
-        if (!agendamento) {
-            console.error('❌ Agendamento não encontrado:', id);
-            return res.status(404).json({ error: 'Agendamento não encontrado' });
-        }
-
-        const updatePayload = {};
-        if (prontuario !== undefined) updatePayload.prontuario = prontuario;
-        if (clinicaState !== undefined) updatePayload.clinicaState = clinicaState;
-
-        await agendamento.update(updatePayload);
-        console.log('✅ Prontuário/estado clínico salvo com sucesso no banco');
-
-        res.json({ message: 'Prontuário e estado clínico salvos com sucesso', prontuario: agendamento.prontuario, clinicaState: agendamento.clinicaState });
-    } catch (error) {
-        console.error('Erro ao salvar prontuário:', error);
-        res.status(500).json({ error: 'Erro interno do servidor' });
+    const agendamento = await Agendamento.findByPk(id);
+    if (!agendamento) {
+      console.error("❌ Agendamento não encontrado:", id);
+      return res.status(404).json({ error: "Agendamento não encontrado" });
     }
+
+    const updatePayload = {};
+    if (prontuario !== undefined) updatePayload.prontuario = prontuario;
+    if (clinicaState !== undefined) updatePayload.clinicaState = clinicaState;
+
+    await agendamento.update(updatePayload);
+    console.log("✅ Prontuário/estado clínico salvo com sucesso no banco");
+
+    res.json({
+      message: "Prontuário e estado clínico salvos com sucesso",
+      prontuario: agendamento.prontuario,
+      clinicaState: agendamento.clinicaState,
+    });
+  } catch (error) {
+    console.error("Erro ao salvar prontuário:", error);
+    res.status(500).json({ error: "Erro interno do servidor" });
+  }
 });
 
 // GET /api/agendamentos/:id/comprovante - Gerar PDF do comprovante
-router.get('/:id/comprovante', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const PDFDocument = require('pdfkit');
+router.get("/:id/comprovante", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const PDFDocument = require("pdfkit");
 
-        // Buscar agendamento com dados relacionados
-        const agendamento = await Agendamento.findByPk(id, {
-            include: [
-                {
-                    model: Pet,
-                    as: 'pet',
-                    include: [{ model: Cliente, as: 'cliente' }]
-                }
-            ]
-        });
+    // Buscar agendamento com dados relacionados
+    const agendamento = await Agendamento.findByPk(id, {
+      include: [
+        {
+          model: Pet,
+          as: "pet",
+          include: [{ model: Cliente, as: "cliente" }],
+        },
+      ],
+    });
 
-        if (!agendamento) {
-            return res.status(404).json({ error: 'Agendamento não encontrado' });
-        }
-
-        // Criar PDF para impressora de cupom (ajustado para ser um pouco mais largo)
-        const mmToPt = mm => mm * 72 / 25.4;
-        const RECEIPT_MM = 72; // aumentar um pouco a largura do cupom (pouquinho mais largo que 58mm)
-        const receiptWidth = Math.round(mmToPt(RECEIPT_MM)); // mm para pontos
-        const receiptHeight = Math.round(mmToPt(300)); // altura padrão 300mm (ajustável)
-        const smallMargin = Math.round(mmToPt(2)); // 2 mm
-        const doc = new PDFDocument({ size: [receiptWidth, receiptHeight], margins: { top: smallMargin, bottom: smallMargin, left: smallMargin, right: smallMargin } });
-        
-        // Headers
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `inline; filename=comprovante-${id}.pdf`);
-        
-        doc.pipe(res);
-
-        // ===== Layout em blocos com colunas fixas e controle de Y para evitar sobreposição =====
-        const left = doc.page.margins.left;
-        const right = doc.page.width - doc.page.margins.right;
-        const pageWidth = doc.page.width;
-        const lineHeight = 12;
-
-        // Cabeçalho: tentar usar logo da empresa (cadastro-empresa) com fallback em texto
-        let logoRendered = false;
-        let empresa = null;
-        try {
-            empresa = await Empresa.findOne({ where: { ativa: true }, order: [['id', 'ASC']] });
-            let logoPath = path.join(__dirname, '../../frontend/logos/logo_pet_cria-removebg-preview.png');
-            if (empresa && empresa.logo) {
-                const candidate = path.join(__dirname, '../../uploads', empresa.logo);
-                if (fs.existsSync(candidate)) logoPath = candidate;
-            }
-
-            if (fs.existsSync(logoPath)) {
-                // ajustar o logo proporcionalmente à largura do cupom
-                const maxLogoWidth = Math.round(pageWidth * 0.6);
-                const logoWidth = Math.min(maxLogoWidth, Math.round(mmToPt(30)));
-                const logoX = (pageWidth - logoWidth) / 2;
-                const logoY = smallMargin + 4;
-                try { doc.image(logoPath, logoX, logoY, { width: logoWidth, align: 'center' }); logoRendered = true; } catch (e) { logoRendered = false; }
-                // ajustar início do conteúdo abaixo da logo — manter espaço maior para evitar sobreposição
-                const logoEstimatedHeight = Math.round(logoWidth * 0.9);
-                // reduzir ligeiramente o espaçamento para aproximar a razão social da logo
-                var y = logoY + logoEstimatedHeight + 2;
-            }
-        } catch (e) {
-            console.warn('Erro ao buscar logo da empresa:', e && e.message);
-        }
-
-        if (!logoRendered) {
-            doc.fillColor('#000').fontSize(18).font('Helvetica-Bold').text('PET9', { align: 'center' });
-            doc.fontSize(11).font('Helvetica-Bold').text('PET CRIA LTDA', { align: 'center' });
-            doc.fontSize(9).font('Helvetica').text('Contato: (27)99910-4837', { align: 'center' });
-            // iniciar y logo -> conteúdo; aumentar espaçamento quando não há logo real
-            // aproximar um pouco (menos espaçamento) para a razão social
-            var y = doc.y + 12;
-        }
-
-        // Exibir Razão Social da empresa abaixo da logo (se disponível)
-        try {
-            if (empresa && empresa.razaoSocial) {
-                doc.fontSize(10).font('Helvetica').fillColor('#000').text(String(empresa.razaoSocial), left, y, { width: right - left, align: 'center' });
-                y += lineHeight + 6;
-            }
-        } catch (e) { /* não bloquear geração por erro de leitura */ }
-
-        // Dados do cliente e emissão (blocos à esquerda e direita)
-        const clienteCodigo = agendamento.pet?.cliente?.codigo || '550';
-        const clienteNome = agendamento.pet?.cliente?.nome || 'Rodrigo';
-        const clienteTelefone = agendamento.pet?.cliente?.telefone || agendamento.pet?.cliente?.celular || '';
-        const dataEmissao = new Date().toLocaleDateString('pt-BR');
-        const petId = agendamento.pet?.id || '312';
-        const petNome = agendamento.pet?.nome || 'Clark';
-
-        doc.fontSize(9).font('Helvetica-Bold').fillColor('#c00').text(`Cliente: ${clienteCodigo} - ${clienteNome}`, left, y);
-        if (clienteTelefone) {
-            doc.fontSize(9).font('Helvetica').fillColor('#000').text(`Contato: ${clienteTelefone}`, left, y + lineHeight);
-        }
-
-        // Avançar y para evitar sobreposição antes de imprimir Emissão/Atendimento
-        const rightAreaWidth = right - left;
-        const clienteLines = clienteTelefone ? 2 : 1;
-        const spacingAfterCliente = clienteLines * lineHeight;
-        // posicionar Emissão abaixo do nome/contato do cliente
-        doc.fontSize(8).font('Helvetica').fillColor('#000').text(`Emissão: ${dataEmissao}`, left, y + spacingAfterCliente, { width: rightAreaWidth, align: 'right' });
-        // manter fonte regular para 'Atendimento' logo abaixo de Emissão
-        doc.fontSize(9).font('Helvetica').text(`Atendimento: ${id}`, left, y + spacingAfterCliente + lineHeight, { width: rightAreaWidth, align: 'right' });
-
-        // Pet em nova linha, alinhado à esquerda — avançar y considerando linhas de cliente + emissão + atendimento
-        y += spacingAfterCliente + lineHeight * 2 + 6;
-        doc.fontSize(9).font('Helvetica').text(`Pet: ${petId} - ${petNome}`, left, y);
-
-        // Espaçamento antes da tabela
-        y += lineHeight + 6;
-
-        // Linha pontilhada (usar dash para manter visual consistente)
-        doc.save();
-        doc.lineWidth(0.7);
-        doc.dash(2, { space: 3 });
-        doc.moveTo(left, y).lineTo(right, y).stroke();
-        doc.undash();
-        doc.restore();
-
-        y += 10;
-
-        // Definir colunas responsivas (percentuais) para caber bem no cupom
-        const contentWidth = pageWidth - doc.page.margins.left - doc.page.margins.right;
-        const totalColWidth = Math.round(contentWidth * 0.28);
-        const unitColWidth = Math.round(contentWidth * 0.18);
-        const qtyColWidth = Math.round(contentWidth * 0.12);
-
-        const totalX = right - totalColWidth;
-        const unitX = totalX - unitColWidth;
-        const qtyX = unitX - qtyColWidth;
-        const descX = left;
-
-        // Cabeçalho da tabela
-        doc.fontSize(9).font('Helvetica-Bold').fillColor('#000');
-        doc.text('Descrição', descX, y, { width: qtyX - descX - 8 });
-        doc.text('Qtd', qtyX, y, { width: unitX - qtyX, align: 'center' });
-        doc.text('Vlr Unit', unitX, y, { width: totalX - unitX, align: 'right' });
-        doc.text('Total', totalX, y, { width: right - totalX, align: 'right' });
-
-        y += lineHeight + 6;
-
-        // Linha divisória
-        doc.save(); doc.lineWidth(0.5); doc.moveTo(left, y - 4).lineTo(right, y - 4).stroke(); doc.restore();
-
-        // Serviços
-        const servicos = agendamento.servicos || [];
-        let subtotal = 0;
-        doc.font('Helvetica').fontSize(9).fillColor('#000');
-
-        for (let i = 0; i < servicos.length; i++) {
-            const servico = servicos[i];
-            const quantidade = parseFloat(servico.quantidade) || 1;
-            // "Vlr Unit" = valor unitário cadastrado original do serviço/produto (nunca muda com desconto/acréscimo)
-            const unitarioCadastrado = parseFloat(servico.unitario) || parseFloat(servico.valor) || 0;
-            // "Total" = valor final já calculado com desconto/acréscimo (salvo no banco)
-            // Prioriza servico.total; fallback: valor × qtd
-            const total = parseFloat(servico.total) || (parseFloat(servico.valor || servico.unitario) * quantidade) || (unitarioCadastrado * quantidade);
-            subtotal += total;
-
-            const descricao = servico.nome || '';
-
-            // Verificar quebra de página
-            if (y > doc.page.height - 120) {
-                doc.addPage();
-                y = 60;
-            }
-
-            // Descrição (pode quebrar em várias linhas)
-            const descWidth = qtyX - descX - 8;
-            const descHeight = doc.heightOfString(descricao, { width: descWidth });
-            doc.text(descricao, descX, y, { width: descWidth });
-
-            // Quantidade, Valor Unitário (cadastrado) e Total alinhados nas colunas
-            doc.text(String(quantidade), qtyX, y, { width: unitX - qtyX, align: 'center' });
-            doc.text(`R$ ${unitarioCadastrado.toFixed(2)}`, unitX, y, { width: totalX - unitX, align: 'right' });
-            doc.text(`R$ ${total.toFixed(2)}`, totalX, y, { width: right - totalX, align: 'right' });
-
-            // avançar y pela maior altura entre descrição e linha simples
-            y += Math.max(descHeight, lineHeight) + 6;
-        }
-
-        // Espaço antes dos totais - usar fluxo (sem x/y) e bloco exclusivo para valores
-        doc.moveDown(1);
-
-        // Linha pontilhada visual (texto) para evitar uso de coordenadas absolutas
-        const dashLine = Array(Math.floor(contentWidth / 6)).fill('.').join('');
-        doc.fontSize(8).fillColor('#000').text(dashLine, { align: 'center', width: contentWidth });
-        doc.moveDown(0.5);
-
-        // Bloco de totais usando largura reduzida para deslocar visualmente o bloco para a esquerda
-        const desiredOffsetFromRight = Math.round(mmToPt(6)); // ~6mm
-        const totalsBlockWidth = Math.max(contentWidth - desiredOffsetFromRight, totalColWidth + 12);
-
-        doc.moveDown(0.2);
-        doc.fontSize(9).font('Helvetica').fillColor('#000').text(`Subtotal: R$ ${subtotal.toFixed(2)}`, { align: 'right', width: totalsBlockWidth, lineGap: 4 });
-        doc.moveDown(0.3);
-        doc.fontSize(9).font('Helvetica').text(`(-) Descontos: R$ 0,00`, { align: 'right', width: totalsBlockWidth, lineGap: 4 });
-        doc.moveDown(0.6);
-
-        // Linha separadora curta antes do total
-        const sepLen = Math.floor(totalsBlockWidth / 6);
-        const separator = Array(sepLen).fill('-').join('');
-        doc.fontSize(9).text(separator, { align: 'right', width: totalsBlockWidth });
-        doc.moveDown(0.6);
-
-        // Espaçamento e formas de pagamento centradas em bloco próprio
-        y += lineHeight + 16;
-        doc.fontSize(9).font('Helvetica-Bold').text('Formas de Pagamento', left, y, { width: right - left, align: 'center' });
-
-        // Mostrar formas de pagamento salvas no agendamento, se houver
-        const pagamentos = agendamento.pagamentos || [];
-        if (Array.isArray(pagamentos) && pagamentos.length > 0) {
-            y += lineHeight + 8;
-            doc.fontSize(9).font('Helvetica').fillColor('#000');
-            // helper para mapear chave da forma para rótulo legível
-            const formaLabel = (f) => {
-                if (!f) return '';
-                const map = { dinheiro: 'Dinheiro', debito: 'Débito', credito: 'Crédito', pix: 'Pix', crediario: 'Crediário', cheque: 'Cheque', haver: 'Haver' };
-                return map[f] || String(f);
-            };
-
-            pagamentos.forEach(p => {
-                try {
-                    const label = formaLabel(p.forma || p.tipo || p.method);
-                    const valor = (p.valor !== undefined && p.valor !== null) ? `R$ ${Number(p.valor).toFixed(2)}` : '';
-                    doc.text(label, left + 6, y, { width: (right - left) - 12, align: 'left' });
-                    if (valor) doc.text(valor, left + 6, y, { width: (right - left) - 12, align: 'right' });
-                    y += lineHeight + 4;
-                } catch (e) { /* não bloquear drawing por item inválido */ }
-            });
-
-            y += 6;
-        } else {
-            // manter espaço similar quando não há pagamentos
-            y += lineHeight + 12;
-        }
-
-        // Depois das formas de pagamento, desenhar a linha separadora (assim pagamentos ficam acima dela)
-        doc.save(); doc.lineWidth(0.5); doc.moveTo(left, y).lineTo(right, y).stroke(); doc.restore();
-        y += 8;
-
-        // Total centralizado abaixo da linha
-        doc.fontSize(10).font('Helvetica-Bold').text(`Total do(s) atendimento(s): R$ ${subtotal.toFixed(2)}`, left, y, { width: right - left, align: 'center' });
-
-        // Linha para assinatura (aumentar espaço para ficar mais abaixo que o total)
-        // Ajuste feito para afastar a assinatura do bloco de totais
-        // Linha para assinatura (centralizada no cupom)
-        y += 60;
-        if (y > doc.page.height - 60) {
-            doc.addPage({ size: [receiptWidth, receiptHeight], margins: { top: smallMargin, bottom: smallMargin, left: smallMargin, right: smallMargin } });
-            y = smallMargin + 20;
-        }
-        const sigLineLeft = left + 12;
-        const sigLineRight = right - 12;
-        doc.moveTo(sigLineLeft, y).lineTo(sigLineRight, y).stroke();
-        y += 6;
-        doc.fontSize(9).font('Helvetica').text('Assinatura', sigLineLeft, y, { width: sigLineRight - sigLineLeft, align: 'center' });
-
-        doc.end();
-    } catch (error) {
-        console.error('Erro ao gerar comprovante:', error);
-        res.status(500).json({ error: 'Erro ao gerar comprovante' });
+    if (!agendamento) {
+      return res.status(404).json({ error: "Agendamento não encontrado" });
     }
+
+    // Criar PDF para impressora de cupom (ajustado para ser um pouco mais largo)
+    const mmToPt = (mm) => (mm * 72) / 25.4;
+    const RECEIPT_MM = 72; // aumentar um pouco a largura do cupom (pouquinho mais largo que 58mm)
+    const receiptWidth = Math.round(mmToPt(RECEIPT_MM)); // mm para pontos
+    const receiptHeight = Math.round(mmToPt(300)); // altura padrão 300mm (ajustável)
+    const smallMargin = Math.round(mmToPt(2)); // 2 mm
+    const doc = new PDFDocument({
+      size: [receiptWidth, receiptHeight],
+      margins: {
+        top: smallMargin,
+        bottom: smallMargin,
+        left: smallMargin,
+        right: smallMargin,
+      },
+    });
+
+    // Headers
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename=comprovante-${id}.pdf`,
+    );
+
+    doc.pipe(res);
+
+    // ===== Layout em blocos com colunas fixas e controle de Y para evitar sobreposição =====
+    const left = doc.page.margins.left;
+    const right = doc.page.width - doc.page.margins.right;
+    const pageWidth = doc.page.width;
+    const lineHeight = 12;
+
+    // Cabeçalho: tentar usar logo da empresa (cadastro-empresa) com fallback em texto
+    let logoRendered = false;
+    let empresa = null;
+    try {
+      empresa = await Empresa.findOne({
+        where: { ativa: true },
+        order: [["id", "ASC"]],
+      });
+      let logoPath = path.join(
+        __dirname,
+        "../../frontend/logos/logo_pet_cria-removebg-preview.png",
+      );
+      if (empresa && empresa.logo) {
+        const candidate = path.join(__dirname, "../../uploads", empresa.logo);
+        if (fs.existsSync(candidate)) logoPath = candidate;
+      }
+
+      if (fs.existsSync(logoPath)) {
+        // ajustar o logo proporcionalmente à largura do cupom
+        const maxLogoWidth = Math.round(pageWidth * 0.6);
+        const logoWidth = Math.min(maxLogoWidth, Math.round(mmToPt(30)));
+        const logoX = (pageWidth - logoWidth) / 2;
+        const logoY = smallMargin + 4;
+        try {
+          doc.image(logoPath, logoX, logoY, {
+            width: logoWidth,
+            align: "center",
+          });
+          logoRendered = true;
+        } catch (e) {
+          logoRendered = false;
+        }
+        // ajustar início do conteúdo abaixo da logo — manter espaço maior para evitar sobreposição
+        const logoEstimatedHeight = Math.round(logoWidth * 0.9);
+        // reduzir ligeiramente o espaçamento para aproximar a razão social da logo
+        var y = logoY + logoEstimatedHeight + 2;
+      }
+    } catch (e) {
+      console.warn("Erro ao buscar logo da empresa:", e && e.message);
+    }
+
+    if (!logoRendered) {
+      doc
+        .fillColor("#000")
+        .fontSize(18)
+        .font("Helvetica-Bold")
+        .text("PET9", { align: "center" });
+      doc
+        .fontSize(11)
+        .font("Helvetica-Bold")
+        .text("PET CRIA LTDA", { align: "center" });
+      doc
+        .fontSize(9)
+        .font("Helvetica")
+        .text("Contato: (27)99910-4837", { align: "center" });
+      // iniciar y logo -> conteúdo; aumentar espaçamento quando não há logo real
+      // aproximar um pouco (menos espaçamento) para a razão social
+      var y = doc.y + 12;
+    }
+
+    // Exibir Razão Social da empresa abaixo da logo (se disponível)
+    try {
+      if (empresa && empresa.razaoSocial) {
+        doc
+          .fontSize(10)
+          .font("Helvetica")
+          .fillColor("#000")
+          .text(String(empresa.razaoSocial), left, y, {
+            width: right - left,
+            align: "center",
+          });
+        y += lineHeight + 6;
+      }
+    } catch (e) {
+      /* não bloquear geração por erro de leitura */
+    }
+
+    // Dados do cliente e emissão (blocos à esquerda e direita)
+    const clienteCodigo = agendamento.pet?.cliente?.codigo || "550";
+    const clienteNome = agendamento.pet?.cliente?.nome || "Rodrigo";
+    const clienteTelefone =
+      agendamento.pet?.cliente?.telefone ||
+      agendamento.pet?.cliente?.celular ||
+      "";
+    const dataEmissao = new Date().toLocaleDateString("pt-BR");
+    const petId = agendamento.pet?.id || "312";
+    const petNome = agendamento.pet?.nome || "Clark";
+
+    doc
+      .fontSize(9)
+      .font("Helvetica-Bold")
+      .fillColor("#c00")
+      .text(`Cliente: ${clienteCodigo} - ${clienteNome}`, left, y);
+    if (clienteTelefone) {
+      doc
+        .fontSize(9)
+        .font("Helvetica")
+        .fillColor("#000")
+        .text(`Contato: ${clienteTelefone}`, left, y + lineHeight);
+    }
+
+    // Avançar y para evitar sobreposição antes de imprimir Emissão/Atendimento
+    const rightAreaWidth = right - left;
+    const clienteLines = clienteTelefone ? 2 : 1;
+    const spacingAfterCliente = clienteLines * lineHeight;
+    // posicionar Emissão abaixo do nome/contato do cliente
+    doc
+      .fontSize(8)
+      .font("Helvetica")
+      .fillColor("#000")
+      .text(`Emissão: ${dataEmissao}`, left, y + spacingAfterCliente, {
+        width: rightAreaWidth,
+        align: "right",
+      });
+    // manter fonte regular para 'Atendimento' logo abaixo de Emissão
+    doc
+      .fontSize(9)
+      .font("Helvetica")
+      .text(`Atendimento: ${id}`, left, y + spacingAfterCliente + lineHeight, {
+        width: rightAreaWidth,
+        align: "right",
+      });
+
+    // Pet em nova linha, alinhado à esquerda — avançar y considerando linhas de cliente + emissão + atendimento
+    y += spacingAfterCliente + lineHeight * 2 + 6;
+    doc
+      .fontSize(9)
+      .font("Helvetica")
+      .text(`Pet: ${petId} - ${petNome}`, left, y);
+
+    // Espaçamento antes da tabela
+    y += lineHeight + 6;
+
+    // Linha pontilhada (usar dash para manter visual consistente)
+    doc.save();
+    doc.lineWidth(0.7);
+    doc.dash(2, { space: 3 });
+    doc.moveTo(left, y).lineTo(right, y).stroke();
+    doc.undash();
+    doc.restore();
+
+    y += 10;
+
+    // Definir colunas responsivas (percentuais) para caber bem no cupom
+    const contentWidth =
+      pageWidth - doc.page.margins.left - doc.page.margins.right;
+    const totalColWidth = Math.round(contentWidth * 0.28);
+    const unitColWidth = Math.round(contentWidth * 0.18);
+    const qtyColWidth = Math.round(contentWidth * 0.12);
+
+    const totalX = right - totalColWidth;
+    const unitX = totalX - unitColWidth;
+    const qtyX = unitX - qtyColWidth;
+    const descX = left;
+
+    // Cabeçalho da tabela
+    doc.fontSize(9).font("Helvetica-Bold").fillColor("#000");
+    doc.text("Descrição", descX, y, { width: qtyX - descX - 8 });
+    doc.text("Qtd", qtyX, y, { width: unitX - qtyX, align: "center" });
+    doc.text("Vlr Unit", unitX, y, { width: totalX - unitX, align: "right" });
+    doc.text("Total", totalX, y, { width: right - totalX, align: "right" });
+
+    y += lineHeight + 6;
+
+    // Linha divisória
+    doc.save();
+    doc.lineWidth(0.5);
+    doc
+      .moveTo(left, y - 4)
+      .lineTo(right, y - 4)
+      .stroke();
+    doc.restore();
+
+    // Serviços
+    const servicos = agendamento.servicos || [];
+    let subtotal = 0;
+    doc.font("Helvetica").fontSize(9).fillColor("#000");
+
+    for (let i = 0; i < servicos.length; i++) {
+      const servico = servicos[i];
+      const quantidade = parseFloat(servico.quantidade) || 1;
+      // "Vlr Unit" = valor unitário cadastrado original do serviço/produto (nunca muda com desconto/acréscimo)
+      const unitarioCadastrado =
+        parseFloat(servico.unitario) || parseFloat(servico.valor) || 0;
+      // "Total" = valor final já calculado com desconto/acréscimo (salvo no banco)
+      // Prioriza servico.total; fallback: valor × qtd
+      const total =
+        parseFloat(servico.total) ||
+        parseFloat(servico.valor || servico.unitario) * quantidade ||
+        unitarioCadastrado * quantidade;
+      subtotal += total;
+
+      const descricao = servico.nome || "";
+
+      // Verificar quebra de página
+      if (y > doc.page.height - 120) {
+        doc.addPage();
+        y = 60;
+      }
+
+      // Descrição (pode quebrar em várias linhas)
+      const descWidth = qtyX - descX - 8;
+      const descHeight = doc.heightOfString(descricao, { width: descWidth });
+      doc.text(descricao, descX, y, { width: descWidth });
+
+      // Quantidade, Valor Unitário (cadastrado) e Total alinhados nas colunas
+      doc.text(String(quantidade), qtyX, y, {
+        width: unitX - qtyX,
+        align: "center",
+      });
+      doc.text(`R$ ${unitarioCadastrado.toFixed(2)}`, unitX, y, {
+        width: totalX - unitX,
+        align: "right",
+      });
+      doc.text(`R$ ${total.toFixed(2)}`, totalX, y, {
+        width: right - totalX,
+        align: "right",
+      });
+
+      // avançar y pela maior altura entre descrição e linha simples
+      y += Math.max(descHeight, lineHeight) + 6;
+    }
+
+    // Espaço antes dos totais - usar fluxo (sem x/y) e bloco exclusivo para valores
+    doc.moveDown(1);
+
+    // Linha pontilhada visual (texto) para evitar uso de coordenadas absolutas
+    const dashLine = Array(Math.floor(contentWidth / 6))
+      .fill(".")
+      .join("");
+    doc
+      .fontSize(8)
+      .fillColor("#000")
+      .text(dashLine, { align: "center", width: contentWidth });
+    doc.moveDown(0.5);
+
+    // Bloco de totais usando largura reduzida para deslocar visualmente o bloco para a esquerda
+    const desiredOffsetFromRight = Math.round(mmToPt(6)); // ~6mm
+    const totalsBlockWidth = Math.max(
+      contentWidth - desiredOffsetFromRight,
+      totalColWidth + 12,
+    );
+
+    doc.moveDown(0.2);
+    doc
+      .fontSize(9)
+      .font("Helvetica")
+      .fillColor("#000")
+      .text(`Subtotal: R$ ${subtotal.toFixed(2)}`, {
+        align: "right",
+        width: totalsBlockWidth,
+        lineGap: 4,
+      });
+    doc.moveDown(0.3);
+    doc.fontSize(9).font("Helvetica").text(`(-) Descontos: R$ 0,00`, {
+      align: "right",
+      width: totalsBlockWidth,
+      lineGap: 4,
+    });
+    doc.moveDown(0.6);
+
+    // Linha separadora curta antes do total
+    const sepLen = Math.floor(totalsBlockWidth / 6);
+    const separator = Array(sepLen).fill("-").join("");
+    doc
+      .fontSize(9)
+      .text(separator, { align: "right", width: totalsBlockWidth });
+    doc.moveDown(0.6);
+
+    // Espaçamento e formas de pagamento centradas em bloco próprio
+    y += lineHeight + 16;
+    doc
+      .fontSize(9)
+      .font("Helvetica-Bold")
+      .text("Formas de Pagamento", left, y, {
+        width: right - left,
+        align: "center",
+      });
+
+    // Mostrar formas de pagamento salvas no agendamento, se houver
+    const pagamentos = agendamento.pagamentos || [];
+    if (Array.isArray(pagamentos) && pagamentos.length > 0) {
+      y += lineHeight + 8;
+      doc.fontSize(9).font("Helvetica").fillColor("#000");
+      // helper para mapear chave da forma para rótulo legível
+      const formaLabel = (f) => {
+        if (!f) return "";
+        const map = {
+          dinheiro: "Dinheiro",
+          debito: "Débito",
+          credito: "Crédito",
+          pix: "Pix",
+          crediario: "Crediário",
+          cheque: "Cheque",
+          haver: "Haver",
+        };
+        return map[f] || String(f);
+      };
+
+      pagamentos.forEach((p) => {
+        try {
+          const label = formaLabel(p.forma || p.tipo || p.method);
+          const valor =
+            p.valor !== undefined && p.valor !== null
+              ? `R$ ${Number(p.valor).toFixed(2)}`
+              : "";
+          doc.text(label, left + 6, y, {
+            width: right - left - 12,
+            align: "left",
+          });
+          if (valor)
+            doc.text(valor, left + 6, y, {
+              width: right - left - 12,
+              align: "right",
+            });
+          y += lineHeight + 4;
+        } catch (e) {
+          /* não bloquear drawing por item inválido */
+        }
+      });
+
+      y += 6;
+    } else {
+      // manter espaço similar quando não há pagamentos
+      y += lineHeight + 12;
+    }
+
+    // Depois das formas de pagamento, desenhar a linha separadora (assim pagamentos ficam acima dela)
+    doc.save();
+    doc.lineWidth(0.5);
+    doc.moveTo(left, y).lineTo(right, y).stroke();
+    doc.restore();
+    y += 8;
+
+    // Total centralizado abaixo da linha
+    doc
+      .fontSize(10)
+      .font("Helvetica-Bold")
+      .text(`Total do(s) atendimento(s): R$ ${subtotal.toFixed(2)}`, left, y, {
+        width: right - left,
+        align: "center",
+      });
+
+    // Linha para assinatura (aumentar espaço para ficar mais abaixo que o total)
+    // Ajuste feito para afastar a assinatura do bloco de totais
+    // Linha para assinatura (centralizada no cupom)
+    y += 60;
+    if (y > doc.page.height - 60) {
+      doc.addPage({
+        size: [receiptWidth, receiptHeight],
+        margins: {
+          top: smallMargin,
+          bottom: smallMargin,
+          left: smallMargin,
+          right: smallMargin,
+        },
+      });
+      y = smallMargin + 20;
+    }
+    const sigLineLeft = left + 12;
+    const sigLineRight = right - 12;
+    doc.moveTo(sigLineLeft, y).lineTo(sigLineRight, y).stroke();
+    y += 6;
+    doc
+      .fontSize(9)
+      .font("Helvetica")
+      .text("Assinatura", sigLineLeft, y, {
+        width: sigLineRight - sigLineLeft,
+        align: "center",
+      });
+
+    doc.end();
+  } catch (error) {
+    console.error("Erro ao gerar comprovante:", error);
+    res.status(500).json({ error: "Erro ao gerar comprovante" });
+  }
 });
 
 // ====== PRONTUÁRIO — PDF COMPLETO ======
-router.get('/:id/prontuario/pdf', async (req, res) => {
+router.get("/:id/prontuario/pdf", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const PDFDocument = require("pdfkit");
+
+    // Buscar agendamento com Pet + Cliente
+    const agendamento = await Agendamento.findByPk(id, {
+      include: [
+        { model: Pet, as: "pet", include: [{ model: Cliente, as: "cliente" }] },
+      ],
+    });
+    if (!agendamento)
+      return res.status(404).json({ error: "Agendamento não encontrado" });
+
+    // Buscar empresa ativa
+    let empresa = null;
     try {
-        const { id } = req.params;
-        const PDFDocument = require('pdfkit');
+      empresa = await Empresa.findOne({
+        where: { ativa: true },
+        order: [["id", "ASC"]],
+      });
+    } catch (e) {}
 
-        // Buscar agendamento com Pet + Cliente
-        const agendamento = await Agendamento.findByPk(id, {
-            include: [{ model: Pet, as: 'pet', include: [{ model: Cliente, as: 'cliente' }] }]
+    // Helper: strip HTML tags
+    const stripHtml = (str) =>
+      String(str || "")
+        .replace(/<[^>]*>/g, "")
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&nbsp;/g, " ")
+        .trim();
+
+    // PDF A4
+    const mmToPt = (mm) => (mm * 72) / 25.4;
+    const A4W = 595.28,
+      A4H = 841.89;
+    const marginX = mmToPt(18),
+      marginTop = mmToPt(14),
+      marginBottom = mmToPt(14);
+    const contentW = A4W - marginX * 2;
+
+    const doc = new PDFDocument({
+      size: "A4",
+      margins: {
+        top: marginTop,
+        bottom: marginBottom,
+        left: marginX,
+        right: marginX,
+      },
+      autoFirstPage: true,
+    });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename=prontuario-${id}.pdf`,
+    );
+    doc.pipe(res);
+
+    const left = marginX,
+      right = A4W - marginX;
+    let y = marginTop;
+
+    // ── CABEÇALHO: logo ──────────────────────────────────────────────
+    let logoRendered = false;
+    try {
+      let logoPath = path.join(
+        __dirname,
+        "../../frontend/logos/logo_pet_cria-removebg-preview.png",
+      );
+      if (empresa && empresa.logo) {
+        const candidate = path.join(__dirname, "../../uploads", empresa.logo);
+        if (fs.existsSync(candidate)) logoPath = candidate;
+      }
+      if (fs.existsSync(logoPath)) {
+        const maxH = Math.round(mmToPt(18));
+        const maxW = Math.round(mmToPt(28));
+        const logoX = (A4W - maxW) / 2;
+        doc.image(logoPath, logoX, y, {
+          fit: [maxW, maxH],
+          align: "center",
+          valign: "top",
         });
-        if (!agendamento) return res.status(404).json({ error: 'Agendamento não encontrado' });
-
-        // Buscar empresa ativa
-        let empresa = null;
-        try { empresa = await Empresa.findOne({ where: { ativa: true }, order: [['id', 'ASC']] }); } catch(e) {}
-
-        // Helper: strip HTML tags
-        const stripHtml = (str) => String(str || '').replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ').trim();
-
-        // PDF A4
-        const mmToPt = mm => mm * 72 / 25.4;
-        const A4W = 595.28, A4H = 841.89;
-        const marginX = mmToPt(18), marginTop = mmToPt(14), marginBottom = mmToPt(14);
-        const contentW = A4W - marginX * 2;
-
-        const doc = new PDFDocument({ size: 'A4', margins: { top: marginTop, bottom: marginBottom, left: marginX, right: marginX }, autoFirstPage: true });
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `inline; filename=prontuario-${id}.pdf`);
-        doc.pipe(res);
-
-        const left = marginX, right = A4W - marginX;
-        let y = marginTop;
-
-        // ── CABEÇALHO: logo ──────────────────────────────────────────────
-        let logoRendered = false;
-        try {
-            let logoPath = path.join(__dirname, '../../frontend/logos/logo_pet_cria-removebg-preview.png');
-            if (empresa && empresa.logo) {
-                const candidate = path.join(__dirname, '../../uploads', empresa.logo);
-                if (fs.existsSync(candidate)) logoPath = candidate;
-            }
-            if (fs.existsSync(logoPath)) {
-                const maxH = Math.round(mmToPt(18));
-                const maxW = Math.round(mmToPt(28));
-                const logoX = (A4W - maxW) / 2;
-                doc.image(logoPath, logoX, y, { fit: [maxW, maxH], align: 'center', valign: 'top' });
-                y += maxH + Math.round(mmToPt(4));
-                logoRendered = true;
-            }
-        } catch(e) {}
-        if (!logoRendered) {
-            doc.fontSize(20).font('Helvetica-Bold').fillColor('#2c3e50').text('PETSHOP', left, y, { align: 'center', width: contentW });
-            y += 26;
-        }
-
-        // Nome empresa
-        if (empresa && empresa.razaoSocial) {
-            doc.fontSize(12).font('Helvetica-Bold').fillColor('#2c3e50').text(empresa.razaoSocial, left, y, { align: 'center', width: contentW });
-            y += 16;
-        }
-        // Contato empresa
-        const contatoEmp = [empresa && empresa.cnpj ? `CNPJ: ${empresa.cnpj}` : '', empresa && empresa.telefone ? `Tel: ${empresa.telefone}` : '', empresa && empresa.email ? empresa.email : ''].filter(Boolean).join('   ');
-        if (contatoEmp) {
-            doc.fontSize(8.5).font('Helvetica').fillColor('#636e72').text(contatoEmp, left, y, { align: 'center', width: contentW });
-            y += 13;
-        }
-        if (empresa && empresa.endereco) {
-            let endStr = '';
-            try {
-                const e = typeof empresa.endereco === 'string' ? JSON.parse(empresa.endereco) : empresa.endereco;
-                if (typeof e === 'object' && e !== null) {
-                    endStr = [e.logradouro || e.rua || e.endereco, e.numero, e.bairro, e.cidade ? `${e.cidade}${e.estado ? '/' + e.estado : ''}` : '', e.cep ? `CEP: ${e.cep}` : ''].filter(Boolean).join(', ');
-                } else {
-                    endStr = String(e);
-                }
-            } catch(e2) { endStr = String(empresa.endereco); }
-            if (endStr) {
-                doc.fontSize(8).font('Helvetica').fillColor('#636e72').text(endStr, left, y, { align: 'center', width: contentW });
-                y += 13;
-            }
-        }
-
-        // Linha divisória grossa
-        y += 6;
-        doc.save().rect(left, y, contentW, 2).fill('#2c3e50').restore();
-        y += 10;
-
-        // ── TÍTULO ────────────────────────────────────────────────────────
-        doc.fontSize(15).font('Helvetica-Bold').fillColor('#2c3e50').text('PRONTUÁRIO DO PET', left, y, { align: 'center', width: contentW });
-        y += 22;
-
-        // ── DADOS DO AGENDAMENTO ─────────────────────────────────────────
-        const dataAg = agendamento.dataAgendamento ? new Date(agendamento.dataAgendamento).toLocaleDateString('pt-BR') : '—';
-        const horaAg = agendamento.horario || '—';
-        const petNome = agendamento.pet?.nome || '—';
-        const petRaca = agendamento.pet?.raca || '—';
-        const petGenero = agendamento.pet?.genero || '—';
-        const petPorte = agendamento.pet?.porte || '—';
-        const petNasc = agendamento.pet?.data_nascimento ? new Date(agendamento.pet.data_nascimento).toLocaleDateString('pt-BR') : '—';
-        const clienteNome = agendamento.pet?.cliente?.nome || '—';
-        const clienteTel = agendamento.pet?.cliente?.telefone || agendamento.pet?.cliente?.celular || '—';
-        const profissional = agendamento.profissional || '—';
-        const servicos = (agendamento.servicos || []).map(s => s.nome || s.servico || '').filter(Boolean).join(', ') || '—';
-
-        // Caixa de informações do pet (fundo cinza suave)
-        const boxH = 126;
-        // 1) fundo cinza
-        doc.save().roundedRect(left, y, contentW, boxH, 6).fill('#f8f9fa').restore();
-        // 2) header colorido: topo arredondado + retângulo cobre cantos inferiores do roundedRect
-        doc.save().roundedRect(left, y, contentW, 26, 6).fill('#2c3e50').restore();
-        doc.save().rect(left, y + 6, contentW, 20).fill('#2c3e50').restore();
-        // 3) stroke por cima de tudo — borda limpa sem artefato
-        doc.save().lineWidth(1).roundedRect(left, y, contentW, boxH, 6).stroke('#c8cfd6').restore();
-        doc.fontSize(10).font('Helvetica-Bold').fillColor('#ffffff').text('INFORMAÇÕES DO PET', left + 10, y + 8, { width: contentW - 20 });
-        y += 30;
-
-        // Duas colunas de info
-        const col1X = left + 10, col2X = left + contentW / 2 + 5;
-        const colW = contentW / 2 - 15;
-        const lineH = 15;
-
-        const labelStyle = () => doc.fontSize(8).font('Helvetica-Bold').fillColor('#636e72');
-        const valueStyle = () => doc.fontSize(9).font('Helvetica').fillColor('#2c3e50');
-
-        const drawField = (label, value, x, curY) => {
-            labelStyle().text(label.toUpperCase(), x, curY, { width: colW });
-            valueStyle().text(value, x, curY + 9, { width: colW });
-        };
-
-        drawField('Nome do Pet', petNome, col1X, y);
-        drawField('Tutor', clienteNome, col2X, y);
-        y += lineH * 2 + 2;
-        drawField('Raça', petRaca, col1X, y);
-        drawField('Telefone', clienteTel, col2X, y);
-        y += lineH * 2 + 2;
-        drawField('Gênero / Porte', `${petGenero} / ${petPorte}`, col1X, y);
-        drawField('Nascimento', petNasc, col2X, y);
-        y += lineH * 2 + 8;
-
-        // Segunda caixa: dados do atendimento
-        const boxH2 = 96;
-        // 1) fundo cinza
-        doc.save().roundedRect(left, y, contentW, boxH2, 6).fill('#f8f9fa').restore();
-        // 2) header colorido
-        doc.save().roundedRect(left, y, contentW, 26, 6).fill('#4a90d9').restore();
-        doc.save().rect(left, y + 6, contentW, 20).fill('#4a90d9').restore();
-        // 3) stroke por cima
-        doc.save().lineWidth(1).roundedRect(left, y, contentW, boxH2, 6).stroke('#b0bec5').restore();
-        doc.fontSize(10).font('Helvetica-Bold').fillColor('#ffffff').text('DADOS DO ATENDIMENTO', left + 10, y + 8, { width: contentW - 20 });
-        y += 30;
-
-        drawField('Número', `#${id}`, col1X, y);
-        drawField('Profissional', profissional, col2X, y);
-        y += lineH * 2 + 2;
-        drawField('Data / Hora', `${dataAg} às ${horaAg}`, col1X, y);
-        drawField('Serviços', servicos, col2X, y);
-        y += lineH * 2 + 14;
-
-        // ── REGISTROS DO PRONTUÁRIO ────────────────────────────────────
-        const prontuario = agendamento.prontuario || [];
-
-        // Mapa de labels e cores por tipo
-        const tipoMeta = {
-            peso:          { label: 'Peso',                 color: '#ff6b6b' },
-            banho:         { label: 'Banho e Tosa',          color: '#4ecdc4' },
-            medicacao:     { label: 'Medicação',             color: '#ff9f43' },
-            cirurgia:      { label: 'Cirurgia',             color: '#a29bfe' },
-            coracao:       { label: 'Avaliação Cardíaca',   color: '#fd79a8' },
-            vacina:        { label: 'Vacina',               color: '#6c5ce7' },
-            queixas:       { label: 'Queixas e Sintomas',   color: '#00b894' },
-            exames:        { label: 'Exames',               color: '#e17055' },
-            alergias:      { label: 'Alergias',             color: '#fdcb6e' },
-            temperatura:   { label: 'Temperatura',          color: '#74b9ff' },
-            dieta:         { label: 'Dieta e Alimentação',  color: '#55efc4' },
-            compartilhar:  { label: 'Notas para Compartilhar', color: '#0984e3' },
-            anexar:        { label: 'Anexos e Documentos',  color: '#636e72' }
-        };
-
-        if (prontuario.length === 0) {
-            doc.fontSize(10).font('Helvetica').fillColor('#aaa').text('Nenhum registro no prontuário.', left, y, { align: 'center', width: contentW });
-            y += 20;
-        }
-
-        for (const reg of prontuario) {
-            const meta = tipoMeta[reg.tipo] || { label: reg.tipo, color: '#6c757d' };
-            const conteudo = stripHtml(reg.conteudo);
-            const dataReg = reg.dataEmissao || '';
-
-            // Verificar se é tipo anexar
-            if (reg.tipo === 'anexar') {
-                const arquivos = reg.arquivos || [];
-                if (arquivos.length === 0) continue;
-
-                // Estimar altura do card
-                const cardH = 32 + arquivos.length * 14 + 12;
-                if (y + cardH > A4H - marginBottom - 40) { doc.addPage(); y = marginTop; }
-
-                // Borda colorida lateral
-                doc.save().rect(left, y, 4, cardH).fill(meta.color).restore();
-                doc.save().roundedRect(left, y, contentW, cardH, 4).stroke('#dee2e6').restore();
-
-                // Título
-                doc.fontSize(9.5).font('Helvetica-Bold').fillColor(meta.color).text(meta.label, left + 12, y + 8, { width: contentW - 80 });
-                if (dataReg) doc.fontSize(7.5).font('Helvetica').fillColor('#aaa').text(dataReg, left + 12, y + 8, { width: contentW - 20, align: 'right' });
-                y += 24;
-
-                // Arquivos
-                arquivos.forEach(arq => {
-                    const nome = arq.name || arq.url || 'Arquivo';
-                    doc.fontSize(8.5).font('Helvetica').fillColor('#2c3e50').text(`• ${nome}`, left + 16, y, { width: contentW - 24 });
-                    y += 14;
-                });
-                y += 10;
-                continue;
-            }
-
-            if (!conteudo) continue;
-
-            // Calcular altura do conteúdo de texto
-            const textH = doc.heightOfString(conteudo, { width: contentW - 24, fontSize: 9 });
-            const cardH = 32 + textH + 14;
-
-            if (y + cardH > A4H - marginBottom - 40) { doc.addPage(); y = marginTop; }
-
-            // Card com borda colorida lateral
-            doc.save().rect(left, y, 4, cardH).fill(meta.color).restore();
-            doc.save().roundedRect(left, y, contentW, cardH, 4).stroke('#dee2e6').restore();
-
-            // Título do card
-            doc.fontSize(9.5).font('Helvetica-Bold').fillColor(meta.color).text(meta.label, left + 12, y + 8, { width: contentW - 80 });
-            if (dataReg) doc.fontSize(7.5).font('Helvetica').fillColor('#aaa').text(dataReg, left + 12, y + 8, { width: contentW - 20, align: 'right' });
-
-            // Conteúdo
-            doc.fontSize(9).font('Helvetica').fillColor('#2c3e50').text(conteudo, left + 12, y + 24, { width: contentW - 24 });
-
-            y += cardH + 8;
-        }
-
-        // ── RODAPÉ ────────────────────────────────────────────────────────
-        if (y > A4H - marginBottom - 50) { doc.addPage(); y = marginTop; }
-        y += 10;
-        doc.save().moveTo(left, y).lineTo(right, y).lineWidth(0.5).stroke('#dee2e6').restore();
-        y += 8;
-        const agora = new Date().toLocaleString('pt-BR');
-        doc.fontSize(8).font('Helvetica').fillColor('#aaa').text(`Documento gerado em ${agora}`, left, y, { align: 'center', width: contentW });
-
-        doc.end();
-    } catch (error) {
-        console.error('Erro ao gerar PDF do prontuário:', error);
-        res.status(500).json({ error: 'Erro ao gerar PDF do prontuário' });
+        y += maxH + Math.round(mmToPt(4));
+        logoRendered = true;
+      }
+    } catch (e) {}
+    if (!logoRendered) {
+      doc
+        .fontSize(20)
+        .font("Helvetica-Bold")
+        .fillColor("#2c3e50")
+        .text("PETSHOP", left, y, { align: "center", width: contentW });
+      y += 26;
     }
+
+    // Nome empresa
+    if (empresa && empresa.razaoSocial) {
+      doc
+        .fontSize(12)
+        .font("Helvetica-Bold")
+        .fillColor("#2c3e50")
+        .text(empresa.razaoSocial, left, y, {
+          align: "center",
+          width: contentW,
+        });
+      y += 16;
+    }
+    // Contato empresa
+    const contatoEmp = [
+      empresa && empresa.cnpj ? `CNPJ: ${empresa.cnpj}` : "",
+      empresa && empresa.telefone ? `Tel: ${empresa.telefone}` : "",
+      empresa && empresa.email ? empresa.email : "",
+    ]
+      .filter(Boolean)
+      .join("   ");
+    if (contatoEmp) {
+      doc
+        .fontSize(8.5)
+        .font("Helvetica")
+        .fillColor("#636e72")
+        .text(contatoEmp, left, y, { align: "center", width: contentW });
+      y += 13;
+    }
+    if (empresa && empresa.endereco) {
+      let endStr = "";
+      try {
+        const e =
+          typeof empresa.endereco === "string"
+            ? JSON.parse(empresa.endereco)
+            : empresa.endereco;
+        if (typeof e === "object" && e !== null) {
+          endStr = [
+            e.logradouro || e.rua || e.endereco,
+            e.numero,
+            e.bairro,
+            e.cidade ? `${e.cidade}${e.estado ? "/" + e.estado : ""}` : "",
+            e.cep ? `CEP: ${e.cep}` : "",
+          ]
+            .filter(Boolean)
+            .join(", ");
+        } else {
+          endStr = String(e);
+        }
+      } catch (e2) {
+        endStr = String(empresa.endereco);
+      }
+      if (endStr) {
+        doc
+          .fontSize(8)
+          .font("Helvetica")
+          .fillColor("#636e72")
+          .text(endStr, left, y, { align: "center", width: contentW });
+        y += 13;
+      }
+    }
+
+    // Linha divisória grossa
+    y += 6;
+    doc.save().rect(left, y, contentW, 2).fill("#2c3e50").restore();
+    y += 10;
+
+    // ── TÍTULO ────────────────────────────────────────────────────────
+    doc
+      .fontSize(15)
+      .font("Helvetica-Bold")
+      .fillColor("#2c3e50")
+      .text("PRONTUÁRIO DO PET", left, y, { align: "center", width: contentW });
+    y += 22;
+
+    // ── DADOS DO AGENDAMENTO ─────────────────────────────────────────
+    const dataAg = agendamento.dataAgendamento
+      ? new Date(agendamento.dataAgendamento).toLocaleDateString("pt-BR")
+      : "—";
+    const horaAg = agendamento.horario || "—";
+    const petNome = agendamento.pet?.nome || "—";
+    const petRaca = agendamento.pet?.raca || "—";
+    const petGenero = agendamento.pet?.genero || "—";
+    const petPorte = agendamento.pet?.porte || "—";
+    const petNasc = agendamento.pet?.data_nascimento
+      ? new Date(agendamento.pet.data_nascimento).toLocaleDateString("pt-BR")
+      : "—";
+    const clienteNome = agendamento.pet?.cliente?.nome || "—";
+    const clienteTel =
+      agendamento.pet?.cliente?.telefone ||
+      agendamento.pet?.cliente?.celular ||
+      "—";
+    const profissional = agendamento.profissional || "—";
+    const servicos =
+      (agendamento.servicos || [])
+        .map((s) => s.nome || s.servico || "")
+        .filter(Boolean)
+        .join(", ") || "—";
+
+    // Caixa de informações do pet (fundo cinza suave)
+    const boxH = 126;
+    // 1) fundo cinza
+    doc
+      .save()
+      .roundedRect(left, y, contentW, boxH, 6)
+      .fill("#f8f9fa")
+      .restore();
+    // 2) header colorido: topo arredondado + retângulo cobre cantos inferiores do roundedRect
+    doc.save().roundedRect(left, y, contentW, 26, 6).fill("#2c3e50").restore();
+    doc
+      .save()
+      .rect(left, y + 6, contentW, 20)
+      .fill("#2c3e50")
+      .restore();
+    // 3) stroke por cima de tudo — borda limpa sem artefato
+    doc
+      .save()
+      .lineWidth(1)
+      .roundedRect(left, y, contentW, boxH, 6)
+      .stroke("#c8cfd6")
+      .restore();
+    doc
+      .fontSize(10)
+      .font("Helvetica-Bold")
+      .fillColor("#ffffff")
+      .text("INFORMAÇÕES DO PET", left + 10, y + 8, { width: contentW - 20 });
+
+    // Duas colunas de info
+    const col1X = left + 10,
+      col2X = left + contentW / 2 + 5;
+    const colW = contentW / 2 - 15;
+    const lineH = 15;
+
+    const labelStyle = () =>
+      doc.fontSize(8).font("Helvetica-Bold").fillColor("#636e72");
+    const valueStyle = () =>
+      doc.fontSize(9).font("Helvetica").fillColor("#2c3e50");
+
+    const drawField = (label, value, x, curY) => {
+      labelStyle().text(label.toUpperCase(), x, curY, { width: colW });
+      valueStyle().text(value, x, curY + 9, { width: colW });
+    };
+
+    const box1YStart = y;
+    drawField("Nome do Pet", petNome, col1X, y + 30);
+    drawField("Tutor", clienteNome, col2X, y + 30);
+    drawField("Raça", petRaca, col1X, y + 30 + lineH * 2 + 2);
+    drawField("Telefone", clienteTel, col2X, y + 30 + lineH * 2 + 2);
+    drawField(
+      "Gênero / Porte",
+      `${petGenero} / ${petPorte}`,
+      col1X,
+      y + 30 + (lineH * 2 + 2) * 2,
+    );
+    drawField("Nascimento", petNasc, col2X, y + 30 + (lineH * 2 + 2) * 2);
+    // Avançar y para sempre sair abaixo da caixa
+    y = box1YStart + boxH + 14;
+
+    // Segunda caixa: dados do atendimento — altura dinâmica para caber os serviços
+    // Calcular altura do campo Serviços (pode ser longo)
+    const servicosTextHeight = doc
+      .fontSize(9)
+      .font("Helvetica")
+      .heightOfString(servicos, { width: colW });
+    // Linhas fixas: header(26) + padding(4) + linha1(lineH*2+2) + início linha2(lineH+9)
+    // + altura real do texto serviços + padding inferior(14)
+    const linhaServicosBaseY = 30 + lineH * 2 + 2 + lineH + 9; // offset relativo dentro da caixa
+    const boxH2 = Math.max(
+      96,
+      30 + lineH * 2 + 2 + 9 + servicosTextHeight + 20,
+    );
+    const boxYStart = y;
+    // 1) fundo cinza
+    doc
+      .save()
+      .roundedRect(left, y, contentW, boxH2, 6)
+      .fill("#f8f9fa")
+      .restore();
+    // 2) header colorido
+    doc.save().roundedRect(left, y, contentW, 26, 6).fill("#4a90d9").restore();
+    doc
+      .save()
+      .rect(left, y + 6, contentW, 20)
+      .fill("#4a90d9")
+      .restore();
+    // 3) stroke por cima
+    doc
+      .save()
+      .lineWidth(1)
+      .roundedRect(left, y, contentW, boxH2, 6)
+      .stroke("#b0bec5")
+      .restore();
+    doc
+      .fontSize(10)
+      .font("Helvetica-Bold")
+      .fillColor("#ffffff")
+      .text("DADOS DO ATENDIMENTO", left + 10, y + 8, { width: contentW - 20 });
+
+    drawField("Número", `#${id}`, col1X, y + 30);
+    drawField("Profissional", profissional, col2X, y + 30);
+    // Linha 2: Data/Hora à esquerda, Serviços à direita (pode ser multilinha)
+    labelStyle().text("DATA / HORA", col1X, y + 30 + lineH * 2 + 2, {
+      width: colW,
+    });
+    valueStyle().text(
+      `${dataAg} às ${horaAg}`,
+      col1X,
+      y + 30 + lineH * 2 + 2 + 9,
+      { width: colW },
+    );
+    labelStyle().text("SERVIÇOS", col2X, y + 30 + lineH * 2 + 2, {
+      width: colW,
+    });
+    valueStyle().text(servicos, col2X, y + 30 + lineH * 2 + 2 + 9, {
+      width: colW,
+    });
+    // Avançar y para sempre sair abaixo da caixa
+    y = boxYStart + boxH2 + 14;
+
+    // ── REGISTROS DO PRONTUÁRIO ────────────────────────────────────
+    const prontuario = agendamento.prontuario || [];
+
+    // Mapa de labels e cores por tipo
+    const tipoMeta = {
+      peso: { label: "Peso", color: "#ff6b6b" },
+      banho: { label: "Banho e Tosa", color: "#4ecdc4" },
+      medicacao: { label: "Medicação", color: "#ff9f43" },
+      cirurgia: { label: "Cirurgia", color: "#a29bfe" },
+      coracao: { label: "Avaliação Cardíaca", color: "#fd79a8" },
+      vacina: { label: "Vacina", color: "#6c5ce7" },
+      queixas: { label: "Queixas e Sintomas", color: "#00b894" },
+      exames: { label: "Exames", color: "#e17055" },
+      alergias: { label: "Alergias", color: "#fdcb6e" },
+      temperatura: { label: "Temperatura", color: "#74b9ff" },
+      dieta: { label: "Dieta e Alimentação", color: "#55efc4" },
+      compartilhar: { label: "Notas para Compartilhar", color: "#0984e3" },
+      anexar: { label: "Anexos e Documentos", color: "#636e72" },
+    };
+
+    if (prontuario.length === 0) {
+      doc
+        .fontSize(10)
+        .font("Helvetica")
+        .fillColor("#aaa")
+        .text("Nenhum registro no prontuário.", left, y, {
+          align: "center",
+          width: contentW,
+        });
+      y += 20;
+    }
+
+    for (const reg of prontuario) {
+      const meta = tipoMeta[reg.tipo] || { label: reg.tipo, color: "#6c757d" };
+      const conteudo = stripHtml(reg.conteudo);
+      const dataReg = reg.dataEmissao || "";
+
+      // Verificar se é tipo anexar
+      if (reg.tipo === "anexar") {
+        const arquivos = reg.arquivos || [];
+        if (arquivos.length === 0) continue;
+
+        // Estimar altura do card
+        const cardH = 32 + arquivos.length * 14 + 12;
+        if (y + cardH > A4H - marginBottom - 40) {
+          doc.addPage();
+          y = marginTop;
+        }
+        const anexarCardStartY = y;
+
+        // Borda colorida lateral
+        doc.save().rect(left, y, 4, cardH).fill(meta.color).restore();
+        doc
+          .save()
+          .roundedRect(left, y, contentW, cardH, 4)
+          .stroke("#dee2e6")
+          .restore();
+
+        // Título
+        doc
+          .fontSize(9.5)
+          .font("Helvetica-Bold")
+          .fillColor(meta.color)
+          .text(meta.label, left + 12, y + 8, { width: contentW - 80 });
+        if (dataReg)
+          doc
+            .fontSize(7.5)
+            .font("Helvetica")
+            .fillColor("#aaa")
+            .text(dataReg, left + 12, y + 8, {
+              width: contentW - 20,
+              align: "right",
+            });
+
+        // Arquivos
+        arquivos.forEach((arq, idx) => {
+          const nome = arq.name || arq.url || "Arquivo";
+          doc
+            .fontSize(8.5)
+            .font("Helvetica")
+            .fillColor("#2c3e50")
+            .text(`• ${nome}`, left + 16, y + 24 + idx * 14, {
+              width: contentW - 24,
+            });
+        });
+        // Sempre sair abaixo do card desenhado
+        y = anexarCardStartY + cardH + 8;
+        continue;
+      }
+
+      if (!conteudo) continue;
+
+      // Calcular altura do conteúdo de texto
+      const textH = doc.heightOfString(conteudo, {
+        width: contentW - 24,
+        fontSize: 9,
+      });
+      const cardH = 32 + textH + 14;
+
+      if (y + cardH > A4H - marginBottom - 40) {
+        doc.addPage();
+        y = marginTop;
+      }
+
+      // Card com borda colorida lateral
+      doc.save().rect(left, y, 4, cardH).fill(meta.color).restore();
+      doc
+        .save()
+        .roundedRect(left, y, contentW, cardH, 4)
+        .stroke("#dee2e6")
+        .restore();
+
+      // Título do card
+      doc
+        .fontSize(9.5)
+        .font("Helvetica-Bold")
+        .fillColor(meta.color)
+        .text(meta.label, left + 12, y + 8, { width: contentW - 80 });
+      if (dataReg)
+        doc
+          .fontSize(7.5)
+          .font("Helvetica")
+          .fillColor("#aaa")
+          .text(dataReg, left + 12, y + 8, {
+            width: contentW - 20,
+            align: "right",
+          });
+
+      // Conteúdo
+      doc
+        .fontSize(9)
+        .font("Helvetica")
+        .fillColor("#2c3e50")
+        .text(conteudo, left + 12, y + 24, { width: contentW - 24 });
+
+      y += cardH + 8;
+    }
+
+    // ── RODAPÉ ────────────────────────────────────────────────────────
+    if (y > A4H - marginBottom - 50) {
+      doc.addPage();
+      y = marginTop;
+    }
+    y += 10;
+    doc
+      .save()
+      .moveTo(left, y)
+      .lineTo(right, y)
+      .lineWidth(0.5)
+      .stroke("#dee2e6")
+      .restore();
+    y += 8;
+    const agora = new Date().toLocaleString("pt-BR");
+    doc
+      .fontSize(8)
+      .font("Helvetica")
+      .fillColor("#aaa")
+      .text(`Documento gerado em ${agora}`, left, y, {
+        align: "center",
+        width: contentW,
+      });
+
+    doc.end();
+  } catch (error) {
+    console.error("Erro ao gerar PDF do prontuário:", error);
+    res.status(500).json({ error: "Erro ao gerar PDF do prontuário" });
+  }
 });
 
 // ====== PRONTUÁRIO — UPLOAD DE ANEXOS ======
-const multer = require('multer');
+const multer = require("multer");
 
 const storageProntuario = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const dir = path.join(__dirname, '../../uploads/prontuario');
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        cb(null, dir);
-    },
-    filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname);
-        const base = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_\-]/g, '_');
-        cb(null, `ag${req.params.id}_${Date.now()}_${base}${ext}`);
-    }
+  destination: (req, file, cb) => {
+    const dir = path.join(__dirname, "../../uploads/prontuario");
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const base = path
+      .basename(file.originalname, ext)
+      .replace(/[^a-zA-Z0-9_\-]/g, "_");
+    cb(null, `ag${req.params.id}_${Date.now()}_${base}${ext}`);
+  },
 });
 
 const uploadProntuario = multer({
-    storage: storageProntuario,
-    limits: { fileSize: 20 * 1024 * 1024 } // 20 MB
+  storage: storageProntuario,
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
 });
 
 // POST /api/agendamentos/:id/prontuario/anexos
-router.post('/:id/prontuario/anexos', uploadProntuario.single('arquivo'), async (req, res) => {
+router.post(
+  "/:id/prontuario/anexos",
+  uploadProntuario.single("arquivo"),
+  async (req, res) => {
     try {
-        if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
-        const url = `/uploads/prontuario/${req.file.filename}`;
-        res.json({
-            id: `anexo-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-            url,
-            name: req.file.originalname,
-            type: req.file.mimetype,
-            size: req.file.size
-        });
+      if (!req.file)
+        return res.status(400).json({ error: "Nenhum arquivo enviado" });
+      const url = `/uploads/prontuario/${req.file.filename}`;
+      res.json({
+        id: `anexo-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+        url,
+        name: req.file.originalname,
+        type: req.file.mimetype,
+        size: req.file.size,
+      });
     } catch (error) {
-        console.error('Erro ao fazer upload de anexo do prontuário:', error);
-        res.status(500).json({ error: 'Erro ao salvar arquivo' });
+      console.error("Erro ao fazer upload de anexo do prontuário:", error);
+      res.status(500).json({ error: "Erro ao salvar arquivo" });
     }
-});
+  },
+);
 
 module.exports = router;

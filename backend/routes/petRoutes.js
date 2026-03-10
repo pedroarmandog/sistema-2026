@@ -2,7 +2,30 @@ const express = require("express");
 const router = express.Router();
 const petController = require("../controllers/petController");
 const multer = require("multer");
-const { Agendamento } = require("../models");
+const { Agendamento, Periodicidade } = require("../models");
+
+// Helper: calcula data de renovação somando os dias da periodicidade à data de aplicação
+function calcularDataRenovacao(
+  dataAplic,
+  periodicidadeDescricao,
+  periodicidadesMap,
+) {
+  if (!dataAplic || !periodicidadeDescricao) return null;
+  const p = periodicidadesMap.get(
+    (periodicidadeDescricao || "").trim().toLowerCase(),
+  );
+  if (!p || !p.dias) return null;
+  // Extrair partes da string (yyyy-mm-dd) para evitar deslocamento de timezone UTC vs local
+  const dateStr =
+    typeof dataAplic === "string"
+      ? dataAplic.slice(0, 10)
+      : new Date(dataAplic).toISOString().slice(0, 10);
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const d = new Date(year, month - 1, day); // local midnight, sem offset UTC
+  if (isNaN(d)) return null;
+  d.setDate(d.getDate() + Number(p.dias));
+  return d.toISOString().slice(0, 10);
+}
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, "uploads/"),
@@ -33,23 +56,40 @@ router.get("/", petController.getAllPets); // Listar todos os pets
 router.get("/:id/vacinas", async (req, res) => {
   try {
     const petId = req.params.id;
-    const agendamentos = await Agendamento.findAll({
-      where: { petId },
-      order: [["dataAgendamento", "DESC"]],
-    });
+    const [agendamentos, periodicidades] = await Promise.all([
+      Agendamento.findAll({
+        where: { petId },
+        order: [["dataAgendamento", "DESC"]],
+      }),
+      Periodicidade.findAll(),
+    ]);
+    const periodicidadesMap = new Map(
+      periodicidades.map((p) => [p.descricao.trim().toLowerCase(), p]),
+    );
     const vacinas = [];
     agendamentos.forEach((ag) => {
       parseServicos(ag.servicos).forEach((s) => {
         const meta = s.meta || {};
         if (meta.tipoEspecial === "vacina") {
+          const dataAplic = meta.dataAplic || ag.dataAgendamento || null;
+          const renovacaoLabel = meta.renovacao || meta.proximaDose || "";
           vacinas.push({
             agendamento_id: ag.id,
-            data_aplicacao: meta.dataAplic || ag.dataAgendamento || null,
+            grupo_id: meta.grupo_id || null,
+            data_aplicacao: dataAplic,
             vacina: s.nome || meta.nome || "-",
             produto: s.nome || meta.nome || "-",
             lote: meta.lote || "-",
             dose: meta.dose || "-",
-            data_renovacao: meta.renovacao || meta.proximaDose || "-",
+            renovacao: renovacaoLabel,
+            data_renovacao:
+              calcularDataRenovacao(
+                dataAplic,
+                renovacaoLabel,
+                periodicidadesMap,
+              ) ||
+              renovacaoLabel ||
+              "-",
             profissional: s.profissional || ag.profissional || "-",
           });
         }
@@ -66,23 +106,40 @@ router.get("/:id/vacinas", async (req, res) => {
 router.get("/:id/vermifugos", async (req, res) => {
   try {
     const petId = req.params.id;
-    const agendamentos = await Agendamento.findAll({
-      where: { petId },
-      order: [["dataAgendamento", "DESC"]],
-    });
+    const [agendamentos, periodicidades] = await Promise.all([
+      Agendamento.findAll({
+        where: { petId },
+        order: [["dataAgendamento", "DESC"]],
+      }),
+      Periodicidade.findAll(),
+    ]);
+    const periodicidadesMap = new Map(
+      periodicidades.map((p) => [p.descricao.trim().toLowerCase(), p]),
+    );
     const vermifugos = [];
     agendamentos.forEach((ag) => {
       parseServicos(ag.servicos).forEach((s) => {
         const meta = s.meta || {};
         if (meta.tipoEspecial === "vermifugo") {
+          const dataAplic = meta.dataAplic || ag.dataAgendamento || null;
+          const renovacaoLabel = meta.renovacao || meta.proximaDose || "";
           vermifugos.push({
             agendamento_id: ag.id,
-            data_aplicacao: meta.dataAplic || ag.dataAgendamento || null,
+            grupo_id: meta.grupo_id || null,
+            data_aplicacao: dataAplic,
             produto: s.nome || meta.nome || "-",
             lote: meta.lote || "-",
             dose: meta.dose || "-",
-            periodicidade: meta.proximaDose || "-",
-            data_renovacao: meta.renovacao || "-",
+            periodicidade: renovacaoLabel || "-",
+            renovacao: renovacaoLabel,
+            data_renovacao:
+              calcularDataRenovacao(
+                dataAplic,
+                renovacaoLabel,
+                periodicidadesMap,
+              ) ||
+              renovacaoLabel ||
+              "-",
             profissional: s.profissional || ag.profissional || "-",
           });
         }
@@ -99,23 +156,40 @@ router.get("/:id/vermifugos", async (req, res) => {
 router.get("/:id/antiparasitarios", async (req, res) => {
   try {
     const petId = req.params.id;
-    const agendamentos = await Agendamento.findAll({
-      where: { petId },
-      order: [["dataAgendamento", "DESC"]],
-    });
+    const [agendamentos, periodicidades] = await Promise.all([
+      Agendamento.findAll({
+        where: { petId },
+        order: [["dataAgendamento", "DESC"]],
+      }),
+      Periodicidade.findAll(),
+    ]);
+    const periodicidadesMap = new Map(
+      periodicidades.map((p) => [p.descricao.trim().toLowerCase(), p]),
+    );
     const antiparasitarios = [];
     agendamentos.forEach((ag) => {
       parseServicos(ag.servicos).forEach((s) => {
         const meta = s.meta || {};
         if (meta.tipoEspecial === "antiparasitario") {
+          const dataAplic = meta.dataAplic || ag.dataAgendamento || null;
+          const renovacaoLabel = meta.renovacao || meta.proximaDose || "";
           antiparasitarios.push({
             agendamento_id: ag.id,
-            data_aplicacao: meta.dataAplic || ag.dataAgendamento || null,
+            grupo_id: meta.grupo_id || null,
+            data_aplicacao: dataAplic,
             produto: s.nome || meta.nome || "-",
             lote: meta.lote || "-",
             dose: meta.dose || "-",
-            periodicidade: meta.proximaDose || "-",
-            data_renovacao: meta.renovacao || "-",
+            periodicidade: renovacaoLabel || "-",
+            renovacao: renovacaoLabel,
+            data_renovacao:
+              calcularDataRenovacao(
+                dataAplic,
+                renovacaoLabel,
+                periodicidadesMap,
+              ) ||
+              renovacaoLabel ||
+              "-",
             profissional: s.profissional || ag.profissional || "-",
           });
         }
@@ -164,6 +238,7 @@ router.get("/:id/documentos", async (req, res) => {
             size: f.size || null,
             agendamento_id: ag.id,
             data: ag.dataAgendamento,
+            servico: ag.servico || "",
           });
         });
       });
@@ -243,7 +318,8 @@ router.get("/:id/historico", async (req, res) => {
 router.post("/:id/vacinas", async (req, res) => {
   try {
     const petId = req.params.id;
-    const { nome, dataAplic, dose, lote, renovacao, profissional } = req.body;
+    const { nome, dataAplic, dose, lote, renovacao, profissional, grupo_id } =
+      req.body;
     if (!nome)
       return res.status(400).json({ error: "Campo nome é obrigatório" });
     const dataAg = dataAplic ? new Date(dataAplic) : new Date();
@@ -261,6 +337,7 @@ router.post("/:id/vacinas", async (req, res) => {
         dose: dose || "",
         lote: lote || "",
         renovacao: renovacao || "",
+        grupo_id: grupo_id || null,
       },
     };
     const ag = await Agendamento.create({
@@ -283,7 +360,8 @@ router.post("/:id/vacinas", async (req, res) => {
 router.post("/:id/vermifugos", async (req, res) => {
   try {
     const petId = req.params.id;
-    const { nome, dataAplic, dose, lote, renovacao, profissional } = req.body;
+    const { nome, dataAplic, dose, lote, renovacao, profissional, grupo_id } =
+      req.body;
     if (!nome)
       return res.status(400).json({ error: "Campo nome é obrigatório" });
     const dataAg = dataAplic ? new Date(dataAplic) : new Date();
@@ -301,6 +379,7 @@ router.post("/:id/vermifugos", async (req, res) => {
         dose: dose || "",
         lote: lote || "",
         renovacao: renovacao || "",
+        grupo_id: grupo_id || null,
       },
     };
     const ag = await Agendamento.create({
@@ -323,7 +402,8 @@ router.post("/:id/vermifugos", async (req, res) => {
 router.post("/:id/antiparasitarios", async (req, res) => {
   try {
     const petId = req.params.id;
-    const { nome, dataAplic, dose, lote, renovacao, profissional } = req.body;
+    const { nome, dataAplic, dose, lote, renovacao, profissional, grupo_id } =
+      req.body;
     if (!nome)
       return res.status(400).json({ error: "Campo nome é obrigatório" });
     const dataAg = dataAplic ? new Date(dataAplic) : new Date();
@@ -341,6 +421,7 @@ router.post("/:id/antiparasitarios", async (req, res) => {
         dose: dose || "",
         lote: lote || "",
         renovacao: renovacao || "",
+        grupo_id: grupo_id || null,
       },
     };
     const ag = await Agendamento.create({
@@ -356,6 +437,318 @@ router.post("/:id/antiparasitarios", async (req, res) => {
   } catch (e) {
     console.error("Erro POST /pets/:id/antiparasitarios:", e);
     return res.status(500).json({ error: "Erro ao registrar antiparasitário" });
+  }
+});
+
+// PUT /api/pets/:petId/vacinas/:agendamentoId — atualiza vacina no agendamento
+router.put("/:petId/vacinas/:agendamentoId", async (req, res) => {
+  try {
+    const { agendamentoId } = req.params;
+    const { nome, dataAplic, dose, lote, renovacao, profissional } = req.body;
+    const ag = await Agendamento.findByPk(agendamentoId);
+    if (!ag)
+      return res.status(404).json({ error: "Agendamento não encontrado" });
+    // Deep clone para garantir que o Sequelize detecte a mudança no campo JSON
+    let servicos = JSON.parse(JSON.stringify(parseServicos(ag.servicos)));
+    const idx = servicos.findIndex(
+      (s) => s.meta && s.meta.tipoEspecial === "vacina",
+    );
+    if (idx >= 0) {
+      if (nome) servicos[idx].nome = nome;
+      if (profissional !== undefined) servicos[idx].profissional = profissional;
+      const meta = servicos[idx].meta;
+      if (dataAplic) meta.dataAplic = dataAplic;
+      if (dose !== undefined) meta.dose = dose;
+      if (lote !== undefined) meta.lote = lote;
+      if (renovacao !== undefined) meta.renovacao = renovacao;
+    }
+    await ag.update({
+      dataAgendamento: dataAplic ? new Date(dataAplic) : ag.dataAgendamento,
+      profissional: profissional || ag.profissional,
+      servicos,
+    });
+    return res.json({ success: true });
+  } catch (e) {
+    console.error("Erro PUT /pets/:petId/vacinas/:agendamentoId:", e);
+    return res.status(500).json({ error: "Erro ao atualizar vacina" });
+  }
+});
+
+// DELETE /api/pets/:petId/vacinas/:agendamentoId — exclui agendamento de vacina
+router.delete("/:petId/vacinas/:agendamentoId", async (req, res) => {
+  try {
+    const { agendamentoId } = req.params;
+    const ag = await Agendamento.findByPk(agendamentoId);
+    if (!ag)
+      return res.status(404).json({ error: "Agendamento não encontrado" });
+    await ag.destroy();
+    return res.json({ success: true });
+  } catch (e) {
+    console.error("Erro DELETE /pets/:petId/vacinas/:agendamentoId:", e);
+    return res.status(500).json({ error: "Erro ao excluir vacina" });
+  }
+});
+
+// PUT /api/pets/:petId/vermifugos/:agendamentoId — atualiza vermífugo no agendamento
+router.put("/:petId/vermifugos/:agendamentoId", async (req, res) => {
+  try {
+    const { agendamentoId } = req.params;
+    const { nome, dataAplic, dose, lote, renovacao, profissional } = req.body;
+    const ag = await Agendamento.findByPk(agendamentoId);
+    if (!ag)
+      return res.status(404).json({ error: "Agendamento não encontrado" });
+    // Deep clone para garantir que o Sequelize detecte a mudança no campo JSON
+    let servicos = JSON.parse(JSON.stringify(parseServicos(ag.servicos)));
+    const idx = servicos.findIndex(
+      (s) => s.meta && s.meta.tipoEspecial === "vermifugo",
+    );
+    if (idx >= 0) {
+      if (nome) servicos[idx].nome = nome;
+      if (profissional !== undefined) servicos[idx].profissional = profissional;
+      const meta = servicos[idx].meta;
+      if (dataAplic) meta.dataAplic = dataAplic;
+      if (dose !== undefined) meta.dose = dose;
+      if (lote !== undefined) meta.lote = lote;
+      if (renovacao !== undefined) meta.renovacao = renovacao;
+    }
+    await ag.update({
+      dataAgendamento: dataAplic ? new Date(dataAplic) : ag.dataAgendamento,
+      profissional: profissional || ag.profissional,
+      servicos,
+    });
+    return res.json({ success: true });
+  } catch (e) {
+    console.error("Erro PUT /pets/:petId/vermifugos/:agendamentoId:", e);
+    return res.status(500).json({ error: "Erro ao atualizar vermífugo" });
+  }
+});
+
+// DELETE /api/pets/:petId/vermifugos/:agendamentoId — exclui agendamento de vermífugo
+router.delete("/:petId/vermifugos/:agendamentoId", async (req, res) => {
+  try {
+    const { agendamentoId } = req.params;
+    const ag = await Agendamento.findByPk(agendamentoId);
+    if (!ag)
+      return res.status(404).json({ error: "Agendamento não encontrado" });
+    await ag.destroy();
+    return res.json({ success: true });
+  } catch (e) {
+    console.error("Erro DELETE /pets/:petId/vermifugos/:agendamentoId:", e);
+    return res.status(500).json({ error: "Erro ao excluir vermífugo" });
+  }
+});
+
+// PUT /api/pets/:petId/antiparasitarios/:agendamentoId — atualiza antiparasitário no agendamento
+router.put("/:petId/antiparasitarios/:agendamentoId", async (req, res) => {
+  try {
+    const { agendamentoId } = req.params;
+    const { nome, dataAplic, dose, lote, renovacao, profissional } = req.body;
+    const ag = await Agendamento.findByPk(agendamentoId);
+    if (!ag)
+      return res.status(404).json({ error: "Agendamento não encontrado" });
+    // Deep clone para garantir que o Sequelize detecte a mudança no campo JSON
+    let servicos = JSON.parse(JSON.stringify(parseServicos(ag.servicos)));
+    const idx = servicos.findIndex(
+      (s) => s.meta && s.meta.tipoEspecial === "antiparasitario",
+    );
+    if (idx >= 0) {
+      if (nome) servicos[idx].nome = nome;
+      if (profissional !== undefined) servicos[idx].profissional = profissional;
+      const meta = servicos[idx].meta;
+      if (dataAplic) meta.dataAplic = dataAplic;
+      if (dose !== undefined) meta.dose = dose;
+      if (lote !== undefined) meta.lote = lote;
+      if (renovacao !== undefined) meta.renovacao = renovacao;
+    }
+    await ag.update({
+      dataAgendamento: dataAplic ? new Date(dataAplic) : ag.dataAgendamento,
+      profissional: profissional || ag.profissional,
+      servicos,
+    });
+    return res.json({ success: true });
+  } catch (e) {
+    console.error("Erro PUT /pets/:petId/antiparasitarios/:agendamentoId:", e);
+    return res.status(500).json({ error: "Erro ao atualizar antiparasitário" });
+  }
+});
+
+// DELETE /api/pets/:petId/antiparasitarios/:agendamentoId — exclui agendamento de antiparasitário
+router.delete("/:petId/antiparasitarios/:agendamentoId", async (req, res) => {
+  try {
+    const { agendamentoId } = req.params;
+    const ag = await Agendamento.findByPk(agendamentoId);
+    if (!ag)
+      return res.status(404).json({ error: "Agendamento não encontrado" });
+    await ag.destroy();
+    return res.json({ success: true });
+  } catch (e) {
+    console.error(
+      "Erro DELETE /pets/:petId/antiparasitarios/:agendamentoId:",
+      e,
+    );
+    return res.status(500).json({ error: "Erro ao excluir antiparasitário" });
+  }
+});
+
+// POST /api/pets/:petId/documentos — upload de documentos avulsos para o pet
+router.post(
+  "/:petId/documentos",
+  upload.array("arquivos", 20),
+  async (req, res) => {
+    try {
+      const petId = req.params.petId;
+      const files = req.files || [];
+      if (files.length === 0) {
+        return res.status(400).json({ error: "Nenhum arquivo enviado" });
+      }
+
+      const hoje = new Date();
+      const hojeStr = hoje.toISOString().slice(0, 10);
+      const horarioStr = hoje.toTimeString().slice(0, 5) || "00:00";
+
+      const arquivos = files.map((f) => ({
+        id: `doc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        name: f.originalname || f.filename,
+        url: `/uploads/${f.filename}`,
+        type: f.mimetype || "",
+        size: f.size || null,
+      }));
+
+      const prontuario = JSON.stringify([{ tipo: "anexar", arquivos }]);
+
+      const novoAg = await Agendamento.create({
+        petId: parseInt(petId),
+        dataAgendamento: hojeStr,
+        horario: horarioStr,
+        servico: "documento",
+        status: "concluido",
+        prontuario,
+      });
+
+      return res.json({ success: true, agendamento_id: novoAg.id });
+    } catch (e) {
+      console.error("Erro POST /pets/:petId/documentos:", e);
+      return res.status(500).json({ error: "Erro ao salvar documento" });
+    }
+  },
+);
+
+// DELETE /api/pets/:petId/documentos/:agendamentoId — remove arquivo específico do prontuário
+// Se body.url === '__all__', remove todos os anexos deste agendamento
+router.delete("/:petId/documentos/:agendamentoId", async (req, res) => {
+  try {
+    const { agendamentoId } = req.params;
+    const { url } = req.body;
+    const ag = await Agendamento.findByPk(agendamentoId);
+    if (!ag)
+      return res.status(404).json({ error: "Agendamento não encontrado" });
+    let prontuario = ag.prontuario;
+    if (typeof prontuario === "string") {
+      try {
+        prontuario = JSON.parse(prontuario);
+      } catch (e) {
+        prontuario = [];
+      }
+    }
+    if (!Array.isArray(prontuario)) {
+      return res.status(400).json({ error: "Prontuário inválido" });
+    }
+    if (url === "__all__") {
+      // Remove todos os registros de tipo "anexar"
+      prontuario = prontuario.filter((reg) => reg.tipo !== "anexar");
+    } else {
+      prontuario = prontuario
+        .map((reg) => {
+          if (reg.tipo !== "anexar" || !Array.isArray(reg.arquivos)) return reg;
+          return {
+            ...reg,
+            arquivos: reg.arquivos.filter((f) => f.url !== url),
+          };
+        })
+        .filter(
+          (reg) =>
+            reg.tipo !== "anexar" || (reg.arquivos && reg.arquivos.length > 0),
+        );
+    }
+    await ag.update({ prontuario: JSON.stringify(prontuario) });
+    return res.json({ success: true });
+  } catch (e) {
+    console.error("Erro DELETE /pets/:petId/documentos/:agendamentoId:", e);
+    return res.status(500).json({ error: "Erro ao excluir documento" });
+  }
+});
+
+// POST /api/pets/:id/foto — salva base64 da foto no campo foto_url do pet
+router.post("/:id/foto", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { foto_url } = req.body;
+    if (!foto_url) {
+      return res.status(400).json({ error: "foto_url é obrigatório" });
+    }
+    const { Pet } = require("../models");
+    const pet = await Pet.findByPk(id);
+    if (!pet) return res.status(404).json({ error: "Pet não encontrado" });
+    await pet.update({ foto_url });
+    return res.json({ success: true });
+  } catch (e) {
+    console.error("Erro POST /pets/:id/foto:", e);
+    return res.status(500).json({ error: "Erro ao salvar foto" });
+  }
+});
+
+// DELETE /api/pets/:id/foto — remove foto do pet
+router.delete("/:id/foto", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { Pet } = require("../models");
+    const pet = await Pet.findByPk(id);
+    if (!pet) return res.status(404).json({ error: "Pet não encontrado" });
+    await pet.update({ foto_url: null });
+    return res.json({ success: true });
+  } catch (e) {
+    console.error("Erro DELETE /pets/:id/foto:", e);
+    return res.status(500).json({ error: "Erro ao remover foto" });
+  }
+});
+
+// PATCH /api/pets/:id/inativar — inativa o pet sem excluir (soft delete)
+router.patch("/:id/inativar", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { Pet } = require("../models");
+    const pet = await Pet.findByPk(id);
+    if (!pet)
+      return res
+        .status(404)
+        .json({ success: false, message: "Pet não encontrado" });
+    await pet.update({ ativo: false });
+    return res.json({ success: true, message: "Pet inativado com sucesso" });
+  } catch (e) {
+    console.error("Erro PATCH /pets/:id/inativar:", e);
+    return res
+      .status(500)
+      .json({ success: false, message: "Erro ao inativar pet" });
+  }
+});
+
+// PATCH /api/pets/:id/reativar — reactive o pet (marca ativo=true)
+router.patch("/:id/reativar", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { Pet } = require("../models");
+    const pet = await Pet.findByPk(id);
+    if (!pet)
+      return res
+        .status(404)
+        .json({ success: false, message: "Pet não encontrado" });
+    await pet.update({ ativo: true });
+    return res.json({ success: true, message: "Pet reativado com sucesso" });
+  } catch (e) {
+    console.error("Erro PATCH /pets/:id/reativar:", e);
+    return res
+      .status(500)
+      .json({ success: false, message: "Erro ao reativar pet" });
   }
 });
 

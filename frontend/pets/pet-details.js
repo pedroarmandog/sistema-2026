@@ -40,85 +40,31 @@ document.addEventListener("DOMContentLoaded", function () {
       window.location.href = `cadastro-pet.html${q}`;
     });
 
-  // Inativar/excluir pet (hard delete) - botão ao lado de Editar
+  // Inativar/reativar pet — botão ao lado de Editar
   const btnInativar = document.getElementById("btnInativar");
   if (btnInativar)
     btnInativar.addEventListener("click", (ev) => {
-      // Abrir modal de confirmação antes de inativar
       ev.preventDefault();
-      showConfirmDeleteModal();
+      const isInativo = btnInativar.dataset.estado === "inativo";
+      if (isInativo) {
+        // Pet já inativo: reativar direto
+        reativarPet();
+      } else {
+        // Pet ativo: abrir modal de confirmação
+        showConfirmDeleteModal();
+      }
     });
 
   // Funções para controlar o modal de confirmação
   function showConfirmDeleteModal() {
     const modal = document.getElementById("confirmDeleteModal");
     if (!modal) return;
-    // usar flex para respeitar as regras de centralização definidas em CSS (.modal { display:flex; align-items:center; justify-content:center })
     modal.style.display = "flex";
     try {
       document.body.style.overflow = "hidden";
     } catch (e) {}
-    // ligar handler do botão confirmar (evitar múltiplos binds)
     const confirmBtn = document.getElementById("confirmDeleteBtn");
-    if (confirmBtn) {
-      // apontar para a função global que realiza a inativação
-      confirmBtn.onclick = confirmarInativacao;
-    }
-    if (nomeCliente) {
-      applyClientText(nomeCliente, idCliente);
-    } else {
-      // Tentar extrair nome já presente no DOM (ex.: "510 - Davi Miguel Santos")
-      try {
-        const raw = (clientEl.textContent || "").trim();
-        const m = raw.match(/^\s*\d+\s*-\s*(.+)$/);
-        if (m && m[1]) {
-          applyClientText(m[1].trim(), idCliente || "");
-        } else if (raw && raw !== "Cliente:" && raw !== "—") {
-          // se houver algum texto diferente, usar como nome
-          applyClientText(raw, idCliente || "");
-        } else if (idCliente) {
-          // Se não temos nome no DOM, tentar buscar pelo id
-          applyClientText("Carregando...", idCliente);
-          (async function fetchClientNameIfMissing(id) {
-            try {
-              let resp = null;
-              try {
-                resp = await fetch(`/api/clientes/${encodeURIComponent(id)}`);
-              } catch (e) {
-                resp = null;
-              }
-              if (!resp || !resp.ok) {
-                try {
-                  resp = await fetch(
-                    `${location.protocol}//localhost:3000/api/clientes/${encodeURIComponent(id)}`,
-                  );
-                } catch (e) {
-                  resp = null;
-                }
-              }
-              if (resp && resp.ok) {
-                const json = await resp.json();
-                const c = json && (json.cliente || json || json.data);
-                const nome =
-                  (c && (c.nome || c.name || c.fullName || c.nome_completo)) ||
-                  null;
-                if (nome) {
-                  applyClientText(nome, id);
-                  return;
-                }
-              }
-            } catch (e) {
-              /* ignore */
-            }
-            applyClientText(`ID ${id}`, id);
-          })(idCliente);
-        } else {
-          applyClientText(null, "");
-        }
-      } catch (e) {
-        applyClientText(null, "");
-      }
-    }
+    if (confirmBtn) confirmBtn.onclick = confirmarInativacao;
   }
   // Exportar funções para escopo global para suportar onclick inline do HTML
   try {
@@ -180,17 +126,6 @@ document.addEventListener("DOMContentLoaded", function () {
       /* ignore */
     }
   }
-
-  // Conectar botões do tabsActions (barra de abas) ao modal correto
-  const _wireTabsActionsBtn = (id, fn) => {
-    const el = document.getElementById(id);
-    if (el) el.onclick = fn;
-  };
-  _wireTabsActionsBtn("btnAdd_vacinas", () => _abrirModalVacina(petId));
-  _wireTabsActionsBtn("btnAdd_vermifugos", () => _abrirModalVermifugo(petId));
-  _wireTabsActionsBtn("btnAdd_antiparasitarios", () =>
-    _abrirModalAntiparasitario(petId),
-  );
 
   tabButtons.forEach((btn) => {
     btn.addEventListener("click", (ev) => {
@@ -375,57 +310,33 @@ function initTabsActions() {
   const btnMaisVacinas = document.getElementById("btnAdd_vacinas");
   if (btnMaisVacinas)
     btnMaisVacinas.addEventListener("click", () => {
-      const urlParams = new URLSearchParams(window.location.search);
-      const petId = urlParams.get("pet_id") || urlParams.get("id");
-      const clienteId = urlParams.get("cliente_id");
-      const q = clienteId
-        ? `?pet_id=${encodeURIComponent(petId)}&cliente_id=${encodeURIComponent(clienteId)}`
-        : `?pet_id=${encodeURIComponent(petId)}`;
-      window.location.href = `vacinas-cadastro.html${q}`;
+      window.location.href = "../item/novo-produto.html";
     });
   const btnPeriodicos = document.getElementById("btnPeriodicos");
   if (btnPeriodicos)
     btnPeriodicos.addEventListener("click", (e) => {
       e.preventDefault();
-      mostrarNotificacao(
-        'Ação "Periódicos" (Vacinas) ainda não implementada.',
-        "info",
-      );
+      window.location.href = "../item/clinica/periodicidade.html";
     });
 
   // vermifugos
   const btnMaisVermifugos = document.getElementById("btnAdd_vermifugos");
   if (btnMaisVermifugos)
     btnMaisVermifugos.addEventListener("click", () => {
-      const urlParams = new URLSearchParams(window.location.search);
-      const petId = urlParams.get("pet_id") || urlParams.get("id");
-      const clienteId = urlParams.get("cliente_id");
-      const q = clienteId
-        ? `?pet_id=${encodeURIComponent(petId)}&cliente_id=${encodeURIComponent(clienteId)}`
-        : `?pet_id=${encodeURIComponent(petId)}`;
-      window.location.href = `vermifugos-cadastro.html${q}`;
+      window.location.href = "../item/novo-produto.html";
     });
   const btnPeriodicosV = document.getElementById("btnPeriodicos_vermifugos");
   if (btnPeriodicosV)
     btnPeriodicosV.addEventListener("click", (e) => {
       e.preventDefault();
-      mostrarNotificacao(
-        'Ação "Periódicos" (Vermífugos) ainda não implementada.',
-        "info",
-      );
+      window.location.href = "../item/clinica/periodicidade.html";
     });
 
   // antiparasitarios
   const btnMaisAntip = document.getElementById("btnAdd_antiparasitarios");
   if (btnMaisAntip)
     btnMaisAntip.addEventListener("click", () => {
-      const urlParams = new URLSearchParams(window.location.search);
-      const petId = urlParams.get("pet_id") || urlParams.get("id");
-      const clienteId = urlParams.get("cliente_id");
-      const q = clienteId
-        ? `?pet_id=${encodeURIComponent(petId)}&cliente_id=${encodeURIComponent(clienteId)}`
-        : `?pet_id=${encodeURIComponent(petId)}`;
-      window.location.href = `antiparasitarios-cadastro.html${q}`;
+      window.location.href = "../item/novo-produto.html";
     });
   const btnPeriodicosA = document.getElementById(
     "btnPeriodicos_antiparasitarios",
@@ -433,10 +344,7 @@ function initTabsActions() {
   if (btnPeriodicosA)
     btnPeriodicosA.addEventListener("click", (e) => {
       e.preventDefault();
-      mostrarNotificacao(
-        'Ação "Periódicos" (Antiparasitários) ainda não implementada.',
-        "info",
-      );
+      window.location.href = "../item/clinica/periodicidade.html";
     });
 }
 
@@ -616,9 +524,130 @@ function _filtrarHistoricoGrupos(tipo) {
 }
 
 // ======= DOCUMENTOS =======
+/** Modal para upload de documentos avulsos para o pet */
+function _abrirModalAdicionarDocumento(petId) {
+  const modalId = "_modalAdicionarDocumento";
+  const antigo = document.getElementById(modalId);
+  if (antigo) antigo.remove();
+
+  const overlay = document.createElement("div");
+  overlay.id = modalId;
+  overlay.style.cssText = `
+    position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;
+    background:rgba(0,0,0,.45);
+  `;
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:12px;width:460px;max-width:96vw;
+                box-shadow:0 8px 40px rgba(0,0,0,.22);display:flex;flex-direction:column;overflow:hidden;">
+      <div style="padding:18px 24px 14px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;">
+        <span style="font-size:16px;font-weight:700;color:#111">Adicionar Documento</span>
+      </div>
+      <div style="padding:20px 24px;display:flex;flex-direction:column;gap:14px;">
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <label style="font-size:13px;font-weight:600;color:#374151">Arquivo(s) *</label>
+          <label id="${modalId}_dropzone" style="display:flex;flex-direction:column;align-items:center;justify-content:center;
+                 gap:8px;border:2px dashed #d1d5db;border-radius:10px;padding:28px 16px;cursor:pointer;
+                 background:#f9fafb;transition:border-color .2s;" 
+                 ondragover="event.preventDefault();this.style.borderColor='#3b82f6';"
+                 ondragleave="this.style.borderColor='#d1d5db';"
+                 ondrop="event.preventDefault();this.style.borderColor='#d1d5db';document.getElementById('${modalId}_input').files=event.dataTransfer.files;document.getElementById('${modalId}_label').textContent=event.dataTransfer.files.length+' arquivo(s) selecionado(s)';">
+            <i class="fas fa-cloud-upload-alt" style="font-size:28px;color:#9ca3af;"></i>
+            <span id="${modalId}_label" style="font-size:13px;color:#6b7280;">Clique ou arraste arquivos aqui</span>
+            <input id="${modalId}_input" type="file" multiple accept="*/*" style="display:none"
+              onchange="document.getElementById('${modalId}_label').textContent=this.files.length+' arquivo(s) selecionado(s)';">
+          </label>
+        </div>
+      </div>
+      <div style="padding:12px 24px 18px;display:flex;gap:10px;justify-content:flex-end;">
+        <button type="button" id="${modalId}_cancelar"
+          style="padding:8px 20px;border-radius:8px;border:1px solid #d1d5db;background:#f9fafb;
+                 color:#374151;font-size:14px;cursor:pointer;">Cancelar</button>
+        <button type="button" id="${modalId}_salvar"
+          style="padding:8px 22px;border-radius:8px;border:none;background:#2563eb;
+                 color:#fff;font-size:14px;font-weight:600;cursor:pointer;">Salvar</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  const fechar = () => overlay.remove();
+  overlay
+    .querySelector(`#${modalId}_cancelar`)
+    .addEventListener("click", fechar);
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) fechar();
+  });
+  // Clicar na dropzone abre o input
+  overlay
+    .querySelector(`#${modalId}_dropzone`)
+    .addEventListener("click", (e) => {
+      if (e.target.tagName !== "INPUT") {
+        overlay.querySelector(`#${modalId}_input`).click();
+      }
+    });
+
+  overlay
+    .querySelector(`#${modalId}_salvar`)
+    .addEventListener("click", async () => {
+      const input = overlay.querySelector(`#${modalId}_input`);
+      if (!input.files || input.files.length === 0) {
+        mostrarNotificacao("Selecione pelo menos um arquivo", "error");
+        return;
+      }
+      const btnSalvar = overlay.querySelector(`#${modalId}_salvar`);
+      btnSalvar.disabled = true;
+      btnSalvar.textContent = "Enviando...";
+
+      const formData = new FormData();
+      for (const f of input.files) formData.append("arquivos", f);
+
+      try {
+        let r = null;
+        try {
+          r = await fetch(`/api/pets/${encodeURIComponent(petId)}/documentos`, {
+            method: "POST",
+            body: formData,
+          });
+        } catch (e) {
+          r = null;
+        }
+        if (!r || !r.ok) {
+          r = await fetch(
+            `${location.protocol}//localhost:3000/api/pets/${encodeURIComponent(petId)}/documentos`,
+            { method: "POST", body: formData },
+          );
+        }
+        const json = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          mostrarNotificacao(json.error || "Erro ao salvar documento", "error");
+          btnSalvar.disabled = false;
+          btnSalvar.textContent = "Salvar";
+          return;
+        }
+        mostrarNotificacao("Documento(s) salvo(s) com sucesso!", "success");
+        fechar();
+        loadDocumentosIntoTab(petId);
+      } catch (e) {
+        mostrarNotificacao("Erro ao enviar arquivo", "error");
+        btnSalvar.disabled = false;
+        btnSalvar.textContent = "Salvar";
+      }
+    });
+}
+
 async function loadDocumentosIntoTab(petId) {
   const wrapper = document.getElementById("docs-dynamic-list");
   if (!wrapper) return;
+
+  // Wiring do botão Adicionar (fica no HTML estático, só precisa ser wirng uma vez)
+  const btnAdd = document.getElementById("btnAddDocumento");
+  if (btnAdd && !btnAdd._wired) {
+    btnAdd._wired = true;
+    btnAdd.addEventListener("click", () =>
+      _abrirModalAdicionarDocumento(petId),
+    );
+  }
 
   wrapper.innerHTML = `<div class="hist-loading"><i class="fas fa-circle-notch fa-spin"></i>&nbsp;Carregando...</div>`;
 
@@ -658,7 +687,12 @@ async function loadDocumentosIntoTab(petId) {
   docs.forEach((d) => {
     const gid = d.agendamento_id || "avulso";
     if (!groupsMap.has(gid))
-      groupsMap.set(gid, { id: gid, data: d.data, files: [] });
+      groupsMap.set(gid, {
+        id: gid,
+        data: d.data,
+        servico: d.servico || "",
+        files: [],
+      });
     groupsMap.get(gid).files.push(d);
   });
 
@@ -686,6 +720,7 @@ async function loadDocumentosIntoTab(petId) {
   groupsMap.forEach((group) => {
     const gid = group.id;
     const dataFmt = formatarData(group.data);
+    const isDocumentoAvulso = group.servico === "documento";
     const agendHref =
       gid !== "avulso" ? `../agendamento-detalhes.html?id=${gid}` : "#";
 
@@ -710,12 +745,23 @@ async function loadDocumentosIntoTab(petId) {
       })
       .join("");
 
+    const groupActionsHtml = `
+      <div class="docs-group-acoes">
+        <button class="btn-acao-doc btn-doc-excluir" title="Excluir todos os documentos deste grupo"><i class="fas fa-trash-alt"></i></button>
+      </div>`;
+
+    const verAtendimentoLink =
+      !isDocumentoAvulso && gid !== "avulso"
+        ? `<a href="${agendHref}" class="docs-group-link" onclick="event.stopPropagation()"><i class="fas fa-arrow-right"></i> Ver atendimento</a>`
+        : "";
+
     html += `
-            <div class="docs-group">
+            <div class="docs-group" data-agendamento-id="${gid}">
                 <div class="docs-group-header">
-                    <span class="docs-group-label">ATENDIMENTO <strong>${gid !== "avulso" ? gid : "-"}</strong></span>
+                    <span class="docs-group-label">${isDocumentoAvulso ? "DOCUMENTO" : "ATENDIMENTO"} <strong>${gid !== "avulso" ? gid : "-"}</strong></span>
                     <span class="docs-group-date">${dataFmt}</span>
-                    <a href="${agendHref}" class="docs-group-link" onclick="event.stopPropagation()"><i class="fas fa-arrow-right"></i> Ver atendimento</a>
+                    ${verAtendimentoLink}
+                    ${groupActionsHtml}
                 </div>
                 <div class="docs-group-files">${filesHtml}</div>
             </div>`;
@@ -723,6 +769,58 @@ async function loadDocumentosIntoTab(petId) {
 
   // Verificar se imagem pode ser exibida inline
   wrapper.innerHTML = html;
+
+  // Wiring dos botões de ação dos groups de documentos
+  const urlParams2 = new URLSearchParams(window.location.search);
+  const _petIdDocs = urlParams2.get("pet_id") || urlParams2.get("id");
+  wrapper.querySelectorAll(".docs-group").forEach((group) => {
+    const agId = group.dataset.agendamentoId;
+    const agendHref =
+      agId !== "avulso" ? `../agendamento-detalhes.html?id=${agId}` : "#";
+    const btnExcluir = group.querySelector(".btn-doc-excluir");
+    if (btnExcluir)
+      btnExcluir.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (!agId || agId === "avulso") {
+          mostrarNotificacao(
+            "Não é possível excluir documentos avulsos",
+            "error",
+          );
+          return;
+        }
+        _confirmarAcao(
+          "Deseja remover todos os documentos deste grupo? Esta ação não pode ser desfeita.",
+          () => {
+            _apiFetch(
+              `/api/pets/${encodeURIComponent(_petIdDocs)}/documentos/${encodeURIComponent(agId)}`,
+              {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ url: "__all__" }),
+              },
+            )
+              .then(async (r) => {
+                const json = await r.json().catch(() => ({}));
+                if (!r.ok) {
+                  mostrarNotificacao(
+                    json.error || "Erro ao excluir documentos",
+                    "error",
+                  );
+                  return;
+                }
+                mostrarNotificacao(
+                  "Documentos excluídos com sucesso!",
+                  "success",
+                );
+                loadDocumentosIntoTab(_petIdDocs);
+              })
+              .catch(() =>
+                mostrarNotificacao("Erro ao excluir documentos", "error"),
+              );
+          },
+        );
+      });
+  });
 }
 
 function _abrirDoc(url, type) {
@@ -806,17 +904,25 @@ function renderPet(pet, clienteId) {
       clientEl.textContent && clientEl.textContent.trim(),
     );
     // Tentar extrair o nome do cliente a partir de vários campos comuns
+    const _strOrNull = (v) => (v && typeof v === "string" ? v : null);
     const nomeCliente =
       (pet &&
-        ((pet.Cliente && pet.Cliente.nome) ||
-          pet.cliente_nome ||
-          pet.cliente ||
-          pet.owner_name ||
-          pet.nome_cliente ||
-          pet.clienteName)) ||
+        (_strOrNull(pet.Cliente && pet.Cliente.nome) ||
+          _strOrNull(pet.cliente_nome) ||
+          _strOrNull(
+            typeof pet.cliente === "string"
+              ? pet.cliente
+              : pet.cliente && pet.cliente.nome,
+          ) ||
+          _strOrNull(pet.owner_name) ||
+          _strOrNull(pet.nome_cliente) ||
+          _strOrNull(pet.clienteName))) ||
       null;
     const idCliente =
-      (pet && ((pet.Cliente && pet.Cliente.id) || pet.cliente_id)) ||
+      (pet &&
+        ((pet.Cliente && pet.Cliente.id) ||
+          (pet.cliente && pet.cliente.id) ||
+          pet.cliente_id)) ||
       clienteId ||
       "";
 
@@ -930,6 +1036,9 @@ function renderPet(pet, clienteId) {
     } catch (e) {}
   }
   setText("petAtivo", pet.ativo ? "Sim" : "Não");
+
+  // Atualizar botão inativar/reativar conforme estado atual do pet
+  atualizarBotaoInativar(!!pet.ativo);
   setText("petObservacao", pet.observacao || pet.observacoes || "—");
 
   // Alergias - suportar array ou string
@@ -957,21 +1066,18 @@ function renderPet(pet, clienteId) {
   }
   setText("petAlergias", alergiasText);
 
-  // Carregar foto persistida (se houver) para este pet
+  // Carregar foto do banco para este pet
   try {
     const img = document.getElementById("petPhotoImg");
     const fallback = document.getElementById("petAvatar");
-    const key = pet && pet.id ? `pet_${pet.id}_photo` : null;
-    if (key) {
-      const dataUrl = localStorage.getItem(key);
-      if (dataUrl && img) {
-        img.src = dataUrl;
-        img.style.display = "block";
-        if (fallback) fallback.style.display = "none";
-      } else {
-        if (img) img.style.display = "none";
-        if (fallback) fallback.style.display = "flex";
-      }
+    const dataUrl = pet && pet.foto_url;
+    if (dataUrl && img) {
+      img.src = dataUrl;
+      img.style.display = "block";
+      if (fallback) fallback.style.display = "none";
+    } else {
+      if (img) img.style.display = "none";
+      if (fallback) fallback.style.display = "flex";
     }
   } catch (e) {
     /* ignore */
@@ -1131,101 +1237,68 @@ function clearGlobalModalOverlays() {
   }
 }
 
-// Função que chama o backend para marcar o pet como inativo (soft delete)
-async function inativarPet(petId) {
-  if (!petId) throw new Error("petId ausente");
-  const payload = { ativo: false };
-  // tentar relativo
-  let resp = null;
+// Atualiza o texto e cor do botão conforme o estado ativo/inativo do pet
+function atualizarBotaoInativar(ativo) {
+  const btn = document.getElementById("btnInativar");
+  if (!btn) return;
+  if (ativo) {
+    btn.textContent = "Inativar";
+    btn.style.background = "";
+    btn.style.borderColor = "";
+    btn.dataset.estado = "ativo";
+    btn.className = "btn btn-danger";
+  } else {
+    btn.textContent = "Reativar Pet";
+    btn.style.background = "#f97316";
+    btn.style.borderColor = "#f97316";
+    btn.dataset.estado = "inativo";
+    btn.className = "btn";
+    btn.style.color = "#fff";
+  }
+}
+
+// Reativa o pet via PATCH /api/pets/:id/reativar
+async function reativarPet() {
+  const petIdEl = document.getElementById("petId");
+  const petId = petIdEl ? (petIdEl.textContent || "").trim() : null;
+  if (!petId) {
+    showToast("ID do pet não encontrado", "error");
+    return;
+  }
   try {
-    resp = await fetch(`/api/pets/${encodeURIComponent(petId)}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-  } catch (e) {
-    resp = null;
-  }
-
-  if (!resp || !resp.ok) {
-    // tentar backend padrão
-    try {
-      resp = await fetch(
-        `${location.protocol}//localhost:3000/api/pets/${encodeURIComponent(petId)}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        },
-      );
-    } catch (e) {
-      resp = null;
+    const resp = await fetch(
+      `/api/pets/${encodeURIComponent(petId)}/reativar`,
+      { method: "PATCH" },
+    );
+    if (!resp.ok) {
+      const json = await resp.json().catch(() => ({}));
+      throw new Error(json.message || "Erro ao reativar");
     }
+    setText("petAtivo", "Sim");
+    atualizarBotaoInativar(true);
+    showToast("Pet reativado com sucesso", "success");
+  } catch (e) {
+    showToast(
+      "Erro ao reativar pet: " + (e && e.message ? e.message : ""),
+      "error",
+      5000,
+    );
   }
+}
 
-  if (!resp) throw new Error("Sem resposta do servidor");
+// Inativa o pet via PATCH /api/pets/:id/inativar (soft delete — apenas marca ativo=false)
+async function inativarOuExcluirPet(petId) {
+  if (!petId) throw new Error("ID do pet ausente");
+  const resp = await fetch(`/api/pets/${encodeURIComponent(petId)}/inativar`, {
+    method: "PATCH",
+  });
   if (!resp.ok) {
-    const text = await resp.text().catch(() => "");
+    const json = await resp.json().catch(() => ({}));
     throw new Error(
-      text && text.length ? text : "Erro do servidor: " + (resp.status || ""),
+      json.message || "Erro ao inativar pet (status " + resp.status + ")",
     );
   }
   return true;
-}
-
-// Tenta excluir o pet (DELETE). Se o backend não permitir, recorre a inativação (PUT {ativo:false}).
-async function inativarOuExcluirPet(petId) {
-  if (!petId) throw new Error("ID do pet ausente");
-
-  // Primeiro: tentar DELETE
-  try {
-    let resp = null;
-    try {
-      resp = await fetch(`/api/pets/${encodeURIComponent(petId)}`, {
-        method: "DELETE",
-      });
-    } catch (e) {
-      resp = null;
-    }
-
-    if (!resp || !resp.ok) {
-      try {
-        resp = await fetch(
-          `${location.protocol}//localhost:3000/api/pets/${encodeURIComponent(petId)}`,
-          { method: "DELETE" },
-        );
-      } catch (e) {
-        resp = null;
-      }
-    }
-
-    if (resp && resp.ok) return true; // excluído com sucesso
-
-    // Se DELETE não for permitido (405) ou endpoint não existir (404), tentar inativar via PUT
-    if (
-      resp &&
-      (resp.status === 405 || resp.status === 404 || resp.status === 400)
-    ) {
-      // fallback para inativação
-      await inativarPet(petId);
-      return true;
-    }
-
-    // Caso não tenhamos resposta ou esteja com outro erro, tentar fazer PUT como fallback de último recurso
-    try {
-      await inativarPet(petId);
-      return true;
-    } catch (e) {
-      // propagar erro original se possível
-      const msg = resp
-        ? `Erro ao excluir (status ${resp.status})`
-        : "Sem resposta ao tentar excluir";
-      throw new Error(msg + (e && e.message ? ": " + e.message : ""));
-    }
-  } catch (e) {
-    // propagar qualquer erro
-    throw e;
-  }
 }
 
 // Fechar modal de confirmação (utilizado também pelo onclick inline do HTML)
@@ -1254,38 +1327,15 @@ async function confirmarInativacao() {
       return;
     }
     await inativarOuExcluirPet(petId);
-    // mostrar notificação no estilo do sistema (mais visível)
     try {
       mostrarNotificacao("Pet inativado com sucesso", "success");
     } catch (e) {
       showToast("Pet inativado com sucesso", "success");
     }
     closeConfirmDeleteModal();
-    // redirecionar para a página do cliente (se disponível) para não mostrar mais a ficha do pet
-    const params = new URLSearchParams(window.location.search);
-    const clienteIdLocal =
-      params.get("cliente_id") ||
-      params.get("clienteId") ||
-      params.get("cliente") ||
-      params.get("cid");
-    if (clienteIdLocal) {
-      setTimeout(() => {
-        try {
-          window.location.href = `../client-details.html?id=${encodeURIComponent(clienteIdLocal)}`;
-        } catch (e) {
-          window.history.back();
-        }
-      }, 700);
-    } else {
-      // fallback: voltar no histórico
-      setTimeout(() => {
-        try {
-          window.history.back();
-        } catch (e) {
-          location.href = "../clientes.html";
-        }
-      }, 700);
-    }
+    // Atualizar página sem redirecionar
+    setText("petAtivo", "Não");
+    atualizarBotaoInativar(false);
   } catch (e) {
     console.error("Erro ao inativar pet:", e);
     showToast(
@@ -1401,7 +1451,9 @@ async function loadResourceIntoTab(resourceId, petId, clienteId, columns) {
   if (!container) return;
 
   // Montar cabeçalho da tabela baseado em columns
-  const headersHtml = columns.map((c) => `<th>${c.label}</th>`).join("");
+  const headersHtml =
+    columns.map((c) => `<th>${c.label}</th>`).join("") +
+    `<th style="text-align:right;padding-right:48px;width:140px;min-width:140px;">Ações</th>`;
 
   // Personalizar cabeçalho para vacinas (dois controles) ou usar botão padrão
   const headerTitle =
@@ -1517,18 +1569,135 @@ async function loadResourceIntoTab(resourceId, petId, clienteId, columns) {
       "data",
       "periodicidade",
     ]);
+    // Agrupar por grupo_id: sem grupo_id = raiz independente; com grupo_id = sub-item
+    const rootMap = new Map(); // agendamento_id → item
+    const subMap = new Map(); // grupo_id        → [sub-items]
     items.forEach((it) => {
-      const tr = document.createElement("tr");
-      const rowHtml = columns
-        .map((c) => {
-          const val = it[c.key];
-          if (val == null || val === "") return "<td>-</td>";
-          const display = dateKeys.has(c.key) ? formatarData(val) : val;
-          return `<td>${display}</td>`;
-        })
-        .join("");
-      tr.innerHTML = rowHtml;
-      tbody.appendChild(tr);
+      if (!it.grupo_id) {
+        rootMap.set(String(it.agendamento_id), it);
+      } else {
+        const gid = String(it.grupo_id);
+        if (!subMap.has(gid)) subMap.set(gid, []);
+        subMap.get(gid).push(it);
+      }
+    });
+
+    // Ordenar raízes pelo item mais recente do grupo (pode ser uma renovação)
+    const roots = [...rootMap.values()].sort((a, b) => {
+      const getMaxDate = (rootItem) => {
+        const subs = subMap.get(String(rootItem.agendamento_id)) || [];
+        const allDates = [rootItem, ...subs].map((it) =>
+          it.data_aplicacao ? new Date(it.data_aplicacao).getTime() : 0,
+        );
+        return Math.max(...allDates);
+      };
+      return getMaxDate(b) - getMaxDate(a);
+    });
+
+    roots.forEach((rootItem) => {
+      // Juntar raiz + renovações e ordenar: data DESC, desempate por agendamento_id DESC (maior = mais recente)
+      const allInGroup = [
+        rootItem,
+        ...(subMap.get(String(rootItem.agendamento_id)) || []),
+      ].sort((a, b) => {
+        const da = a.data_aplicacao ? new Date(a.data_aplicacao) : new Date(0);
+        const db = b.data_aplicacao ? new Date(b.data_aplicacao) : new Date(0);
+        const diff = db - da;
+        if (diff !== 0) return diff;
+        return (
+          (Number(b.agendamento_id) || 0) - (Number(a.agendamento_id) || 0)
+        );
+      });
+      const principal = allInGroup[0];
+      const subItems = allInGroup.slice(1);
+      const temSub = subItems.length > 0;
+      const grupoId =
+        "grp_" + resourceId + "_" + Math.random().toString(36).slice(2, 8);
+
+      function _buildRowHtml(item, isSub) {
+        return columns
+          .map((c) => {
+            const val = item[c.key];
+            if (val == null || val === "")
+              return `<td${isSub ? ' class="td-subdose"' : ""}>-</td>`;
+            const display = dateKeys.has(c.key) ? formatarData(val) : val;
+            return `<td${isSub ? ' class="td-subdose"' : ""}>${display}</td>`;
+          })
+          .join("");
+      }
+
+      // Linha principal
+      const trP = document.createElement("tr");
+      trP.className = "tr-principal";
+      const expandBtn = temSub
+        ? `<button class="btn-acao btn-expand" title="Ver ${subItems.length} dose(s) anterior(es)" data-target="${grupoId}"><i class="fas fa-chevron-down"></i></button>`
+        : `<span class="btn-acao-placeholder"></span>`;
+      trP.innerHTML =
+        _buildRowHtml(principal, false) +
+        `<td class="td-acoes">${expandBtn}<button class="btn-acao btn-renovar" title="Renovar"><i class="fas fa-sync-alt"></i></button><button class="btn-acao btn-editar" title="Editar"><i class="fas fa-pen"></i></button><button class="btn-acao btn-excluir" title="Excluir"><i class="fas fa-trash-alt"></i></button></td>`;
+
+      trP
+        .querySelector(".btn-renovar")
+        .addEventListener("click", () =>
+          _renovarRegistroItem(resourceId, principal, petId, clienteId),
+        );
+      trP
+        .querySelector(".btn-editar")
+        .addEventListener("click", () =>
+          _editarRegistroItem(resourceId, principal, petId, clienteId),
+        );
+      trP
+        .querySelector(".btn-excluir")
+        .addEventListener("click", () =>
+          _excluirRegistroItem(
+            resourceId,
+            principal.agendamento_id,
+            petId,
+            clienteId,
+          ),
+        );
+
+      if (temSub) {
+        const btnEx = trP.querySelector(".btn-expand");
+        btnEx.addEventListener("click", () => {
+          const isOpen = btnEx.classList.toggle("expanded");
+          tbody
+            .querySelectorAll(`[data-grupo="${grupoId}"]`)
+            .forEach((r) => (r.style.display = isOpen ? "" : "none"));
+          btnEx.querySelector("i").className = isOpen
+            ? "fas fa-chevron-up"
+            : "fas fa-chevron-down";
+        });
+      }
+
+      tbody.appendChild(trP);
+
+      // Sub-linhas (doses anteriores)
+      subItems.forEach((sub) => {
+        const trS = document.createElement("tr");
+        trS.className = "tr-subdose";
+        trS.dataset.grupo = grupoId;
+        trS.style.display = "none";
+        trS.innerHTML =
+          _buildRowHtml(sub, true) +
+          `<td class="td-acoes td-subdose"><span class="btn-acao-placeholder"></span><button class="btn-acao btn-editar btn-editar-sub" title="Editar"><i class="fas fa-pen"></i></button><button class="btn-acao btn-excluir" title="Excluir"><i class="fas fa-trash-alt"></i></button></td>`;
+        trS
+          .querySelector(".btn-editar-sub")
+          .addEventListener("click", () =>
+            _editarRegistroItem(resourceId, sub, petId, clienteId),
+          );
+        trS
+          .querySelector(".btn-excluir")
+          .addEventListener("click", () =>
+            _excluirRegistroItem(
+              resourceId,
+              sub.agendamento_id,
+              petId,
+              clienteId,
+            ),
+          );
+        tbody.appendChild(trS);
+      });
     });
   } catch (e) {
     console.warn("Erro ao carregar resource", resourceId, e);
@@ -2082,9 +2251,16 @@ function initPetPhotoControls() {
           0.65,
         );
         try {
-          localStorage.setItem(`pet_${petId}_photo`, compressedDataUrl);
+          const resp = await fetch(`/api/pets/${petId}/foto`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ foto_url: compressedDataUrl }),
+          });
+          if (!resp.ok) throw new Error("Falha ao salvar foto no servidor");
         } catch (err) {
           console.error("Falha ao salvar foto", err);
+          mostrarNotificacao("Erro ao salvar foto", "error");
+          return;
         }
         // atualizar UI
         if (img) {
@@ -2113,36 +2289,45 @@ function initPetPhotoControls() {
     });
   }
 
-  // On load: aplicar foto se já existir no localStorage
+  // On load: aplicar foto a partir do banco (API)
   (function applySavedPhoto() {
     try {
       const urlParams = new URLSearchParams(window.location.search);
       const petId = urlParams.get("pet_id") || urlParams.get("id");
       if (!petId) return;
-      const key = `pet_${petId}_photo`;
-      const dataUrl = localStorage.getItem(key);
-      if (dataUrl && img) {
-        img.src = dataUrl;
-        img.style.display = "block";
-        if (fallback) fallback.style.display = "none";
-        if (removeBtn) removeBtn.style.display = "inline-block";
-        try {
-          if (wrapper && wrapper.classList) {
-            wrapper.classList.add("has-photo");
-            wrapper.classList.remove("no-photo");
+      fetch(`/api/pets/${petId}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((petData) => {
+          const dataUrl =
+            petData &&
+            (petData.foto_url || (petData.pet && petData.pet.foto_url));
+          if (dataUrl && img) {
+            img.src = dataUrl;
+            img.style.display = "block";
+            if (fallback) fallback.style.display = "none";
+            if (removeBtn) removeBtn.style.display = "inline-block";
+            try {
+              if (wrapper && wrapper.classList) {
+                wrapper.classList.add("has-photo");
+                wrapper.classList.remove("no-photo");
+              }
+            } catch (e) {}
+          } else {
+            if (img) img.style.display = "none";
+            if (fallback) fallback.style.display = "flex";
+            if (removeBtn) removeBtn.style.display = "none";
+            try {
+              if (wrapper && wrapper.classList) {
+                wrapper.classList.add("no-photo");
+                wrapper.classList.remove("has-photo");
+              }
+            } catch (e) {}
           }
-        } catch (e) {}
-      } else {
-        if (img) img.style.display = "none";
-        if (fallback) fallback.style.display = "flex";
-        if (removeBtn) removeBtn.style.display = "none";
-        try {
-          if (wrapper && wrapper.classList) {
-            wrapper.classList.add("no-photo");
-            wrapper.classList.remove("has-photo");
-          }
-        } catch (e) {}
-      }
+        })
+        .catch(() => {
+          if (img) img.style.display = "none";
+          if (fallback) fallback.style.display = "flex";
+        });
     } catch (e) {
       /* ignore */
     }
@@ -2159,13 +2344,12 @@ function initPetPhotoControls() {
         mostrarNotificacao("ID do pet ausente", "error");
         return;
       }
-      const key = `pet_${petId}_photo`;
-      try {
-        localStorage.removeItem(key);
-      } catch (err) {
-        console.error("Falha ao remover foto", err);
-      }
-      // atualizar UI
+      fetch(`/api/pets/${petId}/foto`, { method: "DELETE" })
+        .then((r) => (r.ok ? r.json() : Promise.reject()))
+        .catch((err) => {
+          console.error("Falha ao remover foto", err);
+        });
+      // atualizar UI imediatamente
       if (img) {
         img.src = "";
         img.style.display = "none";
@@ -2788,3 +2972,409 @@ function _abrirModalAntiparasitario(petId) {
 document.addEventListener("DOMContentLoaded", function () {
   initPetPhotoControls();
 });
+
+// =====================================================================
+// AÇÕES DE REGISTRO — Renovar, Editar, Excluir (Vacinas/Vermífugos/Antiparasitários)
+// =====================================================================
+
+/** Incrementa o número da dose. Ex: "1 dose" → "2 dose", "2ª" → "3ª", "1" → "2" */
+function _incrementarDose(dose) {
+  if (!dose || dose === "-") return "";
+  const m = dose.match(/(\d+)/);
+  if (m) {
+    const next = parseInt(m[1]) + 1;
+    return dose.replace(/\d+/, String(next));
+  }
+  return dose;
+}
+
+/** Abre modal pré-preenchido para RENOVAR (cria novo registro com dose auto-incrementada) */
+function _renovarRegistroItem(resourceId, item, petId, clienteId) {
+  const hoje = new Date().toISOString().slice(0, 10);
+  const cfg = _buildRegistroConfig(resourceId, petId, clienteId, null, {
+    produto: item.produto || item.vacina || "",
+    lote: item.lote || "",
+    dose: _incrementarDose(item.dose || ""),
+    profissional: item.profissional || "",
+    dataAplic: hoje,
+    renovacao: item.renovacao || "",
+    grupo_id: item.grupo_id || item.agendamento_id,
+  });
+  if (cfg) _abrirModalGenericoRegistro(cfg);
+}
+
+/** Abre modal pré-preenchido para EDITAR (atualiza o registro existente no banco) */
+function _editarRegistroItem(resourceId, item, petId, clienteId) {
+  const agendamentoId = item.agendamento_id;
+  if (!agendamentoId) {
+    mostrarNotificacao(
+      "Não é possível editar: agendamento não identificado",
+      "error",
+    );
+    return;
+  }
+  // Converter data brasileira dd/mm/yyyy → yyyy-mm-dd para o input date
+  const dateToInput = (val) => {
+    if (!val || val === "-") return "";
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(val)) {
+      const [d, m, y] = val.split("/");
+      return `${y}-${m}-${d}`;
+    }
+    if (/^\d{4}-\d{2}-\d{2}/.test(val)) return val.slice(0, 10);
+    return "";
+  };
+  const cfg = _buildRegistroConfig(
+    resourceId,
+    petId,
+    clienteId,
+    agendamentoId,
+    {
+      produto: item.produto || item.vacina || "",
+      lote: item.lote || "",
+      dose: item.dose || "",
+      profissional: item.profissional || "",
+      dataAplic:
+        dateToInput(item.data_aplicacao) ||
+        new Date().toISOString().slice(0, 10),
+      renovacao: item.renovacao || "",
+    },
+  );
+  if (cfg) _abrirModalGenericoRegistro(cfg);
+}
+
+/** Modal de confirmação customizado no estilo do sistema */
+function _confirmarAcao(mensagem, onConfirmar) {
+  const id = "_modalConfirmarAcao";
+  const antigo = document.getElementById(id);
+  if (antigo) antigo.remove();
+
+  const overlay = document.createElement("div");
+  overlay.id = id;
+  overlay.style.cssText = `
+    position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;
+    background:rgba(0,0,0,.45);
+  `;
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:12px;width:420px;max-width:94vw;
+                box-shadow:0 8px 40px rgba(0,0,0,.22);display:flex;flex-direction:column;overflow:hidden;">
+      <div style="padding:18px 24px 14px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:10px;">
+        <span style="width:34px;height:34px;border-radius:50%;background:#fef2f2;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <i class="fas fa-trash-alt" style="color:#dc2626;font-size:15px;"></i>
+        </span>
+        <span style="font-size:16px;font-weight:700;color:#111">Confirmar exclusão</span>
+      </div>
+      <div style="padding:20px 24px 8px;">
+        <p style="margin:0;font-size:14px;color:#374151;line-height:1.6;">${mensagem}</p>
+        <p style="margin:8px 0 0;font-size:13px;color:#6b7280;">Esta ação não pode ser desfeita.</p>
+      </div>
+      <div style="padding:16px 24px 20px;display:flex;gap:10px;justify-content:flex-end;">
+        <button type="button" id="${id}_cancelar"
+          style="padding:8px 20px;border-radius:8px;border:1px solid #d1d5db;background:#f9fafb;
+                 color:#374151;font-size:14px;cursor:pointer;font-weight:500;">Cancelar</button>
+        <button type="button" id="${id}_confirmar"
+          style="padding:8px 22px;border-radius:8px;border:none;background:#dc2626;
+                 color:#fff;font-size:14px;font-weight:600;cursor:pointer;">Excluir</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const fechar = () => overlay.remove();
+  overlay.querySelector(`#${id}_cancelar`).addEventListener("click", fechar);
+  overlay.querySelector(`#${id}_confirmar`).addEventListener("click", () => {
+    fechar();
+    onConfirmar();
+  });
+  // Fechar ao clicar fora
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) fechar();
+  });
+}
+
+/** Confirma e exclui o registro do banco via DELETE */
+function _excluirRegistroItem(resourceId, agendamentoId, petId, clienteId) {
+  if (
+    !agendamentoId ||
+    agendamentoId === "undefined" ||
+    agendamentoId === "null"
+  ) {
+    mostrarNotificacao(
+      "Não é possível excluir: agendamento não identificado",
+      "error",
+    );
+    return;
+  }
+  const nomes = {
+    vacinas: "vacina",
+    vermifugos: "vermífugo",
+    antiparasitarios: "antiparasitário",
+  };
+  const nomeItem = nomes[resourceId] || "registro";
+
+  _confirmarAcao(
+    `Deseja realmente excluir este(a) <strong>${nomeItem}</strong>?`,
+    async () => {
+      try {
+        const r = await _apiFetch(
+          `/api/pets/${encodeURIComponent(petId)}/${resourceId}/${encodeURIComponent(agendamentoId)}`,
+          { method: "DELETE" },
+        );
+        const json = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          mostrarNotificacao(
+            json.error || `Erro ao excluir ${nomeItem}`,
+            "error",
+          );
+          return;
+        }
+        mostrarNotificacao(
+          `${nomeItem.charAt(0).toUpperCase() + nomeItem.slice(1)} excluído(a) com sucesso!`,
+          "success",
+        );
+        _recarregarTabResource(resourceId, petId, clienteId);
+      } catch (e) {
+        mostrarNotificacao(`Erro ao excluir ${nomeItem}`, "error");
+      }
+    },
+  );
+}
+
+/** Recarrega a aba de resource com as colunas padrão */
+function _recarregarTabResource(resourceId, petId, clienteId) {
+  const colunasMap = {
+    vacinas: [
+      { key: "data_aplicacao", label: "Data aplicação" },
+      { key: "produto", label: "Produto" },
+      { key: "lote", label: "Lote" },
+      { key: "dose", label: "Dose" },
+      { key: "data_renovacao", label: "Renovação" },
+      { key: "profissional", label: "Profissional" },
+    ],
+    vermifugos: [
+      { key: "data_aplicacao", label: "Data aplicação" },
+      { key: "produto", label: "Produto" },
+      { key: "lote", label: "Lote" },
+      { key: "dose", label: "Dose" },
+      { key: "periodicidade", label: "Periodicidade" },
+      { key: "data_renovacao", label: "Data renovação" },
+    ],
+    antiparasitarios: [
+      { key: "data_aplicacao", label: "Data aplicação" },
+      { key: "produto", label: "Produto" },
+      { key: "lote", label: "Lote" },
+      { key: "dose", label: "Dose" },
+      { key: "periodicidade", label: "Periodicidade" },
+      { key: "data_renovacao", label: "Data renovação" },
+    ],
+  };
+  const cols = colunasMap[resourceId];
+  if (cols) loadResourceIntoTab(resourceId, petId, clienteId, cols);
+}
+
+/** Monta configurações para o modal genérico Renovar/Editar */
+function _buildRegistroConfig(
+  resourceId,
+  petId,
+  clienteId,
+  agendamentoId,
+  dados,
+) {
+  const isEditar = agendamentoId != null;
+  const map = {
+    vacinas: {
+      titulo: isEditar ? "Editar Vacina" : "Renovar Vacina",
+      cor: "#10b981",
+      apiPath: isEditar
+        ? `/api/pets/${petId}/vacinas/${agendamentoId}`
+        : `/api/pets/${petId}/vacinas`,
+      method: isEditar ? "PUT" : "POST",
+      dropdownFiltros: ["vacina"],
+    },
+    vermifugos: {
+      titulo: isEditar ? "Editar Vermífugo" : "Renovar Vermífugo",
+      cor: "#3b82f6",
+      apiPath: isEditar
+        ? `/api/pets/${petId}/vermifugos/${agendamentoId}`
+        : `/api/pets/${petId}/vermifugos`,
+      method: isEditar ? "PUT" : "POST",
+      dropdownFiltros: ["vermífugo", "vermifugos"],
+    },
+    antiparasitarios: {
+      titulo: isEditar ? "Editar Antiparasitário" : "Renovar Antiparasitário",
+      cor: "#f59e0b",
+      apiPath: isEditar
+        ? `/api/pets/${petId}/antiparasitarios/${agendamentoId}`
+        : `/api/pets/${petId}/antiparasitarios`,
+      method: isEditar ? "PUT" : "POST",
+      dropdownFiltros: ["antiparasitário", "antiparasitarios"],
+    },
+  };
+  const cfg = map[resourceId];
+  if (!cfg) return null;
+  return {
+    ...cfg,
+    dados,
+    resourceId,
+    petId,
+    clienteId,
+    agendamentoId,
+    isEditar,
+    grupoId: dados.grupo_id || null,
+  };
+}
+
+/** Abre modal genérico de Renovar/Editar com campos pré-preenchidos */
+async function _abrirModalGenericoRegistro(config) {
+  const {
+    titulo,
+    cor,
+    apiPath,
+    method,
+    dropdownFiltros,
+    dados,
+    resourceId,
+    petId,
+    clienteId,
+  } = config;
+
+  const fields = `
+    <div style="display:flex;flex-direction:column;gap:4px;">
+      <label style="font-size:13px;font-weight:600;color:#374151">Produto *</label>
+      <div class="di-wrap">
+        <input id="grm_nome" type="text" value="${(dados.produto || "").replace(/"/g, "&quot;")}"
+          autocomplete="off"
+          style="width:100%;box-sizing:border-box;padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;">
+        <div id="grm_nome_list"></div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <label style="font-size:13px;font-weight:600;color:#374151">Data de aplicação</label>
+        <input id="grm_dataAplic" type="date" value="${dados.dataAplic || ""}"
+          style="padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <label style="font-size:13px;font-weight:600;color:#374151">Dose</label>
+        <input id="grm_dose" type="text" value="${(dados.dose || "").replace(/"/g, "&quot;")}" placeholder="Ex: 1 dose"
+          style="padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;">
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <label style="font-size:13px;font-weight:600;color:#374151">Lote</label>
+        <input id="grm_lote" type="text" value="${(dados.lote || "").replace(/"/g, "&quot;")}" placeholder="Ex: A1234"
+          style="padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <label style="font-size:13px;font-weight:600;color:#374151">Renovação</label>
+        <select id="grm_renovacao"
+          style="padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;background:#fff;">
+          <option value="">— Selecionar —</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:4px;">
+      <label style="font-size:13px;font-weight:600;color:#374151">Profissional</label>
+      <select id="grm_profissional"
+        style="padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;background:#fff;width:100%;">
+        <option value="">— Selecionar —</option>
+      </select>
+    </div>
+  `;
+
+  let dropdownCtrl = { getSelected: () => null };
+
+  _criarModalRegistro(
+    "_modalGenericoRegistroPet",
+    titulo,
+    cor,
+    fields,
+    async (fechar) => {
+      const itemSel = dropdownCtrl.getSelected();
+      const nomeDigitado = document.getElementById("grm_nome").value.trim();
+      const nome = itemSel ? itemSel.nome : nomeDigitado;
+      if (!nome) {
+        mostrarNotificacao("Informe o nome do produto", "error");
+        return;
+      }
+      const payload = {
+        nome,
+        dataAplic: document.getElementById("grm_dataAplic").value,
+        dose: document.getElementById("grm_dose").value.trim(),
+        lote: document.getElementById("grm_lote").value.trim(),
+        renovacao: document.getElementById("grm_renovacao").value,
+        profissional: document.getElementById("grm_profissional").value,
+        grupo_id: config.grupoId || null,
+      };
+      try {
+        const r = await _apiFetch(apiPath, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const json = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          mostrarNotificacao(json.error || "Erro ao salvar", "error");
+          return;
+        }
+        mostrarNotificacao("Salvo com sucesso!", "success");
+        fechar();
+        _recarregarTabResource(resourceId, petId, clienteId);
+      } catch (e) {
+        mostrarNotificacao("Erro ao salvar", "error");
+      }
+    },
+  );
+
+  // Carregar dropdown e pré-selecionar
+  _carregarDropdownItens("grm_nome", "grm_nome_list", dropdownFiltros).then(
+    (ctrl) => {
+      dropdownCtrl = ctrl;
+      if (dados.produto) {
+        const el = document.getElementById("grm_nome");
+        if (el) el.value = dados.produto;
+      }
+    },
+  );
+
+  // Carregar periodicidades e pré-selecionar renovação
+  _carregarPeriodicidadesSelect("grm_renovacao").then(() => {
+    if (dados.renovacao) {
+      const sel = document.getElementById("grm_renovacao");
+      if (!sel) return;
+      for (const opt of sel.options) {
+        if (
+          opt.value === dados.renovacao ||
+          opt.textContent.trim() === dados.renovacao.trim()
+        ) {
+          opt.selected = true;
+          break;
+        }
+      }
+      if (!sel.value) sel.value = dados.renovacao;
+    }
+  });
+
+  // Carregar profissionais e pré-selecionar
+  _carregarProfissionaisSelect("grm_profissional").then(() => {
+    if (dados.profissional) {
+      const sel = document.getElementById("grm_profissional");
+      if (!sel) return;
+      for (const opt of sel.options) {
+        if (
+          opt.value === dados.profissional ||
+          opt.textContent.trim() === dados.profissional.trim()
+        ) {
+          opt.selected = true;
+          break;
+        }
+      }
+      if (!sel.value) sel.value = dados.profissional;
+    }
+  });
+
+  setTimeout(() => {
+    const el = document.getElementById("grm_nome");
+    if (el) el.focus();
+  }, 80);
+}
