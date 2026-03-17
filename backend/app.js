@@ -29,6 +29,13 @@ app.use(bodyParser.json({ limit: "10mb" })); // aumentar limite para aceitar log
 app.use(bodyParser.urlencoded({ limit: "10mb", extended: true }));
 app.use("/uploads", express.static(path.join(__dirname, "../uploads"))); // imagens públicas
 
+// Rota para favicon.ico (browsers buscam este path automaticamente)
+app.get("/favicon.ico", (req, res) => {
+  res.sendFile(
+    path.join(__dirname, "../frontend/fivecon/Design sem nome (17).png"),
+  );
+});
+
 // Configurar middleware para desabilitar cache de arquivos estáticos
 app.use(
   express.static(path.join(__dirname, "../frontend"), {
@@ -64,8 +71,10 @@ const centroRoutes = require("./routes/centroRoutes");
 const marcasRoutes = require("./routes/marcasRoutes");
 const tipoEntradasRoutes = require("./routes/tipoEntradasRoutes");
 const vendaRoutes = require("./routes/vendaRoutes");
+const orcamentoRoutes = require("./routes/orcamentoRoutes");
 const caixaRoutes = require("./routes/caixaRoutes");
 const movimentoCaixaRoutes = require("./routes/movimentoCaixaRoutes");
+const posicaoCaixaRoutes = require("./routes/posicaoCaixaRoutes");
 const profissionalRoutes = require("./routes/profissionalRoutes");
 const empresaRoutes = require("./routes/empresaRoutes");
 const perfilProdutoRoutes = require("./routes/perfilProdutoRoutes");
@@ -1185,8 +1194,10 @@ app.use("/api/tipo-entradas", tipoEntradasRoutes);
   }
 })();
 app.use("/api/vendas", vendaRoutes);
+app.use("/api/orcamentos", orcamentoRoutes);
 app.use("/api/caixas", caixaRoutes);
 app.use("/api/movimentos-caixa", movimentoCaixaRoutes);
+app.use("/api/posicao-caixa", posicaoCaixaRoutes);
 app.use("/api/profissionais", profissionalRoutes);
 app.use("/api/empresas", empresaRoutes);
 app.use("/api/perfis-produto", perfilProdutoRoutes);
@@ -1328,6 +1339,32 @@ try {
 } catch (e) {
   console.warn(
     "Aviso: falha ao carregar/sincronizar modelo Fornecedor:",
+    e && e.message,
+  );
+}
+
+// Garantir que a tabela movimentacoes_caixa (Posição de Caixa) exista
+try {
+  const { PagamentoCaixa } = require("./models/PagamentoCaixa");
+  if (!SKIP_DB_SYNC) {
+    if (PagamentoCaixa && typeof PagamentoCaixa.sync === "function") {
+      PagamentoCaixa.sync({ alter: true })
+        .then(() => {
+          console.log(
+            "Tabela `movimentacoes_caixa` sincronizada/atualizada ✅",
+          );
+        })
+        .catch((err) => {
+          console.warn(
+            "Não foi possível sincronizar tabela `movimentacoes_caixa`:",
+            err && err.message,
+          );
+        });
+    }
+  }
+} catch (e) {
+  console.warn(
+    "Aviso: falha ao carregar/sincronizar modelo PagamentoCaixa:",
     e && e.message,
   );
 }

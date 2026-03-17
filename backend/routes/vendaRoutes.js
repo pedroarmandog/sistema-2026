@@ -1,11 +1,370 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const vendaController = require('../controllers/vendaController');
+const vendaController = require("../controllers/vendaController");
+const { Venda, Empresa } = require("../models");
+const path = require("path");
+const fs = require("fs");
 
-router.get('/', vendaController.listarVendas);
-router.get('/:id', vendaController.buscarVenda);
-router.post('/', vendaController.criarVenda);
-router.put('/:id', vendaController.atualizarVenda);
-router.delete('/:id', vendaController.deletarVenda);
+// Comprovante PDF (cupom fiscal) - DEVE vir antes de /:id
+router.get("/:id/comprovante", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const PDFDocument = require("pdfkit");
+
+    const venda = await Venda.findByPk(id);
+    if (!venda) return res.status(404).json({ erro: "Venda não encontrada" });
+
+    const mmToPt = (mm) => (mm * 72) / 25.4;
+    const RECEIPT_MM = 72;
+    const receiptWidth = Math.round(mmToPt(RECEIPT_MM));
+    const receiptHeight = Math.round(mmToPt(400));
+    const smallMargin = Math.round(mmToPt(2));
+
+    const doc = new PDFDocument({
+      size: [receiptWidth, receiptHeight],
+      margins: {
+        top: smallMargin,
+        bottom: smallMargin,
+        left: smallMargin,
+        right: smallMargin,
+      },
+    });
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename=comprovante-venda-${id}.pdf`,
+    );
+    doc.pipe(res);
+
+    const left = doc.page.margins.left;
+    const right = doc.page.width - doc.page.margins.right;
+    const pageWidth = doc.page.width;
+    const contentWidth = right - left;
+    const lineHeight = 12;
+
+    // --- Logo e dados da empresa ---
+    let logoRendered = false;
+    let empresa = null;
+    try {
+      empresa = await Empresa.findOne({
+        where: { ativa: true },
+        order: [["id", "ASC"]],
+      });
+      let logoPath = path.join(
+        __dirname,
+        "../../frontend/logos/logo_pet_cria-removebg-preview.png",
+      );
+      if (empresa && empresa.logo) {
+        const candidate = path.join(__dirname, "../../uploads", empresa.logo);
+        if (fs.existsSync(candidate)) logoPath = candidate;
+      }
+      if (fs.existsSync(logoPath)) {
+        const maxLogoWidth = Math.round(pageWidth * 0.6);
+        const logoWidth = Math.min(maxLogoWidth, Math.round(mmToPt(30)));
+        const logoX = (pageWidth - logoWidth) / 2;
+        const logoY = smallMargin + 4;
+        try {
+          doc.image(logoPath, logoX, logoY, {
+            width: logoWidth,
+            align: "center",
+          });
+          logoRendered = true;
+        } catch (e) {
+          logoRendered = false;
+        }
+        const logoEstimatedHeight = Math.round(logoWidth * 0.9);
+        var y = logoY + logoEstimatedHeight + 2;
+      }
+    } catch (e) {
+      /* fallback */
+    }
+
+    if (!logoRendered) {
+      doc
+        .fillColor("#000")
+        .fontSize(18)
+        .font("Helvetica-Bold")
+        .text("PET9", { align: "center" });
+      var y = doc.y + 6;
+    }
+
+    // Razão social e contato
+    if (empresa && empresa.razaoSocial) {
+      doc
+        .fontSize(10)
+        .font("Helvetica-Bold")
+        .fillColor("#000")
+        .text(String(empresa.razaoSocial), left, y, {
+          width: contentWidth,
+          align: "center",
+        });
+      y += lineHeight + 2;
+    }
+    if (empresa && empresa.telefone) {
+      doc
+        .fontSize(8)
+        .font("Helvetica")
+        .fillColor("#000")
+        .text(`Contato: ${empresa.telefone}`, left, y, {
+          width: contentWidth,
+          align: "center",
+        });
+      y += lineHeight;
+    }
+
+    // 1ª Via
+    doc
+      .fontSize(8)
+      .font("Helvetica")
+      .text("1ª Via", left, y, { width: contentWidth, align: "right" });
+    y += lineHeight + 4;
+
+    // Nº venda e emissão
+    const dataEmissao = venda.data
+      ? new Date(venda.data).toLocaleDateString("pt-BR") +
+        " " +
+        new Date(venda.data).toLocaleTimeString("pt-BR", {
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : new Date().toLocaleDateString("pt-BR");
+    doc.fontSize(9).font("Helvetica-Bold").fillColor("#000");
+    doc.text(`Venda: ${venda.id}`, left, y);
+    doc.font("Helvetica").fontSize(8).text(`Emissão: ${dataEmissao}`, left, y, {
+      width: contentWidth,
+      align: "right",
+    });
+    y += lineHeight + 6;
+
+    // --- Produto/Serviço ---
+    // Linha pontilhada
+    doc.save();
+    doc.lineWidth(0.5);
+    doc.dash(2, { space: 3 });
+    doc.moveTo(left, y).lineTo(right, y).stroke();
+    doc.undash();
+    doc.restore();
+    y += 6;
+
+    doc
+      .fontSize(9)
+      .font("Helvetica-Bold")
+      .fillColor("#000")
+      .text("Produto/Serviço", left, y, {
+        width: contentWidth,
+        align: "center",
+      });
+    y += lineHeight + 4;
+
+    // Cabeçalho tabela
+    doc.fontSize(7).font("Helvetica-Bold");
+    doc.text("Cód.", left, y, { width: 22 });
+    doc.text("Desc.", left + 22, y, { width: 40 });
+    doc.text("Qtd.", left + 62, y, { width: 20, align: "center" });
+    doc.text("Unid.", left + 82, y, { width: 22, align: "center" });
+    doc.text("Vlr Unit.", left + 104, y, { width: 30, align: "right" });
+    doc.text("Desc%", left + 134, y, { width: 26, align: "right" });
+    const totalColX = left + 160;
+    doc.text("Total", totalColX, y, { width: 32, align: "right" });
+    y += lineHeight + 2;
+
+    doc.save();
+    doc.lineWidth(0.3);
+    doc.moveTo(left, y).lineTo(right, y).stroke();
+    doc.restore();
+    y += 4;
+
+    // Itens
+    const itens = Array.isArray(venda.itens) ? venda.itens : [];
+    let totalBruto = 0;
+    let totalDescontoItens = 0;
+    let totalQuantidade = 0;
+
+    doc.font("Helvetica").fontSize(7).fillColor("#000");
+    for (const item of itens) {
+      const prod = item.produto || {};
+      const codigo = prod.id || "-";
+      const nome = prod.nome || item.nome || item.descricao || "-";
+      const qtd = parseFloat(item.quantidade || item.qtd || 1);
+      const unitario = parseFloat(item.valorUnitario || item.preco || 0);
+      const desconto = parseFloat(item.desconto || 0);
+      const bruto = qtd * unitario;
+      const total = parseFloat(
+        item.totalFinal || item.total || bruto - (bruto * desconto) / 100,
+      );
+
+      totalBruto += bruto;
+      totalDescontoItens += bruto - total;
+      totalQuantidade += qtd;
+
+      if (y > doc.page.height - 100) {
+        doc.addPage();
+        y = smallMargin + 10;
+      }
+
+      // Linha do item: código - nome em uma linha, valores abaixo
+      doc.font("Helvetica").fontSize(7);
+      doc.text(`${codigo} - ${nome}`, left, y, { width: contentWidth - 50 });
+      doc.text(`${qtd} KG x R$`, left, y + lineHeight, { width: 80 });
+      doc.text(`${unitario.toFixed(2)}`, left + 50, y + lineHeight, {
+        width: 40,
+      });
+      doc.text(`- ${desconto.toFixed(2)}%`, left + 90, y + lineHeight, {
+        width: 40,
+      });
+      doc.font("Helvetica-Bold").text(`R$ ${total.toFixed(2)}`, left, y, {
+        width: contentWidth,
+        align: "right",
+      });
+      doc.font("Helvetica");
+      y += lineHeight * 2 + 4;
+    }
+
+    // --- EM CASO DE DEVOLUÇÃO ---
+    y += 4;
+    doc.save();
+    doc.lineWidth(0.5);
+    doc.dash(2, { space: 3 });
+    doc.moveTo(left, y).lineTo(right, y).stroke();
+    doc.undash();
+    doc.restore();
+    y += 6;
+
+    doc
+      .fontSize(7)
+      .font("Helvetica-Bold")
+      .text("EM CASO DE DEVOLUCAO APRESENTAR ESTE DOCUMENTO.", left, y, {
+        width: contentWidth,
+        align: "center",
+      });
+    y += lineHeight + 6;
+
+    // --- Formas de Pagamento ---
+    doc.save();
+    doc.lineWidth(0.5);
+    doc.dash(2, { space: 3 });
+    doc.moveTo(left, y).lineTo(right, y).stroke();
+    doc.undash();
+    doc.restore();
+    y += 6;
+
+    doc
+      .fontSize(9)
+      .font("Helvetica-Bold")
+      .text("Formas de Pagamento", left, y, {
+        width: contentWidth,
+        align: "center",
+      });
+    y += lineHeight + 4;
+
+    const pagamentos = Array.isArray(venda.pagamentos) ? venda.pagamentos : [];
+    const formaLabel = (f) => {
+      if (!f) return "";
+      const map = {
+        dinheiro: "Dinheiro",
+        debito: "Débito",
+        credito: "Crédito",
+        pix: "PIX",
+        crediario: "Crediário",
+        cheque: "Cheque",
+        haver: "Haver",
+      };
+      return map[String(f).toLowerCase()] || String(f);
+    };
+
+    doc.font("Helvetica").fontSize(8);
+    for (const p of pagamentos) {
+      const label = formaLabel(p.forma || p.tipo || "");
+      const valor = p.valor != null ? `R$ ${Number(p.valor).toFixed(2)}` : "";
+      doc.text(label, left + 4, y, { width: contentWidth - 8 });
+      if (valor)
+        doc.text(valor, left + 4, y, {
+          width: contentWidth - 8,
+          align: "right",
+        });
+      y += lineHeight + 2;
+    }
+
+    y += 6;
+
+    // --- Totais ---
+    doc.save();
+    doc.lineWidth(0.5);
+    doc.dash(2, { space: 3 });
+    doc.moveTo(left, y).lineTo(right, y).stroke();
+    doc.undash();
+    doc.restore();
+    y += 6;
+
+    doc
+      .fontSize(9)
+      .font("Helvetica-Bold")
+      .text("Totais", left, y, { width: contentWidth, align: "center" });
+    y += lineHeight + 4;
+
+    const totalPago = parseFloat(venda.totalPago) || 0;
+    const totaisVenda = venda.totais || {};
+    const descontoGeral = parseFloat(totaisVenda.desconto || 0);
+    const totalDos = totalBruto - totalDescontoItens;
+    const totalLiquido = totalPago > 0 ? totalPago : totalDos - descontoGeral;
+
+    doc.font("Helvetica").fontSize(8);
+    const printTotalLine = (label, value) => {
+      doc.text(label, left + 4, y, { width: contentWidth - 8 });
+      doc.text(value, left + 4, y, { width: contentWidth - 8, align: "right" });
+      y += lineHeight + 1;
+    };
+
+    printTotalLine("Total Quantidade:", totalQuantidade.toFixed(2));
+    printTotalLine("Total Bruto:", `R$ ${totalBruto.toFixed(2)}`);
+    printTotalLine(
+      "(-) Desconto Itens:",
+      `R$ ${totalDescontoItens.toFixed(2)}`,
+    );
+    printTotalLine("Total dos:", `R$ ${totalDos.toFixed(2)}`);
+    printTotalLine("(-) Desconto:", `R$ ${descontoGeral.toFixed(2)}`);
+    doc.font("Helvetica-Bold").fontSize(9);
+    printTotalLine("Total Líquido:", `R$ ${totalLiquido.toFixed(2)}`);
+
+    // --- Assinatura ---
+    y += 30;
+    if (y > doc.page.height - 40) {
+      doc.addPage();
+      y = smallMargin + 20;
+    }
+    const sigLeft = left + 12;
+    const sigRight = right - 12;
+    doc.moveTo(sigLeft, y).lineTo(sigRight, y).stroke();
+    y += 6;
+    doc
+      .fontSize(9)
+      .font("Helvetica")
+      .text("Assinatura", sigLeft, y, {
+        width: sigRight - sigLeft,
+        align: "center",
+      });
+
+    // Linha pontilhada final
+    y += 20;
+    doc.save();
+    doc.lineWidth(0.5);
+    doc.dash(2, { space: 3 });
+    doc.moveTo(left, y).lineTo(right, y).stroke();
+    doc.undash();
+    doc.restore();
+
+    doc.end();
+  } catch (error) {
+    console.error("Erro ao gerar comprovante de venda:", error);
+    res.status(500).json({ erro: "Erro ao gerar comprovante de venda" });
+  }
+});
+
+router.get("/", vendaController.listarVendas);
+router.get("/:id", vendaController.buscarVenda);
+router.post("/", vendaController.criarVenda);
+router.put("/:id", vendaController.atualizarVenda);
+router.delete("/:id", vendaController.deletarVenda);
 
 module.exports = router;

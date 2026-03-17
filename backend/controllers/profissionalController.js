@@ -31,7 +31,22 @@ exports.buscarProfissional = async (req, res) => {
 // Criar profissional
 exports.criarProfissional = async (req, res) => {
   try {
-    const profissional = await Profissional.create(req.body);
+    const dados = { ...req.body };
+
+    // Gerar codigo único se não fornecido
+    if (!dados.codigo) {
+      let codigo;
+      let tentativas = 0;
+      do {
+        codigo = String(Math.floor(100 + Math.random() * 900));
+        const existe = await Profissional.findOne({ where: { codigo } });
+        if (!existe) break;
+        tentativas++;
+      } while (tentativas < 20);
+      dados.codigo = codigo;
+    }
+
+    const profissional = await Profissional.create(dados);
     res.status(201).json(profissional);
   } catch (error) {
     console.error("Erro ao criar profissional:", error);

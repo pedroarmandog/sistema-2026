@@ -244,210 +244,159 @@ body {
     max-width: 1200px;
     margin: 0 auto;
     padding: 20px;
-}
-
-.posicao-header {
-    margin-bottom: 30px;
-}
-
-.posicao-titulo {
-    font-size: 28px;
-    font-weight: 600;
-    color: var(--text-primary);
-    margin: 0;
-    text-align: center;
-}
-
-.posicao-content {
-    background-color: var(--bg-card);
-    border-radius: 12px;
-    padding: 0;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    overflow: hidden;
-}
-
-/* Seções de Receita e Despesa */
-.secao-receita,
-.secao-despesa {
-    margin-bottom: 0;
-}
-
-.secao-header {
-    padding: 16px 30px;
-    color: white;
-    font-weight: 600;
-}
-
-.receita-header {
-    background-color: #2ecc71;
-}
-
-.despesa-header {
-    background-color: #e74c3c;
-}
-
-.secao-header h2 {
-    margin: 0;
-    font-size: 18px;
-    font-weight: 600;
-}
-
-.secao-body {
-    padding: 0;
-}
-
-/* Linhas de Itens */
-.linha-item {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 14px 30px;
-    border-bottom: 1px solid var(--border-color);
-    transition: background-color 0.2s ease;
+    flex-direction: column;
+    gap: 24px;
 }
 
-.linha-item:hover {
-    background-color: var(--bg-hover);
-}
-
-.linha-item:last-child {
-    border-bottom: none;
-}
-
-.item-label {
-    font-size: 14px;
-    color: var(--text-primary);
-}
-
-.item-valor {
-    font-size: 14px;
-    color: var(--text-primary);
-    font-weight: 500;
-    min-width: 120px;
-    text-align: right;
-}
-
-/* Subtotais */
-.linha-item.subtotal {
-    background-color: #f8f9fa;
-    font-weight: 600;
-}
-
-.linha-item.subtotal .item-label {
-    font-weight: 600;
-}
-
-.linha-item.subtotal .item-valor {
-    font-weight: 700;
-}
-
-/* Saldo de Caixa */
-.linha-item.saldo {
-    background-color: #fff9e6;
-}
-
-.linha-item.saldo .item-label {
-    font-weight: 600;
-}
-
-.linha-item.saldo .item-valor {
-    font-weight: 700;
-}
-
-/* Subtotal Final */
-.linha-item.subtotal-final {
-    background-color: #e8f5e9;
-    font-weight: 700;
-}
-
-.secao-despesa .linha-item.subtotal-final {
-    background-color: #ffebee;
-}
-
-.linha-item.subtotal-final .item-label {
-    font-weight: 700;
-}
-
-.linha-item.subtotal-final .item-valor {
-    font-weight: 700;
-}
-
-/* Resultado Final */
-.resultado-final {
-    border-top: 3px solid var(--border-color);
-    background-color: #f5f5f5;
-}
-
-.linha-item.resultado {
-    padding: 20px 30px;
-    background-color: transparent;
-}
-
-.linha-item.resultado .item-label {
-    font-size: 16px;
-    font-weight: 700;
-    color: var(--text-primary);
-}
-
-.linha-item.resultado .item-valor {
+/* Título das seções */
+.secao-titulo {
     font-size: 18px;
-    font-weight: 700;
+    font-weight: 600;
     color: var(--text-primary);
+    margin: 0 0 16px 0;
 }
 
-/* Responsivo */
+/* ═══════════ RESUMO DO CAIXA ═══════════ */
+.resumo-caixa {
+    background: var(--bg-card, #fff);
+    border-radius: 12px;
+    padding: 20px 24px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.resumo-cards {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+}
+
+.resumo-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 18px 16px;
+    border-radius: 10px;
+    color: #fff;
+}
+
+.resumo-card i {
+    font-size: 28px;
+    opacity: 0.85;
+}
+
+.resumo-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.resumo-label {
+    font-size: 13px;
+    opacity: 0.9;
+}
+
+.resumo-valor {
+    font-size: 20px;
+    font-weight: 700;
+}
+
+/* Cores dos cards */
+.card-dinheiro { background: linear-gradient(135deg, #27ae60, #2ecc71); }
+.card-pix      { background: linear-gradient(135deg, #2980b9, #3498db); }
+.card-cartao   { background: linear-gradient(135deg, #8e44ad, #9b59b6); }
+.card-total    { background: linear-gradient(135deg, #2c3e50, #34495e); }
+
+/* ═══════════ TABELA DE MOVIMENTAÇÕES ═══════════ */
+.movimentacoes {
+    background: var(--bg-card, #fff);
+    border-radius: 12px;
+    padding: 20px 24px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.tabela-wrapper {
+    overflow-x: auto;
+}
+
+.tabela-movimentacoes {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.tabela-movimentacoes th {
+    text-align: left;
+    padding: 12px 14px;
+    background: var(--bg-body, #f8f9fa);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary, #6c757d);
+    border-bottom: 2px solid var(--border-color, #dee2e6);
+}
+
+.tabela-movimentacoes td {
+    padding: 12px 14px;
+    font-size: 14px;
+    color: var(--text-primary, #333);
+    border-bottom: 1px solid var(--border-color, #dee2e6);
+}
+
+.tabela-movimentacoes tbody tr:hover {
+    background: var(--bg-hover, #f1f3f5);
+}
+
+.linha-vazia td {
+    text-align: center;
+    padding: 30px;
+    color: var(--text-secondary, #999);
+    font-style: italic;
+}
+
+/* Badge para forma de pagamento */
+.badge-pagamento {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #fff;
+}
+
+.badge-dinheiro { background: #27ae60; }
+.badge-pix      { background: #2980b9; }
+.badge-cartao   { background: #8e44ad; }
+
+/* ═══════════ RESPONSIVO ═══════════ */
+@media (max-width: 992px) {
+    .resumo-cards {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .form-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
 @media (max-width: 768px) {
     .posicao-container {
         padding: 15px;
     }
-    
-    .posicao-titulo {
-        font-size: 24px;
+    .resumo-cards {
+        grid-template-columns: 1fr;
     }
-    
-    .secao-header {
-        padding: 12px 20px;
+    .form-grid {
+        grid-template-columns: 1fr;
     }
-    
-    .secao-header h2 {
-        font-size: 16px;
-    }
-    
-    .linha-item {
-        padding: 12px 20px;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 8px;
-    }
-    
-    .item-label {
+    .tabela-movimentacoes th,
+    .tabela-movimentacoes td {
+        padding: 10px 8px;
         font-size: 13px;
-    }
-    
-    .item-valor {
-        font-size: 14px;
-        font-weight: 700;
-        width: 100%;
-        text-align: left;
-    }
-    
-    .linha-item.resultado {
-        padding: 16px 20px;
-    }
-    
-    .linha-item.resultado .item-label {
-        font-size: 15px;
-    }
-    
-    .linha-item.resultado .item-valor {
-        font-size: 16px;
     }
 }
 
 @media (max-width: 480px) {
-    .posicao-titulo {
-        font-size: 20px;
+    .resumo-valor {
+        font-size: 16px;
     }
+}
     
     .item-label {
         font-size: 12px;

@@ -10,11 +10,6 @@
     "ativo": true
   },
   {
-    "id": 1766092734045,
-    "descricao": "GRANEL - SAIDA",
-    "ativo": true
-  },
-  {
     "id": 1766092765929,
     "descricao": "GRANEL - ENTRADA",
     "ativo": true
@@ -32,11 +27,6 @@
   {
     "id": 1766429082284,
     "descricao": "Quatree Carne",
-    "ativo": true
-  },
-  {
-    "id": 1766494920760,
-    "descricao": "SAIDA DE MERCADORIA",
     "ativo": true
   }
 ]
