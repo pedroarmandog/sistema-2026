@@ -49,6 +49,10 @@ const Caixa = sequelize.define('Caixa', {
     saldoFinal: {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: true
+    },
+    empresa_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true
     }
 }, {
     tableName: 'caixas',

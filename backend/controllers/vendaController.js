@@ -12,6 +12,11 @@ exports.listarVendas = async (req, res) => {
     // Construir filtros dinâmicos
     const where = {};
 
+    // Filtro obrigatório por empresa
+    if (req.user?.empresaId) {
+      where.empresa_id = req.user.empresaId;
+    }
+
     // Filtro por data
     if (dataInicio && dataFim) {
       where.data = {
@@ -129,7 +134,10 @@ exports.criarVenda = async (req, res) => {
       if (cli) dados.clienteId = cli.id;
     }
 
-    const venda = await Venda.create(dados);
+    const venda = await Venda.create({
+      ...dados,
+      empresa_id: req.user?.empresaId || null,
+    });
     res.status(201).json(venda);
   } catch (error) {
     console.error("Erro ao criar venda:", error);

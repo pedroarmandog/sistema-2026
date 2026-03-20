@@ -542,12 +542,7 @@ async function carregarOrcamentos() {
           <td><span class="status-badge status-${statusMap(orc.status)}">${statusLabel(orc.status)}</span></td>
           <td class="orc-acoes-cell" onclick="event.stopPropagation()">
             <div class="orc-acoes-wrap">
-              <button class="orc-acoes-btn" onclick="toggleDropdownAcoes(event,${orc.id})">&#8942;</button>
-              <div class="orc-acoes-dropdown" id="dropdown-${orc.id}">
-                ${orc.status !== "faturado" ? `<button onclick="faturarOrcamento(${orc.id})">Faturar</button>` : ""}
-                ${orc.status !== "cancelado" && orc.status !== "faturado" ? `<button onclick="confirmarCancelarOrcamento(${orc.id})">Cancelar</button>` : ""}
-                <button class="orc-dd-excluir" onclick="confirmarExcluirOrcamento(${orc.id})">Excluir</button>
-              </div>
+              <button class="orc-acoes-btn" onclick="toggleDropdownAcoes(event,${orc.id},${"'" + orc.status + "'"})">&#8942;</button>
             </div>
           </td>
         </tr>`;
@@ -564,33 +559,118 @@ function atualizarPaginacao(total) {
   if (txt) txt.textContent = `${total} of ${total}`;
 }
 
-// --- Dropdown de ações por linha ---
-function toggleDropdownAcoes(event, id) {
-  event.stopPropagation();
-  // Fechar qualquer outro dropdown aberto
-  document.querySelectorAll(".orc-acoes-dropdown.open").forEach((d) => {
-    if (d.id !== `dropdown-${id}`) d.classList.remove("open");
+// --- Dropdown global de ações (position:fixed para nunca ser cortado) ---
+let _ddAberto = null;
+
+function _criarDropdownGlobal() {
+  if (document.getElementById("orcDropdownGlobal")) return;
+  const dd = document.createElement("div");
+  dd.id = "orcDropdownGlobal";
+  dd.style.cssText = [
+    "position:fixed",
+    "z-index:999999",
+    "background:#fff",
+    "border:1px solid #ddd",
+    "border-radius:6px",
+    "box-shadow:0 4px 18px rgba(0,0,0,0.18)",
+    "min-width:120px",
+    "overflow:hidden",
+    "display:none",
+  ].join(";");
+  document.body.appendChild(dd);
+  document.addEventListener("click", function (e) {
+    if (!dd.contains(e.target)) _fecharDropdownGlobal();
   });
-  const dd = document.getElementById(`dropdown-${id}`);
-  if (dd) dd.classList.toggle("open");
 }
 
-document.addEventListener("click", () => {
-  document
-    .querySelectorAll(".orc-acoes-dropdown.open")
-    .forEach((d) => d.classList.remove("open"));
-});
+function _fecharDropdownGlobal() {
+  const dd = document.getElementById("orcDropdownGlobal");
+  if (dd) dd.style.display = "none";
+  _ddAberto = null;
+}
+
+function toggleDropdownAcoes(event, id, status) {
+  event.stopPropagation();
+  _criarDropdownGlobal();
+  const dd = document.getElementById("orcDropdownGlobal");
+
+  // Se o mesmo botão foi clicado de novo, fecha
+  if (_ddAberto === id) {
+    _fecharDropdownGlobal();
+    return;
+  }
+  _ddAberto = id;
+
+  // Montar itens conforme status
+  let html = "";
+  const btn = (label, fn, cls) =>
+    `<button style="display:block;width:100%;text-align:left;background:none;border:none;padding:9px 16px;font-size:13px;cursor:pointer;color:${cls === "danger" ? "#e74c3c" : "#333"}" onmouseenter="this.style.background='${cls === "danger" ? "#ffeaea" : "#f0f7ff"}';this.style.color='${cls === "danger" ? "#c0392b" : "#007bff"}'" onmouseleave="this.style.background='none';this.style.color='${cls === "danger" ? "#e74c3c" : "#333"}'" onclick="_fecharDropdownGlobal();${fn}">${label}</button>`;
+
+  if (status !== "faturado") html += btn("Faturar", `faturarOrcamento(${id})`);
+  if (status !== "cancelado" && status !== "faturado")
+    html += btn("Cancelar", `confirmarCancelarOrcamento(${id})`);
+  html += btn("Excluir", `confirmarExcluirOrcamento(${id})`, "danger");
+  dd.innerHTML = html;
+
+  // Posicionar abaixo do botão clicado
+  const rect = event.currentTarget.getBoundingClientRect();
+  const ddW = 130;
+  let left = rect.right - ddW;
+  let top = rect.bottom + 4;
+  if (left < 4) left = 4;
+  if (top + 140 > window.innerHeight) top = rect.top - 140;
+  dd.style.left = left + "px";
+  dd.style.top = top + "px";
+  dd.style.display = "block";
+}
 
 async function faturarOrcamento(id) {
   window.location.href = `./nova-venda.html?orcamentoId=${id}`;
 }
 
 // ---- Filtros ----
+const ORC_FILTRO_PAGINA = "orcamentos";
+
+async function salvarFiltroStatus(statusValue) {
+  try {
+    await fetch("/api/user-filters", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        pagina: ORC_FILTRO_PAGINA,
+        filtros: { status: statusValue },
+      }),
+    });
+  } catch (e) {
+    console.warn("Erro ao salvar filtro:", e);
+  }
+}
+
+async function restaurarFiltroStatus() {
+  try {
+    const resp = await fetch(`/api/user-filters?pagina=${ORC_FILTRO_PAGINA}`);
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const statusSalvo = data?.filtros?.status;
+    if (statusSalvo) {
+      const radio = document.querySelector(
+        `input[name="status"][value="${statusSalvo}"]`,
+      );
+      if (radio) radio.checked = true;
+    }
+  } catch (e) {
+    console.warn("Erro ao restaurar filtro:", e);
+  }
+}
+
 function configurarEventosListagem() {
-  // Status
-  document
-    .querySelectorAll('input[name="status"]')
-    .forEach((r) => r.addEventListener("change", () => carregarOrcamentos()));
+  // Status — salva no banco ao mudar
+  document.querySelectorAll('input[name="status"]').forEach((r) =>
+    r.addEventListener("change", () => {
+      salvarFiltroStatus(r.value);
+      carregarOrcamentos();
+    }),
+  );
 
   // Pesquisar
   const btnPesq = document.querySelector(".btn-pesquisar");
@@ -924,16 +1004,67 @@ function renderItensTabela() {
 // --- Finalizar orçamento ---
 async function finalizarOrcamento() {
   if (orcItensAdicionados.length === 0) {
-    alert("Adicione ao menos um item.");
+    showNotification("Adicione ao menos um item.", "warning");
     return;
   }
   if (!orcClienteSelecionado) {
-    alert("Selecione um cliente.");
+    showNotification("Selecione um cliente.", "warning");
     return;
   }
   if (!orcIdAtual) {
     alert("Erro: feche o modal e abra novamente.");
     return;
+  }
+  // Notificação global reutilizável (caso não exista)
+  if (typeof window.showNotification !== "function") {
+    window.showNotification = function (message, type = "info") {
+      // Remove notificações antigas iguais
+      document.querySelectorAll(".notification").forEach((n) => {
+        if (n.textContent.includes(message)) n.remove();
+      });
+      const notification = document.createElement("div");
+      notification.className = `notification notification-${type}`;
+      notification.style.position = "fixed";
+      notification.style.top = "32px";
+      notification.style.right = "32px";
+      notification.style.zIndex = 9999;
+      notification.style.minWidth = "260px";
+      notification.style.maxWidth = "350px";
+      notification.style.padding = "14px 24px 14px 18px";
+      notification.style.borderRadius = "8px";
+      notification.style.boxShadow = "0 2px 16px rgba(0,0,0,0.10)";
+      notification.style.display = "flex";
+      notification.style.alignItems = "center";
+      notification.style.gap = "10px";
+      notification.style.fontSize = "15px";
+      notification.style.fontWeight = 500;
+      notification.style.cursor = "pointer";
+      notification.style.transition = "opacity 0.2s";
+      if (type === "warning") {
+        notification.style.background = "#fffbe6";
+        notification.style.color = "#856404";
+        notification.innerHTML = `<i class='fas fa-exclamation-triangle' style='color:#ffc107;font-size:18px;'></i> <span>${message}</span>`;
+      } else if (type === "success") {
+        notification.style.background = "#e6ffed";
+        notification.style.color = "#155724";
+        notification.innerHTML = `<i class='fas fa-check-circle' style='color:#27ae60;font-size:18px;'></i> <span>${message}</span>`;
+      } else if (type === "error") {
+        notification.style.background = "#fdecea";
+        notification.style.color = "#721c24";
+        notification.innerHTML = `<i class='fas fa-times-circle' style='color:#e74c3c;font-size:18px;'></i> <span>${message}</span>`;
+      } else {
+        notification.style.background = "#e8f4fd";
+        notification.style.color = "#0c5460";
+        notification.innerHTML = `<i class='fas fa-info-circle' style='color:#17a2b8;font-size:18px;'></i> <span>${message}</span>`;
+      }
+      // Fechar ao clicar
+      notification.onclick = () => notification.remove();
+      document.body.appendChild(notification);
+      setTimeout(() => {
+        notification.style.opacity = 0;
+        setTimeout(() => notification.remove(), 300);
+      }, 4000);
+    };
   }
 
   const body = {
@@ -1144,6 +1275,7 @@ function fecharComprovantePDF() {
 // ========================================
 let orcCalStart = null;
 let orcCalEnd = null;
+let orcCalSelecting = false; // true = aguardando segundo clique
 let orcCalLeftMonth = {
   year: new Date().getFullYear(),
   month: new Date().getMonth() - 1 < 0 ? 11 : new Date().getMonth() - 1,
@@ -1229,7 +1361,10 @@ function inicializarCalendario() {
       e.stopPropagation();
       const isOpen = popup.style.display !== "none";
       popup.style.display = isOpen ? "none" : "block";
-      if (!isOpen) _calRender();
+      if (!isOpen) {
+        orcCalSelecting = false; // sempre começa limpo ao abrir
+        _calRender();
+      }
     });
   }
   document.addEventListener("click", function (e) {
@@ -1288,7 +1423,7 @@ function _calRenderMes(containerId, ym, side) {
         if (isEnd) cls += " orc-cal-selected orc-cal-range-end";
         if (inRange) cls += " orc-cal-in-range";
         if (isToday && !isStart && !isEnd) cls += " orc-cal-today";
-        html += `<td class="${cls}" onclick="orcCalDayClick('${iso}')">${day}</td>`;
+        html += `<td class="${cls}" onclick="orcCalDayClick(event,'${iso}')">${day}</td>`;
         day++;
       }
     }
@@ -1321,19 +1456,23 @@ function orcCalNavMes(side, delta) {
   _calRender();
 }
 
-function orcCalDayClick(isoDate) {
+function orcCalDayClick(event, isoDate) {
+  event.stopPropagation();
   const d = new Date(isoDate + "T00:00:00");
-  if (!orcCalStart || (orcCalStart && orcCalEnd)) {
+  if (!orcCalSelecting) {
+    // Primeiro clique: marca início, fica aberto
     orcCalStart = d;
     orcCalEnd = null;
+    orcCalSelecting = true;
   } else {
+    // Segundo clique: define fim e fecha
     if (d < orcCalStart) {
       orcCalEnd = orcCalStart;
       orcCalStart = d;
     } else {
       orcCalEnd = d;
     }
-    // Fechar popup e atualizar
+    orcCalSelecting = false;
     const popup = document.getElementById("orcCalPopup");
     if (popup) popup.style.display = "none";
   }
@@ -1345,7 +1484,7 @@ function orcCalDayClick(isoDate) {
 // INICIALIZAÇÃO
 // ========================================
 document.addEventListener("DOMContentLoaded", function () {
-  setTimeout(() => {
+  setTimeout(async () => {
     // Inicializar calendário de período
     inicializarCalendario();
 
@@ -1354,6 +1493,10 @@ document.addEventListener("DOMContentLoaded", function () {
     configurarAutocompletClientes();
     configurarAutocompletProfissionais();
     configurarCalculoItem();
+
+    // Restaurar filtro de status salvo no banco antes de carregar
+    await restaurarFiltroStatus();
+
     carregarOrcamentos();
     console.log("✅ OrcamentosManager inicializado");
   }, 300);

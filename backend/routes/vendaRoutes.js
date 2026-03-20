@@ -4,6 +4,10 @@ const vendaController = require("../controllers/vendaController");
 const { Venda, Empresa } = require("../models");
 const path = require("path");
 const fs = require("fs");
+const { authUser } = require("../middleware/authUser");
+
+// Aplicar auth em todas as rotas de venda
+router.use(authUser);
 
 // Comprovante PDF (cupom fiscal) - DEVE vir antes de /:id
 router.get("/:id/comprovante", async (req, res) => {

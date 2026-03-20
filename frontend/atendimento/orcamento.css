@@ -220,6 +220,7 @@ html,
 body {
   margin: 0 !important;
   padding: 0 !important;
+  overflow-x: hidden;
 }
 
 /* Em casos onde um wrapper está empurrando a página, forçar o header para frente */
@@ -332,12 +333,15 @@ body {
 }
 
 .btn-mais-filtros {
-  background: #ecf0f1;
-  color: #7f8c8d;
+  background: #bdc3c7;
+  color: #636e72;
+  cursor: default;
+  pointer-events: none;
+  opacity: 0.75;
 }
 
 .btn-mais-filtros:hover {
-  background: #d5dbdb;
+  background: #bdc3c7;
 }
 
 .btn-pesquisar {
@@ -525,7 +529,7 @@ body {
 .orcamentos-table-container {
   background: white;
   border-radius: 12px;
-  overflow: hidden;
+  overflow: visible;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   margin-bottom: 24px;
 }
@@ -533,6 +537,9 @@ body {
 .orcamentos-table {
   width: 100%;
   border-collapse: collapse;
+  border-radius: 12px;
+  overflow: hidden;
+  display: table;
 }
 
 .orcamentos-table th {
@@ -1094,6 +1101,14 @@ body {
   font-size: 14px;
   color: #7f8c8d;
   margin-bottom: 20px;
+}
+
+/* Centraliza o botão 'Ver Comprovante' apenas no modal de sucesso */
+.orc-sucesso-box .orc-btn-comprovante {
+  margin-left: auto;
+  margin-right: auto;
+  display: flex;
+  justify-content: center;
 }
 
 /* Confirmation modals */

@@ -283,27 +283,97 @@ router.post("/manual", async (req, res) => {
               : mapped.itens || [];
           saved.updatedProducts = [];
 
-          // Se finalizado, ajustar estoque (adicionar)
-          if (
-            String(saved.situacao).toLowerCase().includes("final") &&
-            Produto
-          ) {
+          // Se finalizado/concluído, ajustar estoque (adicionar) e criar produtos novos
+          const situacaoFinal = String(saved.situacao || "").toLowerCase();
+          const isConcluido =
+            situacaoFinal.includes("final") ||
+            situacaoFinal.includes("conclui") ||
+            situacaoFinal === "concluido";
+          if (isConcluido && Produto) {
             const itens = Array.isArray(saved.itens) ? saved.itens : [];
             for (const it of itens) {
               try {
+                const fatorVal = Number(it.fator || 1) || 1;
+                const qtdEstoque = Number(it.entEstoque || 0) || 0;
                 const quantidade =
-                  Number(it.quantidade || it.qty || it.qtd || 0) || 0;
+                  qtdEstoque ||
+                  Math.round(Number(it.quantidade || 0) * fatorVal) ||
+                  0;
                 if (quantidade === 0) continue;
+
                 let prod = null;
-                if (it.id) prod = await Produto.findByPk(String(it.id));
+                if (it.matchedId)
+                  prod = await Produto.findByPk(String(it.matchedId));
                 if (!prod && it.codigo)
                   prod = await Produto.findOne({
                     where: { codigo: String(it.codigo) },
                   });
-                if (!prod) continue;
+
+                if (!prod) {
+                  // Criar produto novo
+                  const nomeItem = (
+                    it.descricao ||
+                    it.nome ||
+                    it.xProd ||
+                    ""
+                  ).trim();
+                  if (!nomeItem) continue;
+                  try {
+                    const [[rowMax]] = await Produto.sequelize.query(
+                      "SELECT MAX(CAST(id AS UNSIGNED)) AS maxId FROM itens",
+                    );
+                    const maxId =
+                      rowMax && rowMax.maxId !== null
+                        ? Number(rowMax.maxId)
+                        : 0;
+                    prod = await Produto.create({
+                      id: String((maxId || 0) + 1),
+                      nome: nomeItem,
+                      codigo: it.codigo || "",
+                      preco: Number(it.unitario || it.preco || 0) || 0,
+                      custoBase: Number(it.unitario || it.preco || 0) || 0,
+                      ncm: it.ncm || it.NCM || "",
+                      validade: it.validade || "",
+                      estoqueAtual: quantidade,
+                      fatorCompra: String(fatorVal),
+                    });
+                    console.log(
+                      `[entrada/manual] Produto CRIADO: ${nomeItem} (id=${prod.id}) estoque=${quantidade}`,
+                    );
+                    if (
+                      HistoricoEstoque &&
+                      typeof HistoricoEstoque.create === "function"
+                    ) {
+                      await HistoricoEstoque.create({
+                        produtoId: String(prod.id),
+                        produtoNome: prod.nome,
+                        dataMovimento: saved.dataEmissao || new Date(),
+                        operacao: "Entrada",
+                        estoqueAnterior: 0,
+                        quantidade: quantidade,
+                        novoEstoque: quantidade,
+                        observacao: `Produto criado via entrada ${saved.id}`,
+                      });
+                    }
+                    saved.updatedProducts.push(
+                      prod.get ? prod.get({ plain: true }) : prod,
+                    );
+                  } catch (createErr) {
+                    console.warn(
+                      "Erro ao criar produto na entrada:",
+                      createErr && createErr.message,
+                    );
+                  }
+                  continue;
+                }
+
+                // Produto existente: incrementar estoque
                 const atual = Number(prod.estoqueAtual) || 0;
                 const novo = atual + quantidade;
                 const updatedProd = await prod.update({ estoqueAtual: novo });
+                console.log(
+                  `[entrada/manual] Estoque ATUALIZADO: ${prod.nome} ${atual} → ${novo}`,
+                );
                 if (
                   HistoricoEstoque &&
                   typeof HistoricoEstoque.create === "function"

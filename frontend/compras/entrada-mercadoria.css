@@ -556,12 +556,12 @@ body {
     transform: translateY(-1px);
 }
 
-.btn-ignorar {
+.btn-excluir {
     color: #f44336;
     border-color: #f44336;
 }
 
-.btn-ignorar:hover {
+.btn-excluir:hover {
     background-color: #ffebee;
 }
 

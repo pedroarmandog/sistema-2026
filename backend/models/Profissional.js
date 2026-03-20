@@ -110,6 +110,10 @@ const Profissional = sequelize.define(
       type: DataTypes.STRING,
       allowNull: true,
     },
+    empresa_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
   },
   {
     tableName: "profissionais",

@@ -3,6 +3,9 @@ const router = express.Router();
 const path = require("path");
 const multer = require("multer");
 const profissionalController = require("../controllers/profissionalController");
+const { authUser } = require("../middleware/authUser");
+
+router.use(authUser);
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {

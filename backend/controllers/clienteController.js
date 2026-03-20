@@ -95,6 +95,7 @@ exports.createCliente = async (req, res) => {
       proximidade,
       ativo,
       imagem_perfil,
+      empresa_id: req.user?.empresaId || null,
     });
 
     res.status(201).json({
@@ -102,6 +103,8 @@ exports.createCliente = async (req, res) => {
       message: "Cliente criado com sucesso",
       cliente: cliente,
     });
+
+    // Nota: boas_vindas é disparado no cadastro do primeiro pet (petController)
   } catch (err) {
     console.error("Erro ao criar cliente:", err);
     res.status(500).json({
@@ -127,6 +130,11 @@ exports.getAllClientes = async (req, res) => {
           { cpf: { [Op.like]: `%${search}%` } },
         ],
       };
+    }
+
+    // Filtro obrigatório por empresa
+    if (req.user?.empresaId) {
+      whereClause.empresa_id = req.user.empresaId;
     }
 
     const clientes = await Cliente.findAll({
@@ -281,7 +289,10 @@ exports.updateCliente = async (req, res) => {
     }
 
     const [updatedRows] = await Cliente.update(updates, {
-      where: { id: id },
+      where: {
+        id: id,
+        ...(req.user?.empresaId ? { empresa_id: req.user.empresaId } : {}),
+      },
     });
 
     if (updatedRows === 0) {
@@ -311,8 +322,13 @@ exports.deleteCliente = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Verificar se o cliente existe
-    const cliente = await Cliente.findByPk(id);
+    // Verificar se o cliente existe e pertence à empresa
+    const cliente = await Cliente.findOne({
+      where: {
+        id,
+        ...(req.user?.empresaId ? { empresa_id: req.user.empresaId } : {}),
+      },
+    });
     if (!cliente) {
       return res.status(404).json({
         success: false,

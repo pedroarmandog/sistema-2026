@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sistema Bloqueado - PetHub</title>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+      .blocked-container {
+        text-align: center;
+        background: #fff;
+        border-radius: 20px;
+        padding: 60px 50px;
+        box-shadow: 0 25px 60px rgba(0, 0, 0, 0.3);
+        max-width: 520px;
+        width: 100%;
+      }
+      .blocked-icon {
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #fee2e2, #fecaca);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 24px;
+      }
+      .blocked-icon i {
+        font-size: 44px;
+        color: #dc2626;
+      }
+      .blocked-container h1 {
+        font-size: 24px;
+        color: #1a1a2e;
+        margin-bottom: 12px;
+      }
+      .blocked-container p {
+        font-size: 15px;
+        color: #666;
+        line-height: 1.7;
+        margin-bottom: 30px;
+      }
+      .blocked-container .highlight {
+        color: #dc2626;
+        font-weight: 600;
+      }
+      .contact-info {
+        background: #f8f9fa;
+        border-radius: 12px;
+        padding: 20px;
+        margin-top: 16px;
+      }
+      .contact-info p {
+        font-size: 13px;
+        color: #888;
+        margin-bottom: 8px;
+      }
+      .contact-info a {
+        color: #667eea;
+        text-decoration: none;
+        font-weight: 600;
+      }
+      .logo-bottom {
+        margin-top: 30px;
+      }
+      .logo-bottom img {
+        height: 40px;
+        opacity: 0.4;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.05);
+        }
+      }
+      .blocked-icon {
+        animation: pulse 2s ease-in-out infinite;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="blocked-container">
+      <div class="blocked-icon">
+        <i class="fas fa-lock"></i>
+      </div>
+      <h1>Sistema Bloqueado</h1>
+      <p>
+        Seu acesso ao sistema foi
+        <span class="highlight">bloqueado por falta de pagamento</span>.<br />
+        Para regularizar sua situação e reativar o acesso, entre em contato com
+        a administração.
+      </p>
+      <div class="contact-info">
+        <p>
+          Mesmo com login e senha corretos, o acesso permanecerá bloqueado até a
+          regularização.
+        </p>
+        <p>
+          Entre em contato:
+          <a href="mailto:suporte@pethub.com">suporte@pethub.com</a>
+        </p>
+      </div>
+      <div class="logo-bottom">
+        <img src="../../logos/Logo PetHub (4).svg" alt="PetHub" />
+      </div>
+    </div>
+    <script>
+      // Limpar cookies de sessão para impedir voltar ao sistema
+      document.cookie = "pethub_token=; Max-Age=0; path=/";
+      document.cookie = "usuarioLogadoId=; Max-Age=0; path=/";
+      document.cookie = "usuarioLogadoNome=; Max-Age=0; path=/";
+      // Impedir que o botão voltar funcione
+      history.pushState(null, null, location.href);
+      window.addEventListener("popstate", function () {
+        history.pushState(null, null, location.href);
+      });
+    </script>
+  </body>
+</html>

@@ -24,6 +24,11 @@ const Fornecedor = require("./Fornecedor");
 const Entrada = require("./Entrada");
 const Saida = require("./Saida");
 const PeriodicidadeFactory = require("./Periodicidade");
+// Modelos do módulo de Marketing/WhatsApp
+const WhatsappSessionFactory = require("./WhatsappSession");
+const MensagemAutomaticaFactory = require("./MensagemAutomatica");
+const EnvioAgendadoFactory = require("./EnvioAgendado");
+const LogEnvioFactory = require("./LogEnvio");
 
 // Importar sequelize do Cliente para inicializar os modelos factory
 const { sequelize } = require("./Cliente");
@@ -32,12 +37,24 @@ const PerfilComissao = PerfilComissaoFactory(sequelize);
 const Comissao = ComissaoFactory(sequelize);
 const Empresa = EmpresaFactory(sequelize);
 const Periodicidade = PeriodicidadeFactory(sequelize);
+// Inicializar modelos de Marketing/WhatsApp
+const WhatsappSession = WhatsappSessionFactory(sequelize);
+const MensagemAutomatica = MensagemAutomaticaFactory(sequelize);
+const EnvioAgendado = EnvioAgendadoFactory(sequelize);
+const LogEnvio = LogEnvioFactory(sequelize);
 // Inicializar modelo Usuario (factory)
 const UsuarioFactory = require("./Usuario");
 const Usuario = UsuarioFactory(sequelize);
 // Inicializar modelo UserFilter
 const UserFilterFactory = require("./UserFilter");
 const UserFilter = UserFilterFactory(sequelize);
+// Inicializar modelos do Painel Admin
+const AdminFactory = require("./Admin");
+const Admin = AdminFactory(sequelize);
+const EmpresaPainelFactory = require("./EmpresaPainel");
+const EmpresaPainel = EmpresaPainelFactory(sequelize);
+const PagamentoPainelFactory = require("./PagamentoPainel");
+const PagamentoPainel = PagamentoPainelFactory(sequelize);
 
 // Definir associações
 Cliente.hasMany(Pet, {
@@ -74,6 +91,17 @@ Cliente.hasMany(Venda, {
 console.log("✅ Associações Cliente ↔ Pet ↔ Agendamento configuradas");
 console.log("✅ Associações Cliente ↔ Venda configuradas");
 
+// Associações Painel Admin
+EmpresaPainel.hasMany(PagamentoPainel, {
+  foreignKey: "empresa_id",
+  as: "pagamentos",
+});
+PagamentoPainel.belongsTo(EmpresaPainel, {
+  foreignKey: "empresa_id",
+  as: "empresa",
+});
+console.log("✅ Associações EmpresaPainel ↔ PagamentoPainel configuradas");
+
 // Exportar todos os modelos
 module.exports = {
   Cliente,
@@ -104,5 +132,14 @@ module.exports = {
   Fornecedor,
   Entrada,
   Saida,
+  // Marketing/WhatsApp
+  WhatsappSession,
+  MensagemAutomatica,
+  EnvioAgendado,
+  LogEnvio,
+  // Painel Admin
+  Admin,
+  EmpresaPainel,
+  PagamentoPainel,
   sequelize,
 };

@@ -4,7 +4,10 @@ const { Op } = require("sequelize");
 // Listar todos os profissionais
 exports.listarProfissionais = async (req, res) => {
   try {
+    const empresaId = req.user?.empresaId;
+    const where = empresaId ? { empresa_id: empresaId } : {};
     const profissionais = await Profissional.findAll({
+      where,
       order: [["nome", "ASC"]],
     });
     res.json(profissionais);
@@ -32,6 +35,7 @@ exports.buscarProfissional = async (req, res) => {
 exports.criarProfissional = async (req, res) => {
   try {
     const dados = { ...req.body };
+    if (req.user?.empresaId) dados.empresa_id = req.user.empresaId;
 
     // Gerar codigo único se não fornecido
     if (!dados.codigo) {

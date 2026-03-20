@@ -5,6 +5,10 @@ const Fornecedor = require("../models/Fornecedor");
 const { QueryTypes } = require("sequelize");
 const fs = require("fs");
 const path = require("path");
+const { authUser } = require("../middleware/authUser");
+
+// Todas as rotas de itens requerem autenticação (multi-tenant)
+router.use(authUser);
 
 // arquivo para armazenar exclusões locais (bloqueio de itens que existem apenas no frontend)
 const blockedFilePath = path.join(
@@ -112,6 +116,11 @@ router.get("/", async (req, res) => {
       andConditions.push({ tipo: tipo });
     }
 
+    // Filtrar por empresa (multi-tenant)
+    if (req.user?.empresaId) {
+      andConditions.push({ empresa_id: req.user.empresaId });
+    }
+
     let where = {};
     if (andConditions.length === 1) where = andConditions[0];
     else if (andConditions.length > 1) where = { [Op.and]: andConditions };
@@ -123,7 +132,7 @@ router.get("/", async (req, res) => {
     const itens = await Produto.findAll({
       where,
       order: [["nome", "ASC"]],
-      limit: 200,
+      limit: 1000,
     });
     try {
       console.log(`GET /api/itens - itens retornados: ${itens.length}`);
@@ -421,6 +430,8 @@ router.post("/", async (req, res) => {
 
     // preparar payload coerente para o modelo
     const payload = { ...data, nome };
+    // Adicionar empresa_id para isolamento multi-tenant
+    if (req.user?.empresaId) payload.empresa_id = req.user.empresaId;
     // gerar um código simples quando não fornecido para evitar registros com codigo=null
     try {
       if (!payload.codigo || String(payload.codigo).trim() === "") {
@@ -429,10 +440,11 @@ router.post("/", async (req, res) => {
       }
     } catch (e) {}
 
-    // evitar criação de duplicatas: se já existe item com mesmo nome + agrupamento, retornar existente
+    // evitar criação de duplicatas: se já existe item com mesmo nome + agrupamento + empresa, retornar existente
     try {
       const where = { nome };
       if (payload.agrupamento) where.agrupamento = payload.agrupamento;
+      if (payload.empresa_id) where.empresa_id = payload.empresa_id;
       const exists = await Produto.findOne({ where });
       if (exists) {
         try {

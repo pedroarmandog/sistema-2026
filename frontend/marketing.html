@@ -716,12 +716,13 @@
         <div class="content">
             <!-- Phone Number Section -->
             <div class="phone-section">
-                <div class="phone-card">
+                <div class="phone-card" id="whatsappStatusCard" onclick="abrirModalConexaoWhatsapp()" style="cursor:pointer;">
                     <div class="phone-status">
-                        <i class="fas fa-check-circle status-icon active"></i>
-                        <span class="phone-number">5527999104837</span>
+                        <i class="fas fa-circle status-icon" id="wppStatusIcon" style="color:#ccc;font-size:12px;"></i>
+                        <span class="phone-number" id="wppNumeroExibido">Clique para conectar WhatsApp</span>
                         <i class="fas fa-chevron-right"></i>
                     </div>
+                    <span id="wppStatusLabel" style="font-size:11px;color:#999;margin-left:8px;">Desconectado</span>
                 </div>
             </div>
 
@@ -730,58 +731,330 @@
                 <!-- Active Messages -->
                 <div class="messages-section active-messages">
                     <div class="section-header">
-                        <div class="section-badge">1 mensagens ativas</div>
+                        <div class="section-badge" id="badgeMensagensAtivas">0 mensagens ativas</div>
                     </div>
-                    
-                    <div class="message-card">
-                        <h3 class="message-title">Lembrete de Agendamento de Serviço</h3>
-                        <div class="message-schedule">
-                            <div class="schedule-item">
-                                <span class="schedule-label">1 dia antes às</span>
-                                <span class="schedule-time">09:00h</span>
-                            </div>
-                            <div class="schedule-item">
-                                <span class="schedule-label">No dia, iniciando às</span>
-                                <span class="schedule-time">08:00h</span>
-                            </div>
-                        </div>
-                        <div class="message-status error">
-                            <i class="fas fa-exclamation-circle"></i>
-                            <span>2 mensagens não enviadas!</span>
-                        </div>
+                    <div id="listaMensagensAtivas">
+                        <!-- Gerado dinamicamente por marketing.js -->
+                        <div style="color:#aaa;padding:16px;font-size:13px;">Carregando...</div>
                     </div>
                 </div>
 
                 <!-- Inactive Messages -->
                 <div class="messages-section inactive-messages">
                     <div class="section-header">
-                        <div class="section-badge inactive">11 mensagens inativas</div>
+                        <div class="section-badge inactive" id="badgeMensagensInativas">0 mensagens inativas</div>
                     </div>
-                    
-                    <div class="inactive-message-card">
-                        <h3 class="message-title purple">Aviso que o pet está pronto</h3>
-                        <p class="message-description">
-                            Mantenha uma comunicação próxima e proativa com os tutores informando automaticamente quando o pet estiver pronto para voltar para casa. Essa notificação agiliza o atendimento, melhora a experiência do cliente e demonstra cuidado, sem que a recepção precise fazer ligações ou enviar mensagens manualmente.
-                        </p>
-                    </div>
-                    
-                    <div class="inactive-message-card">
-                        <h3 class="message-title purple">Lembrete de Oportunidade de Venda para Produtos</h3>
-                        <p class="message-description">
-                            Ativar essa mensagem ajuda a lembrar os tutores no momento certo de renovar produtos essenciais, incentivando compras recorrentes e aumentando a fidelização. Além disso, cada contato abre novas oportunidades de venda, contribuindo para um maior ticket médio.
-                        </p>
-                    </div>
-                    
-                    <div class="inactive-message-card">
-                        <h3 class="message-title purple">Ciclo do plano de banhos por Consumo foi concluído</h3>
-                        <p class="message-description">
-                            Benefícios: A mensagem automática de conclusão do plano de banhos é essencial para manter os tutores informados e facilitar a renovação do
-                        </p>
+                    <div id="listaMensagensInativas">
+                        <!-- Gerado dinamicamente por marketing.js -->
+                        <div style="color:#aaa;padding:16px;font-size:13px;">Carregando...</div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         MODAL 1: CONEXÃO WHATSAPP (QR CODE)
+    ═══════════════════════════════════════════════════════ -->
+    <div id="modalQRCode" class="modal-overlay" style="display:none;">
+        <div class="modal-box" style="max-width:480px;text-align:center;">
+            <button class="modal-close" onclick="fecharModal('modalQRCode')">&times;</button>
+            <div style="margin-bottom:20px;">
+                <div style="width:56px;height:56px;border-radius:50%;background:#f0eaff;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;">
+                    <i class="fab fa-whatsapp" style="font-size:28px;color:#7c3aed;"></i>
+                </div>
+                <h2 style="margin:0;font-size:18px;">Conectar WhatsApp</h2>
+                <p style="color:#666;font-size:13px;margin-top:6px;">Escaneie o QR Code com o WhatsApp do celular</p>
+            </div>
+
+            <!-- Status: aguardando conexão -->
+            <div id="qrStatusConectado" style="display:none;padding:20px 0;">
+                <i class="fas fa-check-circle" style="font-size:48px;color:#22c55e;margin-bottom:12px;"></i>
+                <p style="font-size:16px;font-weight:600;color:#16a34a;margin:0;">WhatsApp Conectado!</p>
+                <p id="qrNumeroConectado" style="color:#666;font-size:13px;margin-top:6px;"></p>
+                <button onclick="fecharModal('modalQRCode')" class="btn-ativar" style="margin-top:16px;width:200px;">Fechar</button>
+            </div>
+
+            <!-- Status: gerando QR -->
+            <div id="qrStatusAguardando" style="display:none;padding:20px 0;">
+                <div style="width:240px;height:240px;margin:0 auto;background:#f5f5f5;border-radius:8px;display:flex;align-items:center;justify-content:center;">
+                    <div class="spinner" style="width:40px;height:40px;border:4px solid #e5e7eb;border-top-color:#7c3aed;border-radius:50%;animation:spin 1s linear infinite;"></div>
+                </div>
+                <p style="color:#666;font-size:13px;margin-top:12px;">Gerando QR Code...</p>
+            </div>
+
+            <!-- QR Code image -->
+            <div id="qrImageContainer" style="display:none;padding:10px 0;">
+                <img id="qrCodeImg" src="" alt="QR Code" style="width:240px;height:240px;border-radius:8px;border:2px solid #e5e7eb;">
+                <p style="color:#666;font-size:12px;margin-top:10px;">Abra o WhatsApp → Aparelhos Conectados → Conectar aparelho</p>
+            </div>
+
+            <!-- Status: desconectado (inicial) -->
+            <div id="qrStatusDesconectado">
+                <p style="color:#666;font-size:13px;margin-bottom:16px;">Clique em "Iniciar Conexão" para gerar o QR Code.</p>
+                <button onclick="iniciarConexaoWhatsapp()" class="btn-ativar" style="width:200px;" id="btnIniciarConexao">
+                    <i class="fab fa-whatsapp"></i> Iniciar Conexão
+                </button>
+            </div>
+
+            <!-- Botão desconectar (exibido quando conectado) -->
+            <div id="qrBtnDesconectar" style="display:none;margin-top:12px;">
+                <button onclick="desconectarWhatsapp()" style="background:none;border:1px solid #ef4444;color:#ef4444;padding:8px 20px;border-radius:6px;cursor:pointer;font-size:13px;">
+                    <i class="fas fa-times-circle"></i> Desconectar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         MODAL 2: EDITAR MENSAGEM (Texto + Variáveis + Imagem)
+    ═══════════════════════════════════════════════════════ -->
+    <div id="modalEditarMensagem" class="modal-overlay" style="display:none;">
+        <div class="modal-box" style="max-width:700px;">
+            <button class="modal-close" onclick="fecharModal('modalEditarMensagem')">&times;</button>
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+                <div style="width:48px;height:48px;border-radius:50%;background:#f0eaff;display:flex;align-items:center;justify-content:center;">
+                    <i class="fas fa-calendar" id="modalMsgIcone" style="font-size:20px;color:#7c3aed;"></i>
+                </div>
+                <h2 style="margin:0;font-size:16px;" id="modalMsgTitulo">Mensagem</h2>
+            </div>
+
+            <p style="font-size:12px;color:#999;margin-bottom:6px;">Whatsapp Web</p>
+            <input type="hidden" id="modalMsgId">
+
+            <!-- Editor de texto -->
+            <textarea id="modalMsgConteudo" rows="10"
+                style="width:100%;padding:14px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;resize:vertical;font-family:inherit;box-sizing:border-box;">
+            </textarea>
+
+            <!-- Toolbar: emoji e variáveis -->
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <!-- Upload de imagem -->
+                    <label for="modalMsgImagem" style="cursor:pointer;color:#7c3aed;font-size:13px;display:flex;align-items:center;gap:4px;">
+                        <i class="fas fa-image"></i> Imagem
+                    </label>
+                    <input type="file" id="modalMsgImagem" accept="image/*" style="display:none;" onchange="previewImagem(this)">
+                    <span id="modalMsgImagemNome" style="font-size:12px;color:#666;"></span>
+                </div>
+                <button onclick="mostrarVariaveis()" class="btn-variaveis">Variáveis</button>
+            </div>
+
+            <!-- Preview da imagem selecionada -->
+            <div id="modalMsgImagemPreview" style="display:none;margin-top:8px;">
+                <img id="modalMsgImagemImg" src="" alt="Preview" style="max-height:120px;border-radius:6px;border:1px solid #e5e7eb;">
+                <button onclick="removerImagem()" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px;margin-left:8px;">
+                    <i class="fas fa-times"></i> Remover
+                </button>
+            </div>
+
+            <!-- Painel de variáveis (toggle) -->
+            <div id="painelVariaveis" style="display:none;background:#f8f4ff;border-radius:8px;padding:12px;margin-top:10px;">
+                <p style="font-size:12px;color:#7c3aed;font-weight:600;margin:0 0 8px;">Variáveis disponíveis — clique para inserir:</p>
+                <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                    <button onclick="inserirVariavel('{nome_tutor}')" class="btn-variavel">{nome_tutor}</button>
+                    <button onclick="inserirVariavel('{nome_pet}')" class="btn-variavel">{nome_pet}</button>
+                    <button onclick="inserirVariavel('{data_agendamento}')" class="btn-variavel">{data_agendamento}</button>
+                    <button onclick="inserirVariavel('{hora_agendamento}')" class="btn-variavel">{hora_agendamento}</button>
+                    <button onclick="inserirVariavel('{servico}')" class="btn-variavel">{servico}</button>
+                    <button onclick="inserirVariavel('{nome_empresa}')" class="btn-variavel">{nome_empresa}</button>
+                </div>
+            </div>
+
+            <div style="display:flex;justify-content:center;margin-top:20px;">
+                <button onclick="avancarParaConfiguracao()" class="btn-ativar" style="min-width:200px;">Avançar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         MODAL 3: CONFIGURAR ENVIO (Horário / Ativar)
+    ═══════════════════════════════════════════════════════ -->
+    <div id="modalConfigurarEnvio" class="modal-overlay" style="display:none;">
+        <div class="modal-box" style="max-width:500px;">
+            <button class="modal-close" onclick="fecharModal('modalConfigurarEnvio')">&times;</button>
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+                <div style="width:48px;height:48px;border-radius:50%;background:#f0eaff;display:flex;align-items:center;justify-content:center;">
+                    <i class="fas fa-clock" style="font-size:20px;color:#7c3aed;"></i>
+                </div>
+                <h2 style="margin:0;font-size:16px;" id="modalConfTitulo">Configurar Envio</h2>
+            </div>
+
+            <p style="font-size:12px;color:#999;margin-bottom:12px;">Whatsapp Web</p>
+
+            <div style="margin-bottom:16px;">
+                <p style="font-size:13px;font-weight:600;color:#333;margin-bottom:10px;">Quando enviar</p>
+
+                <label class="radio-opcao">
+                    <input type="radio" name="tipoEnvio" value="no_dia" checked onchange="atualizarOpcaoEnvio()">
+                    <span>No dia, iniciando às</span>
+                    <input type="time" id="horaEnvioNoDia" value="09:00" class="input-hora">
+                    <span>horas</span>
+                </label>
+
+                <label class="radio-opcao">
+                    <input type="radio" name="tipoEnvio" value="1_dia_antes" onchange="atualizarOpcaoEnvio()">
+                    <span>1 Dia antes</span>
+                </label>
+
+                <label class="radio-opcao">
+                    <input type="radio" name="tipoEnvio" value="2_dias_antes" onchange="atualizarOpcaoEnvio()">
+                    <span>2 Dias antes</span>
+                </label>
+
+                <label class="radio-opcao">
+                    <input type="radio" name="tipoEnvio" value="3_dias_antes" onchange="atualizarOpcaoEnvio()">
+                    <span>3 Dias antes</span>
+                </label>
+
+                <label class="radio-opcao">
+                    <input type="radio" name="tipoEnvio" value="5_dias_antes" onchange="atualizarOpcaoEnvio()">
+                    <span>5 Dias antes</span>
+                </label>
+
+                <label class="radio-opcao">
+                    <input type="radio" name="tipoEnvio" value="7_dias_antes" onchange="atualizarOpcaoEnvio()">
+                    <span>7 Dias antes</span>
+                </label>
+
+                <!-- Hora para opções "dias antes" -->
+                <div id="containerHoraDiasAntes" style="display:none;margin-top:10px;padding-left:24px;">
+                    <label style="font-size:13px;color:#555;">Horário do envio: </label>
+                    <input type="time" id="horaEnvioDiasAntes" value="09:00" class="input-hora">
+                </div>
+            </div>
+
+            <div style="display:flex;justify-content:center;margin-top:24px;">
+                <button onclick="ativarMensagemConfirmado()" class="btn-ativar" id="btnAtivarConfirmado" style="min-width:200px;">
+                    Ativar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         ESTILOS INLINE DOS MODAIS
+    ═══════════════════════════════════════════════════════ -->
+    <style>
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .modal-box {
+            background: #fff;
+            border-radius: 12px;
+            padding: 28px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+        }
+        .modal-close {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: none;
+            border: none;
+            font-size: 22px;
+            cursor: pointer;
+            color: #666;
+            line-height: 1;
+        }
+        .btn-ativar {
+            background: #22c55e;
+            color: #fff;
+            border: none;
+            padding: 12px 28px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-ativar:hover { background: #16a34a; }
+        .btn-ativar:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-variaveis {
+            background: #7c3aed;
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .btn-variavel {
+            background: #f0eaff;
+            color: #7c3aed;
+            border: 1px solid #d8b4fe;
+            padding: 4px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .btn-variavel:hover { background: #ede9fe; }
+        .radio-opcao {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #333;
+        }
+        .radio-opcao:hover { background: #f9fafb; }
+        .radio-opcao input[type="radio"] { accent-color: #7c3aed; }
+        .input-hora {
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 13px;
+            width: 80px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Cards de mensagens ativas */
+        #listaMensagensAtivas .message-card {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+        #listaMensagensAtivas .message-card .card-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        #listaMensagensAtivas .message-card .btn-editar {
+            background: none;
+            border: 1px solid #7c3aed;
+            color: #7c3aed;
+            padding: 6px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        #listaMensagensAtivas .message-card .btn-desativar {
+            background: none;
+            border: 1px solid #ef4444;
+            color: #ef4444;
+            padding: 6px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+    </style>
 
     <script src="dashboard.js"></script>
     <script src="marketing.js"></script>

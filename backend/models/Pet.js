@@ -88,6 +88,10 @@ const Pet = sequelize.define(
       type: DataTypes.BOOLEAN,
       defaultValue: true,
     },
+    empresa_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
   },
   {
     tableName: "pets",

@@ -3904,17 +3904,25 @@ function preencherFormulario(dados) {
     const precoNum =
       typeof dados.preco === "number" ? dados.preco : Number(dados.preco) || 0;
     if (custoBaseNum || precoNum) {
-      document.getElementById("custo").value = custoBaseNum.toFixed(2);
-      document.getElementById("venda").value = precoNum.toFixed(2);
+      // Se só tem preco (vindo do XML), colocar em custo e deixar venda em branco
+      const custoFinal = custoBaseNum || precoNum;
+      const vendaFinal = custoBaseNum ? precoNum : 0;
 
-      // Calcular margem com proteção contra divisão por zero
-      const margemReais = precoNum - custoBaseNum;
-      const percentualMargem =
-        custoBaseNum !== 0 ? (margemReais / custoBaseNum) * 100 : 0;
+      document.getElementById("custo").value = custoFinal.toFixed(2);
+      document.getElementById("venda").value =
+        vendaFinal > 0 ? vendaFinal.toFixed(2) : "";
 
-      document.getElementById("reaisMargem").value = margemReais.toFixed(2);
-      document.getElementById("percentualMargem").value =
-        percentualMargem.toFixed(2);
+      // Calcular margem apenas quando ambos estão definidos
+      if (custoFinal > 0 && vendaFinal > 0) {
+        const margemReais = vendaFinal - custoFinal;
+        const percentualMargem = (margemReais / custoFinal) * 100;
+        document.getElementById("reaisMargem").value = margemReais.toFixed(2);
+        document.getElementById("percentualMargem").value =
+          percentualMargem.toFixed(2);
+      } else {
+        document.getElementById("reaisMargem").value = "";
+        document.getElementById("percentualMargem").value = "";
+      }
     }
   } catch (e) {
     console.debug("Erro ao preencher preços/margem:", e);

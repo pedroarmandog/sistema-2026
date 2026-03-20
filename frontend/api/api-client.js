@@ -42,6 +42,18 @@ class ApiClient {
           /* não-JSON */
         }
 
+        // Se empresa bloqueada (403 + flag), redirecionar imediatamente
+        if (response.status === 403 && errorBody && errorBody.bloqueado) {
+          window.location.href = "/painel/sistema-bloqueado.html";
+          return;
+        }
+
+        // Se não autenticado, redirecionar para login
+        if (response.status === 401) {
+          window.location.href = "/login/login.html";
+          return;
+        }
+
         // compor mensagem de erro a partir dos campos mais comuns
         const serverMsg =
           errorBody &&

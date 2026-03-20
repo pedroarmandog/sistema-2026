@@ -1,6 +1,8 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
+const cookieParser = require("cookie-parser");
+const { authUser } = require("./middleware/authUser");
 const app = express();
 
 const path = require("path");
@@ -27,6 +29,7 @@ app.use(
 );
 app.use(bodyParser.json({ limit: "10mb" })); // aumentar limite para aceitar logos grandes
 app.use(bodyParser.urlencoded({ limit: "10mb", extended: true }));
+app.use(cookieParser());
 app.use("/uploads", express.static(path.join(__dirname, "../uploads"))); // imagens públicas
 
 // Rota para favicon.ico (browsers buscam este path automaticamente)
@@ -93,6 +96,7 @@ const userFilterRoutes = require("./routes/userFilterRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const unidadeRoutes = require("./routes/unidadeRoutes");
 const fornecedorRoutes = require("./routes/fornecedorRoutes");
+const categoriaFinanceiraRoutes = require("./routes/categoriaFinanceiraRoutes");
 const periodicidadeRoutes = require("./routes/periodicidadeRoutes");
 // Integrar módulo Entrada de Mercadoria (Prisma + TypeScript)
 // entrada-mercadoria (compiled router)
@@ -210,11 +214,15 @@ if (!SKIP_DB_SYNC) {
   const __DEV_ENTRADAS = [];
   const { Entrada } = require("./models");
 
-  app.get("/api/entrada/manual", async (req, res) => {
+  app.get("/api/entrada/manual", authUser, async (req, res) => {
+    const empresaId = req.user?.empresaId;
     // Tentar carregar do banco; em falha, usar memória
     try {
       if (Entrada && typeof Entrada.findAll === "function") {
+        const where = {};
+        if (empresaId) where.empresa_id = empresaId;
         const rows = await Entrada.findAll({
+          where,
           order: [["createdAt", "DESC"]],
           limit: 200,
         });
@@ -256,13 +264,15 @@ if (!SKIP_DB_SYNC) {
     return res.status(404).json({ error: "Nota não localizada" });
   });
 
-  app.post("/api/entrada/manual", async (req, res) => {
+  app.post("/api/entrada/manual", authUser, async (req, res) => {
     const payload = req.body || {};
+    const empresaId = req.user?.empresaId;
     // Primeiro tentar persistir no DB
     try {
       if (Entrada && typeof Entrada.create === "function") {
         // mapear campos do payload para os atributos do modelo
         const mapped = Object.assign({}, payload);
+        if (empresaId) mapped.empresa_id = empresaId;
         mapped.categoriaFinanceira =
           mapped.categoriaFinanceira ||
           mapped.tipoEntrada ||
@@ -273,6 +283,8 @@ if (!SKIP_DB_SYNC) {
         mapped.dataEmissao = mapped.dataEmissao || mapped.data || null;
         mapped.valorTotal =
           mapped.valorTotal || mapped.valor || mapped.total || 0;
+        // Normalizar: o frontend pode enviar 'items' ou 'itens' — garantir que 'itens' seja populado
+        mapped.itens = mapped.itens || mapped.items || [];
 
         const created = await Entrada.create(mapped);
         // garantir que a resposta contenha explicitamente os campos esperados
@@ -298,10 +310,15 @@ if (!SKIP_DB_SYNC) {
           "=> saved:",
           saved,
         );
-        // Se estiver Finalizado, aplicar ajuste de estoque para cada item e retornar lista de produtos atualizados
+        // Se estiver Finalizado/Concluído, criar/atualizar produtos e ajustar estoque
         try {
           saved.updatedProducts = [];
-          if (saved && String(saved.situacao).toLowerCase().includes("final")) {
+          const situacaoStr = String(saved.situacao || "").toLowerCase();
+          const isConcluido =
+            situacaoStr.includes("final") ||
+            situacaoStr.includes("conclui") ||
+            situacaoStr === "concluido";
+          if (saved && isConcluido) {
             const Produto = require("./models").Produto;
             const HistoricoEstoque = require("./models").HistoricoEstoque;
             const itens = Array.isArray(saved.itens)
@@ -309,12 +326,21 @@ if (!SKIP_DB_SYNC) {
               : payload.itens || [];
             for (const it of itens) {
               try {
+                // Calcular quantidade correta (entEstoque tem prioridade sobre quantidade * fator)
+                const fatorVal = Number(it.fator || 1) || 1;
+                const qtdEstoque = Number(it.entEstoque || 0) || 0;
                 const quantidade =
-                  Number(it.quantidade || it.qty || it.qtd || 0) || 0;
+                  qtdEstoque ||
+                  Math.round(Number(it.quantidade || 0) * fatorVal) ||
+                  0;
                 if (quantidade === 0) continue;
-                // localizar produto por id ou codigo
+
+                // Localizar produto: matchedId > id > codigo
                 let prod = null;
-                if (it.id) {
+                if (it.matchedId) {
+                  prod = await Produto.findByPk(String(it.matchedId));
+                }
+                if (!prod && it.id && String(it.id).length < 20) {
                   prod = await Produto.findByPk(String(it.id));
                 }
                 if (!prod && it.codigo) {
@@ -322,10 +348,74 @@ if (!SKIP_DB_SYNC) {
                     where: { codigo: String(it.codigo) },
                   });
                 }
-                if (!prod) continue;
+
+                if (!prod) {
+                  // Produto não existe: criar no catálogo com estoque inicial
+                  const nomeItem = (
+                    it.descricao ||
+                    it.nome ||
+                    it.xProd ||
+                    ""
+                  ).trim();
+                  if (!nomeItem) continue;
+                  try {
+                    const [[rowMax]] = await Produto.sequelize.query(
+                      "SELECT MAX(CAST(id AS UNSIGNED)) AS maxId FROM itens",
+                    );
+                    const maxId =
+                      rowMax && rowMax.maxId !== null
+                        ? Number(rowMax.maxId)
+                        : 0;
+                    prod = await Produto.create({
+                      id: String((maxId || 0) + 1),
+                      nome: nomeItem,
+                      codigo: it.codigo || "",
+                      preco: Number(it.unitario || it.preco || 0) || 0,
+                      custoBase: Number(it.unitario || it.preco || 0) || 0,
+                      ncm: it.ncm || it.NCM || "",
+                      validade: it.validade || "",
+                      estoqueAtual: quantidade,
+                      fatorCompra: String(fatorVal),
+                    });
+                    console.log(
+                      `[entrada/manual] Produto criado: ${nomeItem} (id=${prod.id}) estoque=${quantidade}`,
+                    );
+                    try {
+                      if (
+                        HistoricoEstoque &&
+                        typeof HistoricoEstoque.create === "function"
+                      ) {
+                        await HistoricoEstoque.create({
+                          produtoId: String(prod.id),
+                          produtoNome: prod.nome,
+                          dataMovimento: saved.dataEmissao || new Date(),
+                          operacao: "Entrada",
+                          estoqueAnterior: 0,
+                          quantidade: quantidade,
+                          novoEstoque: quantidade,
+                          observacao: `Produto criado via entrada ${saved.id}`,
+                        });
+                      }
+                    } catch (e) {}
+                    saved.updatedProducts.push(
+                      prod.get ? prod.get({ plain: true }) : prod,
+                    );
+                  } catch (createErr) {
+                    console.warn(
+                      "Erro criando produto na entrada:",
+                      createErr && createErr.message,
+                    );
+                  }
+                  continue;
+                }
+
+                // Produto existente: incrementar estoque
                 const atual = Number(prod.estoqueAtual) || 0;
                 const novo = atual + quantidade;
                 const updatedProd = await prod.update({ estoqueAtual: novo });
+                console.log(
+                  `[entrada/manual] Estoque atualizado: ${prod.nome} ${atual} → ${novo}`,
+                );
                 if (
                   HistoricoEstoque &&
                   typeof HistoricoEstoque.create === "function"
@@ -341,15 +431,11 @@ if (!SKIP_DB_SYNC) {
                     observacao: `Entrada automática via nota ${saved.id}`,
                   });
                 }
-                try {
-                  saved.updatedProducts.push(
-                    updatedProd.get
-                      ? updatedProd.get({ plain: true })
-                      : updatedProd,
-                  );
-                } catch (e) {
-                  saved.updatedProducts.push(updatedProd);
-                }
+                saved.updatedProducts.push(
+                  updatedProd.get
+                    ? updatedProd.get({ plain: true })
+                    : updatedProd,
+                );
               } catch (e) {
                 console.warn(
                   "Erro ajustando estoque (POST entrada):",
@@ -400,6 +486,8 @@ if (!SKIP_DB_SYNC) {
         mapped.dataEmissao = mapped.dataEmissao || mapped.data || null;
         mapped.valorTotal =
           mapped.valorTotal || mapped.valor || mapped.total || 0;
+        // Normalizar: o frontend pode enviar 'items' ou 'itens'
+        mapped.itens = mapped.itens || mapped.items || undefined;
 
         const existing = await Entrada.findByPk(id);
         if (existing) {
@@ -632,6 +720,153 @@ if (!SKIP_DB_SYNC) {
 
 // Garantir que exista um endpoint para listar entradas em /api/entrada/manual
 // mesmo quando o módulo `entrada-mercadoria` compilado não expõe esse route.
+
+// POST: criar entrada manual com DB e processar itens no estoque
+app.post("/api/entrada/manual", async (req, res) => {
+  const payload = req.body || {};
+  try {
+    const { Entrada, Produto, HistoricoEstoque } = require("./models");
+    if (!Entrada || typeof Entrada.create !== "function") {
+      throw new Error("Modelo Entrada não disponível");
+    }
+
+    const mapped = Object.assign({}, payload);
+    mapped.categoriaFinanceira =
+      mapped.categoriaFinanceira || mapped.tipoEntrada || mapped.tipo || null;
+    mapped.observacao = mapped.observacao || mapped.observacoes || null;
+    mapped.situacao = mapped.situacao || mapped.status || "pendente";
+    mapped.dataEmissao = mapped.dataEmissao || mapped.data || null;
+    mapped.valorTotal = mapped.valorTotal || mapped.valor || mapped.total || 0;
+    mapped.itens = mapped.itens || mapped.items || [];
+
+    const created = await Entrada.create(mapped);
+    const saved = created.toJSON();
+    saved.itens =
+      saved.itens && saved.itens.length > 0 ? saved.itens : mapped.itens || [];
+    saved.updatedProducts = [];
+
+    // Processar estoque quando situacao = concluido/finalizado
+    const situacaoStr = String(saved.situacao || "").toLowerCase();
+    const isConcluido =
+      situacaoStr.includes("final") ||
+      situacaoStr.includes("conclui") ||
+      situacaoStr === "concluido";
+
+    if (isConcluido && Produto && typeof Produto.findByPk === "function") {
+      for (const it of saved.itens) {
+        try {
+          const fatorVal = Number(it.fator || 1) || 1;
+          const qtdEstoque = Number(it.entEstoque || 0) || 0;
+          const quantidade =
+            qtdEstoque ||
+            Math.round(Number(it.quantidade || 0) * fatorVal) ||
+            0;
+          if (quantidade === 0) continue;
+
+          let prod = null;
+          if (it.matchedId) prod = await Produto.findByPk(String(it.matchedId));
+          if (!prod && it.codigo)
+            prod = await Produto.findOne({
+              where: { codigo: String(it.codigo) },
+            });
+
+          if (!prod) {
+            // Criar produto novo
+            const nomeItem = (it.descricao || it.nome || it.xProd || "").trim();
+            if (!nomeItem) continue;
+            try {
+              const [[rowMax]] = await Produto.sequelize.query(
+                "SELECT MAX(CAST(id AS UNSIGNED)) AS maxId FROM itens",
+              );
+              const maxId =
+                rowMax && rowMax.maxId !== null ? Number(rowMax.maxId) : 0;
+              prod = await Produto.create({
+                id: String((maxId || 0) + 1),
+                nome: nomeItem,
+                codigo: it.codigo || "",
+                preco: Number(it.unitario || it.preco || 0) || 0,
+                custoBase: Number(it.unitario || it.preco || 0) || 0,
+                ncm: it.ncm || it.NCM || "",
+                validade: it.validade || "",
+                estoqueAtual: quantidade,
+                fatorCompra: String(fatorVal),
+              });
+              console.log(
+                `[entrada/manual POST] Produto criado: ${nomeItem} (id=${prod.id}) estoque=${quantidade}`,
+              );
+              if (
+                HistoricoEstoque &&
+                typeof HistoricoEstoque.create === "function"
+              ) {
+                await HistoricoEstoque.create({
+                  produtoId: String(prod.id),
+                  produtoNome: prod.nome,
+                  dataMovimento: saved.dataEmissao || new Date(),
+                  operacao: "Entrada",
+                  estoqueAnterior: 0,
+                  quantidade: quantidade,
+                  novoEstoque: quantidade,
+                  observacao: `Produto criado via entrada ${saved.id}`,
+                });
+              }
+              saved.updatedProducts.push(
+                prod.get ? prod.get({ plain: true }) : prod,
+              );
+            } catch (createErr) {
+              console.warn(
+                "Erro criando produto na entrada:",
+                createErr && createErr.message,
+              );
+            }
+            continue;
+          }
+
+          // Incrementar estoque do produto existente
+          const atual = Number(prod.estoqueAtual) || 0;
+          const novo = atual + quantidade;
+          const updatedProd = await prod.update({ estoqueAtual: novo });
+          console.log(
+            `[entrada/manual POST] Estoque atualizado: ${prod.nome} ${atual} → ${novo}`,
+          );
+          if (
+            HistoricoEstoque &&
+            typeof HistoricoEstoque.create === "function"
+          ) {
+            await HistoricoEstoque.create({
+              produtoId: String(prod.id),
+              produtoNome: prod.nome,
+              dataMovimento: saved.dataEmissao || new Date(),
+              operacao: "Entrada",
+              estoqueAnterior: atual,
+              quantidade: quantidade,
+              novoEstoque: novo,
+              observacao: `Entrada automática via nota ${saved.id}`,
+            });
+          }
+          saved.updatedProducts.push(
+            updatedProd.get ? updatedProd.get({ plain: true }) : updatedProd,
+          );
+        } catch (e) {
+          console.warn(
+            "Erro ajustando estoque (POST entrada/manual):",
+            e && e.message,
+          );
+        }
+      }
+    }
+
+    console.log(
+      `[api/entrada/manual POST] Entrada criada id=${saved.id}, itens=${saved.itens.length}, produtosProcessados=${saved.updatedProducts.length}`,
+    );
+    return res.json(saved);
+  } catch (err) {
+    console.error("Erro POST /api/entrada/manual:", err && err.message);
+    return res
+      .status(500)
+      .json({ error: err.message || "Erro interno ao salvar entrada" });
+  }
+});
+
 app.get("/api/entrada/manual", async (req, res) => {
   try {
     const models = require("./models");
@@ -1150,6 +1385,10 @@ app.get("/api/test", (req, res) => {
 });
 
 const petTagsRoutes = require("./routes/petTagsRoutes");
+// Rotas do módulo de Marketing/WhatsApp
+const marketingRoutes = require("./routes/marketingRoutes");
+app.use("/api/marketing", marketingRoutes);
+
 app.use("/api/clientes", clienteRoutes);
 app.use("/api/pets", petRoutes);
 app.use("/api/pet-tags", petTagsRoutes);
@@ -1216,6 +1455,15 @@ app.use("/api/user-filters", userFilterRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/unidades", unidadeRoutes);
 app.use("/api/fornecedores", fornecedorRoutes);
+app.use("/api/categorias-financeiras", categoriaFinanceiraRoutes);
+
+// Painel Financeiro – dados reais do banco
+const painelFinanceiroRoutes = require("./routes/painelFinanceiroRoutes");
+app.use("/api/painel-financeiro", painelFinanceiroRoutes);
+
+// Painel Admin – controle de empresas, login admin, faturamento
+const adminRoutes = require("./routes/adminRoutes");
+app.use("/api/admin", adminRoutes);
 
 // Endpoint compatível com frontend: buscar produtos com preço alterado
 app.get("/api/editar-produto", async (req, res) => {
@@ -1278,6 +1526,17 @@ if (!SKIP_DB_SYNC) {
         await criarUsuarioInicial();
       } catch (error) {
         console.warn("⚠️  Aviso ao criar usuário inicial:", error.message);
+      }
+
+      // Criar admin inicial do painel se não existir
+      try {
+        const criarAdminInicial = require("./scripts/seed-admin-painel");
+        await criarAdminInicial();
+      } catch (error) {
+        console.warn(
+          "⚠️  Aviso ao criar admin inicial do painel:",
+          error.message,
+        );
       }
     })
     .catch((error) => {
@@ -1637,10 +1896,106 @@ try {
   console.error("Erro ao carregar/sincronizar modelo Usuario:", e && e.message);
 }
 
+// ── Handler global: evita crash por erros do Puppeteer/WhatsApp ──────────────
+process.on("unhandledRejection", (reason, promise) => {
+  const msg = reason && reason.message ? reason.message : String(reason);
+  // TargetCloseError é comportamento normal do WhatsApp Web (navegação após auth)
+  if (
+    msg.includes("Target closed") ||
+    msg.includes("TargetCloseError") ||
+    msg.includes("Session closed") ||
+    msg.includes("Protocol error")
+  ) {
+    console.warn(
+      "[WhatsApp] Puppeteer TargetCloseError ignorado (comportamento normal após auth):",
+      msg,
+    );
+    return;
+  }
+  console.error("⚠️ [UnhandledRejection]", msg);
+});
+
+process.on("uncaughtException", (err) => {
+  const msg = err && err.message ? err.message : String(err);
+  if (
+    msg.includes("Target closed") ||
+    msg.includes("TargetCloseError") ||
+    msg.includes("Session closed") ||
+    msg.includes("Protocol error")
+  ) {
+    console.warn(
+      "[WhatsApp] Puppeteer exception ignorada (comportamento normal):",
+      msg,
+    );
+    return;
+  }
+  console.error("💥 [UncaughtException]", msg);
+  // Não encerrar o processo para erros não críticos
+});
+
 // Iniciar o servidor
 const server = app.listen(3000, () => {
   console.log("🚀 Servidor rodando na porta 3000 ✅");
   console.log("🔗 URL: http://localhost:3000");
+
+  // Iniciar agendador de mensagens WhatsApp (node-cron)
+  try {
+    const { iniciarAgendador } = require("./services/whatsappQueue");
+    iniciarAgendador();
+  } catch (err) {
+    console.warn(
+      "⚠️ Não foi possível iniciar agendador WhatsApp:",
+      err.message,
+    );
+  }
+
+  // Cron: verificação de vencimentos do painel admin (todo dia às 00:30)
+  try {
+    const cron = require("node-cron");
+    const {
+      verificarVencimentos,
+    } = require("./controllers/empresaPainelController");
+    cron.schedule("30 0 * * *", () => {
+      console.log("[cron] Executando verificação de vencimentos...");
+      verificarVencimentos();
+    });
+    // Executar verificação ao iniciar também
+    verificarVencimentos();
+    console.log("✅ Cron de verificação de vencimentos iniciado");
+  } catch (err) {
+    console.warn(
+      "⚠️ Não foi possível iniciar cron de vencimentos:",
+      err.message,
+    );
+  }
+
+  // Reconectar automaticamente sessões WhatsApp que estavam ativas
+  // (usa arquivos de sessão salvos em disco — sem precisar de novo QR)
+  setTimeout(async () => {
+    try {
+      const { reconectarSessoesAtivas } = require("./services/whatsappService");
+      await reconectarSessoesAtivas();
+    } catch (err) {
+      console.warn("⚠️ Erro ao reconectar sessões WhatsApp:", err.message);
+    }
+  }, 3000); // aguarda 3s para o DB estar pronto
+
+  // Garantir estado correto das mensagens automáticas no banco
+  setTimeout(async () => {
+    try {
+      const { MensagemAutomatica } = require("./models");
+      await MensagemAutomatica.update(
+        { ativo: false },
+        { where: { tipo: ["plano_banhos_concluido", "pet_liberado_portal"] } },
+      );
+      await MensagemAutomatica.update(
+        { ativo: true },
+        { where: { tipo: ["pet_pronto", "primeiro_banho"] } },
+      );
+    } catch (err) {
+      console.warn("⚠️ Erro ao ajustar mensagens automáticas:", err.message);
+    }
+  }, 5000);
 
   const address = server.address();
   if (address) {

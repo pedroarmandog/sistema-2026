@@ -4,6 +4,10 @@ const { Agendamento, Pet, Cliente, Empresa, Usuario } = require("../models");
 const fs = require("fs");
 const path = require("path");
 const { Op } = require("sequelize");
+const { authUser } = require("../middleware/authUser");
+
+// Aplicar auth em toda a rota
+router.use(authUser);
 
 // GET /api/agendamentos - Listar agendamentos
 router.get("/", async (req, res) => {
@@ -23,6 +27,11 @@ router.get("/", async (req, res) => {
         [Op.notIn]: ["vacina", "vermifugo", "antiparasitario", "documento"],
       },
     };
+
+    // Filtro obrigatório por empresa
+    if (req.user?.empresaId) {
+      whereClause.empresa_id = req.user.empresaId;
+    }
 
     // Filtro por data - usar intervalo com offset -03:00 para evitar
     // discrepâncias de timezone/UTC ao armazenar timestamps.
@@ -258,6 +267,7 @@ router.post("/", async (req, res) => {
       profissional: profissional || "",
       valor: valor || 0,
       status: "agendado",
+      empresa_id: req.user?.empresaId || null,
     });
 
     // Buscar o agendamento criado com os dados relacionados
@@ -286,6 +296,46 @@ router.post("/", async (req, res) => {
     };
 
     res.status(201).json(agendamentoFormatted);
+
+    // ── Trigger: Lembrete de Agendamento (via Marketing) ────────────
+    setImmediate(async () => {
+      try {
+        const {
+          dispararMensagemAutomatica,
+        } = require("../controllers/marketingController");
+        const nomeTutor = agendamentoCriado.pet?.cliente?.nome || "";
+        const telefone = agendamentoCriado.pet?.cliente?.telefone || "";
+        const nomePet = agendamentoCriado.pet?.nome || "";
+        const dt = agendamentoCriado.dataAgendamento
+          ? new Date(agendamentoCriado.dataAgendamento)
+          : null;
+        const dataAgendamento = dt ? dt.toLocaleDateString("pt-BR") : "";
+        const horaAgendamento = agendamentoCriado.horario || "";
+
+        await dispararMensagemAutomatica(
+          "lembrete_agendamento",
+          {
+            nomeTutor,
+            nomePet,
+            dataAgendamento,
+            horaAgendamento,
+            servico: agendamentoCriado.servico || "",
+          },
+          telefone,
+          dt,
+          {
+            agendamentoId: agendamentoCriado.id,
+            petId: agendamentoCriado.petId,
+          },
+          1,
+        );
+      } catch (e) {
+        console.warn(
+          "[Marketing] Não foi possível disparar lembrete:",
+          e.message,
+        );
+      }
+    });
   } catch (error) {
     console.error("Erro ao criar agendamento:", error);
     res.status(500).json({ error: "Erro interno do servidor" });
@@ -579,6 +629,91 @@ router.patch("/:id/status", async (req, res) => {
       pagamentos: updatePayload.pagamentos,
       totalPago: updatePayload.totalPago,
     });
+
+    // ── Trigger: pet_pronto ─────────────────────────────────────────
+    if (status === "pronto") {
+      setImmediate(async () => {
+        try {
+          const {
+            dispararMensagemAutomatica,
+          } = require("../controllers/marketingController");
+          const ag = await Agendamento.findByPk(id, {
+            include: [
+              {
+                model: Pet,
+                as: "pet",
+                include: [{ model: Cliente, as: "cliente" }],
+              },
+            ],
+          });
+          if (!ag?.pet?.cliente) return;
+          await dispararMensagemAutomatica(
+            "pet_pronto",
+            {
+              nomeTutor: ag.pet.cliente.nome || "",
+              nomePet: ag.pet.nome || "",
+            },
+            ag.pet.cliente.telefone || "",
+            null,
+            { agendamentoId: ag.id, petId: ag.petId },
+            1,
+          );
+        } catch (e) {
+          console.warn(
+            "[Marketing] Não foi possível disparar pet_pronto:",
+            e.message,
+          );
+        }
+      });
+    }
+
+    // ── Trigger: primeiro_banho ─────────────────────────────────────
+    if (status === "concluido") {
+      setImmediate(async () => {
+        try {
+          const {
+            dispararMensagemAutomatica,
+          } = require("../controllers/marketingController");
+          const ag = await Agendamento.findByPk(id, {
+            include: [
+              {
+                model: Pet,
+                as: "pet",
+                include: [{ model: Cliente, as: "cliente" }],
+              },
+            ],
+          });
+          if (!ag?.pet?.cliente) return;
+          // Verificar se é o primeiro atendimento concluído deste pet
+          const concluidos = await Agendamento.count({
+            where: {
+              petId: ag.petId,
+              status: "concluido",
+              id: { [Op.ne]: id },
+            },
+          });
+          if (concluidos === 0) {
+            await dispararMensagemAutomatica(
+              "primeiro_banho",
+              {
+                nomeTutor: ag.pet.cliente.nome || "",
+                nomePet: ag.pet.nome || "",
+                servico: ag.servico || "",
+              },
+              ag.pet.cliente.telefone || "",
+              null,
+              { agendamentoId: ag.id, petId: ag.petId },
+              1,
+            );
+          }
+        } catch (e) {
+          console.warn(
+            "[Marketing] Não foi possível disparar primeiro_banho:",
+            e.message,
+          );
+        }
+      });
+    }
   } catch (error) {
     console.error("Erro ao atualizar status:", error);
     res.status(500).json({ error: "Erro interno do servidor" });

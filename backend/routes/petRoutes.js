@@ -3,6 +3,10 @@ const router = express.Router();
 const petController = require("../controllers/petController");
 const multer = require("multer");
 const { Agendamento, Periodicidade } = require("../models");
+const { authUser } = require("../middleware/authUser");
+
+// Aplicar auth em toda a rota de pets
+router.use(authUser);
 
 // Helper: calcula data de renovação somando os dias da periodicidade à data de aplicação
 function calcularDataRenovacao(
