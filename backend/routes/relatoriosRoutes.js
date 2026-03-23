@@ -7,313 +7,323 @@ const Produto = require("../models/Produto");
 const { Venda } = require("../models/Venda");
 const { Op } = require("sequelize");
 
-// DEBUG: confirmar que o arquivo de rotas foi carregado
-console.log("🔧 relatoriosRoutes.js carregado e router criado");
+// Helper: agrega vendas por produto e retorna array de linhas com custos e lucros
+async function gerarDadosFaturamento(filters = {}, req) {
+  // filtros: dataInicio, dataFim, ... (aceita mesmo formato do frontend)
+  const { dataInicio, dataFim } = filters || {};
 
-/**
- * ========================================
- * ROTAS DE RELATÓRIOS
- * ========================================
- */
+  // montar where para vendas (simples)
+  const where = {};
+  function parseBRDate(s) {
+    if (!s) return null;
+    const parts = String(s).split("/");
+    if (parts.length === 3)
+      return new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
+    return new Date(s);
+  }
+  const inicio = parseBRDate(dataInicio);
+  const fim = parseBRDate(dataFim);
+  if (inicio && fim) {
+    fim.setHours(23, 59, 59, 999);
+    where.createdAt = { [Op.between]: [inicio, fim] };
+  }
+  // respeitar empresa_id quando disponível
+  if (req && req.user && req.user.empresaId)
+    where.empresa_id = req.user.empresaId;
 
-/**
- * POST /api/relatorios/faturamento
- * Retorna dados para relatório de faturamento
- */
+  const vendas = await Venda.findAll({ where });
+
+  // agregação simples: map produtos por codigo/nome
+  const mapa = new Map();
+  for (const v of vendas) {
+    let itens = [];
+    try {
+      itens = Array.isArray(v.itens) ? v.itens : JSON.parse(v.itens || "[]");
+    } catch (e) {
+      itens = v.itens || [];
+    }
+    for (const it of itens) {
+      const key = (it.codigo || it.id || it.produto || it.nome) + "";
+      const entry = mapa.get(key) || {
+        codigo: it.codigo || it.id || "",
+        produto: it.produto || it.nome || String(it.nome || ""),
+        qtd_venda: 0,
+        qtd_vendida: 0,
+        total_venda: 0,
+      };
+      entry.qtd_venda += Number(it.quantidade || it.qtd || it.qtd_venda || 1);
+      entry.qtd_vendida +=
+        Number(it.quantidade_vendida || it.qtd_vendida || it.quantidade || 0) ||
+        entry.qtd_venda;
+      const preco =
+        Number(it.preco || it.preco_venda || it.precoVenda || it.valor || 0) ||
+        0;
+      entry.total_venda += preco * Number(it.quantidade || it.qtd || 1);
+      mapa.set(key, entry);
+    }
+  }
+
+  // buscar produtos para obter custo unitário
+  const empresaId = req && req.user && req.user.empresaId;
+  const produtosDB = await Produto.findAll({
+    where: empresaId ? { empresa_id: empresaId } : {},
+  });
+  const produtosPorCodigo = new Map();
+  for (const p of produtosDB)
+    produtosPorCodigo.set(String(p.codigo || p.id || p.nome), p);
+
+  const resultado = [];
+  for (const [k, v] of mapa.entries()) {
+    // tentar achar produto por codigo ou nome
+    let prod = produtosDB.find(
+      (p) =>
+        String(p.codigo) === String(v.codigo) ||
+        String(p.id) === String(v.codigo),
+    );
+    if (!prod) prod = produtosPorCodigo.get(String(v.codigo)) || null;
+    const custoUnit = prod && prod.custoBase ? Number(prod.custoBase || 0) : 0;
+    const total_custo = Number(
+      (custoUnit * (v.qtd_vendida || v.qtd_venda || 0)).toFixed(2),
+    );
+    const total_venda = Number((v.total_venda || 0).toFixed(2));
+    const total_lucro = Number((total_venda - total_custo).toFixed(2));
+    const margem = total_venda
+      ? Number(((total_lucro / total_venda) * 100).toFixed(2))
+      : 0;
+    resultado.push({
+      codigo: v.codigo || v.codigo,
+      produto: prod || v.produto,
+      qtd_venda: v.qtd_venda,
+      qtd_vendida: v.qtd_vendida,
+      total_custo,
+      total_venda,
+      total_lucro,
+      margem,
+    });
+  }
+
+  // ordenar por codigo/produto
+  resultado.sort((a, b) => {
+    if (a.codigo && b.codigo)
+      return String(a.codigo).localeCompare(String(b.codigo));
+    if (a.produto && b.produto)
+      return String(a.produto.nome || a.produto).localeCompare(
+        String(b.produto.nome || b.produto),
+      );
+    return 0;
+  });
+  return resultado;
+}
+
+// Rota: /faturamento (JSON)
 router.post("/faturamento", async (req, res) => {
   try {
-    console.log("📊 Gerando dados do relatório de faturamento");
-    console.log("Filtros recebidos:", req.body);
-
-    const { dataInicio, dataFim, relatorioPor, ordenacao } = req.body;
-
-    // Consultar vendas no período e agregar por produto usando o campo `itens` (JSON) das vendas.
-    const periodoTexto = `Período: ${dataInicio || ""} até ${dataFim || ""}`;
-
-    // montar filtro de datas para query
-    const where = {};
-    if (dataInicio && dataFim) {
-      const inicio = new Date(dataInicio + " 00:00:00");
-      const fim = new Date(dataFim + " 23:59:59");
-      where.data = { [Op.between]: [inicio, fim] };
-    }
-
-    // Buscar vendas do banco
-    let vendas = [];
-    try {
-      vendas = await Venda.findAll({ where });
-      console.log(
-        `📦 rel-faturamento: encontradas ${vendas.length} vendas no período`,
-      );
-    } catch (e) {
-      console.warn("⚠️ Falha ao buscar vendas para relatório:", e && e.message);
-      vendas = [];
-    }
-
-    // Agregar itens por código/nome
-    const mapa = {}; // key -> { codigo, produto, qtd_vendida, total_venda }
-
-    vendas.forEach((v) => {
-      const itens = Array.isArray(v.itens) ? v.itens : v.itens || [];
-      itens.forEach((it) => {
-        const codigo =
-          it.codigo || it.id || (it.produtoId ? String(it.produtoId) : "");
-        const nome =
-          it.descricao || it.produto || it.nome || it.titulo || "Item sem nome";
-        const quantidade = Number(it.quantidade || it.qtd || it.qty || 0) || 0;
-        const total = Number(it.total || it.precoTotal || it.valor || 0) || 0;
-
-        const key = codigo || nome;
-        if (!mapa[key])
-          mapa[key] = {
-            codigo: codigo || "",
-            produto: nome,
-            qtd_vendida: 0,
-            total_venda: 0,
-            custo: 0,
-          };
-        mapa[key].qtd_vendida += quantidade;
-        mapa[key].total_venda += total;
-      });
-    });
-
-    const produtos = Object.keys(mapa).map((k) => {
-      const p = mapa[k];
-      const lucro = Number((p.total_venda - (p.custo || 0)).toFixed(2));
-      const margem = p.total_venda
-        ? Number(((lucro / p.total_venda) * 100).toFixed(2))
-        : 0;
-      return {
-        codigo: p.codigo,
-        produto: p.produto,
-        qtd_vendida: p.qtd_vendida,
-        custo: Number((p.custo || 0).toFixed(2)),
-        total_venda: Number(p.total_venda.toFixed(2)),
-        lucro: lucro,
-        margem: margem,
-      };
-    });
-
-    res.json({ periodo: periodoTexto, produtos });
+    const filtros = req.body || {};
+    const produtos = await gerarDadosFaturamento(filtros, req);
+    const periodo =
+      filtros.dataInicio && filtros.dataFim
+        ? `Período: ${filtros.dataInicio} até ${filtros.dataFim}`
+        : "Período: Todos";
+    res.json({ periodo, produtos });
   } catch (error) {
     console.error("❌ Erro ao gerar relatório:", error);
-    res.status(500).json({
-      error: "Erro ao gerar relatório",
-      message: error.message,
-    });
+    res
+      .status(500)
+      .json({ error: "Erro ao gerar relatório", message: error.message });
   }
 });
 
-/**
- * POST /api/relatorios/faturamento/pdf
- * Gera PDF do relatório de faturamento
- */
+// Rota: /faturamento/pdf (PDF)
 router.post("/faturamento/pdf", async (req, res) => {
+  let PDFDocument;
   try {
-    console.log("📄 Gerando PDF de faturamento (POST)");
+    PDFDocument = require("pdfkit");
+  } catch (e) {
+    res
+      .status(500)
+      .json({ error: "Dependência ausente: pdfkit", message: e.message });
+    return;
+  }
 
-    const { dataInicio = "", dataFim = "", produtos = [] } = req.body || {};
+  try {
+    const filtros = req.body || {};
+    const dataProdutos = await gerarDadosFaturamento(filtros, req);
 
-    let PDFDocument;
-    try {
-      PDFDocument = require("pdfkit");
-    } catch (errRequire) {
-      console.error(
-        "❌ pdfkit não está instalado:",
-        errRequire && errRequire.message,
-      );
-      res.status(500).json({
-        error: "Dependência ausente: pdfkit",
-        message:
-          "Execute `npm install pdfkit` na raiz do projeto e reinicie o servidor.",
-      });
-      return;
-    }
-
-    const doc = new PDFDocument({ size: "A4", margin: 40 });
+    const doc = new PDFDocument({ size: "A4", margin: 36 });
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      'inline; filename="relatorio_faturamento.pdf"',
-    );
+    res.setHeader("Content-Disposition", `inline; filename="faturamento.pdf"`);
     doc.pipe(res);
 
-    // Cabeçalho com logo da empresa
-    let logoPath = path.join(
-      __dirname,
-      "../../frontend/logos/logo_pet_cria-removebg-preview.png",
-    ); // logo padrão
-    const EmpresaModel = Empresa; // já importado no topo
-    let empresa = null;
-    try {
-      empresa = await EmpresaModel.findOne({
-        where: { ativa: true },
-        order: [["id", "ASC"]],
+    // Layout
+    const left = doc.page.margins.left;
+    const usableWidth =
+      doc.page.width - doc.page.margins.left - doc.page.margins.right;
+    const codeW = 60;
+    const numW = 70;
+    const prodW = usableWidth - codeW - numW * 4;
+    const colWidths = [codeW, prodW, numW, numW, numW, numW, numW];
+
+    const headers = [
+      "Código",
+      "Produto",
+      "Qtd Venda",
+      "Qtd Vendido",
+      "Total Custo",
+      "Total Venda",
+      "Total Lucro",
+    ];
+    const headerFontSize = 10;
+    const rowFontSize = 9;
+    const rowHeight = 20;
+    const cellPadding = 4;
+
+    function truncateToWidth(text, width) {
+      const s = String(text || "");
+      doc.font("Helvetica").fontSize(rowFontSize);
+      if (doc.widthOfString(s) <= width) return s;
+      let out = s;
+      const ell = "...";
+      while (out.length > 0 && doc.widthOfString(out + ell) > width)
+        out = out.slice(0, -1);
+      return out.length ? out + ell : ell;
+    }
+
+    // header
+    let y = doc.y + 6;
+    doc.font("Helvetica-Bold").fontSize(headerFontSize);
+    let x = left;
+    for (let i = 0; i < headers.length; i++) {
+      doc.text(headers[i], x + cellPadding, y + 2, {
+        width: colWidths[i] - cellPadding * 2,
+        align: i >= 2 ? "right" : "left",
       });
-    } catch (e) {
-      console.warn("⚠️ Não foi possível buscar empresa ativa:", e && e.message);
+      x += colWidths[i];
     }
-
-    if (empresa && empresa.logo && empresa.logo !== "") {
-      const empresaLogoPath = path.join(
-        __dirname,
-        "../../uploads",
-        empresa.logo,
-      );
-      if (fs.existsSync(empresaLogoPath)) {
-        logoPath = empresaLogoPath;
-        console.log("✅ Usando logo da empresa:", empresa.logo);
-      }
-    }
-
-    if (fs.existsSync(logoPath)) {
-      doc.image(logoPath, 595 / 2 - 55, 30, { width: 110, align: "center" });
-    }
-
-    // Título
-    doc.fontSize(14).font("Helvetica-Bold");
-    doc.text("RELATÓRIO DE FATURAMENTO", 0, 150, { align: "center" });
-    doc.moveDown(0.2);
-    doc.fontSize(11).font("Helvetica");
-    doc.text(
-      empresa
-        ? empresa.nome || empresa.razaoSocial || "PET CRIA LTDA"
-        : "PET CRIA LTDA",
-      { align: "center" },
-    );
-
-    doc.moveDown(1);
-
-    // Construir tabela com layout em duas linhas por produto (para caber em A4)
-    const left = 40;
-    const usableWidth = 595 - 2 * 40; // A4 width - margins
-    // Colunas calculadas para segunda linha
-    const cols2 = {
-      marca: left,
-      grupo: left + 120,
-      subgrupo: left + 240,
-      preco_custo: left + 340,
-      preco_venda: left + 400,
-      estoque_minimo: left + 460,
-    };
-
-    // Header (título da tabela)
-    doc.fontSize(10).font("Helvetica-Bold").fillColor("#222");
-    // desenhar uma linha de separação abaixo do título
-    let y = 180; // ajustado para dar espaço à logo centralizada
+    y += rowHeight;
     doc
-      .moveTo(left, y + 18)
-      .lineTo(left + usableWidth, y + 18)
+      .moveTo(left, y - 6)
+      .lineTo(left + usableWidth, y - 6)
       .stroke("#e6e6e6");
 
-    doc.fontSize(9).font("Helvetica");
+    doc.font("Helvetica").fontSize(rowFontSize).fillColor("#000");
+    let sumQtdVenda = 0,
+      sumQtdVendida = 0,
+      sumTotalCusto = 0,
+      sumTotalVenda = 0,
+      sumTotalLucro = 0;
+    const fmtCurrency = (v) =>
+      new Intl.NumberFormat("pt-BR", {
+        style: "currency",
+        currency: "BRL",
+      }).format(Number(v || 0));
 
-    // Percorrer produtos e desenhar cada produto em duas colunas: esquerda (código + descrição), direita (meta + preços)
-    y = y + 26;
-    const rightColWidth = 170;
-    const codeWidth = 40;
-    const descX = left + codeWidth + 8; // espaço após código
-    const descWidth = usableWidth - rightColWidth - codeWidth - 16; // margem interna
-    const rightX = left + usableWidth - rightColWidth;
-
-    const dataProdutos =
-      Array.isArray(produtos) && produtos.length ? produtos : [];
-
-    dataProdutos.forEach((p, i) => {
-      // calcular blocos e alturas para evitar sobreposição
-      const codigoText = p.codigo || "";
-      const descricao = p.descricao || p.produto || "";
-      const unidadeText = p.unidade ? `Un: ${p.unidade}` : "";
-
-      const marcaText = p.marca || "";
-      const grupoText = p.grupo || "";
-      const subgrupoText = p.subgrupo || "";
-
-      const precoCusto = p.preco_custo
-        ? `C: R$ ${Number(p.preco_custo).toFixed(2)}`
-        : "";
-      const precoVenda = p.preco_venda
-        ? `V: R$ ${Number(p.preco_venda).toFixed(2)}`
-        : "";
-      const estoqueTxt =
-        p.estoque_minimo !== undefined && p.estoque_minimo !== null
-          ? String(p.estoque_minimo)
-          : "";
-
-      const leftDescHeight = doc.heightOfString(descricao, {
-        width: descWidth,
-      });
-      const leftUnitHeight = unidadeText
-        ? doc.heightOfString(unidadeText, { width: descWidth })
-        : 0;
-      const leftHeight = Math.max(leftDescHeight + leftUnitHeight, 18);
-
-      const rightTopLines = [marcaText, grupoText, subgrupoText]
-        .filter(Boolean)
-        .join("\n");
-      const rightPriceLines = [
-        precoCusto,
-        precoVenda,
-        estoqueTxt ? `Est: ${estoqueTxt}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n");
-
-      const rightTopHeight = rightTopLines
-        ? doc.heightOfString(rightTopLines, { width: rightColWidth - 8 })
-        : 0;
-      const rightPriceHeight = rightPriceLines
-        ? doc.heightOfString(rightPriceLines, { width: rightColWidth - 8 })
-        : 0;
-      const rightHeight = Math.max(rightTopHeight + rightPriceHeight, 18);
-
-      const rowPadding = 12;
-      const rowHeight = Math.max(leftHeight, rightHeight) + rowPadding;
-
-      if (y + rowHeight > 760) {
+    for (const p of dataProdutos) {
+      if (y + rowHeight > doc.page.height - doc.page.margins.bottom - 10) {
         doc.addPage();
-        y = 60;
+        y = doc.page.margins.top + 10;
+      }
+      x = left;
+      const codigoVal =
+        p.codigo !== undefined && p.codigo !== null ? String(p.codigo) : "";
+      let produtoVal = "";
+      if (p.produto)
+        produtoVal =
+          typeof p.produto === "object"
+            ? p.produto.nome || p.produto.produto || String(p.produto.id || "")
+            : String(p.produto);
+      const qtdVendaVal = String(p.qtd_venda || 0);
+      const qtdVendidaVal = String(p.qtd_vendida || 0);
+      const totalCustoVal = fmtCurrency(p.total_custo || 0);
+      const totalVendaVal = fmtCurrency(p.total_venda || 0);
+      const totalLucroVal = fmtCurrency(p.total_lucro || 0);
+
+      const cellValues = [
+        codigoVal,
+        produtoVal,
+        qtdVendaVal,
+        qtdVendidaVal,
+        totalCustoVal,
+        totalVendaVal,
+        totalLucroVal,
+      ];
+
+      doc.text(
+        truncateToWidth(cellValues[0], colWidths[0] - cellPadding * 2),
+        x + cellPadding,
+        y + (rowHeight - rowFontSize) / 2 - 1,
+        { width: colWidths[0] - cellPadding * 2, align: "left" },
+      );
+      x += colWidths[0];
+      doc.text(
+        truncateToWidth(cellValues[1], colWidths[1] - cellPadding * 2),
+        x + cellPadding,
+        y + (rowHeight - rowFontSize) / 2 - 1,
+        { width: colWidths[1] - cellPadding * 2, align: "left" },
+      );
+      x += colWidths[1];
+      for (let c = 2; c < 7; c++) {
+        doc.text(
+          cellValues[c],
+          x + cellPadding,
+          y + (rowHeight - rowFontSize) / 2 - 1,
+          { width: colWidths[c] - cellPadding * 2, align: "right" },
+        );
+        x += colWidths[c];
       }
 
-      doc.font("Helvetica-Bold").fontSize(8).fillColor("#000");
-      doc.text(codigoText, left, y, { width: codeWidth, align: "left" });
-      doc.font("Helvetica").fontSize(9).fillColor("#111");
-      doc.text(descricao, descX, y, { width: descWidth, align: "left" });
-
-      if (unidadeText) {
-        doc.font("Helvetica").fontSize(8).fillColor("#666");
-        doc.text(unidadeText, descX, y + leftDescHeight + 4, {
-          width: descWidth,
-        });
-      }
-
-      doc.font("Helvetica").fontSize(9).fillColor("#333");
-      if (rightTopLines) {
-        doc.text(rightTopLines, rightX, y, {
-          width: rightColWidth - 8,
-          align: "left",
-        });
-      }
-
-      if (rightPriceLines) {
-        const priceStartY = y + rightTopHeight + 6;
-        const priceLinesArr = rightPriceLines.split("\n");
-        priceLinesArr.forEach((line, idxLine) => {
-          const thisY = priceStartY + idxLine * 12;
-          doc.text(line, rightX, thisY, {
-            width: rightColWidth - 8,
-            align: "right",
-          });
-        });
-      }
-
-      const sepY = y + rowHeight - 6;
       doc
-        .moveTo(left, sepY)
-        .lineTo(left + usableWidth, sepY)
+        .moveTo(left, y + rowHeight - 4)
+        .lineTo(left + usableWidth, y + rowHeight - 4)
         .stroke("#f0f0f0");
-      y = sepY + 12;
+
+      sumQtdVenda += Number(p.qtd_venda || 0);
+      sumQtdVendida += Number(p.qtd_vendida || 0);
+      sumTotalCusto += Number(p.total_custo || 0);
+      sumTotalVenda += Number(p.total_venda || 0);
+      sumTotalLucro += Number(p.total_lucro || 0);
+      y += rowHeight;
+    }
+
+    // footer totals
+    sumTotalCusto = Number(sumTotalCusto.toFixed(2));
+    sumTotalVenda = Number(sumTotalVenda.toFixed(2));
+    sumTotalLucro = Number(sumTotalLucro.toFixed(2));
+    if (y + rowHeight > doc.page.height - doc.page.margins.bottom - 10) {
+      doc.addPage();
+      y = doc.page.margins.top + 10;
+    }
+    doc
+      .moveTo(left, y - 6)
+      .lineTo(left + usableWidth, y - 6)
+      .stroke("#cccccc");
+    doc.font("Helvetica-Bold").fontSize(rowFontSize + 1);
+    x = left;
+    doc.text("", x + cellPadding, y + (rowHeight - rowFontSize) / 2 - 1, {
+      width: colWidths[0] - cellPadding * 2,
     });
+    x += colWidths[0];
+    doc.text("TOTAL", x + cellPadding, y + (rowHeight - rowFontSize) / 2 - 1, {
+      width: colWidths[1] - cellPadding * 2,
+      align: "left",
+    });
+    x += colWidths[1];
+    const totals = [
+      String(sumQtdVenda),
+      String(sumQtdVendida),
+      fmtCurrency(sumTotalCusto),
+      fmtCurrency(sumTotalVenda),
+      fmtCurrency(sumTotalLucro),
+    ];
+    for (let c = 0; c < totals.length; c++) {
+      const w = colWidths[c + 2];
+      doc.text(
+        totals[c],
+        x + cellPadding,
+        y + (rowHeight - rowFontSize) / 2 - 1,
+        { width: w - cellPadding * 2, align: "right" },
+      );
+      x += w;
+    }
 
     doc.end();
   } catch (error) {
