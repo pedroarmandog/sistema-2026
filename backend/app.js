@@ -1526,6 +1526,19 @@ if (!SKIP_DB_SYNC) {
     .then(async () => {
       console.log("Banco de dados conectado com sucesso ✅");
 
+      // Sincronizar modelos de controle de acessos (tabela nova + coluna nova)
+      try {
+        const { SessaoAtiva, EmpresaPainel } = require("./models");
+        await SessaoAtiva.sync({ alter: true });
+        await EmpresaPainel.sync({ alter: true });
+        console.log("✅ Tabelas de controle de acessos sincronizadas");
+      } catch (e) {
+        console.warn(
+          "⚠️ Aviso ao sincronizar tabelas de acessos:",
+          e && e.message,
+        );
+      }
+
       // Criar usuário inicial padrão se não existir
       try {
         const criarUsuarioInicial = require("./scripts/seed-usuario-inicial");
@@ -2037,7 +2050,14 @@ const server = app.listen(3000, () => {
   // Cron: backup automático diário de todas as empresas (todo dia às 00:00)
   try {
     const cron = require("node-cron");
-    const { executarBackupGeral } = require("./services/backupService");
+    const {
+      executarBackupGeral,
+      verificarEExecutarBackupSeNecessario,
+    } = require("./services/backupService");
+
+    // Verificar na inicialização se o backup de hoje já foi feito
+    verificarEExecutarBackupSeNecessario();
+
     cron.schedule("0 0 * * *", async () => {
       console.log("[cron] Executando backup diário automático...");
       try {

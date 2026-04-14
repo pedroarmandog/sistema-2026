@@ -1,11 +1,16 @@
-const { Usuario, Empresa } = require("../models");
+const { Usuario, Empresa, sequelize } = require("../models");
 const { Op } = require("sequelize");
 const bcrypt = require("bcryptjs");
+const crypto = require("crypto");
 const {
   gerarTokenUsuario,
   isEmpresaBloqueada,
   extractEmpresaId,
 } = require("../middleware/authUser");
+const {
+  verificarLimiteAcessos,
+  registrarSessao,
+} = require("./acessosController");
 
 // Login de usuário
 exports.login = async (req, res) => {
@@ -164,8 +169,42 @@ exports.login = async (req, res) => {
       });
     }
 
+    // Verificar limite de acessos simultâneos
+    const limiteCheck = await verificarLimiteAcessos(_empresaId);
+    if (!limiteCheck.permitido) {
+      console.log(
+        `🚫 Limite de acessos atingido para empresa ${_empresaId}: ${limiteCheck.ativas}/${limiteCheck.limite}`,
+      );
+      return res.status(403).json({
+        mensagem: `Limite de acessos simultâneos atingido (${limiteCheck.ativas}/${limiteCheck.limite}). Peça para outro usuário sair ou entre em contato com o suporte.`,
+        limite_acessos: true,
+      });
+    }
+
     // Gerar JWT com empresaId e configurar cookie
     const token = gerarTokenUsuario(usuarioEncontrado.toJSON());
+
+    // Registrar sessão ativa no banco
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+    const clientIp =
+      req.headers["x-forwarded-for"] ||
+      req.connection?.remoteAddress ||
+      req.ip ||
+      "";
+    const userAgent = req.headers["user-agent"] || "";
+
+    if (limiteCheck.empresaPainelId) {
+      await registrarSessao(
+        usuarioEncontrado.id,
+        limiteCheck.empresaPainelId,
+        tokenHash,
+        typeof clientIp === "string" ? clientIp.split(",")[0].trim() : "",
+        userAgent,
+      );
+      console.log(
+        `📝 Sessão registrada para usuário ${usuarioEncontrado.id} na empresa painel ${limiteCheck.empresaPainelId}`,
+      );
+    }
 
     // Cookie HttpOnly (seguro) — enviado automaticamente pelo navegador
     res.cookie("pethub_token", token, {
@@ -195,14 +234,29 @@ exports.login = async (req, res) => {
   }
 };
 
-// Listar todos os usuários
+// Listar usuários da empresa do usuário logado
 exports.listarUsuarios = async (req, res) => {
   try {
-    const usuarios = await Usuario.findAll({
-      order: [["nome", "ASC"]],
-      attributes: { exclude: ["senha"] }, // Não retornar senha na listagem
+    const empresaId = req.user && req.user.empresaId;
+    if (!empresaId) {
+      return res.status(400).json({ erro: "Empresa não identificada" });
+    }
+
+    // Suportar ambos os formatos: número [3] e objeto [{"id":"3",...}]
+    const targetNum = JSON.stringify(empresaId);
+    const targetStr = JSON.stringify(String(empresaId));
+    const [usuarios] = await sequelize.query(
+      `SELECT * FROM usuarios WHERE JSON_CONTAINS(empresas, ?) OR JSON_CONTAINS(empresas, JSON_OBJECT('id', ?)) ORDER BY nome ASC`,
+      { replacements: [targetNum, targetStr] },
+    );
+
+    // Remover senha de cada usuário
+    const resultado = usuarios.map((u) => {
+      const { senha, ...rest } = u;
+      return rest;
     });
-    res.json(usuarios);
+
+    res.json(resultado);
   } catch (error) {
     console.error("Erro ao listar usuários:", error);
     res.status(500).json({ erro: "Erro ao listar usuários" });

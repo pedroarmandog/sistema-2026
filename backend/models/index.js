@@ -65,6 +65,8 @@ const AdminImpersonationTokenFactory = require("./AdminImpersonationToken");
 const AdminImpersonationToken = AdminImpersonationTokenFactory(sequelize);
 const BackupEmpresaFactory = require("./BackupEmpresa");
 const BackupEmpresa = BackupEmpresaFactory(sequelize);
+const SessaoAtivaFactory = require("./SessaoAtiva");
+const SessaoAtiva = SessaoAtivaFactory(sequelize);
 
 // Definir associações
 Cliente.hasMany(Pet, {
@@ -112,6 +114,17 @@ PagamentoPainel.belongsTo(EmpresaPainel, {
 });
 console.log("✅ Associações EmpresaPainel ↔ PagamentoPainel configuradas");
 
+// Associações SessaoAtiva
+EmpresaPainel.hasMany(SessaoAtiva, {
+  foreignKey: "empresa_id",
+  as: "sessoes",
+});
+SessaoAtiva.belongsTo(EmpresaPainel, {
+  foreignKey: "empresa_id",
+  as: "empresa",
+});
+console.log("✅ Associações EmpresaPainel ↔ SessaoAtiva configuradas");
+
 // Exportar todos os modelos
 module.exports = {
   Cliente,
@@ -156,5 +169,6 @@ module.exports = {
   PagamentoPainel,
   AdminImpersonationToken,
   BackupEmpresa,
+  SessaoAtiva,
   sequelize,
 };

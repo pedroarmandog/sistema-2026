@@ -75,6 +75,11 @@ module.exports = (sequelize) => {
         type: DataTypes.DATEONLY,
         allowNull: true,
       },
+      limite_acessos: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 3,
+      },
     },
     {
       tableName: "empresas_painel",

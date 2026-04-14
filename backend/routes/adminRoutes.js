@@ -5,6 +5,7 @@ const multer = require("multer");
 const adminController = require("../controllers/adminController");
 const empresaPainelController = require("../controllers/empresaPainelController");
 const backupController = require("../controllers/backupController");
+const acessosController = require("../controllers/acessosController");
 const { authAdmin, validarTokenCadastro } = require("../middleware/authAdmin");
 
 // Configurar multer para upload de logos
@@ -97,6 +98,21 @@ router.post(
   "/backups/:empresaId/restaurar",
   authAdmin,
   backupController.restaurar,
+);
+
+// Acessos simultâneos
+router.get("/acessos", authAdmin, acessosController.listarAcessos);
+router.get("/acessos/:id", authAdmin, acessosController.detalhesAcessos);
+router.put("/acessos/:id/limite", authAdmin, acessosController.atualizarLimite);
+router.post(
+  "/acessos/:id/encerrar-todas",
+  authAdmin,
+  acessosController.encerrarTodasSessoes,
+);
+router.post(
+  "/acessos/sessao/:sessaoId/encerrar",
+  authAdmin,
+  acessosController.encerrarSessao,
 );
 
 module.exports = router;

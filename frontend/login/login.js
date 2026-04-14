@@ -108,6 +108,11 @@ async function realizarLogin(usuario, senha) {
       return data;
     }
 
+    // Se limite de acessos atingido, mostrar erro
+    if (data.limite_acessos) {
+      return data;
+    }
+
     if (!response.ok) {
       throw new Error(data.mensagem || "Erro ao fazer login");
     }
@@ -147,6 +152,18 @@ document
           sessionStorage.setItem("empresa_bloqueada", "1");
         } catch (e) {}
         window.location.href = "/painel-admin/sistema-bloqueado.html";
+        return;
+      }
+
+      // Verificar se limite de acessos simultâneos foi atingido
+      if (resultado.limite_acessos) {
+        showNotification(
+          resultado.mensagem ||
+            "Limite de acessos simultâneos atingido. Tente novamente mais tarde.",
+          "error",
+        );
+        btnLogin.disabled = false;
+        btnLogin.textContent = textoOriginal;
         return;
       }
 

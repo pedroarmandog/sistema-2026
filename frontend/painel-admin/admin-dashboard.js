@@ -108,6 +108,7 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
     if (this.dataset.tab === "empresas") carregarEmpresas();
     if (this.dataset.tab === "faturamento") carregarFaturamento();
     if (this.dataset.tab === "backup") carregarBackups();
+    if (this.dataset.tab === "acessos") carregarAcessos();
   });
 });
 
@@ -951,6 +952,7 @@ function refreshAll() {
   if (tab === "empresas") carregarEmpresas();
   if (tab === "faturamento") carregarFaturamento();
   if (tab === "backup") carregarBackups();
+  if (tab === "acessos") carregarAcessos();
 }
 
 // ═══════ BACKUP ═══════
@@ -1186,3 +1188,305 @@ document
 async function init() {
   carregarDashboard();
 }
+
+// ═══════ ACESSOS SIMULTÂNEOS ═══════
+let acessosEmpresaSelecionada = null;
+let acessosLimiteTemp = 3;
+
+async function carregarAcessos() {
+  try {
+    const resp = await fetch(`${API}/acessos`, { headers: authHeaders() });
+    if (resp.status === 401) {
+      logout();
+      return;
+    }
+    const empresas = await resp.json();
+
+    const tbody = document.getElementById("acessosTableBody");
+    const empty = document.getElementById("acessosEmpty");
+    tbody.innerHTML = "";
+
+    // Cards resumo
+    document.getElementById("acessosTotalEmpresas").textContent =
+      empresas.length;
+    const totalAtivos = empresas.reduce((s, e) => s + e.acessos_em_uso, 0);
+    document.getElementById("acessosTotalAtivos").textContent = totalAtivos;
+    const noLimite = empresas.filter(
+      (e) => e.acessos_em_uso >= e.limite_acessos && e.acessos_em_uso > 0,
+    ).length;
+    document.getElementById("acessosNoLimite").textContent = noLimite;
+
+    if (!empresas.length) {
+      empty.style.display = "block";
+      return;
+    }
+    empty.style.display = "none";
+
+    empresas.forEach((emp) => {
+      const tr = document.createElement("tr");
+      const disponivel = Math.max(0, emp.limite_acessos - emp.acessos_em_uso);
+      const percentual =
+        emp.limite_acessos > 0
+          ? (emp.acessos_em_uso / emp.limite_acessos) * 100
+          : 0;
+      let barClass = "acessos-bar-ok";
+      if (percentual >= 100) barClass = "acessos-bar-full";
+      else if (percentual >= 70) barClass = "acessos-bar-warn";
+
+      tr.innerHTML = `
+        <td><strong>${emp.nome_fantasia}</strong></td>
+        <td>${formatarCnpj(emp.cnpj)}</td>
+        <td><span class="status-badge status-${emp.status}">${emp.status}</span></td>
+        <td><strong>${emp.limite_acessos}</strong></td>
+        <td>
+          <div class="acessos-mini-bar-wrapper">
+            <span class="acessos-uso-num">${emp.acessos_em_uso}</span>
+            <div class="acessos-mini-bar">
+              <div class="acessos-mini-bar-fill ${barClass}" style="width: ${Math.min(percentual, 100)}%"></div>
+            </div>
+          </div>
+        </td>
+        <td><span class="acessos-disponivel-badge ${disponivel === 0 ? "acessos-sem-vaga" : ""}">${disponivel}</span></td>
+        <td>
+          <button class="btn-action btn-acessos-detalhe" data-id="${emp.id}" title="Gerenciar acessos">
+            <i class="fas fa-cog"></i>
+          </button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    // Eventos
+    document.querySelectorAll(".btn-acessos-detalhe").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        abrirModalAcessos(btn.dataset.id);
+      });
+    });
+  } catch (err) {
+    console.error("Erro ao carregar acessos:", err);
+  }
+}
+
+async function abrirModalAcessos(empresaId) {
+  try {
+    const resp = await fetch(`${API}/acessos/${empresaId}`, {
+      headers: authHeaders(),
+    });
+    if (resp.status === 401) {
+      logout();
+      return;
+    }
+    const data = await resp.json();
+    acessosEmpresaSelecionada = data;
+    acessosLimiteTemp = data.empresa.limite_acessos;
+
+    // Preencher modal
+    document.getElementById("acessosModalNome").textContent =
+      data.empresa.nome_fantasia;
+    const statusEl = document.getElementById("acessosModalStatus");
+    statusEl.textContent = data.empresa.status;
+    statusEl.className = `modal-status status-badge status-${data.empresa.status}`;
+
+    atualizarModalAcessos(data);
+    document.getElementById("modalAcessos").classList.add("show");
+  } catch (err) {
+    showNotification("Erro ao carregar detalhes de acessos", "error");
+  }
+}
+
+function atualizarModalAcessos(data) {
+  const limite = acessosLimiteTemp;
+  const emUso = data.acessos_em_uso;
+  const disponivel = Math.max(0, limite - emUso);
+  const percentual = limite > 0 ? (emUso / limite) * 100 : 0;
+
+  document.getElementById("acessosModalLimite").textContent = limite;
+  document.getElementById("acessosModalEmUso").textContent = emUso;
+  document.getElementById("acessosModalDisponivel").textContent = disponivel;
+
+  // Barra de progresso
+  const barFill = document.getElementById("acessosBarraFill");
+  barFill.style.width = Math.min(percentual, 100) + "%";
+  barFill.className = "acessos-barra-fill";
+  if (percentual >= 100) barFill.classList.add("barra-full");
+  else if (percentual >= 70) barFill.classList.add("barra-warn");
+  document.getElementById("acessosBarraTexto").textContent =
+    `${emUso} / ${limite} acessos`;
+
+  // Sessões
+  const container = document.getElementById("acessosSessoesBody");
+  if (data.sessoes && data.sessoes.length > 0) {
+    container.innerHTML = data.sessoes
+      .map(
+        (s) => `
+      <div class="sessao-item">
+        <div class="sessao-info">
+          <div class="sessao-usuario"><i class="fas fa-user"></i> ${s.usuario_nome} <span class="sessao-login">(${s.usuario_login})</span></div>
+          <div class="sessao-detalhes">
+            <span><i class="fas fa-clock"></i> ${formatarDataHora(s.data_login)}</span>
+            <span><i class="fas fa-wifi"></i> ${s.ip_address || "-"}</span>
+          </div>
+        </div>
+        <button class="btn-danger btn-sm btn-encerrar-sessao" data-sessao-id="${s.id}" title="Encerrar sessão">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    `,
+      )
+      .join("");
+
+    container.querySelectorAll(".btn-encerrar-sessao").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        await encerrarSessao(btn.dataset.sessaoId);
+      });
+    });
+  } else {
+    container.innerHTML =
+      '<p style="color:#aaa;text-align:center;padding:20px;">Nenhuma sessão ativa</p>';
+  }
+}
+
+function formatarDataHora(data) {
+  if (!data) return "-";
+  const d = new Date(data);
+  return d.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+// Ajuste de limite
+document.getElementById("btnLimiteMenos").addEventListener("click", () => {
+  if (acessosLimiteTemp > 1) {
+    acessosLimiteTemp--;
+    document.getElementById("acessosModalLimite").textContent =
+      acessosLimiteTemp;
+    if (acessosEmpresaSelecionada) {
+      atualizarModalAcessos(acessosEmpresaSelecionada);
+    }
+  }
+});
+
+document.getElementById("btnLimiteMais").addEventListener("click", () => {
+  if (acessosLimiteTemp < 100) {
+    acessosLimiteTemp++;
+    document.getElementById("acessosModalLimite").textContent =
+      acessosLimiteTemp;
+    if (acessosEmpresaSelecionada) {
+      atualizarModalAcessos(acessosEmpresaSelecionada);
+    }
+  }
+});
+
+// Salvar limite
+document
+  .getElementById("btnSalvarLimite")
+  .addEventListener("click", async () => {
+    if (!acessosEmpresaSelecionada) return;
+    const btn = document.getElementById("btnSalvarLimite");
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+
+    try {
+      const resp = await fetch(
+        `${API}/acessos/${acessosEmpresaSelecionada.empresa.id}/limite`,
+        {
+          method: "PUT",
+          headers: authHeaders(),
+          body: JSON.stringify({ limite_acessos: acessosLimiteTemp }),
+        },
+      );
+      if (resp.status === 401) {
+        logout();
+        return;
+      }
+      const data = await resp.json();
+      if (resp.ok) {
+        showNotification("Limite atualizado com sucesso!", "success");
+        acessosEmpresaSelecionada.empresa.limite_acessos = acessosLimiteTemp;
+        carregarAcessos();
+      } else {
+        showNotification(data.error || "Erro ao salvar limite", "error");
+      }
+    } catch {
+      showNotification("Erro de conexão", "error");
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-save"></i> Salvar Limite';
+    }
+  });
+
+// Encerrar sessão individual
+async function encerrarSessao(sessaoId) {
+  try {
+    const resp = await fetch(`${API}/acessos/sessao/${sessaoId}/encerrar`, {
+      method: "POST",
+      headers: authHeaders(),
+    });
+    if (resp.status === 401) {
+      logout();
+      return;
+    }
+    if (resp.ok) {
+      showNotification("Sessão encerrada", "success");
+      // Recarregar modal
+      if (acessosEmpresaSelecionada) {
+        abrirModalAcessos(acessosEmpresaSelecionada.empresa.id);
+      }
+      carregarAcessos();
+    } else {
+      const data = await resp.json();
+      showNotification(data.error || "Erro ao encerrar sessão", "error");
+    }
+  } catch {
+    showNotification("Erro de conexão", "error");
+  }
+}
+
+// Encerrar todas as sessões
+document
+  .getElementById("btnEncerrarTodas")
+  .addEventListener("click", async () => {
+    if (!acessosEmpresaSelecionada) return;
+    const ok = await showConfirm(
+      `Encerrar TODAS as sessões ativas de ${acessosEmpresaSelecionada.empresa.nome_fantasia}?`,
+      "Encerrar Sessões",
+    );
+    if (!ok) return;
+
+    try {
+      const resp = await fetch(
+        `${API}/acessos/${acessosEmpresaSelecionada.empresa.id}/encerrar-todas`,
+        {
+          method: "POST",
+          headers: authHeaders(),
+        },
+      );
+      if (resp.status === 401) {
+        logout();
+        return;
+      }
+      if (resp.ok) {
+        showNotification("Todas as sessões foram encerradas", "success");
+        abrirModalAcessos(acessosEmpresaSelecionada.empresa.id);
+        carregarAcessos();
+      } else {
+        const data = await resp.json();
+        showNotification(data.error || "Erro ao encerrar sessões", "error");
+      }
+    } catch {
+      showNotification("Erro de conexão", "error");
+    }
+  });
+
+// Fechar modal acessos
+document.getElementById("modalAcessosClose").addEventListener("click", () => {
+  document.getElementById("modalAcessos").classList.remove("show");
+});
+document.getElementById("modalAcessos").addEventListener("click", (e) => {
+  if (e.target === e.currentTarget) e.currentTarget.classList.remove("show");
+});

@@ -2047,7 +2047,16 @@ function escapeHtml(text) {
     }
   };
 
-  window.confirmLogout = function () {
+  window.confirmLogout = async function () {
+    // Encerrar sessão no backend
+    try {
+      await fetch("/api/usuarios/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch (e) {
+      // Ignorar erro — prosseguir com logout local
+    }
     deleteCookie("usuarioLogadoId");
     deleteCookie("usuarioLogadoNome");
     window.location.href = "/login/login.html";

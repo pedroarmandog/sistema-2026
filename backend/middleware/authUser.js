@@ -1,4 +1,5 @@
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 
 const JWT_SECRET =
   process.env.JWT_USER_SECRET || "pethub_user_secret_2026_!@#$%";
@@ -89,6 +90,17 @@ async function authUser(req, res, next) {
         empresaId: decoded.empresaId,
         grupoUsuario: decoded.grupoUsuario,
       };
+      // Atualizar última atividade da sessão (fire-and-forget)
+      try {
+        const tokenHash = crypto
+          .createHash("sha256")
+          .update(token)
+          .digest("hex");
+        const {
+          atualizarAtividade,
+        } = require("../controllers/acessosController");
+        atualizarAtividade(tokenHash);
+      } catch (_) {}
       return next();
     } catch (err) {
       console.log(`[authUser] falha ao verificar token: ${err && err.message}`);

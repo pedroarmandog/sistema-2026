@@ -488,6 +488,44 @@ async function listarBackupsGeral() {
   return result;
 }
 
+/**
+ * Verifica se o backup de hoje já foi feito para todas as empresas.
+ * Se alguma empresa não tiver backup de hoje, executa o backup geral.
+ * Chamado na inicialização do servidor para garantir que o backup sempre ocorre,
+ * mesmo que o server não estivesse rodando à meia-noite.
+ */
+async function verificarEExecutarBackupSeNecessario() {
+  try {
+    const hoje = new Date().toISOString().split("T")[0];
+    const empresas = await EmpresaPainel.findAll();
+
+    if (empresas.length === 0) return;
+
+    const backupsHoje = await BackupEmpresa.count({
+      where: {
+        data_referencia: hoje,
+        status: "COMPLETO",
+      },
+    });
+
+    if (backupsHoje < empresas.length) {
+      console.log(
+        `[backup] ⚡ Backup de hoje (${hoje}) incompleto: ${backupsHoje}/${empresas.length} empresas. Executando agora...`,
+      );
+      await executarBackupGeral();
+    } else {
+      console.log(
+        `[backup] ✅ Backup de hoje (${hoje}) já completo (${backupsHoje}/${empresas.length} empresas).`,
+      );
+    }
+  } catch (err) {
+    console.error(
+      "[backup] ❌ Erro na verificação de backup na inicialização:",
+      err.message,
+    );
+  }
+}
+
 module.exports = {
   realizarBackupEmpresa,
   limparBackupsAntigos,
@@ -495,5 +533,6 @@ module.exports = {
   restaurarBackup,
   listarBackups,
   listarBackupsGeral,
+  verificarEExecutarBackupSeNecessario,
   BACKUP_DIR,
 };
