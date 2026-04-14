@@ -53,23 +53,36 @@ function extractEmpresaId(empresas) {
  */
 async function authUser(req, res, next) {
   // 1. Tentar JWT (novo fluxo)
-  const token =
-    req.cookies?.pethub_token ||
-    (req.headers.authorization?.startsWith("Bearer ")
+  const tokenFromCookie = req.cookies?.pethub_token;
+  const tokenFromHeader =
+    req.headers &&
+    req.headers.authorization &&
+    req.headers.authorization.startsWith("Bearer ")
       ? req.headers.authorization.split(" ")[1]
-      : null);
+      : null;
+  const token = tokenFromCookie || tokenFromHeader;
+  const tokenSource = tokenFromCookie
+    ? "cookie:pethub_token"
+    : tokenFromHeader
+      ? "header:Authorization"
+      : null;
 
   if (token) {
+    console.log(
+      `[authUser] token encontrado via ${tokenSource} (len=${String(token).length})`,
+    );
     try {
       const decoded = jwt.verify(token, JWT_SECRET);
+      console.log(
+        `[authUser] token decodificado: id=${decoded.id} empresaId=${decoded.empresaId} grupoUsuario=${decoded.grupoUsuario}`,
+      );
       // Verificar se empresa está bloqueada
       if (await isEmpresaBloqueada(decoded.empresaId)) {
-        return res
-          .status(403)
-          .json({
-            mensagem: "Sistema bloqueado. Entre em contato com o suporte.",
-            bloqueado: true,
-          });
+        console.log(`[authUser] empresa ${decoded.empresaId} bloqueada`);
+        return res.status(403).json({
+          mensagem: "Sistema bloqueado. Entre em contato com o suporte.",
+          bloqueado: true,
+        });
       }
       req.user = {
         id: decoded.id,
@@ -78,31 +91,41 @@ async function authUser(req, res, next) {
       };
       return next();
     } catch (err) {
+      console.log(`[authUser] falha ao verificar token: ${err && err.message}`);
       // token inválido/expirado — continua para fallback
     }
+  } else {
+    console.log(
+      "[authUser] nenhum token JWT encontrado, tentando fallback usuarioLogadoId",
+    );
   }
 
   // 2. Fallback: cookie legado usuarioLogadoId (sessão anterior ao JWT)
   const usuarioLegadoId = req.cookies?.usuarioLogadoId;
   if (usuarioLegadoId) {
+    console.log(
+      `[authUser] cookie usuarioLogadoId presente: ${usuarioLegadoId}`,
+    );
     try {
       const { Usuario } = require("../models");
       const usuario = await Usuario.findByPk(parseInt(usuarioLegadoId), {
         attributes: ["id", "grupoUsuario", "empresas", "ativo"],
       });
       if (usuario && usuario.ativo) {
+        console.log(
+          `[authUser] encontrado usuario legado: id=${usuario.id} grupo=${usuario.grupoUsuario} empresas=${JSON.stringify(usuario.empresas)}`,
+        );
         const empresas = Array.isArray(usuario.empresas)
           ? usuario.empresas
           : [];
         const empresaId = extractEmpresaId(empresas);
         // Verificar se empresa está bloqueada
         if (await isEmpresaBloqueada(empresaId)) {
-          return res
-            .status(403)
-            .json({
-              mensagem: "Sistema bloqueado. Entre em contato com o suporte.",
-              bloqueado: true,
-            });
+          console.log(`[authUser] empresa ${empresaId} bloqueada (fallback)`);
+          return res.status(403).json({
+            mensagem: "Sistema bloqueado. Entre em contato com o suporte.",
+            bloqueado: true,
+          });
         }
         req.user = {
           id: usuario.id,
@@ -111,6 +134,9 @@ async function authUser(req, res, next) {
         };
         // Renovar o JWT para que próximas requisições usem o fluxo novo
         const novoToken = gerarTokenUsuario(usuario.toJSON());
+        console.log(
+          `[authUser] renovando pethub_token para usuario ${usuario.id}`,
+        );
         res.cookie("pethub_token", novoToken, {
           httpOnly: true,
           sameSite: "Lax",
@@ -120,8 +146,13 @@ async function authUser(req, res, next) {
         return next();
       }
     } catch (e) {
+      console.log(
+        `[authUser] fallback usuarioLegado falhou: ${e && e.message}`,
+      );
       // fallback falhou, retornar 401
     }
+  } else {
+    console.log("[authUser] cookie usuarioLogadoId ausente");
   }
 
   return res.status(401).json({ mensagem: "Não autenticado. Faça login." });

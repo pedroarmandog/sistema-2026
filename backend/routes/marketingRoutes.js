@@ -42,6 +42,7 @@ router.get("/whatsapp/status", marketingController.statusWhatsapp);
 router.get("/whatsapp/qr-status", marketingController.obterQRStatus); // polling QR
 router.post("/whatsapp/conectar", marketingController.conectarWhatsapp);
 router.post("/whatsapp/desconectar", marketingController.desconectarWhatsapp);
+router.post("/whatsapp/resetar", marketingController.resetarWhatsapp);
 router.get("/whatsapp/eventos", marketingController.eventoSSE); // SSE
 
 // ── Mensagens Automáticas ─────────────────────────

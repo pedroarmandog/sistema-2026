@@ -1079,70 +1079,8 @@ function inicializarNovaVenda() {
   const btnFinalizar = document.querySelector(".btn-finalizar");
   const btnNova = document.querySelector(".btn-nova");
 
-  if (btnFinalizar) {
-    btnFinalizar.addEventListener("click", async function () {
-      if (itensVenda.length === 0) {
-        mostrarNotificacao(
-          "warning",
-          "Adicione pelo menos um item para finalizar a venda.",
-        );
-        return;
-      }
-
-      // Verificar se o caixa está aberto
-      try {
-        const response = await fetch("http://localhost:3000/api/caixas/aberto");
-        const caixa = await response.json();
-
-        if (!caixa || caixa.aberto !== true) {
-          mostrarNotificacaoAmarela(
-            "Caixa Fechado - Abra o caixa para realizar vendas",
-          );
-          return;
-        }
-      } catch (error) {
-        console.error("Erro ao verificar status do caixa:", error);
-        mostrarNotificacaoAmarela(
-          "Não foi possível verificar o status do caixa",
-        );
-        return;
-      }
-
-      // Cliente é opcional - pode finalizar sem selecionar cliente
-
-      // Salvar venda como pendente antes de abrir modal de pagamento
-      if (!vendaPendenteId) {
-        try {
-          const dadosPendente = {
-            timestamp: new Date().toISOString(),
-            cliente: clienteSelecionado
-              ? clienteSelecionado.nome
-              : __safeGetValue("pesquisarCliente"),
-            clienteId: clienteSelecionado ? clienteSelecionado.id : null,
-            profissional: profissionalSelecionado
-              ? profissionalSelecionado.nome
-              : __safeGetValue("pesquisarProfissional"),
-            profissionalId: profissionalSelecionado
-              ? profissionalSelecionado.id
-              : null,
-            itens: [...itensVenda],
-            totais: { ...totais },
-            pagamentos: [],
-            totalPago: totais.final || 0,
-            status: "pendente",
-          };
-          const vendaCriada = await ApiClient.criarVenda(dadosPendente);
-          vendaPendenteId = vendaCriada.id;
-          console.log("💾 Venda pendente criada: #" + vendaPendenteId);
-        } catch (err) {
-          console.error("Erro ao salvar venda pendente:", err);
-        }
-      }
-
-      // Abrir modal de pagamento
-      abrirModalPagamento();
-    });
-  }
+  // Handler de finalizar é registrado no DOMContentLoaded abaixo (finalizarVendaComDados)
+  // NÃO adicionar outro listener aqui para evitar venda duplicada
 
   if (btnNova) {
     btnNova.addEventListener("click", function () {

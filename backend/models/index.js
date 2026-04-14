@@ -29,6 +29,9 @@ const WhatsappSessionFactory = require("./WhatsappSession");
 const MensagemAutomaticaFactory = require("./MensagemAutomatica");
 const EnvioAgendadoFactory = require("./EnvioAgendado");
 const LogEnvioFactory = require("./LogEnvio");
+const CampanhaFactory = require("./Campanha");
+const ContatoFactory = require("./Contato");
+const BlacklistFactory = require("./Blacklist");
 
 // Importar sequelize do Cliente para inicializar os modelos factory
 const { sequelize } = require("./Cliente");
@@ -42,6 +45,9 @@ const WhatsappSession = WhatsappSessionFactory(sequelize);
 const MensagemAutomatica = MensagemAutomaticaFactory(sequelize);
 const EnvioAgendado = EnvioAgendadoFactory(sequelize);
 const LogEnvio = LogEnvioFactory(sequelize);
+const Campanha = CampanhaFactory(sequelize);
+const Contato = ContatoFactory(sequelize);
+const Blacklist = BlacklistFactory(sequelize);
 // Inicializar modelo Usuario (factory)
 const UsuarioFactory = require("./Usuario");
 const Usuario = UsuarioFactory(sequelize);
@@ -55,6 +61,10 @@ const EmpresaPainelFactory = require("./EmpresaPainel");
 const EmpresaPainel = EmpresaPainelFactory(sequelize);
 const PagamentoPainelFactory = require("./PagamentoPainel");
 const PagamentoPainel = PagamentoPainelFactory(sequelize);
+const AdminImpersonationTokenFactory = require("./AdminImpersonationToken");
+const AdminImpersonationToken = AdminImpersonationTokenFactory(sequelize);
+const BackupEmpresaFactory = require("./BackupEmpresa");
+const BackupEmpresa = BackupEmpresaFactory(sequelize);
 
 // Definir associações
 Cliente.hasMany(Pet, {
@@ -137,9 +147,14 @@ module.exports = {
   MensagemAutomatica,
   EnvioAgendado,
   LogEnvio,
+  Campanha,
+  Contato,
+  Blacklist,
   // Painel Admin
   Admin,
   EmpresaPainel,
   PagamentoPainel,
+  AdminImpersonationToken,
+  BackupEmpresa,
   sequelize,
 };

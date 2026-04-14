@@ -53,6 +53,9 @@
         <button class="tab-btn" data-tab="faturamento">
           <i class="fas fa-dollar-sign"></i> Faturamento
         </button>
+        <button class="tab-btn" data-tab="backup">
+          <i class="fas fa-database"></i> Backup
+        </button>
       </nav>
 
       <!-- ═══════ TAB DASHBOARD ═══════ -->
@@ -221,6 +224,59 @@
           <div class="empty-state" id="fatHistoricoEmpty" style="display: none">
             <i class="fas fa-receipt"></i>
             <p>Nenhum pagamento registrado</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════ TAB BACKUP ═══════ -->
+      <section class="tab-content" id="tab-backup">
+        <div
+          class="dashboard-cards"
+          style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr))"
+        >
+          <div class="dash-card card-backup-total">
+            <div class="dash-card-icon"><i class="fas fa-database"></i></div>
+            <div class="dash-card-info">
+              <span class="dash-card-value" id="backupTotalEmpresas">0</span>
+              <span class="dash-card-label">Empresas com Backup</span>
+            </div>
+          </div>
+          <div class="dash-card card-backup-ultimo">
+            <div class="dash-card-icon"><i class="fas fa-clock"></i></div>
+            <div class="dash-card-info">
+              <span class="dash-card-value" id="backupUltimaData">-</span>
+              <span class="dash-card-label">Último Backup</span>
+            </div>
+          </div>
+          <div class="dash-card card-backup-acoes">
+            <div class="dash-card-icon"><i class="fas fa-play-circle"></i></div>
+            <div class="dash-card-info">
+              <button class="btn-backup-executar" id="btnExecutarBackup">
+                <i class="fas fa-play"></i> Executar Backup Agora
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-card">
+          <h3><i class="fas fa-shield-alt"></i> Backups por Empresa</h3>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Empresa</th>
+                <th>Status</th>
+                <th>Último Backup</th>
+                <th>Total de Backups</th>
+                <th>Restaurar</th>
+              </tr>
+            </thead>
+            <tbody id="backupEmpresasBody"></tbody>
+          </table>
+          <div class="empty-state" id="backupEmpty" style="display: none">
+            <i class="fas fa-database"></i>
+            <p>
+              Nenhum backup encontrado. Execute o primeiro backup manualmente.
+            </p>
           </div>
         </div>
       </section>
@@ -474,6 +530,210 @@
 
     <!-- Notification area -->
     <div id="notificationArea"></div>
+
+    <!-- Confirmation modal (substitui confirm()) -->
+    <div class="modal-overlay" id="modalConfirm" aria-hidden="true">
+      <div class="modal-content modal-confirm">
+        <div class="modal-header">
+          <h3 id="confirmTitle">Confirmação</h3>
+        </div>
+        <div class="modal-body">
+          <p id="confirmMessage">Tem certeza?</p>
+        </div>
+        <div class="modal-actions" style="justify-content: flex-end">
+          <button class="btn-secondary" id="confirmCancel">Cancelar</button>
+          <button class="btn-primary" id="confirmOk" style="margin-left: 8px">
+            OK
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Excluir Empresa (requer credenciais do admin) -->
+    <div class="modal-overlay" id="modalExcluirEmpresa" aria-hidden="true">
+      <div class="modal-content modal-form modal-confirm">
+        <div class="modal-header">
+          <h3>Confirmar Exclusão</h3>
+        </div>
+        <div class="modal-body">
+          <p style="margin-bottom: 12px">
+            Para excluir permanentemente esta empresa e todos os seus dados,
+            confirme o usuário e a senha do admin logado.
+          </p>
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <label style="font-size: 13px; color: #666"
+              >Usuário (nome ou email)</label
+            >
+            <div class="form-group">
+              <input
+                type="text"
+                id="excluirUsuario"
+                placeholder="usuário do admin"
+              />
+            </div>
+            <label style="font-size: 13px; color: #666">Senha</label>
+            <div class="form-group">
+              <div class="password-wrapper">
+                <input
+                  type="password"
+                  id="excluirSenha"
+                  placeholder="Senha do admin"
+                />
+              </div>
+            </div>
+            <small style="color: #999"
+              >Esta ação é irreversível. Todos os dados pertencentes apenas a
+              esta empresa serão removidos.</small
+            >
+          </div>
+        </div>
+        <div class="modal-actions" style="justify-content: flex-end">
+          <button class="btn-secondary" id="btnCancelarExcluir">
+            Cancelar
+          </button>
+          <button
+            class="btn-danger"
+            id="btnConfirmExcluir"
+            style="margin-left: 8px"
+          >
+            Excluir Empresa
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Impersonar Empresa (entrar como admin) -->
+    <div class="modal-overlay" id="modalImpersonarEmpresa" aria-hidden="true">
+      <div class="modal-content modal-form modal-confirm">
+        <div class="modal-header">
+          <h3>Acessar Empresa</h3>
+        </div>
+        <div class="modal-body">
+          <p style="margin-bottom: 12px">
+            Para acessar esta empresa como administrador, confirme suas
+            credenciais do painel admin.
+          </p>
+          <p
+            style="
+              font-weight: 600;
+              margin-bottom: 12px;
+              color: #4f46e5;
+              font-size: 14px;
+            "
+            id="impersonarEmpresaNome"
+          ></p>
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <label style="font-size: 13px; color: #666"
+              >Usuário (nome ou email)</label
+            >
+            <div class="form-group">
+              <input
+                type="text"
+                id="impersonarUsuario"
+                placeholder="Usuário do admin"
+              />
+            </div>
+            <label style="font-size: 13px; color: #666">Senha</label>
+            <div class="form-group">
+              <div class="password-wrapper">
+                <input
+                  type="password"
+                  id="impersonarSenha"
+                  placeholder="Senha do admin"
+                />
+              </div>
+            </div>
+            <small style="color: #999"
+              >Uma nova aba será aberta com acesso total aos dados desta
+              empresa.</small
+            >
+          </div>
+        </div>
+        <div class="modal-actions" style="justify-content: flex-end">
+          <button class="btn-secondary" id="btnCancelarImpersonar">
+            Cancelar
+          </button>
+          <button
+            class="btn-primary"
+            id="btnConfirmImpersonar"
+            style="margin-left: 8px; background: #4f46e5; color: #fff"
+          >
+            <i class="fas fa-sign-in-alt"></i> Acessar Empresa
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Restaurar Backup (requer credenciais do admin) -->
+    <div class="modal-overlay" id="modalRestaurarBackup" aria-hidden="true">
+      <div class="modal-content modal-form modal-confirm">
+        <div class="modal-header">
+          <h3>Confirmar Restauração</h3>
+        </div>
+        <div class="modal-body">
+          <p style="margin-bottom: 12px">
+            Para restaurar os dados desta empresa, confirme o usuário e a senha
+            do admin logado.
+          </p>
+          <p
+            style="
+              font-weight: 600;
+              margin-bottom: 4px;
+              color: #4f46e5;
+              font-size: 14px;
+            "
+            id="restaurarEmpresaNome"
+          ></p>
+          <p
+            style="
+              font-weight: 500;
+              margin-bottom: 12px;
+              color: #059669;
+              font-size: 13px;
+            "
+            id="restaurarDataInfo"
+          ></p>
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <label style="font-size: 13px; color: #666"
+              >Usuário (nome ou email)</label
+            >
+            <div class="form-group">
+              <input
+                type="text"
+                id="restaurarUsuario"
+                placeholder="Usuário do admin"
+              />
+            </div>
+            <label style="font-size: 13px; color: #666">Senha</label>
+            <div class="form-group">
+              <div class="password-wrapper">
+                <input
+                  type="password"
+                  id="restaurarSenha"
+                  placeholder="Senha do admin"
+                />
+              </div>
+            </div>
+            <small style="color: #e11d48; font-weight: 500"
+              >⚠️ Esta ação irá sobrescrever os dados atuais da empresa com o
+              backup selecionado. Esta ação não pode ser desfeita.</small
+            >
+          </div>
+        </div>
+        <div class="modal-actions" style="justify-content: flex-end">
+          <button class="btn-secondary" id="btnCancelarRestaurar">
+            Cancelar
+          </button>
+          <button
+            class="btn-danger"
+            id="btnConfirmRestaurar"
+            style="margin-left: 8px"
+          >
+            <i class="fas fa-undo-alt"></i> Restaurar Backup
+          </button>
+        </div>
+      </div>
+    </div>
 
     <script src="admin-dashboard.js"></script>
   </body>

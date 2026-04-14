@@ -6,31 +6,31 @@
  */
 
 class ReportViewer {
-    constructor() {
-        this.modal = null;
-        this.iframe = null;
-        this.isOpen = false;
-        this.init();
+  constructor() {
+    this.modal = null;
+    this.iframe = null;
+    this.isOpen = false;
+    this.init();
+  }
+
+  init() {
+    console.log("🚀 Inicializando Report Viewer Module");
+    this.createModal();
+  }
+
+  /**
+   * Cria a estrutura da modal
+   */
+  createModal() {
+    // Verificar se já existe
+    if (document.getElementById("reportViewerModal")) {
+      this.modal = document.getElementById("reportViewerModal");
+      this.iframe = document.getElementById("reportViewerIframe");
+      return;
     }
-    
-    init() {
-        console.log('🚀 Inicializando Report Viewer Module');
-        this.createModal();
-    }
-    
-    /**
-     * Cria a estrutura da modal
-     */
-    createModal() {
-        // Verificar se já existe
-        if (document.getElementById('reportViewerModal')) {
-            this.modal = document.getElementById('reportViewerModal');
-            this.iframe = document.getElementById('reportViewerIframe');
-            return;
-        }
-        
-        // Criar modal
-        const modalHTML = `
+
+    // Criar modal
+    const modalHTML = `
             <div id="reportViewerModal" class="report-modal" style="display: none;">
                 <div class="report-modal-overlay"></div>
                 <div class="report-modal-content">
@@ -54,41 +54,45 @@ class ReportViewer {
                 </div>
             </div>
         `;
-        
-        document.body.insertAdjacentHTML('beforeend', modalHTML);
-        
-        // Adicionar estilos
-        this.addStyles();
-        
-        // Referenciar elementos
-        this.modal = document.getElementById('reportViewerModal');
-        this.iframe = document.getElementById('reportViewerIframe');
-        
-        // Eventos
-        document.getElementById('closeReportModal').addEventListener('click', () => {
-            this.close();
-        });
-        
-        // Fechar com ESC
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && this.isOpen) {
-                this.close();
-            }
-        });
-        
-        // Fechar clicando no overlay
-        this.modal.querySelector('.report-modal-overlay').addEventListener('click', () => {
-            this.close();
-        });
-    }
-    
-    /**
-     * Adiciona estilos CSS da modal
-     */
-    addStyles() {
-        if (document.getElementById('reportViewerStyles')) return;
-        
-        const styles = `
+
+    document.body.insertAdjacentHTML("beforeend", modalHTML);
+
+    // Adicionar estilos
+    this.addStyles();
+
+    // Referenciar elementos
+    this.modal = document.getElementById("reportViewerModal");
+    this.iframe = document.getElementById("reportViewerIframe");
+
+    // Eventos
+    document
+      .getElementById("closeReportModal")
+      .addEventListener("click", () => {
+        this.close();
+      });
+
+    // Fechar com ESC
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && this.isOpen) {
+        this.close();
+      }
+    });
+
+    // Fechar clicando no overlay
+    this.modal
+      .querySelector(".report-modal-overlay")
+      .addEventListener("click", () => {
+        this.close();
+      });
+  }
+
+  /**
+   * Adiciona estilos CSS da modal
+   */
+  addStyles() {
+    if (document.getElementById("reportViewerStyles")) return;
+
+    const styles = `
             <style id="reportViewerStyles">
                 .report-modal {
                     position: fixed;
@@ -117,8 +121,8 @@ class ReportViewer {
                 .report-modal-content {
                     position: relative;
                     width: 60%;
-                    height: 60%;
-                    margin: 7.5% auto;
+                    height: 75%;
+                    margin: 5% auto;
                     background: white;
                     border-radius: 12px;
                     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
@@ -215,63 +219,63 @@ class ReportViewer {
                 }
             </style>
         `;
-        
-        document.head.insertAdjacentHTML('beforeend', styles);
-    }
-    
-    /**
-     * Abre o relatório
-     * @param {string} reportType - Tipo do relatório (faturamento, produtos, etc)
-     * @param {object} filters - Filtros do relatório
-     */
-    open(reportType, filters = {}) {
-        console.log('📊 Abrindo relatório:', reportType, filters);
-        
-        // Construir URL com parâmetros
-        const params = new URLSearchParams({
-            type: reportType,
-            filters: JSON.stringify(filters)
-        });
-        
-        const viewerUrl = `/frontend/components/report-viewer.html?${params.toString()}`;
-        
-        // Definir src do iframe
-        this.iframe.src = viewerUrl;
-        
-        // Mostrar modal
-        this.modal.classList.add('active');
-        this.modal.style.display = 'block';
-        this.isOpen = true;
-        
-        // Bloquear scroll do body
-        document.body.style.overflow = 'hidden';
-        
-        console.log('✅ Modal de relatório aberta');
-    }
-    
-    /**
-     * Fecha a modal
-     */
-    close() {
-        console.log('❌ Fechando modal de relatório');
-        
-        this.modal.classList.remove('active');
-        
-        // Animação de saída
-        setTimeout(() => {
-            this.modal.style.display = 'none';
-            this.iframe.src = '';
-            this.isOpen = false;
-            document.body.style.overflow = '';
-        }, 300);
-    }
-    
-    /**
-     * Verifica se a modal está aberta
-     */
-    isModalOpen() {
-        return this.isOpen;
-    }
+
+    document.head.insertAdjacentHTML("beforeend", styles);
+  }
+
+  /**
+   * Abre o relatório
+   * @param {string} reportType - Tipo do relatório (faturamento, produtos, etc)
+   * @param {object} filters - Filtros do relatório
+   */
+  open(reportType, filters = {}) {
+    console.log("📊 Abrindo relatório:", reportType, filters);
+
+    // Construir URL com parâmetros
+    const params = new URLSearchParams({
+      type: reportType,
+      filters: JSON.stringify(filters),
+    });
+
+    const viewerUrl = `/frontend/components/report-viewer.html?${params.toString()}`;
+
+    // Definir src do iframe
+    this.iframe.src = viewerUrl;
+
+    // Mostrar modal
+    this.modal.classList.add("active");
+    this.modal.style.display = "block";
+    this.isOpen = true;
+
+    // Bloquear scroll do body
+    document.body.style.overflow = "hidden";
+
+    console.log("✅ Modal de relatório aberta");
+  }
+
+  /**
+   * Fecha a modal
+   */
+  close() {
+    console.log("❌ Fechando modal de relatório");
+
+    this.modal.classList.remove("active");
+
+    // Animação de saída
+    setTimeout(() => {
+      this.modal.style.display = "none";
+      this.iframe.src = "";
+      this.isOpen = false;
+      document.body.style.overflow = "";
+    }, 300);
+  }
+
+  /**
+   * Verifica se a modal está aberta
+   */
+  isModalOpen() {
+    return this.isOpen;
+  }
 }
 
 // Criar instância global
@@ -280,4 +284,4 @@ const reportViewer = new ReportViewer();
 // Exportar para uso global
 window.reportViewer = reportViewer;
 
-console.log('✅ Report Viewer Module carregado');
+console.log("✅ Report Viewer Module carregado");

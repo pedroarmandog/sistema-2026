@@ -107,6 +107,7 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
     if (this.dataset.tab === "dashboard") carregarDashboard();
     if (this.dataset.tab === "empresas") carregarEmpresas();
     if (this.dataset.tab === "faturamento") carregarFaturamento();
+    if (this.dataset.tab === "backup") carregarBackups();
   });
 });
 
@@ -256,14 +257,22 @@ async function carregarEmpresas() {
                 <td>${formatarData(emp.data_vencimento)}${vencHoje}</td>
                 <td>${formatarDinheiro(emp.valor_mensalidade)}</td>
                 <td>
-                    ${emp.status !== "ATIVO" ? `<button class="btn-action reativar" data-id="${emp.id}" title="Reativar"><i class="fas fa-play"></i></button>` : ""}
-                    ${emp.status !== "BLOQUEADO" ? `<button class="btn-action bloquear" data-id="${emp.id}" title="Bloquear"><i class="fas fa-ban"></i></button>` : ""}
+                  <button class="btn-action impersonar" data-id="${emp.id}" data-nome="${emp.nome_fantasia}" title="Acessar como Admin"><i class="fas fa-user-shield"></i></button>
+                  ${emp.status !== "ATIVO" ? `<button class="btn-action reativar" data-id="${emp.id}" title="Reativar"><i class="fas fa-play"></i></button>` : ""}
+                  ${emp.status !== "BLOQUEADO" ? `<button class="btn-action bloquear" data-id="${emp.id}" title="Bloquear"><i class="fas fa-ban"></i></button>` : ""}
+                  <button class="btn-action excluir" data-id="${emp.id}" title="Excluir"><i class="fas fa-times"></i></button>
                 </td>
             `;
       tbody.appendChild(tr);
     });
 
     // Eventos dos botões de ação inline
+    document.querySelectorAll(".btn-action.impersonar").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        abrirModalImpersonar(btn.dataset.id, btn.dataset.nome);
+      });
+    });
     document.querySelectorAll(".btn-action.reativar").forEach((btn) => {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -274,6 +283,12 @@ async function carregarEmpresas() {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
         bloquearEmpresa(btn.dataset.id);
+      });
+    });
+    document.querySelectorAll(".btn-action.excluir").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        abrirModalExcluirEmpresa(btn.dataset.id);
       });
     });
   } catch (err) {
@@ -375,6 +390,181 @@ document.getElementById("modalEmpresa").addEventListener("click", (e) => {
   if (e.target === e.currentTarget) e.currentTarget.classList.remove("show");
 });
 
+// ═══════ MODAL EXCLUIR EMPRESA ═══════
+function abrirModalExcluirEmpresa(id) {
+  empresaSelecionada = { id: Number(id) };
+  const modal = document.getElementById("modalExcluirEmpresa");
+  const usuarioInput = document.getElementById("excluirUsuario");
+  // preencher usuário com o nome do admin logado para conveniência
+  const adminNome = getCookie("admin_nome") || "";
+  usuarioInput.value = adminNome;
+  document.getElementById("excluirSenha").value = "";
+  modal.classList.add("show");
+}
+
+document.getElementById("btnCancelarExcluir").addEventListener("click", () => {
+  document.getElementById("modalExcluirEmpresa").classList.remove("show");
+});
+
+document
+  .getElementById("btnConfirmExcluir")
+  .addEventListener("click", async () => {
+    const modal = document.getElementById("modalExcluirEmpresa");
+    const usuario = document.getElementById("excluirUsuario").value.trim();
+    const senha = document.getElementById("excluirSenha").value;
+    if (!senha) {
+      showNotification("Digite a senha do admin para confirmar", "error");
+      return;
+    }
+    try {
+      const resp = await fetch(`${API}/empresas/${empresaSelecionada.id}`, {
+        method: "DELETE",
+        headers: Object.assign({}, authHeaders(), {
+          "Content-Type": "application/json",
+        }),
+        body: JSON.stringify({ usuario, senha }),
+      });
+      if (resp.status === 401) {
+        logout();
+        return;
+      }
+      const data = await resp.json();
+      if (resp.ok) {
+        showNotification(
+          data.message || "Empresa excluída com sucesso",
+          "success",
+        );
+        modal.classList.remove("show");
+        refreshAll();
+      } else {
+        showNotification(data.error || "Erro ao excluir empresa", "error");
+      }
+    } catch (e) {
+      showNotification("Erro de conexão", "error");
+    }
+  });
+
+// ═══════ MODAL IMPERSONAR EMPRESA ═══════
+function abrirModalImpersonar(id, nome) {
+  empresaSelecionada = { id: Number(id) };
+  const modal = document.getElementById("modalImpersonarEmpresa");
+  const usuarioInput = document.getElementById("impersonarUsuario");
+  const nomeEl = document.getElementById("impersonarEmpresaNome");
+  nomeEl.textContent = nome || "";
+  const adminNome = getCookie("admin_nome") || "";
+  usuarioInput.value = adminNome;
+  document.getElementById("impersonarSenha").value = "";
+  modal.classList.add("show");
+}
+
+document
+  .getElementById("btnCancelarImpersonar")
+  .addEventListener("click", () => {
+    document.getElementById("modalImpersonarEmpresa").classList.remove("show");
+  });
+document
+  .getElementById("modalImpersonarEmpresa")
+  .addEventListener("click", (e) => {
+    if (e.target === e.currentTarget) e.currentTarget.classList.remove("show");
+  });
+
+document
+  .getElementById("btnConfirmImpersonar")
+  .addEventListener("click", async () => {
+    const modal = document.getElementById("modalImpersonarEmpresa");
+    const usuario = document.getElementById("impersonarUsuario").value.trim();
+    const senha = document.getElementById("impersonarSenha").value;
+    const btn = document.getElementById("btnConfirmImpersonar");
+
+    if (!senha) {
+      showNotification("Digite a senha do admin para confirmar", "error");
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verificando...';
+
+    try {
+      const resp = await fetch(
+        `${API}/empresas/${empresaSelecionada.id}/impersonate`,
+        {
+          method: "POST",
+          headers: Object.assign({}, authHeaders(), {
+            "Content-Type": "application/json",
+          }),
+          body: JSON.stringify({ usuario, senha }),
+        },
+      );
+      if (resp.status === 401) {
+        logout();
+        return;
+      }
+      const data = await resp.json();
+      if (resp.ok && data.impersonateUrl) {
+        showNotification(`Acessando ${data.empresa}...`, "success");
+        modal.classList.remove("show");
+        // Abrir em nova aba com o token de uso único
+        window.open(data.impersonateUrl, "_blank");
+      } else {
+        showNotification(data.error || "Erro ao acessar empresa", "error");
+      }
+    } catch (e) {
+      showNotification("Erro de conexão", "error");
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Acessar Empresa';
+    }
+  });
+
+// ===== Confirmação customizada (substitui confirm()) =====
+function showConfirm(message, title = "Confirmação") {
+  return new Promise((resolve) => {
+    const modal = document.getElementById("modalConfirm");
+    const msgEl = document.getElementById("confirmMessage");
+    const titleEl = document.getElementById("confirmTitle");
+    const okBtn = document.getElementById("confirmOk");
+    const cancelBtn = document.getElementById("confirmCancel");
+
+    if (!modal || !okBtn || !cancelBtn || !msgEl) return resolve(false);
+
+    msgEl.textContent = message;
+    titleEl.textContent = title;
+    modal.classList.add("show");
+
+    function cleanup() {
+      modal.classList.remove("show");
+      okBtn.removeEventListener("click", onOk);
+      cancelBtn.removeEventListener("click", onCancel);
+      modal.removeEventListener("click", onOverlayClick);
+      document.removeEventListener("keydown", onKey);
+    }
+
+    function onOk() {
+      cleanup();
+      resolve(true);
+    }
+    function onCancel() {
+      cleanup();
+      resolve(false);
+    }
+    function onKey(e) {
+      if (e.key === "Escape") onCancel();
+      if (e.key === "Enter") onOk();
+    }
+    function onOverlayClick(e) {
+      if (e.target === modal) onCancel();
+    }
+
+    okBtn.addEventListener("click", onOk);
+    cancelBtn.addEventListener("click", onCancel);
+    document.addEventListener("keydown", onKey);
+    modal.addEventListener("click", onOverlayClick);
+
+    // foco no botão OK para acessibilidade
+    setTimeout(() => okBtn.focus(), 50);
+  });
+}
+
 // Botões do modal
 document.getElementById("btnReativar").addEventListener("click", async () => {
   if (!empresaSelecionada) return;
@@ -396,12 +586,10 @@ document.getElementById("btnPagamento").addEventListener("click", async () => {
 
 // ═══════ AÇÕES ═══════
 async function reativarEmpresa(id) {
-  if (
-    !confirm(
-      "Reativar esta empresa? Uma nova data de vencimento será definida (30 dias).",
-    )
-  )
-    return;
+  const ok = await showConfirm(
+    "Reativar esta empresa? Uma nova data de vencimento será definida (30 dias).",
+  );
+  if (!ok) return;
   try {
     const resp = await fetch(`${API}/empresas/${id}/reativar`, {
       method: "POST",
@@ -424,8 +612,10 @@ async function reativarEmpresa(id) {
 }
 
 async function bloquearEmpresa(id) {
-  if (!confirm("Bloquear esta empresa? O sistema dela ficará inacessível."))
-    return;
+  const ok = await showConfirm(
+    "Bloquear esta empresa? O sistema dela ficará inacessível.",
+  );
+  if (!ok) return;
   try {
     const resp = await fetch(`${API}/empresas/${id}/bloquear`, {
       method: "POST",
@@ -448,7 +638,8 @@ async function bloquearEmpresa(id) {
 }
 
 async function registrarPagamento(id) {
-  if (!confirm("Registrar pagamento para esta empresa?")) return;
+  const ok = await showConfirm("Registrar pagamento para esta empresa?");
+  if (!ok) return;
   try {
     const resp = await fetch(`${API}/empresas/${id}/pagamento`, {
       method: "POST",
@@ -759,7 +950,237 @@ function refreshAll() {
   if (tab === "dashboard") carregarDashboard();
   if (tab === "empresas") carregarEmpresas();
   if (tab === "faturamento") carregarFaturamento();
+  if (tab === "backup") carregarBackups();
 }
+
+// ═══════ BACKUP ═══════
+let backupRestaurarEmpresa = null;
+let backupRestaurarData = null;
+
+async function carregarBackups() {
+  try {
+    const resp = await fetch(`${API}/backups`, { headers: authHeaders() });
+    if (resp.status === 401) {
+      logout();
+      return;
+    }
+    const data = await resp.json();
+
+    // Cards resumo
+    const comBackup = data.filter((e) => e.total_backups > 0).length;
+    document.getElementById("backupTotalEmpresas").textContent = comBackup;
+
+    // Última data de backup
+    let ultimaData = null;
+    for (const emp of data) {
+      if (emp.ultimo_backup) {
+        if (!ultimaData || emp.ultimo_backup > ultimaData) {
+          ultimaData = emp.ultimo_backup;
+        }
+      }
+    }
+    document.getElementById("backupUltimaData").textContent = ultimaData
+      ? formatarData(ultimaData)
+      : "Nenhum";
+
+    // Tabela
+    const tbody = document.getElementById("backupEmpresasBody");
+    const empty = document.getElementById("backupEmpty");
+    tbody.innerHTML = "";
+
+    if (!data || data.length === 0) {
+      empty.style.display = "block";
+      return;
+    }
+    empty.style.display = "none";
+
+    data.forEach((item) => {
+      const tr = document.createElement("tr");
+
+      // Montar opções do calendário (datas disponíveis)
+      let selectHtml =
+        '<select class="backup-date-select" data-empresa-id="' +
+        item.empresa.id +
+        '" data-empresa-nome="' +
+        item.empresa.nome +
+        '">';
+      selectHtml += '<option value="">Selecionar data...</option>';
+      if (item.backups && item.backups.length > 0) {
+        item.backups.forEach((b) => {
+          const dataFormatada = formatarData(b.data_referencia);
+          const statusTag = b.status === "RESTAURADO" ? " (restaurado)" : "";
+          selectHtml += `<option value="${b.data_referencia}">${dataFormatada}${statusTag} — ${b.registros_totais} reg.</option>`;
+        });
+      }
+      selectHtml += "</select>";
+
+      const btnRestaurar =
+        item.backups && item.backups.length > 0
+          ? `<button class="btn-restaurar-backup" data-empresa-id="${item.empresa.id}" data-empresa-nome="${item.empresa.nome}"><i class="fas fa-undo-alt"></i> Restaurar</button>`
+          : '<span style="color:#aaa;font-size:12px;">Sem backups</span>';
+
+      tr.innerHTML = `
+        <td><strong>${item.empresa.nome}</strong></td>
+        <td><span class="status-badge status-${item.empresa.status}">${item.empresa.status}</span></td>
+        <td>${item.ultimo_backup ? formatarData(item.ultimo_backup) : '<span style="color:#aaa">—</span>'}</td>
+        <td>${item.total_backups} backup${item.total_backups !== 1 ? "s" : ""}</td>
+        <td>
+          <div class="backup-restore-group">
+            ${selectHtml}
+            ${btnRestaurar}
+          </div>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    // Event listeners dos botões restaurar
+    document.querySelectorAll(".btn-restaurar-backup").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const empresaId = btn.dataset.empresaId;
+        const empresaNome = btn.dataset.empresaNome;
+        const select = btn.closest("td").querySelector(".backup-date-select");
+        const dataSelecionada = select ? select.value : "";
+
+        if (!dataSelecionada) {
+          showNotification("Selecione uma data de backup primeiro", "warning");
+          return;
+        }
+
+        abrirModalRestaurar(empresaId, empresaNome, dataSelecionada);
+      });
+    });
+  } catch (err) {
+    console.error("Erro ao carregar backups:", err);
+  }
+}
+
+function abrirModalRestaurar(empresaId, empresaNome, dataReferencia) {
+  backupRestaurarEmpresa = { id: Number(empresaId), nome: empresaNome };
+  backupRestaurarData = dataReferencia;
+
+  const modal = document.getElementById("modalRestaurarBackup");
+  document.getElementById("restaurarEmpresaNome").textContent = empresaNome;
+  document.getElementById("restaurarDataInfo").textContent =
+    "Restaurar para: " + formatarData(dataReferencia);
+  const usuarioInput = document.getElementById("restaurarUsuario");
+  const adminNome = getCookie("admin_nome") || "";
+  usuarioInput.value = adminNome;
+  document.getElementById("restaurarSenha").value = "";
+  modal.classList.add("show");
+}
+
+document
+  .getElementById("btnCancelarRestaurar")
+  .addEventListener("click", () => {
+    document.getElementById("modalRestaurarBackup").classList.remove("show");
+  });
+document
+  .getElementById("modalRestaurarBackup")
+  .addEventListener("click", (e) => {
+    if (e.target === e.currentTarget) e.currentTarget.classList.remove("show");
+  });
+
+document
+  .getElementById("btnConfirmRestaurar")
+  .addEventListener("click", async () => {
+    const modal = document.getElementById("modalRestaurarBackup");
+    const usuario = document.getElementById("restaurarUsuario").value.trim();
+    const senha = document.getElementById("restaurarSenha").value;
+    const btn = document.getElementById("btnConfirmRestaurar");
+
+    if (!senha) {
+      showNotification("Digite a senha do admin para confirmar", "error");
+      return;
+    }
+
+    if (!backupRestaurarEmpresa || !backupRestaurarData) {
+      showNotification("Dados inválidos para restauração", "error");
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Restaurando...';
+
+    try {
+      const resp = await fetch(
+        `${API}/backups/${backupRestaurarEmpresa.id}/restaurar`,
+        {
+          method: "POST",
+          headers: Object.assign({}, authHeaders(), {
+            "Content-Type": "application/json",
+          }),
+          body: JSON.stringify({
+            usuario,
+            senha,
+            data_referencia: backupRestaurarData,
+          }),
+        },
+      );
+      if (resp.status === 401) {
+        logout();
+        return;
+      }
+      const data = await resp.json();
+      if (resp.ok) {
+        showNotification(
+          data.message ||
+            `Backup restaurado com sucesso para ${backupRestaurarEmpresa.nome}`,
+          "success",
+        );
+        modal.classList.remove("show");
+        carregarBackups();
+      } else {
+        showNotification(data.error || "Erro ao restaurar backup", "error");
+      }
+    } catch (e) {
+      showNotification("Erro de conexão", "error");
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-undo-alt"></i> Restaurar Backup';
+    }
+  });
+
+// Botão executar backup manual
+document
+  .getElementById("btnExecutarBackup")
+  .addEventListener("click", async () => {
+    const btn = document.getElementById("btnExecutarBackup");
+    const ok = await showConfirm(
+      "Executar backup de todas as empresas agora?",
+      "Executar Backup",
+    );
+    if (!ok) return;
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Executando...';
+
+    try {
+      const resp = await fetch(`${API}/backups/executar`, {
+        method: "POST",
+        headers: authHeaders(),
+      });
+      if (resp.status === 401) {
+        logout();
+        return;
+      }
+      const data = await resp.json();
+      if (resp.ok) {
+        showNotification(
+          data.message || "Backup executado com sucesso!",
+          "success",
+        );
+        carregarBackups();
+      } else {
+        showNotification(data.error || "Erro ao executar backup", "error");
+      }
+    } catch (e) {
+      showNotification("Erro de conexão", "error");
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-play"></i> Executar Backup Agora';
+    }
+  });
 
 // ═══════ INIT ═══════
 async function init() {

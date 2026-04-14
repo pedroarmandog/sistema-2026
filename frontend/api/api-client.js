@@ -26,7 +26,16 @@ class ApiClient {
       },
     };
 
-    const config = { ...defaultOptions, ...options };
+    const defaultConfig = {
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      // Enviar cookies (JWT em cookie) para autenticação
+      credentials: "include",
+    };
+
+    const config = { ...defaultConfig, ...options };
 
     try {
       const response = await fetch(url, config);
@@ -44,7 +53,7 @@ class ApiClient {
 
         // Se empresa bloqueada (403 + flag), redirecionar imediatamente
         if (response.status === 403 && errorBody && errorBody.bloqueado) {
-          window.location.href = "/painel/sistema-bloqueado.html";
+          window.location.href = "/painel-admin/sistema-bloqueado.html";
           return;
         }
 

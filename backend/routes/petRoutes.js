@@ -2,11 +2,100 @@ const express = require("express");
 const router = express.Router();
 const petController = require("../controllers/petController");
 const multer = require("multer");
-const { Agendamento, Periodicidade } = require("../models");
+const { Agendamento, Periodicidade, Pet, Cliente } = require("../models");
 const { authUser } = require("../middleware/authUser");
 
 // Aplicar auth em toda a rota de pets
 router.use(authUser);
+
+// Helper: após registrar vacina/vermifugo/antiparasitario, agendar envios de vencimento
+async function dispararVencimentoSeConfigurado(agendamentoId, petId) {
+  try {
+    const { MensagemAutomatica } = require("../models");
+    const {
+      dispararMensagemAutomatica,
+      normalizarConfig,
+    } = require("../controllers/marketingController");
+
+    const pet = await Pet.findByPk(petId, {
+      include: [{ model: Cliente, as: "cliente" }],
+    });
+    if (!pet?.cliente?.telefone) return;
+
+    const empId = pet.cliente.empresa_id;
+    const msg = await MensagemAutomatica.findOne({
+      where: { tipo: "vacinas_vencendo", ativo: true, empresaId: empId },
+    });
+    if (!msg) return;
+
+    const ag = await Agendamento.findByPk(agendamentoId);
+    if (!ag) return;
+
+    let servicos = ag.servicos;
+    if (typeof servicos === "string") servicos = JSON.parse(servicos);
+    if (!Array.isArray(servicos)) return;
+
+    const periodicidades = await Periodicidade.findAll();
+    const periodicidadesMap = new Map(
+      periodicidades.map((p) => [p.descricao.trim().toLowerCase(), p]),
+    );
+
+    for (const s of servicos) {
+      const meta = s.meta || {};
+      if (
+        !["vacina", "vermifugo", "antiparasitario"].includes(meta.tipoEspecial)
+      )
+        continue;
+
+      const dataAplic = meta.dataAplic || ag.dataAgendamento || null;
+      const renovacaoLabel = meta.renovacao || "";
+      if (!dataAplic || !renovacaoLabel) continue;
+
+      const p = periodicidadesMap.get(renovacaoLabel.trim().toLowerCase());
+      if (!p || !p.dias) continue;
+
+      const dStr =
+        typeof dataAplic === "string"
+          ? dataAplic.slice(0, 10)
+          : new Date(dataAplic).toISOString().slice(0, 10);
+      const [year, month, day] = dStr.split("-").map(Number);
+      const dRenov = new Date(year, month - 1, day);
+      dRenov.setDate(dRenov.getDate() + Number(p.dias));
+
+      const tipoLabel =
+        meta.tipoEspecial === "vacina"
+          ? "vacina"
+          : meta.tipoEspecial === "vermifugo"
+            ? "vermífugo"
+            : "antiparasitário";
+      const produtoNome = s.nome || meta.nome || tipoLabel;
+
+      // Modo evento: cria envios para cada dia configurado
+      await dispararMensagemAutomatica(
+        "vacinas_vencendo",
+        {
+          nomeTutor: pet.cliente.nome || "Tutor",
+          nomePet: pet.nome || "Pet",
+          produto: produtoNome,
+          tipoEspecial: tipoLabel,
+          dataRenovacao: dRenov.toLocaleDateString("pt-BR"),
+        },
+        pet.cliente.telefone,
+        dRenov,
+        { clienteId: pet.cliente.id, petId: pet.id, agendamentoId: ag.id },
+        empId,
+      );
+      console.log(
+        `[Vencimento] Envios agendados para ${produtoNome} pet=${pet.nome} renovação=${dRenov.toISOString().slice(0, 10)}`,
+      );
+    }
+  } catch (err) {
+    console.error(
+      "[Vencimento] Erro ao agendar envio após registro:",
+      err.message,
+    );
+  }
+}
 
 // Helper: calcula data de renovação somando os dias da periodicidade à data de aplicação
 function calcularDataRenovacao(
@@ -353,6 +442,8 @@ router.post("/:id/vacinas", async (req, res) => {
       status: "concluido",
       profissional: profissional || "",
     });
+    // Agendar envios de vencimento automaticamente
+    dispararVencimentoSeConfigurado(ag.id, petId).catch(() => {});
     return res.status(201).json({ success: true, agendamento_id: ag.id });
   } catch (e) {
     console.error("Erro POST /pets/:id/vacinas:", e);
@@ -395,6 +486,8 @@ router.post("/:id/vermifugos", async (req, res) => {
       status: "concluido",
       profissional: profissional || "",
     });
+    // Agendar envios de vencimento automaticamente
+    dispararVencimentoSeConfigurado(ag.id, petId).catch(() => {});
     return res.status(201).json({ success: true, agendamento_id: ag.id });
   } catch (e) {
     console.error("Erro POST /pets/:id/vermifugos:", e);
@@ -437,6 +530,8 @@ router.post("/:id/antiparasitarios", async (req, res) => {
       status: "concluido",
       profissional: profissional || "",
     });
+    // Agendar envios de vencimento automaticamente
+    dispararVencimentoSeConfigurado(ag.id, petId).catch(() => {});
     return res.status(201).json({ success: true, agendamento_id: ag.id });
   } catch (e) {
     console.error("Erro POST /pets/:id/antiparasitarios:", e);

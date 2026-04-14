@@ -51,45 +51,140 @@ router.get("/:id/comprovante", async (req, res) => {
     let logoRendered = false;
     let empresa = null;
     try {
-      empresa = await Empresa.findOne({
-        where: { ativa: true },
-        order: [["id", "ASC"]],
-      });
-      let logoPath = path.join(
-        __dirname,
-        "../../frontend/logos/logo_pet_cria-removebg-preview.png",
-      );
-      if (empresa && empresa.logo) {
-        const candidate = path.join(__dirname, "../../uploads", empresa.logo);
-        if (fs.existsSync(candidate)) logoPath = candidate;
-      }
-      if (fs.existsSync(logoPath)) {
-        const maxLogoWidth = Math.round(pageWidth * 0.6);
-        const logoWidth = Math.min(maxLogoWidth, Math.round(mmToPt(30)));
-        const logoX = (pageWidth - logoWidth) / 2;
-        const logoY = smallMargin + 4;
+      // Preferir empresa vinculada à venda, depois a do cookie JWT, depois a do req.user, senão qualquer empresa ativa
+      if (venda.empresa_id) empresa = await Empresa.findByPk(venda.empresa_id);
+      if (!empresa) {
+        // Tentar cookie JWT
         try {
+          const jwt = require("jsonwebtoken");
+          const JWT_SECRET =
+            process.env.JWT_USER_SECRET || "pethub_user_secret_2026_!@#$%";
+          const cookieHeader = req.headers.cookie || "";
+          const match = cookieHeader.match(/pethub_token=([^;]+)/);
+          if (match) {
+            const decoded = jwt.verify(match[1], JWT_SECRET);
+            if (decoded.empresaId)
+              empresa = await Empresa.findByPk(decoded.empresaId);
+          }
+        } catch (_) {}
+      }
+      if (!empresa && req.user && req.user.empresaId)
+        empresa = await Empresa.findByPk(req.user.empresaId);
+      if (!empresa)
+        empresa = await Empresa.findOne({
+          where: { ativa: true },
+          order: [["id", "ASC"]],
+        });
+
+      let logoPath = null;
+      let logoBuffer = null;
+
+      // Se empresa tem logo, tentar diferentes formatos (dataURI / base64 / arquivo)
+      if (empresa && empresa.logo) {
+        try {
+          const logoVal = String(empresa.logo || "").trim();
+          if (logoVal.startsWith("data:")) {
+            const parts = logoVal.split(",");
+            if (parts[1]) logoBuffer = Buffer.from(parts[1], "base64");
+          } else if (
+            /^[A-Za-z0-9+/=\r\n]+$/.test(logoVal) &&
+            logoVal.length > 200
+          ) {
+            // provável base64 cru
+            try {
+              logoBuffer = Buffer.from(logoVal, "base64");
+            } catch (e) {
+              logoBuffer = null;
+            }
+          } else {
+            const candidates = [
+              path.join(__dirname, "../../uploads", empresa.logo),
+              path.join(
+                __dirname,
+                "../../uploads",
+                "logos-empresas",
+                empresa.logo,
+              ),
+              path.join(
+                __dirname,
+                "../../uploads",
+                path.basename(empresa.logo),
+              ),
+            ];
+            for (const p of candidates) {
+              if (fs.existsSync(p)) {
+                logoPath = p;
+                break;
+              }
+            }
+          }
+        } catch (e) {
+          /* ignore */
+        }
+      }
+
+      // Se nada obtido da empresa, tentar logos padrões do frontend
+      if (!logoBuffer && !logoPath) {
+        const defaultPaths = [
+          path.join(
+            __dirname,
+            "../../frontend/fivecon/Design sem nome (17).png",
+          ),
+          path.join(__dirname, "../../frontend/logos/Logo PetHub (2).svg"),
+        ];
+        for (const p of defaultPaths) {
+          if (fs.existsSync(p)) {
+            logoPath = p;
+            break;
+          }
+        }
+      }
+
+      // Renderizar logo (buffer ou arquivo)
+      if (logoBuffer) {
+        try {
+          const maxLogoWidth = Math.round(pageWidth * 0.6);
+          const logoWidth = Math.min(maxLogoWidth, Math.round(mmToPt(30)));
+          const logoX = (pageWidth - logoWidth) / 2;
+          const logoY = smallMargin + 4;
+          doc.image(logoBuffer, logoX, logoY, {
+            width: logoWidth,
+            align: "center",
+          });
+          logoRendered = true;
+          const logoEstimatedHeight = Math.round(logoWidth * 0.9);
+          var y = logoY + logoEstimatedHeight + 2;
+        } catch (e) {
+          logoRendered = false;
+        }
+      } else if (logoPath && fs.existsSync(logoPath)) {
+        try {
+          const maxLogoWidth = Math.round(pageWidth * 0.6);
+          const logoWidth = Math.min(maxLogoWidth, Math.round(mmToPt(30)));
+          const logoX = (pageWidth - logoWidth) / 2;
+          const logoY = smallMargin + 4;
           doc.image(logoPath, logoX, logoY, {
             width: logoWidth,
             align: "center",
           });
           logoRendered = true;
+          const logoEstimatedHeight = Math.round(logoWidth * 0.9);
+          var y = logoY + logoEstimatedHeight + 2;
         } catch (e) {
           logoRendered = false;
         }
-        const logoEstimatedHeight = Math.round(logoWidth * 0.9);
-        var y = logoY + logoEstimatedHeight + 2;
       }
     } catch (e) {
       /* fallback */
     }
 
     if (!logoRendered) {
+      // tentar ainda exibir a logo padrão como texto se imagem não encontrada
       doc
         .fillColor("#000")
         .fontSize(18)
         .font("Helvetica-Bold")
-        .text("PET9", { align: "center" });
+        .text("PETHUB", { align: "center" });
       var y = doc.y + 6;
     }
 

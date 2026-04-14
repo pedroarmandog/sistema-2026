@@ -146,7 +146,7 @@ document
         try {
           sessionStorage.setItem("empresa_bloqueada", "1");
         } catch (e) {}
-        window.location.href = "/painel/sistema-bloqueado.html";
+        window.location.href = "/painel-admin/sistema-bloqueado.html";
         return;
       }
 
@@ -164,7 +164,7 @@ document
     } catch (error) {
       // Verificar se o erro é de empresa bloqueada (403)
       if (error.message && error.message.includes("bloqueado")) {
-        window.location.href = "/painel/sistema-bloqueado.html";
+        window.location.href = "/painel-admin/sistema-bloqueado.html";
         return;
       }
       showNotification(

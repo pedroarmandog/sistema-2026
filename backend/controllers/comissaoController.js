@@ -1,6 +1,24 @@
 const { Comissao } = require("../models");
 const { Profissional } = require("../models/Profissional");
 const { Op } = require("sequelize");
+const { Empresa } = require("../models");
+
+// Helper: extrai empresa_id do cookie JWT (mesmo pattern do relatoriosRoutes)
+async function getEmpresaIdFromReq(req) {
+  if (req.user && req.user.empresaId) return req.user.empresaId;
+  try {
+    const jwt = require("jsonwebtoken");
+    const JWT_SECRET =
+      process.env.JWT_USER_SECRET || "pethub_user_secret_2026_!@#$%";
+    const cookieHeader = req.headers.cookie || "";
+    const match = cookieHeader.match(/pethub_token=([^;]+)/);
+    if (match) {
+      const decoded = jwt.verify(match[1], JWT_SECRET);
+      if (decoded.empresaId) return decoded.empresaId;
+    }
+  } catch (_) {}
+  return null;
+}
 
 // Buscar profissionais e suas % para um perfil de produto
 exports.porPerfil = async (req, res) => {
@@ -8,13 +26,18 @@ exports.porPerfil = async (req, res) => {
     const perfil = req.query.perfil;
     if (!perfil) return res.status(400).json({ error: "Informe o perfil" });
 
+    const empresaId = await getEmpresaIdFromReq(req);
+    if (!empresaId)
+      return res.status(401).json({ error: "Empresa não identificada" });
+
     const comissoes = await Comissao.findAll({
-      where: { perfilProduto: perfil },
+      where: { perfilProduto: perfil, empresa_id: empresaId },
       order: [["perfilVendedor", "ASC"]],
     });
 
     // Enriquecer com o ID do profissional cujo nome bate
     const profissionais = await Profissional.findAll({
+      where: { empresa_id: empresaId },
       attributes: ["id", "nome", "perfilComissao"],
     });
 
@@ -48,10 +71,15 @@ exports.calcular = async (req, res) => {
         .json({ error: "Informe perfilProduto, profissionalNome e valor" });
     }
 
+    const empresaId = await getEmpresaIdFromReq(req);
+    if (!empresaId)
+      return res.status(401).json({ error: "Empresa não identificada" });
+
     const comissao = await Comissao.findOne({
       where: {
         perfilProduto,
         perfilVendedor: { [Op.like]: profissionalNome },
+        empresa_id: empresaId,
       },
     });
 
@@ -75,7 +103,12 @@ exports.calcular = async (req, res) => {
 
 exports.getAll = async (req, res) => {
   try {
+    const empresaId = await getEmpresaIdFromReq(req);
+    if (!empresaId)
+      return res.status(401).json({ error: "Empresa não identificada" });
+
     const comissoes = await Comissao.findAll({
+      where: { empresa_id: empresaId },
       order: [
         ["perfilProduto", "ASC"],
         ["perfilVendedor", "ASC"],
@@ -103,7 +136,14 @@ exports.getById = async (req, res) => {
 
 exports.create = async (req, res) => {
   try {
-    const comissao = await Comissao.create(req.body);
+    const empresaId = await getEmpresaIdFromReq(req);
+    if (!empresaId)
+      return res.status(401).json({ error: "Empresa não identificada" });
+
+    const comissao = await Comissao.create({
+      ...req.body,
+      empresa_id: empresaId,
+    });
     res.status(201).json(comissao);
   } catch (error) {
     console.error("Erro ao criar comissão:", error);

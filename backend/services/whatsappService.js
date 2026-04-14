@@ -20,6 +20,10 @@ const clientsMap = new Map();
 // Mapa de listeners SSE por empresaId: Set de res (response objects)
 const sseListeners = new Map();
 
+// Controle de retry automático após auth_failure (evita loop infinito)
+const retryCount = new Map(); // empresaId -> number
+const MAX_AUTO_RETRY = 1;
+
 // Contador anti-spam: mensagens enviadas no último minuto
 const spamCounter = new Map(); // empresaId -> { count, resetAt }
 
@@ -29,6 +33,22 @@ const MAX_DELAY_MS = 10000;
 
 // Diretório para armazenar sessões locais
 const SESSION_DIR = path.join(__dirname, "../../tmp/whatsapp-sessions");
+
+/**
+ * Retorna o diretório de sessão no disco para uma empresa, se existir.
+ */
+function getSessionDirForEmpresa(empresaId) {
+  const chave = String(empresaId);
+  const candidates = [
+    path.join(SESSION_DIR, `empresa_${chave}`),
+    path.join(SESSION_DIR, `session-empresa_${chave}`),
+    path.join(SESSION_DIR, `empresa-${chave}`),
+  ];
+  return (
+    candidates.find((d) => fs.existsSync(d)) ||
+    path.join(SESSION_DIR, `empresa_${chave}`)
+  );
+}
 
 /**
  * Retorna delay aleatório entre MIN_DELAY_MS e MAX_DELAY_MS
@@ -101,8 +121,6 @@ function adicionarListenerSSE(empresaId, res) {
 }
 
 /**
- * Mata processos Chrome/Chromium headless zumbis do Puppeteer.
-/**
  * Mata SOMENTE processos Chrome headless do Puppeteer.
  * Identificados pelo argumento --disable-dev-shm-usage, exclusivo da nossa config.
  * NÃO afeta o Chrome do usuário (que não usa essa flag).
@@ -150,6 +168,24 @@ async function inicializarCliente(empresaId) {
     if (existente.status === "aguardando_qr") {
       return { status: "aguardando_qr" };
     }
+    if (
+      existente.status === "inicializando" ||
+      existente.status === "autenticado"
+    ) {
+      // Verificar se o browser ainda está vivo; se travou, limpar e recriar
+      let browserVivo = false;
+      try {
+        const browser = existente.client && existente.client.pupBrowser;
+        browserVivo = browser && browser.isConnected();
+      } catch (_) {}
+      if (browserVivo) {
+        return { status: existente.status };
+      }
+      // Browser morto ou nunca iniciou — limpar e recriar
+      console.warn(
+        `[WhatsApp][${chave}] Status "${existente.status}" mas browser morto. Recriando...`,
+      );
+    }
     // Destruir cliente antigo antes de recriar
     try {
       await existente.client.destroy();
@@ -160,6 +196,21 @@ async function inicializarCliente(empresaId) {
   // Garantir diretório de sessões
   fs.mkdirSync(SESSION_DIR, { recursive: true });
 
+  // Remover SingletonLock de Chrome zumbi (se existir) para evitar erro "browser is already running"
+  const possibleSessionDirs = [
+    path.join(SESSION_DIR, `session-empresa_${chave}`),
+    path.join(SESSION_DIR, `empresa_${chave}`),
+  ];
+  for (const d of possibleSessionDirs) {
+    const lockFile = path.join(d, "SingletonLock");
+    try {
+      if (fs.existsSync(lockFile)) {
+        fs.unlinkSync(lockFile);
+        console.log(`[WhatsApp][${chave}] Removido SingletonLock zumbi`);
+      }
+    } catch (_) {}
+  }
+
   // Obter caminho do Chromium correto
   let executablePath;
   try {
@@ -168,13 +219,16 @@ async function inicializarCliente(empresaId) {
     executablePath = undefined;
   }
 
+  // Disparador (chave "disp_X") abre Chrome visível; marketing automático roda headless
+  const isDisparador = chave.startsWith("disp_");
+
   const client = new Client({
     authStrategy: new LocalAuth({
       clientId: `empresa_${chave}`,
       dataPath: SESSION_DIR,
     }),
     puppeteer: {
-      headless: true,
+      headless: !isDisparador,
       executablePath,
       handleSIGINT: false,
       handleSIGTERM: false,
@@ -223,12 +277,53 @@ async function inicializarCliente(empresaId) {
     }
   });
 
-  // Evento: Auth failure
-  client.on("auth_failure", (msg) => {
+  // Evento: Auth failure — sessão expirada ou corrompida
+  client.on("auth_failure", async (msg) => {
     console.error(`[WhatsApp][empresa:${chave}] Falha de autenticação:`, msg);
     estado.status = "erro";
-    emitirSSE(chave, "erro", { mensagem: `Falha de autenticação: ${msg}` });
     clientsMap.delete(chave);
+
+    // Destruir cliente antigo
+    try {
+      await client.destroy();
+    } catch (_) {}
+
+    // Limpar sessão corrompida do disco para forçar novo QR
+    const sessDir = limparSessaoDoDisco(chave);
+    console.log(
+      `[WhatsApp][empresa:${chave}] Sessão inválida deletada: ${sessDir}`,
+    );
+    await atualizarStatusNoBanco(chave, "desconectado", null);
+
+    // Auto-retry UMA vez (gera QR novo limpo)
+    const retries = retryCount.get(chave) || 0;
+    if (retries < MAX_AUTO_RETRY) {
+      retryCount.set(chave, retries + 1);
+      console.log(
+        `[WhatsApp][empresa:${chave}] Sessão inválida, recriando conexão (retry ${retries + 1})...`,
+      );
+      emitirSSE(chave, "status", {
+        status: "inicializando",
+        mensagem: "Sessão expirada. Gerando novo QR Code...",
+      });
+      inicializarCliente(empresaId).catch((e) => {
+        console.error(
+          `[WhatsApp][empresa:${chave}] Falha no auto-retry:`,
+          e.message,
+        );
+        emitirSSE(chave, "erro", {
+          mensagem: "Falha ao reconectar. Tente novamente.",
+        });
+      });
+    } else {
+      console.warn(
+        `[WhatsApp][empresa:${chave}] Max auto-retries atingido. Aguardando ação manual.`,
+      );
+      retryCount.delete(chave);
+      emitirSSE(chave, "erro", {
+        mensagem: "Sessão expirada. Clique em conectar novamente.",
+      });
+    }
   });
 
   // Evento: Mudança de estado (CONFLICT, UNLAUNCHED, etc)
@@ -247,6 +342,7 @@ async function inicializarCliente(empresaId) {
     console.log(`[WhatsApp][empresa:${chave}] Cliente pronto e conectado`);
     estado.status = "conectado";
     estado.qrBase64 = null;
+    retryCount.delete(chave); // Reset retry counter on success
 
     try {
       const info = client.info;
@@ -256,6 +352,20 @@ async function inicializarCliente(empresaId) {
       await atualizarStatusNoBanco(chave, "conectado", numero);
       emitirSSE(chave, "conectado", { numero });
 
+      // Fechar abas extras (about:blank) que o Puppeteer abre
+      try {
+        const browser = client.pupBrowser;
+        if (browser) {
+          const pages = await browser.pages();
+          for (const page of pages) {
+            const url = page.url();
+            if (url === "about:blank" || url === "chrome://newtab/") {
+              await page.close().catch(() => {});
+            }
+          }
+        }
+      } catch (_) {}
+
       // Registrar log
       await registrarLog(
         chave,
@@ -264,6 +374,16 @@ async function inicializarCliente(empresaId) {
         { numero },
         `WhatsApp conectado: ${numero}`,
       );
+      // Salvar informações da sessão (caminho em disco) no banco para reuso
+      try {
+        const sessDir = getSessionDirForEmpresa(chave);
+        await salvarSessionInfoNoBanco(chave, { sessionDir: sessDir });
+      } catch (e) {
+        console.warn(
+          "[WhatsApp] falha ao salvar session info no DB",
+          e && e.message,
+        );
+      }
     } catch (err) {
       console.error("[WhatsApp] Erro no evento ready:", err.message);
     }
@@ -272,6 +392,14 @@ async function inicializarCliente(empresaId) {
   // Evento: Desconectado
   client.on("disconnected", async (reason) => {
     console.warn(`[WhatsApp][empresa:${chave}] Desconectado: ${reason}`);
+    // Ignorar se já foi limpo (ex: reinicialização automática após detached frame)
+    const atual = clientsMap.get(chave);
+    if (!atual || atual.client !== client) {
+      console.log(
+        `[WhatsApp][empresa:${chave}] Evento disconnected ignorado (cliente já substituído).`,
+      );
+      return;
+    }
     estado.status = "desconectado";
     estado.qrBase64 = null;
     estado.numero = null;
@@ -290,26 +418,60 @@ async function inicializarCliente(empresaId) {
   });
 
   // Inicializar cliente (abre o browser)
-  client.initialize().catch((err) => {
-    const msg = err && err.message ? err.message : String(err);
-    // TargetCloseError é normal durante a navegação pós-auth — apenas logar
-    if (
-      msg.includes("Target closed") ||
-      msg.includes("TargetCloseError") ||
-      msg.includes("Session closed") ||
-      msg.includes("Protocol error")
-    ) {
-      console.warn(
-        `[WhatsApp][empresa:${chave}] Transição de página (normal):`,
-        msg,
+  console.log(
+    `[WhatsApp][empresa:${chave}] Iniciando browser Puppeteer (headless: ${!isDisparador})...`,
+  );
+  client
+    .initialize()
+    .then(() => {
+      console.log(
+        `[WhatsApp][empresa:${chave}] initialize() resolveu com sucesso`,
       );
-      return;
+    })
+    .catch((err) => {
+      const msg = err && err.message ? err.message : String(err);
+      console.error(`[WhatsApp][empresa:${chave}] initialize() catch: ${msg}`);
+      // TargetCloseError / frame detached é normal durante a navegação pós-auth — apenas logar
+      if (
+        msg.includes("Target closed") ||
+        msg.includes("TargetCloseError") ||
+        msg.includes("Session closed") ||
+        msg.includes("Protocol error") ||
+        msg.includes("detached Frame") ||
+        msg.includes("Navigating frame") ||
+        msg.includes("frame was detached") ||
+        msg.includes("Execution context was destroyed")
+      ) {
+        console.warn(
+          `[WhatsApp][empresa:${chave}] Transição de página (normal):`,
+          msg,
+        );
+        return;
+      }
+      console.error(`[WhatsApp][empresa:${chave}] Erro ao inicializar:`, msg);
+      estado.status = "erro";
+      emitirSSE(chave, "erro", { mensagem: msg });
+      clientsMap.delete(chave);
+    });
+
+  // Timeout de segurança: se não conectar em 90s, limpar para evitar Chrome zumbi
+  setTimeout(async () => {
+    const atual = clientsMap.get(chave);
+    if (atual && atual === estado && atual.status !== "conectado") {
+      console.warn(
+        `[WhatsApp][empresa:${chave}] Timeout de 90s — status ainda "${atual.status}". Limpando...`,
+      );
+      try {
+        await client.destroy();
+      } catch (_) {}
+      clientsMap.delete(chave);
+      await atualizarStatusNoBanco(chave, "desconectado", null);
+      // Notificar frontend via SSE que deu timeout
+      emitirSSE(chave, "erro", {
+        mensagem: "Timeout: não foi possível conectar. Tente novamente.",
+      });
     }
-    console.error(`[WhatsApp][empresa:${chave}] Erro ao inicializar:`, msg);
-    estado.status = "erro";
-    emitirSSE(chave, "erro", { mensagem: msg });
-    clientsMap.delete(chave);
-  });
+  }, 90000);
 
   return { status: "inicializando" };
 }
@@ -328,6 +490,67 @@ function obterStatus(empresaId) {
     numero: estado.numero,
     qrBase64: estado.status === "aguardando_qr" ? estado.qrBase64 : null,
   };
+}
+
+/**
+ * Remove os arquivos de sessão do disco para uma empresa.
+ * Usado quando a sessão está corrompida/expirada.
+ * @returns {string|null} caminho removido, ou null se não encontrou
+ */
+function limparSessaoDoDisco(empresaId) {
+  const chave = String(empresaId);
+  const candidates = [
+    path.join(SESSION_DIR, `session-empresa_${chave}`),
+    path.join(SESSION_DIR, `empresa_${chave}`),
+    path.join(SESSION_DIR, `empresa-${chave}`),
+  ];
+
+  for (const d of candidates) {
+    if (fs.existsSync(d)) {
+      try {
+        fs.rmSync(d, { recursive: true, force: true });
+        console.log(`[WhatsApp][${chave}] Sessão removida do disco: ${d}`);
+        return d;
+      } catch (err) {
+        console.warn(
+          `[WhatsApp][${chave}] Falha ao remover ${d}:`,
+          err.message,
+        );
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Limpa completamente a sessão de uma empresa (memória + disco + banco).
+ * Usado para forçar nova conexão quando a sessão está corrompida.
+ */
+async function limparSessao(empresaId) {
+  const chave = String(empresaId);
+
+  // 1. Destruir cliente em memória
+  const estado = clientsMap.get(chave);
+  if (estado) {
+    try {
+      await estado.client.destroy();
+    } catch (_) {}
+    clientsMap.delete(chave);
+  }
+
+  // 2. Remover arquivos de sessão do disco
+  const removido = limparSessaoDoDisco(chave);
+
+  // 3. Atualizar banco para desconectado
+  await atualizarStatusNoBanco(chave, "desconectado", null);
+
+  // 4. Resetar retry counter
+  retryCount.delete(chave);
+
+  console.log(
+    `[WhatsApp][${chave}] Sessão completamente limpa. Removido: ${removido || "nenhum arquivo"}`,
+  );
+  return { limpo: true, sessaoRemovida: removido };
 }
 
 /**
@@ -385,19 +608,73 @@ async function enviarMensagem(empresaId, telefone, texto, imagemPath = null) {
 
       if (imagemPath && fs.existsSync(imagemPath)) {
         const { MessageMedia } = require("whatsapp-web.js");
-        const media = MessageMedia.fromFilePath(imagemPath);
+        const ext = path.extname(imagemPath).toLowerCase();
+        const mimeTypes = {
+          ".png": "image/png",
+          ".jpg": "image/jpeg",
+          ".jpeg": "image/jpeg",
+          ".gif": "image/gif",
+          ".webp": "image/webp",
+        };
+        const mime = mimeTypes[ext] || null;
+        let media;
+        if (mime) {
+          // Forçar mime type correto para enviar como foto (não documento)
+          const data = fs.readFileSync(imagemPath).toString("base64");
+          media = new MessageMedia(mime, data, path.basename(imagemPath));
+        } else {
+          media = MessageMedia.fromFilePath(imagemPath);
+        }
         await estado.client.sendMessage(numeroFormatado, media, {
           caption: texto,
+          sendMediaAsSticker: false,
         });
       } else {
         await estado.client.sendMessage(numeroFormatado, texto);
       }
 
-      console.log(`[WhatsApp] ✅ Mensagem enviada para ${numeroFormatado}`);
+      console.log(`[WhatsApp] ✅ Mensagem enviada para {numeroFormatado}`);
       return { sucesso: true };
     } catch (err) {
       const msg = err && err.message ? err.message : String(err);
       console.warn(`[WhatsApp] Falha com ${numeroFormatado}: ${msg}`);
+
+      // Erros fatais de sessão — a sessão está irrecuperável (frame morto).
+      // Destruir e reinicializar automaticamente.
+      if (
+        msg.includes("detached Frame") ||
+        msg.includes("Execution context was destroyed") ||
+        msg.includes("Target closed") ||
+        msg.includes("Session closed")
+      ) {
+        console.warn(
+          `[WhatsApp] Sessão quebrada para empresa ${chave}, reinicializando...`,
+        );
+        // Remover listeners do cliente antigo para evitar que o evento "disconnected"
+        // atualize o banco para "desconectado" enquanto reinicializamos
+        try {
+          estado.client.removeAllListeners("disconnected");
+        } catch (_) {}
+        // Limpar da memória (mas NÃO atualizar banco — vamos reconectar)
+        estado.status = "reinicializando";
+        try {
+          await estado.client.destroy();
+        } catch (_) {}
+        clientsMap.delete(chave);
+        // Reinicializar em background (não bloqueia o retorno)
+        // A sessão LocalAuth em disco permite reconectar sem QR
+        inicializarCliente(empresaId).catch((e) =>
+          console.error(
+            `[WhatsApp] Falha ao reinicializar empresa ${chave}:`,
+            e.message,
+          ),
+        );
+        return {
+          sucesso: false,
+          erro: "Sessão WhatsApp reinicializando automaticamente. Envio será retentado.",
+        };
+      }
+
       // Se for o último número da lista, retornar erro
       if (numeroFormatado === numerosParaTentar[numerosParaTentar.length - 1]) {
         console.error(
@@ -472,6 +749,9 @@ function substituirVariaveis(template, variaveis) {
     "{servico}": variaveis.servico || "",
     "{nome_empresa}":
       variaveis.nomeEmpresa || variaveis.nome_empresa || "PetHub",
+    "{produto}": variaveis.produto || "",
+    "{data_renovacao}":
+      variaveis.dataRenovacao || variaveis.data_renovacao || "",
     // suporte ao formato legado do frontend
     "{nometutor}": variaveis.nomeTutor || variaveis.nome_tutor || "",
     "{nomepet}": variaveis.nomePet || variaveis.nome_pet || "",
@@ -491,21 +771,41 @@ function substituirVariaveis(template, variaveis) {
 async function atualizarStatusNoBanco(empresaId, status, numero) {
   try {
     const { WhatsappSession } = require("../models");
-    const [session] = await WhatsappSession.findOrCreate({
-      where: { empresaId: Number(empresaId) },
-      defaults: {
-        status,
-        numero,
-        ultimaConexao: status === "conectado" ? new Date() : null,
-      },
-    });
+    const chaveStr = String(empresaId);
+    const isDisp = chaveStr.startsWith("disp_");
+    const numericId = isDisp
+      ? Number(chaveStr.replace("disp_", ""))
+      : Number(empresaId);
 
-    await session.update({
-      status,
-      numero: numero || session.numero,
-      ultimaConexao:
-        status === "conectado" ? new Date() : session.ultimaConexao,
-    });
+    if (isDisp) {
+      // Disparador: buscar instância pelo ID direto
+      const session = await WhatsappSession.findByPk(numericId);
+      if (session) {
+        await session.update({
+          status,
+          numero: numero || session.numero,
+          ultimaConexao:
+            status === "conectado" ? new Date() : session.ultimaConexao,
+        });
+      }
+    } else {
+      // Sistema principal: buscar por empresaId
+      const [session] = await WhatsappSession.findOrCreate({
+        where: { empresaId: numericId },
+        defaults: {
+          status,
+          numero,
+          ultimaConexao: status === "conectado" ? new Date() : null,
+        },
+      });
+
+      await session.update({
+        status,
+        numero: numero || session.numero,
+        ultimaConexao:
+          status === "conectado" ? new Date() : session.ultimaConexao,
+      });
+    }
   } catch (err) {
     console.warn(
       "[WhatsApp] Aviso: não foi possível atualizar status no banco:",
@@ -517,8 +817,12 @@ async function atualizarStatusNoBanco(empresaId, status, numero) {
 async function registrarLog(empresaId, envioId, evento, detalhes, mensagem) {
   try {
     const { LogEnvio } = require("../models");
+    const chaveStr = String(empresaId);
+    const numericId = chaveStr.startsWith("disp_")
+      ? Number(chaveStr.replace("disp_", ""))
+      : Number(empresaId);
     await LogEnvio.create({
-      empresaId: Number(empresaId),
+      empresaId: numericId || 0,
       envioAgendadoId: envioId || null,
       evento,
       detalhes,
@@ -527,6 +831,31 @@ async function registrarLog(empresaId, envioId, evento, detalhes, mensagem) {
   } catch (err) {
     console.warn(
       "[WhatsApp] Aviso: não foi possível registrar log:",
+      err.message,
+    );
+  }
+}
+
+async function salvarSessionInfoNoBanco(empresaId, info) {
+  try {
+    const { WhatsappSession } = require("../models");
+    const chaveStr = String(empresaId);
+    const isDisp = chaveStr.startsWith("disp_");
+    const numericId = isDisp
+      ? Number(chaveStr.replace("disp_", ""))
+      : Number(empresaId);
+
+    let sess;
+    if (isDisp) {
+      sess = await WhatsappSession.findByPk(numericId);
+    } else {
+      sess = await WhatsappSession.findOne({ where: { empresaId: numericId } });
+    }
+    if (!sess) return;
+    await sess.update({ sessionData: JSON.stringify(info) });
+  } catch (err) {
+    console.warn(
+      "[WhatsApp] Aviso: não foi possível salvar sessionData no banco:",
       err.message,
     );
   }
@@ -546,9 +875,17 @@ async function reconectarSessoesAtivas() {
     // Aguardar um pouco para o SO liberar locks nos arquivos de sessão
     await new Promise((r) => setTimeout(r, 1500));
 
-    // Buscar todas as sessões que estavam conectadas
+    // Buscar todas as sessões de marketing (não apenas "conectado" — podem ter crashado como "desconectado")
+    // Se existe sessão em disco, vale a pena tentar reconectar
+    const { Op } = require("sequelize");
+    // Buscar sessões de marketing que estavam CONECTADAS antes do restart
+    // Só tenta reconectar se já tinha auth válida (evita gerar QR code headless sem ninguém ver)
     const sessoes = await WhatsappSession.findAll({
-      where: { status: "conectado" },
+      where: {
+        [Op.or]: [{ nome: null }, { nome: "" }],
+        empresaId: { [Op.gt]: 0 },
+        status: "conectado",
+      },
     });
 
     if (sessoes.length === 0) {
@@ -563,10 +900,18 @@ async function reconectarSessoesAtivas() {
     for (const sessao of sessoes) {
       const chave = String(sessao.empresaId);
       // Verificar se os arquivos de sessão existem em disco
-      const sessDir = path.join(SESSION_DIR, `session-empresa_${chave}`);
-      if (!fs.existsSync(sessDir)) {
+      // LocalAuth cria a pasta com o clientId dentro de SESSION_DIR, por exemplo
+      // SESSION_DIR/empresa_<chave>. Manter compatibilidade com variações antigas.
+      const candidateDirs = [
+        path.join(SESSION_DIR, `empresa_${chave}`),
+        path.join(SESSION_DIR, `session-empresa_${chave}`),
+        path.join(SESSION_DIR, `empresa-${chave}`),
+      ];
+
+      const sessDir = candidateDirs.find((d) => fs.existsSync(d));
+      if (!sessDir) {
         console.warn(
-          `[WhatsApp] Arquivos de sessão não encontrados para empresa ${chave}, pulando.`,
+          `[WhatsApp] Arquivos de sessão não encontrados para empresa ${chave}, pulando. Searched: ${candidateDirs.join(", ")}`,
         );
         await atualizarStatusNoBanco(chave, "desconectado", null);
         continue;
@@ -588,6 +933,33 @@ async function reconectarSessoesAtivas() {
   }
 }
 
+/**
+ * Verifica se o cliente WhatsApp está conectado em memória
+ * E se o browser Puppeteer ainda está aberto.
+ */
+function isConectado(empresaId) {
+  const chave = String(empresaId);
+  const estado = clientsMap.get(chave);
+  if (!estado || estado.status !== "conectado") return false;
+
+  // Verificar se o browser Puppeteer ainda está vivo
+  try {
+    const browser = estado.client.pupBrowser;
+    if (browser && !browser.isConnected()) {
+      console.warn(
+        `[WhatsApp][${chave}] Browser Puppeteer fechado. Limpando sessão.`,
+      );
+      estado.status = "desconectado";
+      clientsMap.delete(chave);
+      return false;
+    }
+  } catch (_) {
+    // Se não conseguir verificar, assume que está ok
+  }
+
+  return true;
+}
+
 module.exports = {
   inicializarCliente,
   obterStatus,
@@ -598,4 +970,7 @@ module.exports = {
   emitirSSE,
   registrarLog,
   reconectarSessoesAtivas,
+  isConectado,
+  limparSessao,
+  limparSessaoDoDisco,
 };

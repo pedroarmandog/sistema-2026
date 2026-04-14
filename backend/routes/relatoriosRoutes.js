@@ -6,6 +6,75 @@ const { Empresa } = require("../models");
 const Produto = require("../models/Produto");
 const { Venda } = require("../models/Venda");
 const { Op } = require("sequelize");
+const { Agendamento } = require("../models/Agendamento");
+const Pet = require("../models/Pet");
+const { Cliente } = require("../models/Cliente");
+
+// Helper centralizado: busca a empresa do usuário logado a partir do cookie JWT
+// Ordem: req.user.empresaId → cookie JWT → body/query → primeira ativa (último recurso)
+async function obterEmpresaDoRequest(req) {
+  const jwt = require("jsonwebtoken");
+  const JWT_SECRET =
+    process.env.JWT_USER_SECRET || "pethub_user_secret_2026_!@#$%";
+
+  // 1) req.user (se authUser middleware já preencheu)
+  if (req.user && req.user.empresaId) {
+    const emp = await Empresa.findByPk(req.user.empresaId);
+    if (emp) return emp;
+  }
+
+  // 2) Cookie JWT — mais confiável que body/query
+  try {
+    const cookieHeader = req.headers.cookie || "";
+    const match = cookieHeader.match(/pethub_token=([^;]+)/);
+    if (match) {
+      const decoded = jwt.verify(match[1], JWT_SECRET);
+      if (decoded.empresaId) {
+        const emp = await Empresa.findByPk(decoded.empresaId);
+        if (emp) return emp;
+      }
+    }
+  } catch (_) {}
+
+  // 3) Body ou query param
+  const idFromReq =
+    (req.body && (req.body.empresaId || req.body.empresa_id)) ||
+    (req.query && (req.query.empresaId || req.query.empresa_id));
+  if (idFromReq) {
+    const emp = await Empresa.findByPk(idFromReq);
+    if (emp) return emp;
+  }
+
+  // 4) Último recurso: NÃO retornar empresa aleatória — forçar null
+  console.warn(
+    "[obterEmpresaDoRequest] Nenhuma empresa identificada no request (user/cookie/body/query)",
+  );
+  return null;
+}
+
+// Helper: retorna logo path absoluto e nome da empresa
+async function obterDadosEmpresaPDF(req) {
+  const emp = await obterEmpresaDoRequest(req);
+  if (!emp) return { empresa: null, logoPath: null, nomeEmpresa: "" };
+  const nomeEmpresa = emp.nome || emp.razaoSocial || "";
+  let logoPath = null;
+  if (emp.logo) {
+    const logoStr = String(emp.logo);
+    // logo pode estar como path relativo ou só o filename
+    const candidates = [
+      path.join(__dirname, "../../uploads", logoStr),
+      path.join(__dirname, "../../", logoStr),
+      path.join(__dirname, "../../uploads/logos-empresas", logoStr),
+    ];
+    for (const c of candidates) {
+      if (fs.existsSync(c)) {
+        logoPath = c;
+        break;
+      }
+    }
+  }
+  return { empresa: emp, logoPath, nomeEmpresa };
+}
 
 // Helper: agrega vendas por produto e retorna array de linhas com custos e lucros
 async function gerarDadosFaturamento(filters = {}, req) {
@@ -27,13 +96,14 @@ async function gerarDadosFaturamento(filters = {}, req) {
     fim.setHours(23, 59, 59, 999);
     where.createdAt = { [Op.between]: [inicio, fim] };
   }
-  // respeitar empresa_id quando disponível
-  if (req && req.user && req.user.empresaId)
-    where.empresa_id = req.user.empresaId;
+  // empresa_id obrigatório
+  const empresaObj = await obterEmpresaDoRequest(req);
+  if (!empresaObj || !empresaObj.id) return [];
+  where.empresa_id = empresaObj.id;
 
   const vendas = await Venda.findAll({ where });
 
-  // agregação simples: map produtos por codigo/nome
+  // Agregação robusta: identificar produto por id, código ou nome e somar quantidades/valores
   const mapa = new Map();
   for (const v of vendas) {
     let itens = [];
@@ -43,58 +113,137 @@ async function gerarDadosFaturamento(filters = {}, req) {
       itens = v.itens || [];
     }
     for (const it of itens) {
-      const key = (it.codigo || it.id || it.produto || it.nome) + "";
+      const prodObj = it.produto || {};
+      const prodId =
+        prodObj && (prodObj.id || prodObj._id)
+          ? String(prodObj.id || prodObj._id)
+          : it.produtoId
+            ? String(it.produtoId)
+            : it.id
+              ? String(it.id)
+              : null;
+      const codigo =
+        it.codigo || (prodObj && (prodObj.codigo || prodObj.code)) || "";
+      const nome =
+        (prodObj && (prodObj.nome || prodObj.produto)) ||
+        it.nome ||
+        it.descricao ||
+        "";
+
+      const key = prodId
+        ? `id:${prodId}`
+        : codigo
+          ? `code:${codigo}`
+          : `name:${String(nome || "")
+              .trim()
+              .toLowerCase()}`;
+
       const entry = mapa.get(key) || {
-        codigo: it.codigo || it.id || "",
-        produto: it.produto || it.nome || String(it.nome || ""),
+        produtoId: prodId || null,
+        codigo: codigo || "",
+        nome: nome || "",
+        sample: prodObj || it,
         qtd_venda: 0,
         qtd_vendida: 0,
         total_venda: 0,
       };
-      entry.qtd_venda += Number(it.quantidade || it.qtd || it.qtd_venda || 1);
-      entry.qtd_vendida +=
-        Number(it.quantidade_vendida || it.qtd_vendida || it.quantidade || 0) ||
-        entry.qtd_venda;
-      const preco =
-        Number(it.preco || it.preco_venda || it.precoVenda || it.valor || 0) ||
+
+      const qtd = Number(it.quantidade || it.qtd || it.qtd_venda || 1) || 0;
+      const qtdVendida =
+        Number(it.quantidade_vendida || it.qtd_vendida || qtd) || qtd;
+      entry.qtd_venda += qtd;
+      entry.qtd_vendida += qtdVendida;
+
+      // preço: tentar converter formatos com vírgula / símbolos
+      let precoRaw =
+        it.preco ||
+        it.preco_venda ||
+        it.precoVenda ||
+        it.valor ||
+        it.valorUnitario ||
+        it.totalUnitario ||
         0;
-      entry.total_venda += preco * Number(it.quantidade || it.qtd || 1);
+      let preco = 0;
+      try {
+        preco =
+          Number(
+            String(precoRaw || 0)
+              .replace(/[^0-9\-,\.]/g, "")
+              .replace(",", "."),
+          ) || 0;
+      } catch (pe) {
+        preco = Number(precoRaw) || 0;
+      }
+      entry.total_venda += preco * qtd;
       mapa.set(key, entry);
     }
   }
 
-  // buscar produtos para obter custo unitário
-  const empresaId = req && req.user && req.user.empresaId;
+  // buscar produtos para obter custo unitário (indexar por id/codigo/nome)
   const produtosDB = await Produto.findAll({
-    where: empresaId ? { empresa_id: empresaId } : {},
+    where: { empresa_id: empresaObj.id },
   });
-  const produtosPorCodigo = new Map();
-  for (const p of produtosDB)
-    produtosPorCodigo.set(String(p.codigo || p.id || p.nome), p);
+  const normalizeStr = (s) =>
+    String(s || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
+  const produtosById = new Map();
+  const produtosByCodigo = new Map();
+  const produtosByName = new Map();
+  for (const p of produtosDB) {
+    if (p && p.id) produtosById.set(String(p.id), p);
+    if (p && p.codigo) produtosByCodigo.set(String(p.codigo), p);
+    if (p && p.nome) produtosByName.set(normalizeStr(p.nome), p);
+  }
 
   const resultado = [];
   for (const [k, v] of mapa.entries()) {
-    // tentar achar produto por codigo ou nome
-    let prod = produtosDB.find(
-      (p) =>
-        String(p.codigo) === String(v.codigo) ||
-        String(p.id) === String(v.codigo),
-    );
-    if (!prod) prod = produtosPorCodigo.get(String(v.codigo)) || null;
-    const custoUnit = prod && prod.custoBase ? Number(prod.custoBase || 0) : 0;
-    const total_custo = Number(
-      (custoUnit * (v.qtd_vendida || v.qtd_venda || 0)).toFixed(2),
-    );
-    const total_venda = Number((v.total_venda || 0).toFixed(2));
+    let prod = null;
+    if (v.produtoId && produtosById.has(String(v.produtoId)))
+      prod = produtosById.get(String(v.produtoId));
+    else if (v.codigo && produtosByCodigo.has(String(v.codigo)))
+      prod = produtosByCodigo.get(String(v.codigo));
+    else if (v.nome && produtosByName.has(normalizeStr(v.nome)))
+      prod = produtosByName.get(normalizeStr(v.nome));
+
+    // custo unitário: preferir cadastro (custoBase) -> fallback sample item
+    let custoUnit = 0;
+    if (prod && prod.custoBase !== undefined && prod.custoBase !== null) {
+      custoUnit = Number(prod.custoBase) || 0;
+    } else if (v.sample) {
+      custoUnit =
+        Number(
+          v.sample.custoBase || v.sample.custo || v.sample.preco_custo || 0,
+        ) || 0;
+    }
+
+    const qtdVendida = Number(v.qtd_vendida || v.qtd_venda || 0) || 0;
+    let total_custo = Number((custoUnit * qtdVendida).toFixed(2));
+
+    // total de venda: preferir soma registrada, senão fallback ao preço cadastrado * qtd
+    let total_venda = Number((v.total_venda || 0).toFixed(2));
+    if (!total_venda && prod && prod.preco) {
+      total_venda = Number((Number(prod.preco) * qtdVendida).toFixed(2));
+    }
+
     const total_lucro = Number((total_venda - total_custo).toFixed(2));
     const margem = total_venda
       ? Number(((total_lucro / total_venda) * 100).toFixed(2))
       : 0;
+
     resultado.push({
-      codigo: v.codigo || v.codigo,
-      produto: prod || v.produto,
+      codigo:
+        v.codigo ||
+        v.codigo ||
+        (prod && prod.codigo) ||
+        (prod && prod.id) ||
+        "",
+      produto: prod || v.nome || v.sample || v.produto || "",
       qtd_venda: v.qtd_venda,
       qtd_vendida: v.qtd_vendida,
+      custo_unit: custoUnit,
       total_custo,
       total_venda,
       total_lucro,
@@ -124,12 +273,359 @@ router.post("/faturamento", async (req, res) => {
       filtros.dataInicio && filtros.dataFim
         ? `Período: ${filtros.dataInicio} até ${filtros.dataFim}`
         : "Período: Todos";
-    res.json({ periodo, produtos });
+    // Incluir nome da empresa para templates Stimulsoft
+    const emp = await obterEmpresaDoRequest(req);
+    const nomeEmpresa = emp ? emp.razaoSocial || emp.nome || "" : "";
+    res.json({ periodo, produtos, nomeEmpresa });
   } catch (error) {
     console.error("❌ Erro ao gerar relatório:", error);
     res
       .status(500)
       .json({ error: "Erro ao gerar relatório", message: error.message });
+  }
+});
+
+// Rota: /venda-no-periodo/pdf (PDF) - usa mesma lógica de faturamento mas título diferente
+router.get("/venda-no-periodo/pdf", async (req, res) => {
+  let PDFDocument;
+  try {
+    PDFDocument = require("pdfkit");
+  } catch (e) {
+    res
+      .status(500)
+      .json({ error: "Dependência ausente: pdfkit", message: e.message });
+    return;
+  }
+
+  try {
+    // aceitar filtros via query string (dataInicio, dataFim)
+    const filtros = req.query || {};
+    const dataProdutos = await gerarDadosFaturamento(filtros, req);
+
+    const doc = new PDFDocument({ size: "A4", margin: 36 });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="venda-no-periodo.pdf"`,
+    );
+    doc.pipe(res);
+
+    // Layout (reaproveita lógica do faturamento)
+    const left = doc.page.margins.left;
+    const pageUsableWidth =
+      doc.page.width - doc.page.margins.left - doc.page.margins.right;
+
+    const headers = [
+      "Código",
+      "Produto",
+      "Qtd Vendido",
+      "Total Custo",
+      "Total Venda",
+      "Total Lucro",
+    ];
+
+    const headerFontSize = 9;
+    const rowFontSize = 8;
+    const rowHeight = 18;
+    const cellPadding = 4;
+
+    // --- Logo: preferir payload (companyLogo) -> logo da empresa -> logo padrão ---
+    let logoBuffer = null;
+    try {
+      if (req.query && req.query.companyLogo) {
+        const companyLogo = req.query.companyLogo;
+        if (
+          typeof companyLogo === "string" &&
+          companyLogo.startsWith("data:")
+        ) {
+          const base64 = companyLogo.split(",")[1];
+          if (base64) logoBuffer = Buffer.from(base64, "base64");
+        } else if (typeof companyLogo === "string") {
+          try {
+            logoBuffer = Buffer.from(companyLogo, "base64");
+          } catch (e) {
+            /* ignore */
+          }
+        }
+      }
+      // Também aceitar nome de arquivo do logo via query (logoFilename)
+      if (!logoBuffer && req.query && req.query.logoFilename) {
+        const lf = String(req.query.logoFilename || "");
+        try {
+          const p = path.join(__dirname, "../../uploads", lf);
+          if (fs.existsSync(p)) {
+            logoBuffer = fs.readFileSync(p);
+          }
+        } catch (e) {
+          /* ignore */
+        }
+      }
+    } catch (e) {
+      console.warn("Erro ao parsear companyLogo payload:", e && e.message);
+    }
+
+    // Buscar empresa para logo e razão social
+    // Buscar empresa do usuário logado (cookie JWT)
+    let nomeEmpresa =
+      req.query && req.query.companyName ? String(req.query.companyName) : "";
+    try {
+      const empresa = await obterEmpresaDoRequest(req);
+      if (empresa) {
+        if (!nomeEmpresa)
+          nomeEmpresa = empresa.razaoSocial || empresa.nome || "";
+        if (!logoBuffer && empresa.logo) {
+          const candidates = [
+            path.join(__dirname, "../../uploads", empresa.logo),
+            path.join(
+              __dirname,
+              "../../uploads",
+              "logos-empresas",
+              empresa.logo,
+            ),
+            path.join(__dirname, "../../uploads", path.basename(empresa.logo)),
+          ];
+          for (const p of candidates) {
+            if (fs.existsSync(p)) {
+              try {
+                logoBuffer = fs.readFileSync(p);
+                break;
+              } catch (e) {
+                /* continue */
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn(
+        "Erro ao buscar empresa para venda-no-periodo:",
+        e && e.message,
+      );
+    }
+
+    // Fallback logo padrão
+    if (!logoBuffer) {
+      const defaultPaths = [
+        path.join(__dirname, "../../frontend/fivecon/Design sem nome (17).png"),
+        path.join(__dirname, "../../frontend/logos/Logo PetHub (2).svg"),
+      ];
+      for (const p of defaultPaths) {
+        if (fs.existsSync(p)) {
+          try {
+            logoBuffer = fs.readFileSync(p);
+            break;
+          } catch (e) {
+            /* ignore */
+          }
+        }
+      }
+    }
+
+    // Desenhar logo
+    const pageWidth = doc.page.width;
+    const logoWidth = 90;
+    const logoX = (pageWidth - logoWidth) / 2;
+    const logoY = 25;
+    if (logoBuffer) {
+      try {
+        doc.image(logoBuffer, logoX, logoY, {
+          width: logoWidth,
+          align: "center",
+        });
+      } catch (e) {
+        console.warn("Erro ao desenhar logo no PDF:", e && e.message);
+      }
+    }
+
+    // Título e razão social
+    const leftTable = left;
+    const usableWidth = pageUsableWidth;
+    const prodW = usableWidth - 60 - (headers.length - 2) * 70;
+    const headerStartY = logoBuffer ? Math.max(110, logoY + 85) : doc.y + 6;
+
+    doc.font("Helvetica-Bold").fontSize(14).fillColor("#000");
+    doc.text("RELATÓRIO DE VENDA NO PERÍODO", leftTable, headerStartY, {
+      align: "center",
+      width: usableWidth,
+    });
+
+    doc.moveDown(0.2);
+    if (nomeEmpresa) {
+      doc.font("Helvetica").fontSize(11).fillColor("#444");
+      doc.text(nomeEmpresa, leftTable, doc.y, {
+        align: "center",
+        width: usableWidth,
+      });
+    }
+
+    // Período
+    doc.moveDown(0.2);
+    doc.font("Helvetica").fontSize(10).fillColor("#444");
+    const periodoTexto =
+      filtros && filtros.dataInicio && filtros.dataFim
+        ? `Período: ${filtros.dataInicio} até ${filtros.dataFim}`
+        : filtros && filtros.dataInicio
+          ? `Período: a partir de ${filtros.dataInicio}`
+          : filtros && filtros.dataFim
+            ? `Período: até ${filtros.dataFim}`
+            : "Período: Todos";
+    doc.text(periodoTexto, leftTable, doc.y, {
+      align: "center",
+      width: usableWidth,
+    });
+
+    // Posicionar tabela
+    let y = doc.y + 12;
+    doc.font("Helvetica-Bold").fontSize(headerFontSize).fillColor("#000");
+    let x = leftTable;
+    for (let i = 0; i < headers.length; i++) {
+      doc.text(headers[i], x + cellPadding, y + 2, {
+        width:
+          (i === 0
+            ? 60
+            : i === 1
+              ? usableWidth - 60 - (headers.length - 2) * 70
+              : 70) -
+          cellPadding * 2,
+        align: i >= 2 ? "right" : "left",
+      });
+      x +=
+        i === 0
+          ? 60
+          : i === 1
+            ? usableWidth - 60 - (headers.length - 2) * 70
+            : 70;
+    }
+    y += rowHeight;
+    doc
+      .moveTo(leftTable, y - 6)
+      .lineTo(leftTable + usableWidth, y - 6)
+      .stroke("#e6e6e6");
+
+    // Conteúdo das linhas
+    doc.font("Helvetica").fontSize(rowFontSize).fillColor("#000");
+    let sumQtdVendida = 0,
+      sumTotalCusto = 0,
+      sumTotalVenda = 0,
+      sumTotalLucro = 0;
+    const fmtCurrency = (v) =>
+      new Intl.NumberFormat("pt-BR", {
+        style: "currency",
+        currency: "BRL",
+      }).format(Number(v || 0));
+
+    for (const p of dataProdutos) {
+      if (y + rowHeight > doc.page.height - doc.page.margins.bottom - 10) {
+        doc.addPage();
+        y = doc.page.margins.top + 10;
+      }
+      x = leftTable;
+      const codigoVal =
+        p.codigo !== undefined && p.codigo !== null ? String(p.codigo) : "";
+      let produtoVal = "";
+      if (p.produto)
+        produtoVal =
+          typeof p.produto === "object"
+            ? p.produto.nome || p.produto.produto || String(p.produto.id || "")
+            : String(p.produto);
+      const qtdVendidaVal = String(p.qtd_vendida || 0);
+      const totalCustoVal = fmtCurrency(p.total_custo || 0);
+      const totalVendaVal = fmtCurrency(p.total_venda || 0);
+      const totalLucroVal = fmtCurrency(p.total_lucro || 0);
+
+      const cellValues = [
+        codigoVal,
+        produtoVal,
+        qtdVendidaVal,
+        totalCustoVal,
+        totalVendaVal,
+        totalLucroVal,
+      ];
+
+      // escrever cells (simples, adaptando larguras)
+      doc.text(
+        cellValues[0],
+        x + cellPadding,
+        y + (rowHeight - rowFontSize) / 2 - 1,
+        { width: 60 - cellPadding * 2, align: "left" },
+      );
+      x += 60;
+      const prodW = usableWidth - 60 - (headers.length - 2) * 70;
+      doc.text(
+        cellValues[1],
+        x + cellPadding,
+        y + (rowHeight - rowFontSize) / 2 - 1,
+        { width: prodW - cellPadding * 2, align: "left" },
+      );
+      x += prodW;
+      for (let c = 2; c < headers.length; c++) {
+        doc.text(
+          cellValues[c],
+          x + cellPadding,
+          y + (rowHeight - rowFontSize) / 2 - 1,
+          { width: 70 - cellPadding * 2, align: "right" },
+        );
+        x += 70;
+      }
+
+      doc
+        .moveTo(leftTable, y + rowHeight - 4)
+        .lineTo(leftTable + usableWidth, y + rowHeight - 4)
+        .stroke("#f0f0f0");
+
+      sumQtdVendida += Number(p.qtd_vendida || 0);
+      sumTotalCusto += Number(p.total_custo || 0);
+      sumTotalVenda += Number(p.total_venda || 0);
+      sumTotalLucro += Number(p.total_lucro || 0);
+      y += rowHeight;
+    }
+
+    // Totais
+    sumTotalCusto = Number(sumTotalCusto.toFixed(2));
+    sumTotalVenda = Number(sumTotalVenda.toFixed(2));
+    sumTotalLucro = Number(sumTotalLucro.toFixed(2));
+    if (y + rowHeight > doc.page.height - doc.page.margins.bottom - 10) {
+      doc.addPage();
+      y = doc.page.margins.top + 10;
+    }
+    doc
+      .moveTo(leftTable, y - 6)
+      .lineTo(leftTable + usableWidth, y - 6)
+      .stroke("#cccccc");
+    doc.font("Helvetica-Bold").fontSize(rowFontSize + 1);
+    x = leftTable;
+    doc.text("", x + cellPadding, y + (rowHeight - rowFontSize) / 2 - 1, {
+      width: 60 - cellPadding * 2,
+    });
+    x += 60;
+    doc.text("TOTAL", x + cellPadding, y + (rowHeight - rowFontSize) / 2 - 1, {
+      width: prodW - cellPadding * 2,
+      align: "left",
+    });
+    x += prodW;
+    const totals = [
+      String(sumQtdVendida),
+      fmtCurrency(sumTotalCusto),
+      fmtCurrency(sumTotalVenda),
+      fmtCurrency(sumTotalLucro),
+    ];
+    for (let c = 0; c < totals.length; c++) {
+      const w = 70;
+      doc.text(
+        totals[c],
+        x + cellPadding,
+        y + (rowHeight - rowFontSize) / 2 - 1,
+        { width: w - cellPadding * 2, align: "right" },
+      );
+      x += w;
+    }
+
+    doc.end();
+  } catch (error) {
+    console.error("❌ Erro ao gerar PDF de venda-no-periodo:", error);
+    res
+      .status(500)
+      .json({ error: "Erro ao gerar PDF", message: error.message });
   }
 });
 
@@ -156,26 +652,161 @@ router.post("/faturamento/pdf", async (req, res) => {
 
     // Layout
     const left = doc.page.margins.left;
-    const usableWidth =
+    const pageUsableWidth =
       doc.page.width - doc.page.margins.left - doc.page.margins.right;
-    const codeW = 60;
-    const numW = 70;
-    const prodW = usableWidth - codeW - numW * 4;
-    const colWidths = [codeW, prodW, numW, numW, numW, numW, numW];
 
     const headers = [
       "Código",
       "Produto",
-      "Qtd Venda",
       "Qtd Vendido",
       "Total Custo",
       "Total Venda",
       "Total Lucro",
     ];
-    const headerFontSize = 10;
-    const rowFontSize = 9;
-    const rowHeight = 20;
+
+    // Fonte e dimensões (ajustadas para caber mais colunas)
+    const headerFontSize = 9;
+    const rowFontSize = 8;
+    const rowHeight = 18;
     const cellPadding = 4;
+
+    // --- Logo: preferir payload (companyLogo) -> logo da empresa -> logo padrão ---
+    let logoBuffer = null;
+    try {
+      if (req.body && req.body.companyLogo) {
+        const companyLogo = req.body.companyLogo;
+        if (
+          typeof companyLogo === "string" &&
+          companyLogo.startsWith("data:")
+        ) {
+          const base64 = companyLogo.split(",")[1];
+          if (base64) logoBuffer = Buffer.from(base64, "base64");
+        } else if (typeof companyLogo === "string") {
+          // tentar decodificar base64 bruto (caso frontend envie assim)
+          try {
+            logoBuffer = Buffer.from(companyLogo, "base64");
+          } catch (e) {
+            /* ignore */
+          }
+        } else if (companyLogo && companyLogo.data) {
+          logoBuffer = Buffer.from(companyLogo.data);
+        }
+      }
+    } catch (e) {
+      console.warn("Erro ao parsear companyLogo payload:", e && e.message);
+    }
+
+    // Se não veio pelo payload, tentar buscar da tabela Empresa
+    if (!logoBuffer) {
+      try {
+        const empresa = await obterEmpresaDoRequest(req);
+        if (empresa && empresa.logo) {
+          const candidates = [
+            path.join(__dirname, "../../uploads", empresa.logo),
+            path.join(
+              __dirname,
+              "../../uploads",
+              "logos-empresas",
+              empresa.logo,
+            ),
+            path.join(__dirname, "../../uploads", path.basename(empresa.logo)),
+          ];
+          for (const p of candidates) {
+            if (fs.existsSync(p)) {
+              try {
+                logoBuffer = fs.readFileSync(p);
+                break;
+              } catch (e) {
+                /* continue */
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("Erro ao buscar logo da empresa:", e && e.message);
+      }
+    }
+
+    // Fallback para logo padrão do sistema (frontend assets)
+    if (!logoBuffer) {
+      const defaultPaths = [
+        path.join(__dirname, "../../frontend/fivecon/Design sem nome (17).png"),
+        path.join(__dirname, "../../frontend/logos/Logo PetHub (2).svg"),
+      ];
+      for (const p of defaultPaths) {
+        if (fs.existsSync(p)) {
+          try {
+            logoBuffer = fs.readFileSync(p);
+            break;
+          } catch (e) {
+            /* ignore */
+          }
+        }
+      }
+    }
+
+    // Desenhar logo no topo (header), sem reduzir a largura disponível da tabela
+    const pageWidth = doc.page.width;
+    // permitir ajuste via payload (companyLogoWidth), senão usar 90pt
+    const logoWidth =
+      typeof req.body.companyLogoWidth === "number" &&
+      req.body.companyLogoWidth > 0
+        ? req.body.companyLogoWidth
+        : req.body && Number(req.body.companyLogoWidth)
+          ? Number(req.body.companyLogoWidth)
+          : 90;
+    const logoX = (pageWidth - logoWidth) / 2;
+    const logoY = 25;
+    if (logoBuffer) {
+      try {
+        doc.image(logoBuffer, logoX, logoY, {
+          width: logoWidth,
+          align: "center",
+        });
+      } catch (e) {
+        console.warn("Erro ao desenhar logo no PDF:", e && e.message);
+      }
+    }
+    // tabela usa a largura total disponível na página
+    const leftTable = left;
+    let usableWidth = pageUsableWidth;
+
+    // Calcular larguras dinamicamente garantindo que a soma == usableWidth
+    const codeW = 60; // coluna código
+    const numericCols = headers.length - 2; // colunas numéricas após Código e Produto
+
+    // largura sugerida para colunas numéricas (ajustável)
+    let numW = 70;
+    let prodW = usableWidth - codeW - numW * numericCols;
+
+    // Se produto ficar muito estreito, recalcular numW para caber um mínimo razoável
+    const minProdW = 120;
+    const minNumW = 50;
+    if (prodW < minProdW) {
+      // distribuir espaço disponível entre colunas numéricas mantendo minProdW
+      numW = Math.max(
+        minNumW,
+        Math.floor((usableWidth - codeW - minProdW) / numericCols),
+      );
+      prodW = usableWidth - codeW - numW * numericCols;
+    }
+
+    // Caso extremo (prodW ainda pequeno), distribuir igualmente entre produto+numéricas
+    if (prodW < 80) {
+      const remainder = usableWidth - codeW;
+      const each = Math.max(minNumW, Math.floor(remainder / (numericCols + 1)));
+      prodW = each;
+      numW = each;
+    }
+
+    // Ajustar pequenos desvios para que a soma das colWidths == usableWidth
+    const tentativeTotal = codeW + prodW + numW * numericCols;
+    const diff = usableWidth - tentativeTotal;
+    if (Math.abs(diff) >= 1) {
+      prodW += diff; // ajustar a coluna Produto para compensar
+    }
+
+    const colWidths = [codeW, prodW].concat(new Array(numericCols).fill(numW));
 
     function truncateToWidth(text, width) {
       const s = String(text || "");
@@ -188,10 +819,36 @@ router.post("/faturamento/pdf", async (req, res) => {
       return out.length ? out + ell : ell;
     }
 
-    // header
-    let y = doc.y + 6;
-    doc.font("Helvetica-Bold").fontSize(headerFontSize);
-    let x = left;
+    // Cabeçalho: título e período abaixo da logo, depois os headers da tabela
+    const headerStartY = logoBuffer ? Math.max(110, logoY + 85) : doc.y + 6;
+
+    // Título principal (h3/h4 equivalente)
+    doc.font("Helvetica-Bold").fontSize(14).fillColor("#000");
+    doc.text("RELATÓRIO DE FATURAMENTO", leftTable, headerStartY, {
+      align: "center",
+      width: usableWidth,
+    });
+
+    // Período filtrado (linha menor abaixo do título)
+    doc.moveDown(0.2);
+    doc.font("Helvetica").fontSize(10).fillColor("#444");
+    const periodoTexto =
+      filtros && filtros.dataInicio && filtros.dataFim
+        ? `Período: ${filtros.dataInicio} até ${filtros.dataFim}`
+        : filtros && filtros.dataInicio
+          ? `Período: a partir de ${filtros.dataInicio}`
+          : filtros && filtros.dataFim
+            ? `Período: até ${filtros.dataFim}`
+            : "Período: Todos";
+    doc.text(periodoTexto, leftTable, doc.y, {
+      align: "center",
+      width: usableWidth,
+    });
+
+    // Posicionar início da tabela logo abaixo do título/período
+    let y = doc.y + 12;
+    doc.font("Helvetica-Bold").fontSize(headerFontSize).fillColor("#000");
+    let x = leftTable;
     for (let i = 0; i < headers.length; i++) {
       doc.text(headers[i], x + cellPadding, y + 2, {
         width: colWidths[i] - cellPadding * 2,
@@ -201,13 +858,12 @@ router.post("/faturamento/pdf", async (req, res) => {
     }
     y += rowHeight;
     doc
-      .moveTo(left, y - 6)
-      .lineTo(left + usableWidth, y - 6)
+      .moveTo(leftTable, y - 6)
+      .lineTo(leftTable + usableWidth, y - 6)
       .stroke("#e6e6e6");
 
     doc.font("Helvetica").fontSize(rowFontSize).fillColor("#000");
-    let sumQtdVenda = 0,
-      sumQtdVendida = 0,
+    let sumQtdVendida = 0,
       sumTotalCusto = 0,
       sumTotalVenda = 0,
       sumTotalLucro = 0;
@@ -222,7 +878,7 @@ router.post("/faturamento/pdf", async (req, res) => {
         doc.addPage();
         y = doc.page.margins.top + 10;
       }
-      x = left;
+      x = leftTable;
       const codigoVal =
         p.codigo !== undefined && p.codigo !== null ? String(p.codigo) : "";
       let produtoVal = "";
@@ -231,7 +887,6 @@ router.post("/faturamento/pdf", async (req, res) => {
           typeof p.produto === "object"
             ? p.produto.nome || p.produto.produto || String(p.produto.id || "")
             : String(p.produto);
-      const qtdVendaVal = String(p.qtd_venda || 0);
       const qtdVendidaVal = String(p.qtd_vendida || 0);
       const totalCustoVal = fmtCurrency(p.total_custo || 0);
       const totalVendaVal = fmtCurrency(p.total_venda || 0);
@@ -240,7 +895,6 @@ router.post("/faturamento/pdf", async (req, res) => {
       const cellValues = [
         codigoVal,
         produtoVal,
-        qtdVendaVal,
         qtdVendidaVal,
         totalCustoVal,
         totalVendaVal,
@@ -261,7 +915,7 @@ router.post("/faturamento/pdf", async (req, res) => {
         { width: colWidths[1] - cellPadding * 2, align: "left" },
       );
       x += colWidths[1];
-      for (let c = 2; c < 7; c++) {
+      for (let c = 2; c < headers.length; c++) {
         doc.text(
           cellValues[c],
           x + cellPadding,
@@ -272,11 +926,10 @@ router.post("/faturamento/pdf", async (req, res) => {
       }
 
       doc
-        .moveTo(left, y + rowHeight - 4)
-        .lineTo(left + usableWidth, y + rowHeight - 4)
+        .moveTo(leftTable, y + rowHeight - 4)
+        .lineTo(leftTable + usableWidth, y + rowHeight - 4)
         .stroke("#f0f0f0");
 
-      sumQtdVenda += Number(p.qtd_venda || 0);
       sumQtdVendida += Number(p.qtd_vendida || 0);
       sumTotalCusto += Number(p.total_custo || 0);
       sumTotalVenda += Number(p.total_venda || 0);
@@ -293,11 +946,11 @@ router.post("/faturamento/pdf", async (req, res) => {
       y = doc.page.margins.top + 10;
     }
     doc
-      .moveTo(left, y - 6)
-      .lineTo(left + usableWidth, y - 6)
+      .moveTo(leftTable, y - 6)
+      .lineTo(leftTable + usableWidth, y - 6)
       .stroke("#cccccc");
     doc.font("Helvetica-Bold").fontSize(rowFontSize + 1);
-    x = left;
+    x = leftTable;
     doc.text("", x + cellPadding, y + (rowHeight - rowFontSize) / 2 - 1, {
       width: colWidths[0] - cellPadding * 2,
     });
@@ -308,7 +961,6 @@ router.post("/faturamento/pdf", async (req, res) => {
     });
     x += colWidths[1];
     const totals = [
-      String(sumQtdVenda),
       String(sumQtdVendida),
       fmtCurrency(sumTotalCusto),
       fmtCurrency(sumTotalVenda),
@@ -830,8 +1482,18 @@ router.post("/comissao", async (req, res) => {
       numeroVenda,
     } = req.body || {};
 
+    // ---- empresa_id obrigatório ----
+    const empresaObj = await obterEmpresaDoRequest(req);
+    const empresaId = empresaObj && empresaObj.id;
+    console.log(
+      `[comissao] empresa_id filtrado: ${empresaId} (${empresaObj ? empresaObj.nome || empresaObj.razaoSocial : "null"})`,
+    );
+    if (!empresaId) {
+      return res.status(401).json({ error: "Empresa não identificada" });
+    }
+
     // ---- montar filtro de datas ----
-    const where = {};
+    const where = { empresa_id: empresaId };
     // Cria date no fuso LOCAL (não UTC), para evitar off-by-one de timezone
     const parseDataBR = (s) => {
       if (!s) return null;
@@ -856,7 +1518,9 @@ router.post("/comissao", async (req, res) => {
 
     // ---- buscar comissões cadastradas no banco ----
     const { Comissao, Cliente, Produto, Profissional } = require("../models");
-    const todasComissoes = await Comissao.findAll();
+    const todasComissoes = await Comissao.findAll({
+      where: { empresa_id: empresaId },
+    });
     const mapaComissao = {};
     // mapa rápido: "perfilProduto||perfilVendedor" → percentual
     const mapaComissaoPorPerfil = {};
@@ -904,6 +1568,7 @@ router.post("/comissao", async (req, res) => {
 
     // ---- pré-carregar perfilComissao e tipo de todos os produtos ----
     const todosProdutos = await Produto.findAll({
+      where: { empresa_id: empresaId },
       attributes: ["id", "nome", "perfilComissao", "tipo"],
     }).catch(() => []);
     const mapaProdutoPerfilComissao = {};
@@ -934,6 +1599,7 @@ router.post("/comissao", async (req, res) => {
 
     // ---- pré-carregar profissionais para fallback por ID ----
     const todosProfissionais = await Profissional.findAll({
+      where: { empresa_id: empresaId },
       attributes: ["id", "nome"],
     }).catch(() => []);
     const mapaProfissionalId = {};
@@ -943,6 +1609,7 @@ router.post("/comissao", async (req, res) => {
 
     // ---- buscar clientes para saber grupoCliente ----
     const todosClientes = await Cliente.findAll({
+      where: { empresa_id: empresaId },
       attributes: ["id", "nome", "grupo_cliente"],
     }).catch(() => []);
     const mapaCliente = {};
@@ -1107,20 +1774,51 @@ router.post("/comissao", async (req, res) => {
     }
 
     // ---- totais ----
-    const totalVendas = linhas.reduce((s, l) => s + l.totalVenda, 0);
-    const totalComissoes = linhas.reduce((s, l) => s + l.valorComissao, 0);
+    // Agregar linhas: mesmo profissional + produto + percentual → somar qtd/valores
+    const mapaAgregado = new Map();
+    for (const l of linhas) {
+      const chave = `${(l.profissional || "").toLowerCase()}||${(l.produto || "").toLowerCase()}||${l.percentualComissao}`;
+      if (mapaAgregado.has(chave)) {
+        const existente = mapaAgregado.get(chave);
+        existente.quantidade += l.quantidade;
+        existente.totalVenda += l.totalVenda;
+        existente.valorComissao += l.valorComissao;
+        existente.vendaIds.push(l.vendaId);
+      } else {
+        mapaAgregado.set(chave, {
+          ...l,
+          vendaIds: [l.vendaId],
+        });
+      }
+    }
+    // Recalcular valores arredondados e montar array final
+    const linhasAgregadas = [];
+    for (const item of mapaAgregado.values()) {
+      item.totalVenda = parseFloat(item.totalVenda.toFixed(2));
+      item.valorComissao = parseFloat(item.valorComissao.toFixed(2));
+      // vendaId: primeiro da lista (para referência)
+      item.vendaId = item.vendaIds[0];
+      delete item.vendaIds;
+      linhasAgregadas.push(item);
+    }
+
+    const totalVendas = linhasAgregadas.reduce((s, l) => s + l.totalVenda, 0);
+    const totalComissoes = linhasAgregadas.reduce(
+      (s, l) => s + l.valorComissao,
+      0,
+    );
 
     // ---- ordenação por faturamento (profissional que mais faturou primeiro) ----
     const tipoRelLower = (tipoRelatorio || "").toLowerCase().trim();
     if (tipoRelLower === "faturamento") {
       // Calcular faturamento total por profissional
       const faturamentoPorProf = {};
-      linhas.forEach((l) => {
+      linhasAgregadas.forEach((l) => {
         const k = l.profissional || "";
         faturamentoPorProf[k] = (faturamentoPorProf[k] || 0) + l.totalVenda;
       });
       // Ordenar: primeiro por profissional (do maior faturamento para o menor), depois manter ordem interna
-      linhas.sort((a, b) => {
+      linhasAgregadas.sort((a, b) => {
         const fa = faturamentoPorProf[a.profissional || ""] || 0;
         const fb = faturamentoPorProf[b.profissional || ""] || 0;
         if (fb !== fa) return fb - fa; // maior faturamento primeiro
@@ -1129,11 +1827,11 @@ router.post("/comissao", async (req, res) => {
     }
 
     res.json({
-      linhas,
+      linhas: linhasAgregadas,
       totais: {
         totalVendas: parseFloat(totalVendas.toFixed(2)),
         totalComissoes: parseFloat(totalComissoes.toFixed(2)),
-        qtdLinhas: linhas.length,
+        qtdLinhas: linhasAgregadas.length,
       },
     });
   } catch (error) {
@@ -1175,18 +1873,15 @@ router.post("/comissao/pdf", async (req, res) => {
     let logoPath = null;
     let nomeEmpresa = "";
     try {
-      const emp = await Empresa.findOne({
-        where: { ativa: true },
-        order: [["id", "ASC"]],
-      });
-      if (emp) {
-        nomeEmpresa = emp.nome || emp.razaoSocial || "";
-        if (emp.logo) {
-          const lp = path.join(__dirname, "../../uploads", emp.logo);
-          if (fs.existsSync(lp)) logoPath = lp;
-        }
-      }
-    } catch (e) {}
+      const dadosEmp = await obterDadosEmpresaPDF(req);
+      logoPath = dadosEmp.logoPath;
+      nomeEmpresa = dadosEmp.nomeEmpresa;
+    } catch (e) {
+      console.warn(
+        "⚠️ Erro ao buscar empresa para relatório de comissão:",
+        e && e.message,
+      );
+    }
 
     const pageW = 595;
     const left = 40;
@@ -1524,6 +2219,13 @@ router.post("/comissao/recalcular", async (req, res) => {
         .json({ error: "Informe inicio e fim (YYYY-MM-DD)" });
     }
 
+    // ---- empresa_id obrigatório ----
+    const empresaObj = await obterEmpresaDoRequest(req);
+    const empresaId = empresaObj && empresaObj.id;
+    if (!empresaId) {
+      return res.status(401).json({ error: "Empresa não identificada" });
+    }
+
     const { Comissao, Produto, Profissional } = require("../models");
 
     // --- monta filtro de datas ---
@@ -1534,6 +2236,7 @@ router.post("/comissao/recalcular", async (req, res) => {
 
     // --- pré-carrega produtos: id -> { perfilComissao, nome } ---
     const todosProdutos = await Produto.findAll({
+      where: { empresa_id: empresaId },
       attributes: ["id", "nome", "perfilComissao"],
     }).catch(() => []);
     const mapaProdutoById = {};
@@ -1545,6 +2248,7 @@ router.post("/comissao/recalcular", async (req, res) => {
 
     // --- pré-carrega profissionais: id -> nome ---
     const todosProfissionais = await Profissional.findAll({
+      where: { empresa_id: empresaId },
       attributes: ["id", "nome"],
     }).catch(() => []);
     const mapaProfissionalId = {};
@@ -1554,7 +2258,10 @@ router.post("/comissao/recalcular", async (req, res) => {
 
     // --- busca vendas no período ---
     const vendas = await Venda.findAll({
-      where: { data: { [Op.between]: [dataInicio, dataFim] } },
+      where: {
+        empresa_id: empresaId,
+        data: { [Op.between]: [dataInicio, dataFim] },
+      },
     });
 
     let vendasAtualizadas = 0;
@@ -1627,6 +2334,278 @@ router.post("/comissao/recalcular", async (req, res) => {
   }
 });
 
+// ========================================
+// RELATÓRIO DE ATENDIMENTO NO PERÍODO (PDF)
+// ========================================
+
+router.post("/atendimento-periodo/pdf", async (req, res) => {
+  try {
+    const { dataInicio, dataFim } = req.body || {};
+    if (!dataInicio || !dataFim) {
+      return res.status(400).json({ message: "Informe dataInicio e dataFim" });
+    }
+
+    // Parse dd/mm/yyyy
+    const [dI, mI, yI] = dataInicio.split("/");
+    const [dF, mF, yF] = dataFim.split("/");
+    const dtInicio = new Date(+yI, +mI - 1, +dI);
+    const dtFim = new Date(+yF, +mF - 1, +dF);
+    dtFim.setHours(23, 59, 59, 999);
+
+    // Empresa do usuário
+    const empData = await obterDadosEmpresaPDF(req);
+    const empresaId = empData.empresa?.id;
+    if (!empresaId) {
+      return res.status(401).json({ message: "Empresa não identificada" });
+    }
+
+    // Buscar agendamentos concluídos no período
+    const agendamentos = await Agendamento.findAll({
+      where: {
+        status: "concluido",
+        empresa_id: empresaId,
+        dataAgendamento: { [Op.between]: [dtInicio, dtFim] },
+      },
+      include: [
+        {
+          model: Pet,
+          as: "pet",
+          attributes: ["id", "nome"],
+          include: [
+            {
+              model: Cliente,
+              as: "cliente",
+              attributes: ["id", "nome"],
+            },
+          ],
+        },
+      ],
+      order: [
+        ["dataAgendamento", "ASC"],
+        ["horario", "ASC"],
+      ],
+    });
+
+    if (!agendamentos.length) {
+      return res.status(404).json({
+        message: "Nenhum atendimento concluído encontrado no período.",
+      });
+    }
+
+    // Agrupar por profissional
+    const grupos = {};
+    for (const ag of agendamentos) {
+      const prof = ag.profissional || "Sem profissional";
+      if (!grupos[prof]) grupos[prof] = [];
+
+      let servicos = ag.servico || "";
+      if (ag.servicos) {
+        try {
+          const arr =
+            typeof ag.servicos === "string"
+              ? JSON.parse(ag.servicos)
+              : ag.servicos;
+          if (Array.isArray(arr) && arr.length) {
+            servicos = arr
+              .map((s) =>
+                typeof s === "object" ? s.nome || s.servico || "" : s,
+              )
+              .filter(Boolean)
+              .join(", ");
+          }
+        } catch (_) {}
+      }
+
+      grupos[prof].push({
+        data: ag.dataAgendamento,
+        horario: ag.horario || "",
+        pet: ag.pet?.nome || "-",
+        tutor: ag.pet?.cliente?.nome || "-",
+        servico: servicos || "-",
+        valor: parseFloat(ag.valor) || 0,
+      });
+    }
+
+    // Gerar PDF
+    let PDFDocument;
+    try {
+      PDFDocument = require("pdfkit");
+    } catch (e) {
+      return res.status(500).json({ message: "pdfkit não instalado" });
+    }
+
+    const doc = new PDFDocument({ size: "A4", margin: 40 });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      'inline; filename="relatorio-atendimento.pdf"',
+    );
+    doc.pipe(res);
+
+    const pageW = doc.page.width - 80;
+
+    // --- CABEÇALHO ---
+    const drawHeader = () => {
+      if (empData.logoPath) {
+        try {
+          doc.image(empData.logoPath, doc.page.width / 2 - 30, 30, {
+            width: 60,
+          });
+          doc.moveDown(4);
+        } catch (_) {
+          doc.moveDown(1);
+        }
+      }
+      doc
+        .fontSize(16)
+        .font("Helvetica-Bold")
+        .fillColor("#2c3e6b")
+        .text("Relatório de Atendimento no Período", { align: "center" });
+      doc.moveDown(0.3);
+      doc
+        .fontSize(11)
+        .font("Helvetica")
+        .fillColor("#555")
+        .text(empData.nomeEmpresa || "", { align: "center" });
+      doc.moveDown(0.2);
+      doc
+        .fontSize(10)
+        .fillColor("#777")
+        .text(`Período: ${dataInicio} a ${dataFim}`, { align: "center" });
+      doc.moveDown(1);
+    };
+
+    drawHeader();
+
+    // Colunas: Data | Horário | Pet | Tutor | Serviço | Valor
+    const cols = [
+      { label: "Data", width: 60 },
+      { label: "Horário", width: 50 },
+      { label: "Pet", width: 80 },
+      { label: "Tutor", width: 100 },
+      { label: "Serviço", width: pageW - 60 - 50 - 80 - 100 - 60 },
+      { label: "Valor", width: 60 },
+    ];
+
+    const drawTableHeader = (x0, y0) => {
+      doc.rect(x0, y0, pageW, 20).fill("#2c3e6b");
+      doc.font("Helvetica-Bold").fontSize(8).fillColor("#fff");
+      let cx = x0 + 4;
+      for (const col of cols) {
+        doc.text(col.label, cx, y0 + 5, {
+          width: col.width - 8,
+          align: col.label === "Valor" ? "right" : "left",
+        });
+        cx += col.width;
+      }
+      return y0 + 20;
+    };
+
+    const drawRow = (item, x0, y0, zebra) => {
+      if (zebra) doc.rect(x0, y0, pageW, 18).fill("#f4f6f9");
+      doc.font("Helvetica").fontSize(8).fillColor("#333");
+      let cx = x0 + 4;
+      const dataStr = item.data
+        ? new Date(item.data).toLocaleDateString("pt-BR")
+        : "-";
+      const valStr =
+        item.valor > 0 ? "R$ " + item.valor.toFixed(2).replace(".", ",") : "-";
+      const values = [
+        dataStr,
+        item.horario || "-",
+        item.pet,
+        item.tutor,
+        item.servico,
+        valStr,
+      ];
+      for (let i = 0; i < cols.length; i++) {
+        doc.text(values[i], cx, y0 + 4, {
+          width: cols[i].width - 8,
+          align: cols[i].label === "Valor" ? "right" : "left",
+          lineBreak: false,
+        });
+        cx += cols[i].width;
+      }
+      return y0 + 18;
+    };
+
+    let totalGeral = 0;
+    let totalAtendimentos = 0;
+    const profissionais = Object.keys(grupos).sort();
+
+    for (const prof of profissionais) {
+      const items = grupos[prof];
+      let subtotal = 0;
+
+      // Checar espaço
+      if (doc.y > doc.page.height - 150) {
+        doc.addPage();
+        drawHeader();
+      }
+
+      // Banner profissional
+      doc.rect(40, doc.y, pageW, 22).fill("#3b5998");
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(10)
+        .fillColor("#fff")
+        .text(prof, 48, doc.y + 5);
+      doc.y += 26;
+
+      let y = drawTableHeader(40, doc.y);
+      let rowIdx = 0;
+
+      for (const item of items) {
+        if (y > doc.page.height - 80) {
+          doc.addPage();
+          drawHeader();
+          y = drawTableHeader(40, doc.y);
+          rowIdx = 0;
+        }
+        y = drawRow(item, 40, y, rowIdx % 2 === 0);
+        subtotal += item.valor;
+        rowIdx++;
+      }
+
+      // Rodapé do profissional
+      doc.rect(40, y, pageW, 20).fill("#e8edf3");
+      doc.font("Helvetica-Bold").fontSize(8).fillColor("#2c3e6b");
+      doc.text(`${items.length} atendimento(s)`, 48, y + 5, {
+        width: pageW / 2,
+      });
+      doc.text(
+        `Subtotal: R$ ${subtotal.toFixed(2).replace(".", ",")}`,
+        48,
+        y + 5,
+        { width: pageW - 12, align: "right" },
+      );
+      doc.y = y + 28;
+
+      totalGeral += subtotal;
+      totalAtendimentos += items.length;
+    }
+
+    // Rodapé geral
+    doc.moveDown(0.5);
+    doc.rect(40, doc.y, pageW, 24).fill("#2c3e6b");
+    doc.font("Helvetica-Bold").fontSize(10).fillColor("#fff");
+    doc.text(`Total: ${totalAtendimentos} atendimento(s)`, 48, doc.y + 6, {
+      width: pageW / 2,
+    });
+    doc.text(`R$ ${totalGeral.toFixed(2).replace(".", ",")}`, 48, doc.y + 6, {
+      width: pageW - 12,
+      align: "right",
+    });
+
+    doc.end();
+  } catch (error) {
+    console.error("Erro ao gerar PDF de atendimento:", error);
+    if (!res.headersSent) {
+      res.status(500).json({ message: error.message });
+    }
+  }
+});
+
 module.exports = router;
 
 /**
@@ -1637,11 +2616,13 @@ router.get("/produtos/pdf", async (req, res) => {
   try {
     console.log("📄 Gerando PDF de produtos");
 
-    // Buscar empresa ativa do banco de dados
-    const empresa = await Empresa.findOne({
-      where: { ativa: true },
-      order: [["id", "ASC"]],
-    });
+    // Buscar empresa do usuário logado
+    let empresa = null;
+    try {
+      empresa = await obterEmpresaDoRequest(req);
+    } catch (e) {
+      console.warn("⚠️ Erro ao buscar empresa ativa:", e && e.message);
+    }
 
     // Aqui você deveria buscar os produtos do banco ou do storage
     // Usarei o mesmo fallback de produtos definido acima (produtosExemplo-like)
@@ -1717,7 +2698,7 @@ router.get("/produtos/pdf", async (req, res) => {
     // Cabeçalho com logo da empresa
     let logoPath = path.join(
       __dirname,
-      "../../frontend/logos/logo_pet_cria-removebg-preview.png",
+      "../../frontend/fivecon/Design sem nome (17).png",
     ); // logo padrão
 
     // Se empresa tem logo, usar a logo da empresa
@@ -1742,12 +2723,9 @@ router.get("/produtos/pdf", async (req, res) => {
     doc.text("RELATÓRIO DE PRODUTO", 0, 150, { align: "center" });
     doc.moveDown(0.2);
     doc.fontSize(11).font("Helvetica");
-    doc.text(
-      empresa
-        ? empresa.nome || empresa.razaoSocial || "PET CRIA LTDA"
-        : "PET CRIA LTDA",
-      { align: "center" },
-    );
+    doc.text(empresa ? empresa.nome || empresa.razaoSocial || "" : "", {
+      align: "center",
+    });
 
     doc.moveDown(1);
 
@@ -1952,18 +2930,20 @@ router.post("/entradas/pdf", async (req, res) => {
     );
     doc.pipe(res);
 
-    // Buscar empresa ativa
-    const empresa = await Empresa.findOne({
-      where: { ativa: true },
-      order: [["id", "ASC"]],
-    });
+    // Buscar empresa do usuário logado
+    let empresa = null;
+    try {
+      empresa = await obterEmpresaDoRequest(req);
+    } catch (e) {
+      console.warn("⚠️ Erro ao buscar empresa para entradas:", e && e.message);
+    }
 
     // pegar logo do payload (base64) se foi enviada, senão usar logo da empresa, senão fallback local
     const companyLogo = req.body.companyLogo || null;
     const companyRazao =
       (empresa ? empresa.razaoSocial || empresa.nome : null) ||
       req.body.companyRazao ||
-      "PET CRIA LTDA";
+      "";
 
     let logoRendered = false;
     // permitir ajuste de largura da logo via payload (em pontos). Default menor para visual menos dominante.
@@ -2019,7 +2999,7 @@ router.post("/entradas/pdf", async (req, res) => {
       try {
         const logoPath = path.join(
           __dirname,
-          "../../frontend/logos/logo_pet_cria-removebg-preview.png",
+          "../../frontend/fivecon/Design sem nome (17).png",
         );
         if (fs.existsSync(logoPath))
           doc.image(logoPath, logoX, logoY, {
@@ -2295,22 +3275,31 @@ router.post("/produtos/pdf", async (req, res) => {
     );
     doc.pipe(res);
 
-    // Buscar empresa ativa do banco de dados
-    const empresa = await Empresa.findOne({
-      where: { ativa: true },
-      order: [["id", "ASC"]],
-    });
+    // Buscar empresa do usuário logado
+    let empresa = null;
+    try {
+      empresa = await obterEmpresaDoRequest(req);
+    } catch (err) {
+      console.warn(
+        "⚠️ Erro ao buscar empresa para relatório:",
+        err && err.message,
+      );
+      empresa = null;
+    }
 
-    // usar logo e razão social do payload se disponíveis, senão usar da empresa
-    const companyLogo = req.body.companyLogo || null;
+    // Definir razão social (payload > empresa > fallback)
+    const payloadCompanyRazao =
+      req.body &&
+      (req.body.companyRazao || req.body.razaoSocial || req.body.companyName);
     const companyRazao =
-      (empresa ? empresa.razaoSocial || empresa.nome : null) ||
-      req.body.companyRazao ||
-      "PET CRIA LTDA";
+      payloadCompanyRazao ||
+      (empresa &&
+        (empresa.razaoSocial || empresa.nome || empresa.nomeFantasia)) ||
+      "";
 
-    // tentar usar logo do payload (base64 dataURL) ou fallback para arquivo local
+    // Lidar com o logo: aceitar data-URI (base64) ou nome/URL de arquivo que exista em uploads
+    const payloadLogo = req.body && req.body.companyLogo;
     let logoRendered = false;
-    // permitir ajuste de largura da logo via payload (em pontos). Default menor para visual menos dominante.
     const logoWidth =
       typeof req.body.companyLogoWidth === "number" &&
       req.body.companyLogoWidth > 0
@@ -2322,42 +3311,51 @@ router.post("/produtos/pdf", async (req, res) => {
     const logoX = (pageWidth - logoWidth) / 2; // centralizar horizontalmente
     const logoY = 25; // posição Y fixa no topo
 
-    if (
-      companyLogo &&
-      typeof companyLogo === "string" &&
-      companyLogo.startsWith("data:image/")
-    ) {
+    if (payloadLogo && typeof payloadLogo === "string") {
       try {
-        const base64Data = companyLogo.split(",")[1];
-        if (!base64Data) throw new Error("Base64 data inválida");
-
-        // verificar tamanho aproximado (evitar imagens muito grandes que causam crash)
-        const estimatedSize = (base64Data.length * 3) / 4; // tamanho em bytes
-        if (estimatedSize > 5 * 1024 * 1024) {
-          // limite de 5MB
-          console.warn("⚠️ Logo muito grande, usando fallback local");
-          throw new Error("Logo excede 5MB");
+        if (payloadLogo.startsWith("data:image/")) {
+          const base64Data = payloadLogo.split(",")[1];
+          if (!base64Data) throw new Error("Base64 data inválida");
+          const estimatedSize = (base64Data.length * 3) / 4;
+          if (estimatedSize > 5 * 1024 * 1024)
+            throw new Error("Logo excede 5MB");
+          const imgBuffer = Buffer.from(base64Data, "base64");
+          doc.image(imgBuffer, logoX, logoY, {
+            width: logoWidth,
+            align: "center",
+          });
+          logoRendered = true;
+        } else {
+          // tentar localizar arquivo no diretório uploads (aceita nome de arquivo ou URL que contenha o nome)
+          const candidate = path.join(
+            __dirname,
+            "../../uploads",
+            path.basename(payloadLogo),
+          );
+          if (fs.existsSync(candidate)) {
+            doc.image(candidate, logoX, logoY, {
+              width: logoWidth,
+              align: "center",
+            });
+            logoRendered = true;
+          }
         }
-
-        const imgBuffer = Buffer.from(base64Data, "base64");
-        doc.image(imgBuffer, logoX, logoY, {
-          width: logoWidth,
-          align: "center",
-        });
-        logoRendered = true;
       } catch (logoErr) {
-        console.warn("⚠️ Erro ao incluir logo do payload:", logoErr.message);
+        console.warn(
+          "⚠️ Erro ao incluir logo do payload:",
+          logoErr && logoErr.message,
+        );
         logoRendered = false;
       }
     }
 
     // tentar logo da empresa se não renderizou a do payload
-    if (!logoRendered && empresa && empresa.logo && empresa.logo !== "") {
+    if (!logoRendered && empresa && empresa.logo) {
       try {
         const empresaLogoPath = path.join(
           __dirname,
           "../../uploads",
-          empresa.logo,
+          String(empresa.logo),
         );
         if (fs.existsSync(empresaLogoPath)) {
           doc.image(empresaLogoPath, logoX, logoY, {
@@ -2368,7 +3366,10 @@ router.post("/produtos/pdf", async (req, res) => {
           console.log("✅ Usando logo da empresa:", empresa.logo);
         }
       } catch (logoErr) {
-        console.warn("⚠️ Erro ao incluir logo da empresa:", logoErr.message);
+        console.warn(
+          "⚠️ Erro ao incluir logo da empresa:",
+          logoErr && logoErr.message,
+        );
         logoRendered = false;
       }
     }
@@ -2378,7 +3379,7 @@ router.post("/produtos/pdf", async (req, res) => {
       try {
         const logoPath = path.join(
           __dirname,
-          "../../frontend/logos/logo_pet_cria-removebg-preview.png",
+          "../../frontend/fivecon/Design sem nome (17).png",
         );
         if (fs.existsSync(logoPath)) {
           doc.image(logoPath, logoX, logoY, {
@@ -2387,7 +3388,10 @@ router.post("/produtos/pdf", async (req, res) => {
           });
         }
       } catch (localLogoErr) {
-        console.warn("⚠️ Erro ao incluir logo local:", localLogoErr.message);
+        console.warn(
+          "⚠️ Erro ao incluir logo local:",
+          localLogoErr && localLogoErr.message,
+        );
       }
     }
 
@@ -2622,6 +3626,14 @@ router.post("/fornecedores/pdf", async (req, res) => {
     if (Fornecedor && typeof Fornecedor.findAll === "function") {
       const where = {};
 
+      // ---- empresa_id obrigatório ----
+      const empresaObj = await obterEmpresaDoRequest(req);
+      const empresaId = empresaObj && empresaObj.id;
+      if (!empresaId) {
+        return res.status(401).json({ error: "Empresa não identificada" });
+      }
+      where.empresa_id = empresaId;
+
       // Processar filtro ativo (aceita 'todos', 'sim', 'nao', true, false, 1, 0)
       if (
         filtros.ativo !== undefined &&
@@ -2737,13 +3749,10 @@ router.post("/fornecedores/pdf", async (req, res) => {
     );
     doc.pipe(res);
 
-    // Buscar empresa ativa para logo e razão social
+    // Buscar empresa do usuário logado
     let empresa = null;
     try {
-      empresa = await Empresa.findOne({
-        where: { ativa: true },
-        order: [["id", "ASC"]],
-      });
+      empresa = await obterEmpresaDoRequest(req);
     } catch (e) {
       console.warn("⚠️ Erro ao buscar empresa ativa:", e && e.message);
     }
@@ -2779,7 +3788,7 @@ router.post("/fornecedores/pdf", async (req, res) => {
       try {
         const defaultLogo = path.join(
           __dirname,
-          "../../frontend/logos/logo_pet_cria-removebg-preview.png",
+          "../../frontend/fivecon/Design sem nome (17).png",
         );
         if (fs.existsSync(defaultLogo))
           doc.image(defaultLogo, logoX, logoY, { width: logoWidth });
@@ -2800,7 +3809,7 @@ router.post("/fornecedores/pdf", async (req, res) => {
     const razao =
       empresa && (empresa.nome || empresa.razaoSocial)
         ? empresa.nome || empresa.razaoSocial
-        : "PET CRIA LTDA";
+        : "";
     doc.text(razao, 0, doc.y, { align: "center", width: pageWidth });
     doc.moveDown(0.8);
     // Cabeçalho da tabela (Código | Nome | Telefone | CNPJ/CPF)
@@ -3062,7 +4071,7 @@ router.post("/demonstrativo-resultados/pdf", async (req, res) => {
       try {
         const logoPath = path.join(
           __dirname,
-          "../../frontend/logos/logo_pet_cria-removebg-preview.png",
+          "../../frontend/fivecon/Design sem nome (17).png",
         );
         if (fs.existsSync(logoPath)) {
           doc.image(logoPath, logoX, logoY, {

@@ -49,19 +49,40 @@ router.get("/:id/comprovante", async (req, res) => {
     let logoRendered = false;
     let empresa = null;
     try {
-      empresa = await Empresa.findOne({
-        where: { ativa: true },
-        order: [["id", "ASC"]],
-      });
-      let logoPath = path.join(
-        __dirname,
-        "../../frontend/logos/logo_pet_cria-removebg-preview.png",
-      );
-      if (empresa && empresa.logo) {
-        const candidate = path.join(__dirname, "../../uploads", empresa.logo);
-        if (fs.existsSync(candidate)) logoPath = candidate;
+      // Buscar empresa do usuário logado via cookie JWT
+      const jwt = require("jsonwebtoken");
+      const JWT_SECRET = process.env.JWT_USER_SECRET || "pethub_user_secret_2026_!@#$%";
+      let empresaId = null;
+      try {
+        const cookieHeader = req.headers.cookie || "";
+        const match = cookieHeader.match(/pethub_token=([^;]+)/);
+        if (match) {
+          const decoded = jwt.verify(match[1], JWT_SECRET);
+          if (decoded.empresaId) empresaId = decoded.empresaId;
+        }
+      } catch (_) {}
+      // Tentar query param como fallback
+      if (!empresaId && req.query && (req.query.empresaId || req.query.empresa_id)) {
+        empresaId = req.query.empresaId || req.query.empresa_id;
       }
-      if (fs.existsSync(logoPath)) {
+      if (empresaId) {
+        empresa = await Empresa.findByPk(empresaId);
+      }
+      if (!empresa) {
+        empresa = await Empresa.findOne({ where: { ativa: true }, order: [["id", "ASC"]] });
+      }
+
+      let logoPath = null;
+      if (empresa && empresa.logo) {
+        const candidates = [
+          path.join(__dirname, "../../uploads", String(empresa.logo)),
+          path.join(__dirname, "../../uploads/logos-empresas", String(empresa.logo)),
+        ];
+        for (const c of candidates) {
+          if (fs.existsSync(c)) { logoPath = c; break; }
+        }
+      }
+      if (logoPath) {
         const maxLogoWidth = Math.round(pageWidth * 0.6);
         const logoWidth = Math.min(maxLogoWidth, Math.round(mmToPt(30)));
         const logoX = (pageWidth - logoWidth) / 2;
@@ -83,11 +104,12 @@ router.get("/:id/comprovante", async (req, res) => {
     }
 
     if (!logoRendered) {
+      const headerText = empresa && (empresa.nome || empresa.razaoSocial) ? (empresa.nome || empresa.razaoSocial) : "Empresa";
       doc
         .fillColor("#000")
         .fontSize(18)
         .font("Helvetica-Bold")
-        .text("PET CRIA", { align: "center" });
+        .text(headerText, { align: "center" });
       var y = doc.y + 6;
     }
 

@@ -505,7 +505,12 @@ function preencherSelect(id, itens, labelFn) {
   const valorAtual = sel.value;
   // manter a opção "Todos"
   sel.innerHTML = '<option value="">Todos</option>';
-  (itens || []).forEach((item) => {
+  // normalizar: API pode retornar { rows: [...] } ou { data: [...] } em vez de array
+  let lista = itens;
+  if (!Array.isArray(lista)) {
+    lista = (itens && (itens.rows || itens.data || itens.items)) || [];
+  }
+  lista.forEach((item) => {
     const label = labelFn(item) || "";
     if (!label.trim()) return;
     const opt = document.createElement("option");

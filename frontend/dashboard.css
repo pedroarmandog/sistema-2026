@@ -1614,6 +1614,424 @@ body {
   border: 1px solid #ffeaa7;
 }
 
+/* ========================================
+   DASHBOARD WIDGETS - NEW STYLES
+   ======================================== */
+
+/* Widget Title Icon */
+.widget-title-icon {
+  margin-right: 8px;
+  color: var(--color-primary-light);
+  font-size: 16px;
+}
+
+/* Widget Loading */
+.widget-loading {
+  text-align: center;
+  color: #999;
+  padding: 30px;
+  font-size: 14px;
+}
+
+.widget-loading i {
+  margin-right: 8px;
+  color: var(--color-primary-light);
+}
+
+/* Widget Scroll List */
+.widget-scroll-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* Estoque: tabela com rolagem limitada */
+.estoque-scroll-wrap {
+  max-height: 260px;
+  overflow-y: auto;
+  border-radius: 6px;
+}
+
+.estoque-scroll-wrap::-webkit-scrollbar {
+  width: 5px;
+}
+
+.estoque-scroll-wrap::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.estoque-scroll-wrap::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 4px;
+}
+
+.estoque-scroll-wrap::-webkit-scrollbar-thumb:hover {
+  background: #aaa;
+}
+
+.widget-scroll-list::-webkit-scrollbar {
+  width: 5px;
+}
+
+.widget-scroll-list::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.widget-scroll-list::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 4px;
+}
+
+.widget-scroll-list::-webkit-scrollbar-thumb:hover {
+  background: #aaa;
+}
+
+/* Widget List Items */
+.widget-list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background-color 0.15s ease;
+  text-decoration: none;
+  color: inherit;
+}
+
+.widget-list-item:last-child {
+  border-bottom: none;
+}
+
+.widget-list-item:hover {
+  background: #f8f9fa;
+}
+
+.widget-list-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.widget-list-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.widget-list-info strong {
+  display: block;
+  font-size: 13px;
+  color: #2c3e50;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.widget-list-sub {
+  display: block;
+  font-size: 12px;
+  color: #6c757d;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.widget-list-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+  background: #e9ecef;
+  color: #495057;
+  flex-shrink: 0;
+}
+
+.widget-list-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-danger);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Periodico Items */
+.periodico-item .widget-list-icon {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.periodico-item .widget-list-badge {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+/* Conta Items */
+.conta-item .widget-list-icon {
+  background: #ffebee;
+  color: #c62828;
+}
+
+/* Aniversariante Items */
+.aniversariante-item .widget-list-icon {
+  background: #fce4ec;
+  color: #ad1457;
+}
+
+.aniversariante-item .widget-list-badge {
+  background: #f3e5f5;
+  color: #7b1fa2;
+}
+
+/* Oportunidade Items */
+.oportunidade-item .widget-list-icon {
+  background: #fff8e1;
+  color: #f57f17;
+}
+
+.badge-warning {
+  background: #fff3cd !important;
+  color: #856404 !important;
+}
+
+/* Taxi Dog Items */
+.taxidog-item .widget-list-icon {
+  background: #e0f2f1;
+  color: #00695c;
+}
+
+.taxidog-item .widget-list-badge {
+  background: #e0f7fa;
+  color: #006064;
+}
+
+/* Validade Items */
+.validade-item .widget-list-icon {
+  background: #f3e5f5;
+  color: #6a1b9a;
+}
+
+.validade-critica {
+  border-left: 3px solid #c62828;
+}
+
+.validade-critica .widget-list-badge {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.validade-alta {
+  border-left: 3px solid #e65100;
+}
+
+.validade-alta .widget-list-badge {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.validade-media {
+  border-left: 3px solid #f9a825;
+}
+
+.validade-media .widget-list-badge {
+  background: #fff8e1;
+  color: #f57f17;
+}
+
+.validade-ok .widget-list-badge {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+/* Indicadores Grid */
+.indicadores-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.indicador-card {
+  text-align: center;
+  padding: 20px 12px;
+  border-radius: 12px;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.indicador-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.indicador-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 10px;
+  font-size: 18px;
+}
+
+.indicador-valor {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 4px;
+}
+
+.indicador-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.indicador-agendado {
+  background: #e3f2fd;
+}
+
+.indicador-agendado .indicador-icon {
+  background: #bbdefb;
+  color: #1565c0;
+}
+
+.indicador-agendado .indicador-valor {
+  color: #1565c0;
+}
+
+.indicador-agendado .indicador-label {
+  color: #1976d2;
+}
+
+.indicador-checkin {
+  background: #fff3e0;
+}
+
+.indicador-checkin .indicador-icon {
+  background: #ffe0b2;
+  color: #e65100;
+}
+
+.indicador-checkin .indicador-valor {
+  color: #e65100;
+}
+
+.indicador-checkin .indicador-label {
+  color: #ef6c00;
+}
+
+.indicador-pronto {
+  background: #e8f5e9;
+}
+
+.indicador-pronto .indicador-icon {
+  background: #c8e6c9;
+  color: #2e7d32;
+}
+
+.indicador-pronto .indicador-valor {
+  color: #2e7d32;
+}
+
+.indicador-pronto .indicador-label {
+  color: #388e3c;
+}
+
+/* Empty & Error States */
+.empty-state {
+  text-align: center;
+  padding: 30px 20px;
+  color: #999;
+}
+
+.empty-state i {
+  font-size: 32px;
+  display: block;
+  margin-bottom: 10px;
+  opacity: 0.5;
+}
+
+.empty-state p {
+  font-size: 14px;
+  margin: 0;
+}
+
+.error-state {
+  text-align: center;
+  padding: 30px 20px;
+  color: #c62828;
+}
+
+.error-state i {
+  font-size: 28px;
+  display: block;
+  margin-bottom: 10px;
+  opacity: 0.7;
+}
+
+.error-state p {
+  font-size: 13px;
+  margin: 0;
+}
+
+/* Estoque Badge */
+.badge-estoque {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.badge-estoque.estoque-zerado {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.badge-estoque.estoque-baixo {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+tr.estoque-zerado {
+  background: #fff5f5;
+}
+
+tr.estoque-baixo {
+  background: #fffbf0;
+}
+
+/* Tab Active State Fix */
+.tab-btn.active {
+  background: var(--color-primary-light);
+  color: white;
+}
+
+/* Responsive for indicadores */
+@media (max-width: 768px) {
+  .indicadores-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .indicador-card {
+    padding: 14px 10px;
+  }
+
+  .indicador-valor {
+    font-size: 24px;
+  }
+}
+
 .badge-danger {
   background: #f8d7da;
   color: #721c24;

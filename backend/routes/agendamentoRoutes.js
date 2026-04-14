@@ -327,7 +327,7 @@ router.post("/", async (req, res) => {
             agendamentoId: agendamentoCriado.id,
             petId: agendamentoCriado.petId,
           },
-          1,
+          agendamentoCriado.pet?.cliente?.empresa_id,
         );
       } catch (e) {
         console.warn(
@@ -656,7 +656,7 @@ router.patch("/:id/status", async (req, res) => {
             ag.pet.cliente.telefone || "",
             null,
             { agendamentoId: ag.id, petId: ag.petId },
-            1,
+            ag.pet.cliente.empresa_id,
           );
         } catch (e) {
           console.warn(
@@ -703,7 +703,7 @@ router.patch("/:id/status", async (req, res) => {
               ag.pet.cliente.telefone || "",
               null,
               { agendamentoId: ag.id, petId: ag.petId },
-              1,
+              ag.pet.cliente.empresa_id,
             );
           }
         } catch (e) {
@@ -815,20 +815,52 @@ router.get("/:id/comprovante", async (req, res) => {
     let logoRendered = false;
     let empresa = null;
     try {
-      empresa = await Empresa.findOne({
-        where: { ativa: true },
-        order: [["id", "ASC"]],
-      });
-      let logoPath = path.join(
-        __dirname,
-        "../../frontend/logos/logo_pet_cria-removebg-preview.png",
-      );
+      // Buscar empresa do usuário via cookie JWT
+      const jwt = require("jsonwebtoken");
+      const JWT_SECRET =
+        process.env.JWT_USER_SECRET || "pethub_user_secret_2026_!@#$%";
+      let empresaId = null;
+      try {
+        const cookieHeader = req.headers.cookie || "";
+        const match = cookieHeader.match(/pethub_token=([^;]+)/);
+        if (match) {
+          const decoded = jwt.verify(match[1], JWT_SECRET);
+          if (decoded.empresaId) empresaId = decoded.empresaId;
+        }
+      } catch (_) {}
+      if (
+        !empresaId &&
+        req.query &&
+        (req.query.empresaId || req.query.empresa_id)
+      ) {
+        empresaId = req.query.empresaId || req.query.empresa_id;
+      }
+      if (empresaId) empresa = await Empresa.findByPk(empresaId);
+      if (!empresa)
+        empresa = await Empresa.findOne({
+          where: { ativa: true },
+          order: [["id", "ASC"]],
+        });
+
+      let logoPath = null;
       if (empresa && empresa.logo) {
-        const candidate = path.join(__dirname, "../../uploads", empresa.logo);
-        if (fs.existsSync(candidate)) logoPath = candidate;
+        const candidates = [
+          path.join(__dirname, "../../uploads", String(empresa.logo)),
+          path.join(
+            __dirname,
+            "../../uploads/logos-empresas",
+            String(empresa.logo),
+          ),
+        ];
+        for (const c of candidates) {
+          if (fs.existsSync(c)) {
+            logoPath = c;
+            break;
+          }
+        }
       }
 
-      if (fs.existsSync(logoPath)) {
+      if (logoPath && fs.existsSync(logoPath)) {
         // ajustar o logo proporcionalmente à largura do cupom
         const maxLogoWidth = Math.round(pageWidth * 0.6);
         const logoWidth = Math.min(maxLogoWidth, Math.round(mmToPt(30)));
@@ -853,19 +885,20 @@ router.get("/:id/comprovante", async (req, res) => {
     }
 
     if (!logoRendered) {
-      doc
-        .fillColor("#000")
-        .fontSize(18)
-        .font("Helvetica-Bold")
-        .text("PET9", { align: "center" });
-      doc
-        .fontSize(11)
-        .font("Helvetica-Bold")
-        .text("PET CRIA LTDA", { align: "center" });
-      doc
-        .fontSize(9)
-        .font("Helvetica")
-        .text("Contato: (27)99910-4837", { align: "center" });
+      const nomeEmp = empresa ? empresa.nome || empresa.razaoSocial || "" : "";
+      if (nomeEmp) {
+        doc
+          .fillColor("#000")
+          .fontSize(18)
+          .font("Helvetica-Bold")
+          .text(nomeEmp, { align: "center" });
+      }
+      if (empresa && empresa.telefone) {
+        doc
+          .fontSize(9)
+          .font("Helvetica")
+          .text("Contato: " + empresa.telefone, { align: "center" });
+      }
       // iniciar y logo -> conteúdo; aumentar espaçamento quando não há logo real
       // aproximar um pouco (menos espaçamento) para a razão social
       var y = doc.y + 12;
@@ -1204,13 +1237,34 @@ router.get("/:id/prontuario/pdf", async (req, res) => {
     if (!agendamento)
       return res.status(404).json({ error: "Agendamento não encontrado" });
 
-    // Buscar empresa ativa
+    // Buscar empresa do usuário via cookie JWT
     let empresa = null;
     try {
-      empresa = await Empresa.findOne({
-        where: { ativa: true },
-        order: [["id", "ASC"]],
-      });
+      const jwt = require("jsonwebtoken");
+      const JWT_SECRET =
+        process.env.JWT_USER_SECRET || "pethub_user_secret_2026_!@#$%";
+      let empresaId = null;
+      try {
+        const cookieHeader = req.headers.cookie || "";
+        const match = cookieHeader.match(/pethub_token=([^;]+)/);
+        if (match) {
+          const decoded = jwt.verify(match[1], JWT_SECRET);
+          if (decoded.empresaId) empresaId = decoded.empresaId;
+        }
+      } catch (_) {}
+      if (
+        !empresaId &&
+        req.query &&
+        (req.query.empresaId || req.query.empresa_id)
+      ) {
+        empresaId = req.query.empresaId || req.query.empresa_id;
+      }
+      if (empresaId) empresa = await Empresa.findByPk(empresaId);
+      if (!empresa)
+        empresa = await Empresa.findOne({
+          where: { ativa: true },
+          order: [["id", "ASC"]],
+        });
     } catch (e) {}
 
     // Helper: strip HTML tags
@@ -1256,15 +1310,31 @@ router.get("/:id/prontuario/pdf", async (req, res) => {
     // ── CABEÇALHO: logo ──────────────────────────────────────────────
     let logoRendered = false;
     try {
-      let logoPath = path.join(
-        __dirname,
-        "../../frontend/logos/logo_pet_cria-removebg-preview.png",
-      );
+      let logoPath = null;
       if (empresa && empresa.logo) {
-        const candidate = path.join(__dirname, "../../uploads", empresa.logo);
-        if (fs.existsSync(candidate)) logoPath = candidate;
+        const candidates = [
+          path.join(__dirname, "../../uploads", String(empresa.logo)),
+          path.join(
+            __dirname,
+            "../../uploads/logos-empresas",
+            String(empresa.logo),
+          ),
+        ];
+        for (const c of candidates) {
+          if (fs.existsSync(c)) {
+            logoPath = c;
+            break;
+          }
+        }
       }
-      if (fs.existsSync(logoPath)) {
+      if (!logoPath) {
+        const fallback = path.join(
+          __dirname,
+          "../../frontend/fivecon/Design sem nome (17).png",
+        );
+        if (fs.existsSync(fallback)) logoPath = fallback;
+      }
+      if (logoPath && fs.existsSync(logoPath)) {
         const maxH = Math.round(mmToPt(18));
         const maxW = Math.round(mmToPt(28));
         const logoX = (A4W - maxW) / 2;

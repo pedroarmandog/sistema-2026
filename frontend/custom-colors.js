@@ -142,7 +142,7 @@
   try {
     if (sessionStorage.getItem("empresa_bloqueada") === "1") {
       document.documentElement.style.display = "none"; // esconder tudo imediatamente
-      window.location.replace("/painel/sistema-bloqueado.html");
+      window.location.replace("/painel-admin/sistema-bloqueado.html");
       return;
     }
   } catch (e) {}
@@ -152,7 +152,7 @@
       sessionStorage.setItem("empresa_bloqueada", "1");
     } catch (e) {}
     document.documentElement.style.display = "none";
-    window.location.replace("/painel/sistema-bloqueado.html");
+    window.location.replace("/painel-admin/sistema-bloqueado.html");
   }
 
   // 2. Interceptar TODOS os fetch — detectar 403+bloqueado

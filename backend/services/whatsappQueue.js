@@ -58,6 +58,18 @@ async function processarFila() {
 
   const agora = new Date();
 
+  // Recuperar envios presos em "enviando" há mais de 5 minutos
+  const cincoMinAtras = new Date(agora.getTime() - 5 * 60 * 1000);
+  await EnvioAgendado.update(
+    { status: "pendente" },
+    {
+      where: {
+        status: "enviando",
+        updatedAt: { [Op.lt]: cincoMinAtras },
+      },
+    },
+  ).catch(() => {});
+
   // Buscar envios pendentes com dataAgendada <= agora
   const pendentes = await EnvioAgendado.findAll({
     where: {
@@ -75,8 +87,69 @@ async function processarFila() {
     `[Queue] ${pendentes.length} envio(s) pendente(s) para processar`,
   );
 
+  // Tentar reconexão uma única vez por empresa (não por envio)
+  const empresasVerificadas = new Set();
+
   for (const envio of pendentes) {
+    const empId = String(envio.empresaId || 1);
+    if (!empresasVerificadas.has(empId)) {
+      empresasVerificadas.add(empId);
+      await tentarReconectar(empId);
+    }
     await processarEnvio(envio, LogEnvio);
+  }
+}
+
+/**
+ * Tenta reconectar o WhatsApp de uma empresa (chamado 1x por empresa por ciclo).
+ */
+async function tentarReconectar(empresaId) {
+  if (whatsappService.isConectado(empresaId)) return;
+
+  const fs = require("fs");
+  const path = require("path");
+  const SESSION_DIR = path.join(__dirname, "../../tmp/whatsapp-sessions");
+  const sessionDir = [
+    path.join(SESSION_DIR, `session-empresa_${empresaId}`),
+    path.join(SESSION_DIR, `empresa_${empresaId}`),
+  ].find((d) => fs.existsSync(d));
+
+  if (!sessionDir) {
+    console.warn(
+      `[Queue] WhatsApp empresa ${empresaId} nunca foi conectado. Conecte pelo painel de Marketing.`,
+    );
+    return;
+  }
+
+  try {
+    const status = whatsappService.obterStatus(empresaId);
+    if (
+      !status ||
+      status.status === "desconectado" ||
+      status.status === "erro"
+    ) {
+      console.log(
+        `[Queue] Tentando reconectar empresa ${empresaId} automaticamente...`,
+      );
+      const r = await whatsappService.inicializarCliente(empresaId);
+      if (
+        r.status === "inicializando" ||
+        r.status === "autenticado" ||
+        r.status === "ja_conectado"
+      ) {
+        let tentativas = 0;
+        while (tentativas < 30) {
+          await new Promise((res) => setTimeout(res, 2000));
+          if (whatsappService.isConectado(empresaId)) break;
+          tentativas++;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn(
+      `[Queue] Falha ao reconectar empresa ${empresaId}:`,
+      e.message,
+    );
   }
 }
 
@@ -86,9 +159,7 @@ async function processarFila() {
 async function processarEnvio(envio, LogEnvio) {
   const empresaId = String(envio.empresaId || 1);
 
-  // Verificar se o WhatsApp está conectado
-  const statusWpp = whatsappService.obterStatus(empresaId);
-  if (statusWpp.status !== "conectado") {
+  if (!whatsappService.isConectado(empresaId)) {
     console.warn(
       `[Queue] WhatsApp não conectado para empresa ${empresaId}. Envio #${envio.id} pendente.`,
     );
@@ -99,7 +170,7 @@ async function processarEnvio(envio, LogEnvio) {
   await envio.update({ status: "enviando", tentativas: envio.tentativas + 1 });
 
   try {
-    // Registrar log de início
+    // Registrar log de início (não-crítico)
     await LogEnvio.create({
       empresaId: envio.empresaId,
       envioAgendadoId: envio.id,
@@ -109,7 +180,7 @@ async function processarEnvio(envio, LogEnvio) {
         tentativa: envio.tentativas,
       },
       mensagem: `Iniciando envio #${envio.id} para ${envio.telefoneDestino}`,
-    });
+    }).catch(() => {});
 
     // Enviar mensagem
     const resultado = await whatsappService.enviarMensagem(
@@ -128,7 +199,7 @@ async function processarEnvio(envio, LogEnvio) {
         evento: "envio_sucesso",
         detalhes: { telefone: envio.telefoneDestino },
         mensagem: `Mensagem enviada com sucesso para ${envio.telefoneDestino}`,
-      });
+      }).catch(() => {});
 
       console.log(
         `[Queue] ✅ Envio #${envio.id} enviado para ${envio.telefoneDestino}`,
@@ -149,7 +220,7 @@ async function processarEnvio(envio, LogEnvio) {
         evento: "envio_erro",
         detalhes: { telefone: envio.telefoneDestino, erro: resultado.erro },
         mensagem: `Falha no envio #${envio.id}: ${resultado.erro}`,
-      });
+      }).catch(() => {});
 
       console.error(
         `[Queue] ❌ Falha no envio #${envio.id}: ${resultado.erro}`,
@@ -189,19 +260,54 @@ async function agendarEnvio(params) {
     // Evitar duplicata: checar se já existe envio pendente/enviado para o mesmo contexto + mensagem
     if (params.contexto && params.mensagemAutomaticaId) {
       const { Op } = require("sequelize");
-      const jaExiste = await EnvioAgendado.findOne({
-        where: {
-          mensagemAutomaticaId: params.mensagemAutomaticaId,
-          telefoneDestino: String(params.telefone).replace(/\D/g, ""),
-          status: { [Op.in]: ["enviado", "pendente", "enviando"] },
-        },
-      });
+      const sequelize = require("../models").sequelize;
 
-      // Para boas-vindas, só enviar uma vez por cliente
-      if (
-        jaExiste &&
-        ["enviado", "pendente", "enviando"].includes(jaExiste.status)
-      ) {
+      // Montar WHERE incluindo o contexto (clienteId/petId/agendamentoId) para
+      // permitir envios do mesmo tipo para telefones iguais de clientes diferentes.
+      const whereClause = {
+        mensagemAutomaticaId: params.mensagemAutomaticaId,
+        telefoneDestino: String(params.telefone).replace(/\D/g, ""),
+        status: { [Op.in]: ["enviado", "pendente", "enviando"] },
+      };
+
+      // Se o contexto contiver clienteId ou agendamentoId, usar para diferenciar
+      const ctx =
+        typeof params.contexto === "string"
+          ? JSON.parse(params.contexto)
+          : params.contexto;
+
+      const conditions = [];
+
+      if (ctx.clienteId) {
+        conditions.push(
+          sequelize.literal(
+            `JSON_EXTRACT(contexto, '$.clienteId') = ${Number(ctx.clienteId)}`,
+          ),
+        );
+      } else if (ctx.agendamentoId) {
+        conditions.push(
+          sequelize.literal(
+            `JSON_EXTRACT(contexto, '$.agendamentoId') = ${Number(ctx.agendamentoId)}`,
+          ),
+        );
+      }
+
+      // Diferenciar envios de dias distintos (multi-day)
+      if (ctx.diasAntes !== undefined && ctx.diasAntes !== null) {
+        conditions.push(
+          sequelize.literal(
+            `JSON_EXTRACT(contexto, '$.diasAntes') = ${Number(ctx.diasAntes)}`,
+          ),
+        );
+      }
+
+      if (conditions.length > 0) {
+        whereClause[Op.and] = conditions;
+      }
+
+      const jaExiste = await EnvioAgendado.findOne({ where: whereClause });
+
+      if (jaExiste) {
         console.log(
           `[Queue] Envio duplicado ignorado para ${params.telefone} (mensagem #${params.mensagemAutomaticaId})`,
         );
@@ -223,6 +329,22 @@ async function agendarEnvio(params) {
     console.log(
       `[Queue] Envio #${envio.id} agendado para ${params.telefone} em ${params.dataAgendada}`,
     );
+
+    // Tentar processar imediatamente (sem esperar próximo ciclo da fila)
+    if (envio.dataAgendada <= new Date()) {
+      setImmediate(async () => {
+        try {
+          const { LogEnvio } = require("../models");
+          await processarEnvio(envio, LogEnvio);
+        } catch (e) {
+          console.warn(
+            `[Queue] Falha no disparo imediato #${envio.id}:`,
+            e.message,
+          );
+        }
+      });
+    }
+
     return envio;
   } catch (err) {
     console.error("[Queue] Erro ao agendar envio:", err.message);

@@ -5,11 +5,37 @@ const { Cliente } = require("../models/Cliente");
 exports.createAgendamento = async (req, res) => {
   try {
     const { data, servico, petId } = req.body;
+    // Verificar pet e vínculo de empresa (a menos que usuário seja master)
+    const grupoUser =
+      req.user && req.user.grupoUsuario
+        ? String(req.user.grupoUsuario).toLowerCase()
+        : "";
+    const isMasterUser =
+      grupoUser.includes("admin") ||
+      grupoUser.includes("acesso total") ||
+      grupoUser.includes("master");
+
+    let pet = null;
+    if (petId) {
+      pet = await Pet.findByPk(petId, { include: [{ model: Cliente }] });
+      if (!pet) return res.status(400).json({ error: "Pet não encontrado" });
+
+      if (
+        !isMasterUser &&
+        req.user?.empresaId &&
+        Number(pet.empresa_id) !== Number(req.user.empresaId)
+      ) {
+        return res
+          .status(403)
+          .json({ error: "Pet não pertence à sua empresa" });
+      }
+    }
 
     const agendamento = await Agendamento.create({
       data,
       servico,
       PetId: petId,
+      empresa_id: req.user?.empresaId || null,
     });
     res.json(agendamento);
 
@@ -59,7 +85,7 @@ exports.createAgendamento = async (req, res) => {
           telefone,
           data ? new Date(data) : null,
           { agendamentoId: agendamento.id, petId },
-          1,
+          pet?.Cliente?.empresa_id,
         );
       } catch (e) {
         console.warn(
@@ -89,6 +115,11 @@ exports.getAgendamentos = async (req, res) => {
         [require("sequelize").Op.gte]: dataInicio,
         [require("sequelize").Op.lt]: dataFim,
       };
+    }
+
+    // Filtro obrigatório por empresa (quando disponível no token)
+    if (req.user?.empresaId) {
+      whereCondition.empresa_id = req.user.empresaId;
     }
 
     const agendamentos = await Agendamento.findAll({

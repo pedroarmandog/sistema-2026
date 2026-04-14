@@ -2735,7 +2735,7 @@ function generatePetsReportHTML(pets) {
   const logoSrc =
     logoEl && logoEl.getAttribute && logoEl.getAttribute("src")
       ? logoEl.getAttribute("src")
-      : "/logos/logo_pet_cria-removebg-preview.png";
+      : "/fivecon/Design sem nome (17).png";
   const titulo = "RELATÓRIO DE PETS";
   const now = new Date();
   const header = `

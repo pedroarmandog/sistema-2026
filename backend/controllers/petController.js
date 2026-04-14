@@ -52,10 +52,31 @@ exports.createPet = async (req, res) => {
         message: "Cliente não encontrado",
       });
     }
+    // Verificar vínculo de empresa (a menos que usuário seja master)
+    const grupoUser =
+      req.user && req.user.grupoUsuario
+        ? String(req.user.grupoUsuario).toLowerCase()
+        : "";
+    const isMasterUser =
+      grupoUser.includes("admin") ||
+      grupoUser.includes("acesso total") ||
+      grupoUser.includes("master");
+    if (
+      !isMasterUser &&
+      req.user?.empresaId &&
+      Number(cliente.empresa_id) !== Number(req.user.empresaId)
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "Cliente não pertence à sua empresa",
+      });
+    }
 
     // Verificar se o chip já existe (se fornecido)
     if (chip && chip.trim() !== "") {
-      const petExistente = await Pet.findOne({ where: { chip: chip.trim() } });
+      const whereChip = { chip: chip.trim() };
+      if (req.user?.empresaId) whereChip.empresa_id = req.user.empresaId;
+      const petExistente = await Pet.findOne({ where: whereChip });
       if (petExistente) {
         return res.status(400).json({
           success: false,
@@ -109,7 +130,7 @@ exports.createPet = async (req, res) => {
           cliente.telefone || "",
           null,
           { clienteId: parseInt(cliente_id), petId: novoPet.id },
-          1,
+          cliente.empresa_id,
         );
       } catch (e) {
         console.warn(
@@ -226,6 +247,25 @@ exports.getPetById = async (req, res) => {
 
     console.log("✅ Pet encontrado:", pet.nome);
 
+    // Verificar empresa do pet (a menos que usuário master)
+    const grupoPetQuery =
+      req.user && req.user.grupoUsuario
+        ? String(req.user.grupoUsuario).toLowerCase()
+        : "";
+    const isMasterPetQuery =
+      grupoPetQuery.includes("admin") ||
+      grupoPetQuery.includes("acesso total") ||
+      grupoPetQuery.includes("master");
+    if (
+      !isMasterPetQuery &&
+      req.user?.empresaId &&
+      Number(pet.empresa_id) !== Number(req.user.empresaId)
+    ) {
+      return res
+        .status(403)
+        .json({ success: false, message: "Acesso negado ao pet solicitado" });
+    }
+
     res.json({
       success: true,
       pet: pet,
@@ -253,6 +293,24 @@ exports.updatePet = async (req, res) => {
         success: false,
         message: "Pet não encontrado",
       });
+    }
+    // Verificar vínculo de empresa do pet (a menos que usuário seja master)
+    const grupoAtual =
+      req.user && req.user.grupoUsuario
+        ? String(req.user.grupoUsuario).toLowerCase()
+        : "";
+    const isMasterAtual =
+      grupoAtual.includes("admin") ||
+      grupoAtual.includes("acesso total") ||
+      grupoAtual.includes("master");
+    if (
+      !isMasterAtual &&
+      req.user?.empresaId &&
+      Number(pet.empresa_id) !== Number(req.user.empresaId)
+    ) {
+      return res
+        .status(403)
+        .json({ success: false, message: "Pet não pertence à sua empresa" });
     }
 
     const {
@@ -302,15 +360,34 @@ exports.updatePet = async (req, res) => {
         message: "Cliente não encontrado",
       });
     }
+    // Verificar vínculo de empresa do cliente (a menos que usuário seja master)
+    const grupoCliente =
+      req.user && req.user.grupoUsuario
+        ? String(req.user.grupoUsuario).toLowerCase()
+        : "";
+    const isMasterCliente =
+      grupoCliente.includes("admin") ||
+      grupoCliente.includes("acesso total") ||
+      grupoCliente.includes("master");
+    if (
+      !isMasterCliente &&
+      req.user?.empresaId &&
+      Number(cliente.empresa_id) !== Number(req.user.empresaId)
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "Cliente não pertence à sua empresa",
+      });
+    }
 
     // Verificar se o chip já existe em outro pet (se fornecido)
     if (chip && chip.trim() !== "") {
-      const petExistente = await Pet.findOne({
-        where: {
-          chip: chip.trim(),
-          id: { [require("sequelize").Op.ne]: id },
-        },
-      });
+      const whereChip = {
+        chip: chip.trim(),
+        id: { [require("sequelize").Op.ne]: id },
+      };
+      if (req.user?.empresaId) whereChip.empresa_id = req.user.empresaId;
+      const petExistente = await Pet.findOne({ where: whereChip });
       if (petExistente) {
         return res.status(400).json({
           success: false,
@@ -387,6 +464,25 @@ exports.deletePet = async (req, res) => {
         success: false,
         message: "Pet não encontrado",
       });
+    }
+
+    // Verificar vínculo de empresa antes de excluir (a menos que usuário seja master)
+    const grupoDel =
+      req.user && req.user.grupoUsuario
+        ? String(req.user.grupoUsuario).toLowerCase()
+        : "";
+    const isMasterDel =
+      grupoDel.includes("admin") ||
+      grupoDel.includes("acesso total") ||
+      grupoDel.includes("master");
+    if (
+      !isMasterDel &&
+      req.user?.empresaId &&
+      Number(pet.empresa_id) !== Number(req.user.empresaId)
+    ) {
+      return res
+        .status(403)
+        .json({ success: false, message: "Pet não pertence à sua empresa" });
     }
 
     await pet.destroy();

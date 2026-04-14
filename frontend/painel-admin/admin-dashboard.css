@@ -486,6 +486,13 @@ body {
 .btn-action.bloquear:hover {
   background: #fecaca;
 }
+.btn-action.impersonar {
+  background: #e0e7ff;
+  color: #4f46e5;
+}
+.btn-action.impersonar:hover {
+  background: #c7d2fe;
+}
 
 /* ── Empty State ───────────────────── */
 .empty-state {
@@ -528,6 +535,35 @@ body {
   overflow-y: auto;
   padding: 0;
   position: relative;
+}
+
+/* Confirm modal smaller variant */
+.modal-content.modal-confirm {
+  width: 460px;
+  max-width: 92vw;
+  padding: 16px 18px;
+  text-align: center;
+}
+#modalConfirm .modal-header {
+  padding: 6px 8px 8px;
+  border-bottom: none;
+}
+#modalConfirm .modal-header h3 {
+  font-size: 18px;
+  color: #1a1a2e;
+}
+#modalConfirm .modal-body {
+  padding: 14px 8px;
+}
+#modalConfirm .modal-body p {
+  margin: 6px 0 0;
+  font-size: 15px;
+  color: #444;
+}
+#modalConfirm .modal-actions {
+  padding: 10px 8px 6px;
+  border-top: none;
+  justify-content: center;
 }
 .modal-close {
   position: absolute;
@@ -875,6 +911,86 @@ body {
 }
 .notif-close:hover {
   background: #e5e7eb;
+}
+
+/* ── Backup Tab ────────────────────── */
+.card-backup-total {
+  border-left: 4px solid #6366f1;
+}
+.card-backup-total .dash-card-icon {
+  color: #6366f1;
+}
+.card-backup-ultimo {
+  border-left: 4px solid #059669;
+}
+.card-backup-ultimo .dash-card-icon {
+  color: #059669;
+}
+.card-backup-acoes {
+  border-left: 4px solid #f59e0b;
+}
+.card-backup-acoes .dash-card-icon {
+  color: #f59e0b;
+}
+.btn-backup-executar {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  background: #4f46e5;
+  color: #fff;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-backup-executar:hover {
+  background: #4338ca;
+}
+.btn-backup-executar:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.backup-restore-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.backup-date-select {
+  padding: 6px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #374151;
+  background: #fff;
+  min-width: 180px;
+  cursor: pointer;
+}
+.backup-date-select:focus {
+  border-color: #6366f1;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
+.btn-restaurar-backup {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  background: #fef3c7;
+  color: #b45309;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.btn-restaurar-backup:hover {
+  background: #fde68a;
 }
 
 /* ── Responsive ────────────────────── */

@@ -4,6 +4,7 @@ const path = require("path");
 const multer = require("multer");
 const adminController = require("../controllers/adminController");
 const empresaPainelController = require("../controllers/empresaPainelController");
+const backupController = require("../controllers/backupController");
 const { authAdmin, validarTokenCadastro } = require("../middleware/authAdmin");
 
 // Configurar multer para upload de logos
@@ -54,7 +55,12 @@ router.get("/faturamento", authAdmin, empresaPainelController.faturamento);
 router.get("/empresas", authAdmin, empresaPainelController.listar);
 router.get("/empresas/:id", authAdmin, empresaPainelController.detalhes);
 router.post("/empresas", authAdmin, empresaPainelController.criar);
-router.post("/empresas/completa", authAdmin, uploadLogo.single("logo"), empresaPainelController.criarCompleta);
+router.post(
+  "/empresas/completa",
+  authAdmin,
+  uploadLogo.single("logo"),
+  empresaPainelController.criarCompleta,
+);
 router.put("/empresas/:id", authAdmin, empresaPainelController.atualizar);
 router.delete("/empresas/:id", authAdmin, empresaPainelController.excluir);
 
@@ -73,6 +79,24 @@ router.post(
   "/empresas/:id/pagamento",
   authAdmin,
   empresaPainelController.registrarPagamento,
+);
+
+// Impersonação — entrar na empresa como admin
+router.post(
+  "/empresas/:id/impersonate",
+  authAdmin,
+  empresaPainelController.impersonate,
+);
+router.get("/impersonate/:token", empresaPainelController.impersonateRedirect);
+
+// Backup
+router.get("/backups", authAdmin, backupController.listarTodos);
+router.post("/backups/executar", authAdmin, backupController.executarManual);
+router.get("/backups/:empresaId", authAdmin, backupController.listarPorEmpresa);
+router.post(
+  "/backups/:empresaId/restaurar",
+  authAdmin,
+  backupController.restaurar,
 );
 
 module.exports = router;

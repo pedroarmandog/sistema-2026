@@ -5,7 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PetHub</title>
     <script src="/custom-colors.js"></script>
-    <link rel="icon" href="/fivecon/Design sem nome (17).png" type="image/png">
+    <link
+      rel="icon"
+      href="/fivecon/Design sem nome (17).png"
+      type="image/png"
+    />
     <link rel="stylesheet" href="colors.css" />
     <link rel="stylesheet" href="dashboard.css" />
     <link
@@ -38,8 +42,8 @@
               <span>Operacional</span>
             </a>
             <a href="./painel/rel-faturamento.html" class="submenu-item">
-                        <span>Rel. Faturamento</span>
-                    </a>
+              <span>Rel. Faturamento</span>
+            </a>
             <!--<a href="./painel/rel-demonstrativo-resultados.html" class="submenu-item">
                         <span>Rel. Demonstrativo de resultados</span>
                     </a>-->
@@ -672,191 +676,224 @@
             tabindex="0"
             title="Ver agendamentos de hoje"
           >
-            <div class="stat-number" id="todayAppointmentsCount">0</div>
+            <div class="stat-number" id="statAgendamentos">0</div>
             <div class="stat-label">Agendamentos Agendados para Hoje</div>
-            <div class="stat-icon">
-              <i class="fas fa-calendar-check"></i>
-            </div>
+            <div class="stat-icon"><i class="fas fa-calendar-check"></i></div>
           </div>
-
           <div class="stat-card stat-card-yellow">
-            <div class="stat-number">0</div>
+            <div class="stat-number" id="statVendas">0</div>
             <div class="stat-label">Atendimentos/Vendas Realizadas Hoje</div>
-            <div class="stat-icon">
-              <i class="fas fa-shopping-bag"></i>
-            </div>
+            <div class="stat-icon"><i class="fas fa-shopping-bag"></i></div>
           </div>
-
           <div class="stat-card stat-card-purple">
-            <div class="stat-number">R$ 0,00</div>
+            <div class="stat-number" id="statTicket">R$ 0,00</div>
             <div class="stat-label">Ticket Médio do Dia de Hoje</div>
-            <div class="stat-icon">
-              <i class="fas fa-money-bill-wave"></i>
-            </div>
+            <div class="stat-icon"><i class="fas fa-money-bill-wave"></i></div>
           </div>
-
           <div class="stat-card stat-card-red">
-            <div class="stat-number">0</div>
+            <div class="stat-number" id="statClientes">0</div>
             <div class="stat-label">Clientes Cadastrados no Mês</div>
-            <div class="stat-icon">
-              <i class="fas fa-user-plus"></i>
-            </div>
+            <div class="stat-icon"><i class="fas fa-user-plus"></i></div>
           </div>
         </div>
 
         <!-- Dashboard Widgets -->
         <div class="widgets-grid">
           <!-- Indicadores do Atendimento -->
-          <div class="widget">
+          <div class="widget" id="widgetIndicadores">
             <div class="widget-header">
-              <h3>Indicadores do Atendimento</h3>
+              <h3>
+                <i class="fas fa-chart-bar widget-title-icon"></i> Indicadores
+                do Atendimento
+              </h3>
               <span class="widget-subtitle"
-                >Acompanhe a evolução dos atendimentos</span
+                >Status dos atendimentos de hoje</span
               >
             </div>
             <div class="widget-content">
-              <div class="chart-placeholder">
-                <i class="fas fa-chart-line"></i>
-                <p>Gráfico de atendimentos</p>
+              <div class="indicadores-grid" id="indicadoresContent">
+                <div class="indicador-card indicador-agendado">
+                  <div class="indicador-icon"><i class="fas fa-clock"></i></div>
+                  <div class="indicador-valor" id="indAgendados">0</div>
+                  <div class="indicador-label">Agendados</div>
+                </div>
+                <div class="indicador-card indicador-checkin">
+                  <div class="indicador-icon"><i class="fas fa-store"></i></div>
+                  <div class="indicador-valor" id="indCheckin">0</div>
+                  <div class="indicador-label">No Estabelecimento</div>
+                </div>
+                <div class="indicador-card indicador-pronto">
+                  <div class="indicador-icon">
+                    <i class="fas fa-check-circle"></i>
+                  </div>
+                  <div class="indicador-valor" id="indProntos">0</div>
+                  <div class="indicador-label">Prontos</div>
+                </div>
               </div>
             </div>
           </div>
 
           <!-- Periódicos -->
-          <div class="widget">
+          <div class="widget" id="widgetPeriodicos">
             <div class="widget-header">
-              <h3>Periódicos</h3>
+              <h3><i class="fas fa-redo widget-title-icon"></i> Periódicos</h3>
               <span class="widget-subtitle"
-                >Lembre seus clientes sobre os periódicos</span
+                >Serviços a renovar nos próximos 7 dias</span
               >
             </div>
             <div class="widget-content">
-              <div class="empty-state">
-                <p>Não há lembrete de periódico pelos próximos 7 dias!</p>
+              <div id="periodicosContent" class="widget-scroll-list">
+                <div class="widget-loading">
+                  <i class="fas fa-spinner fa-spin"></i> Carregando...
+                </div>
               </div>
             </div>
           </div>
 
           <!-- Contas a pagar -->
-          <div class="widget">
+          <div class="widget" id="widgetContas">
             <div class="widget-header">
-              <h3>Contas a pagar</h3>
-              <span class="widget-subtitle"
-                >Documentos não pagos vencendo hoje</span
-              >
+              <h3>
+                <i class="fas fa-file-invoice-dollar widget-title-icon"></i>
+                Contas a pagar
+              </h3>
+              <span class="widget-subtitle">Documentos vencendo hoje</span>
             </div>
             <div class="widget-content">
-              <div class="empty-state">
-                <p>Nenhuma conta vencendo hoje</p>
+              <div id="contasContent" class="widget-scroll-list">
+                <div class="widget-loading">
+                  <i class="fas fa-spinner fa-spin"></i> Carregando...
+                </div>
               </div>
             </div>
           </div>
 
           <!-- Produtos com estoque baixo -->
-          <div class="widget widget-large">
+          <div class="widget widget-large" id="widgetEstoque">
             <div class="widget-header">
-              <h3>Produtos com estoque baixo ou sem estoque</h3>
+              <h3>
+                <i class="fas fa-box-open widget-title-icon"></i> Produtos com
+                estoque baixo ou sem estoque
+              </h3>
               <span class="widget-subtitle"
                 >Acompanhe a baixa de estoque dos seus produtos</span
               >
               <div class="widget-actions">
-                <button class="btn-icon">
+                <button
+                  class="btn-icon"
+                  onclick="DashboardApp.loadEstoqueBaixo()"
+                  title="Atualizar"
+                >
                   <i class="fas fa-sync"></i>
-                </button>
-                <button class="btn-icon">
-                  <i class="fas fa-ellipsis-v"></i>
                 </button>
               </div>
             </div>
             <div class="widget-content">
-              <div class="loading-state">
-                <i class="fas fa-spinner fa-spin"></i>
-                <p>Carregando</p>
-              </div>
-              <div class="table-container" style="display: none">
-                <table class="data-table">
-                  <thead>
-                    <tr>
-                      <th>ID - Descrição</th>
-                      <th>Estoque</th>
-                      <th>Mínimo</th>
-                      <th>Ideal</th>
-                      <th>Sugestão de compra</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <!-- Dados serão carregados aqui -->
-                  </tbody>
-                </table>
+              <div id="estoqueContent">
+                <div class="widget-loading">
+                  <i class="fas fa-spinner fa-spin"></i> Carregando...
+                </div>
               </div>
             </div>
           </div>
 
           <!-- Aniversariantes -->
-          <div class="widget">
+          <div class="widget" id="widgetAniversariantes">
             <div class="widget-header">
-              <h3>Aniversariantes</h3>
+              <h3>
+                <i class="fas fa-birthday-cake widget-title-icon"></i>
+                Aniversariantes
+              </h3>
               <div class="widget-tabs">
-                <button class="tab-btn active">PETS</button>
-                <button class="tab-btn">CLIENTES</button>
+                <button
+                  class="tab-btn active"
+                  data-tab="pets"
+                  onclick="DashboardApp.switchAniversarianteTab('pets')"
+                >
+                  PETS
+                </button>
+                <button
+                  class="tab-btn"
+                  data-tab="clientes"
+                  onclick="DashboardApp.switchAniversarianteTab('clientes')"
+                >
+                  CLIENTES
+                </button>
               </div>
             </div>
             <div class="widget-content">
-              <div class="empty-state">
-                <p>Não há aniversariantes pelos próximos 7 dias!</p>
+              <div id="aniversariantesContent" class="widget-scroll-list">
+                <div class="widget-loading">
+                  <i class="fas fa-spinner fa-spin"></i> Carregando...
+                </div>
               </div>
             </div>
           </div>
 
           <!-- Oportunidade de Venda -->
-          <div class="widget">
+          <div class="widget" id="widgetOportunidades">
             <div class="widget-header">
-              <h3>Oportunidade de Venda</h3>
+              <h3>
+                <i class="fas fa-chart-line widget-title-icon"></i> Oportunidade
+                de Venda
+              </h3>
               <span class="widget-subtitle"
-                >Produtos que seus clientes já devem estar precisando</span
+                >Produtos que seus clientes podem precisar</span
               >
               <div class="widget-actions">
-                <button class="btn-icon">
+                <button
+                  class="btn-icon"
+                  onclick="DashboardApp.loadOportunidades()"
+                  title="Atualizar"
+                >
                   <i class="fas fa-sync"></i>
-                </button>
-                <button class="btn-icon">
-                  <i class="fas fa-ellipsis-v"></i>
                 </button>
               </div>
             </div>
             <div class="widget-content">
-              <div class="empty-state">
-                <p>Nenhuma oportunidade encontrada</p>
+              <div id="oportunidadesContent" class="widget-scroll-list">
+                <div class="widget-loading">
+                  <i class="fas fa-spinner fa-spin"></i> Carregando...
+                </div>
               </div>
             </div>
           </div>
 
           <!-- Taxi Dog -->
-          <div class="widget">
+          <div class="widget" id="widgetTaxiDog">
             <div class="widget-header">
-              <h3>Taxi Dog</h3>
+              <h3>
+                <i class="fas fa-shuttle-van widget-title-icon"></i> Taxi Dog
+              </h3>
               <span class="widget-subtitle"
-                >Lista dos Pets com serviço de Taxi Dog para hoje!</span
+                >Pets com serviço de Taxi Dog para hoje</span
               >
             </div>
             <div class="widget-content">
-              <div class="empty-state">
-                <p>Nenhum pet agendado para hoje</p>
+              <div id="taxiDogContent" class="widget-scroll-list">
+                <div class="widget-loading">
+                  <i class="fas fa-spinner fa-spin"></i> Carregando...
+                </div>
               </div>
             </div>
           </div>
 
           <!-- Controle de Validade -->
-          <div class="widget">
+          <div class="widget" id="widgetValidade">
             <div class="widget-header">
-              <h3>Controle de Validade</h3>
+              <h3>
+                <i class="fas fa-hourglass-half widget-title-icon"></i> Controle
+                de Validade
+              </h3>
               <span class="widget-subtitle"
                 >Produtos próximos do vencimento</span
               >
             </div>
             <div class="widget-content">
-              <div class="empty-state">
-                <p>Nenhum produto próximo do vencimento</p>
+              <div id="validadeContent" class="widget-scroll-list">
+                <div class="widget-loading">
+                  <i class="fas fa-spinner fa-spin"></i> Carregando...
+                </div>
               </div>
             </div>
           </div>
@@ -1288,6 +1325,5 @@
         }
       })();
     </script>
-    <script src="dashboard-widgets.js"></script>
   </body>
 </html>

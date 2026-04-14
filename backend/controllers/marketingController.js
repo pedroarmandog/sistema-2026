@@ -51,28 +51,7 @@ const MENSAGENS_PADRAO = [
     configuracaoEnvio: null,
     ativo: true,
   },
-  {
-    tipo: "lembrete_produtos",
-    titulo: "Lembrete de Oportunidade de Venda para Produtos",
-    conteudo:
-      "🛍️ Olá {nome_tutor}!\n\nNotamos que está na hora de renovar alguns produtos para {nome_pet}!\n\n🦴 Ração\n🧴 Shampoo\n💊 Suplementos\n\nTemos ofertas especiais! Que tal dar uma passadinha? 😊",
-    icone: "fa-shopping-bag",
-    descricaoMarketing:
-      "Incentive compras recorrentes lembrando os tutores de renovar produtos essenciais.",
-    configuracaoEnvio: null,
-    ativo: false,
-  },
-  {
-    tipo: "plano_banhos_concluido",
-    titulo: "Ciclo do plano de banhos por Consumo foi concluído",
-    conteudo:
-      "🛁 Olá {nome_tutor}!\n\nO plano de banhos de {nome_pet} foi concluído!\n\nPara manter {nome_pet} sempre limpinho e cheiroso, que tal renovar o plano?\n\n💆 Benefícios: desconto, prioridade e muito carinho!\n\nEntre em contato conosco! 🐾💙",
-    icone: "fa-bath",
-    descricaoMarketing:
-      "Notifique automaticamente quando o ciclo de banhos for concluído para facilitar a renovação.",
-    configuracaoEnvio: null,
-    ativo: false,
-  },
+
   {
     tipo: "aniversario_pet",
     titulo: "Felicitações aos Pets Aniversariantes",
@@ -99,24 +78,14 @@ const MENSAGENS_PADRAO = [
     tipo: "vacinas_vencendo",
     titulo: "Produto a receber vencido",
     conteudo:
-      "💉 Oi {nome_tutor}!\n\nPassando para avisar que a vacina de {nome_pet} está próxima do vencimento!\n\nNão esqueça de agendar na {nome_empresa} para manter {nome_pet} protegido. 🐾\n\nEntre em contato! 😊",
+      "💉 Oi {nome_tutor}!\n\nPassando para avisar que a {produto} de {nome_pet} vence hoje!\n\nNão esqueça de agendar na {nome_empresa} para manter {nome_pet} protegido(a). 🐾\n\nEntre em contato! 😊",
     icone: "fa-syringe",
     descricaoMarketing:
-      "Mantenha os clientes informados sobre vacinas vencendo para garantir visitas regulares.",
-    configuracaoEnvio: { tipo: "dias_antes", valor: 7, hora: "09:00" },
+      "Mantenha os clientes informados sobre vacinas/vermífugos/antiparasitários vencendo para garantir visitas regulares.",
+    configuracaoEnvio: { tipo: "no_dia", hora: "09:00" },
     ativo: false,
   },
-  {
-    tipo: "pet_liberado_portal",
-    titulo: "Pet está liberado",
-    conteudo:
-      "✅ Olá {nome_tutor}!\n\n{nome_pet} está liberado e pode ser acessado no Portal Meu Pet!\n\nAcesse agora mesmo para ver todas as informações do seu pet. 🐾\n\nCom carinho, {nome_empresa}",
-    icone: "fa-unlock",
-    descricaoMarketing:
-      "Notifique quando o pet for liberado no portal digital, eliminando contatos manuais.",
-    configuracaoEnvio: null,
-    ativo: false,
-  },
+
   {
     tipo: "primeiro_banho",
     titulo: "Mensagem de pós-atendimento para primeiros banhos",
@@ -130,7 +99,7 @@ const MENSAGENS_PADRAO = [
   },
   {
     tipo: "programas_fidelidade",
-    titulo: "Boas vindas para novos clientes que possuem pets",
+    titulo: "Programa de Fidelidade",
     conteudo:
       "🎁 Olá {nome_tutor}!\n\nVocê está no caminho certo! {nome_pet} já acumulou pontos suficientes para ganhar um benefício especial.\n\nVenha resgatar na {nome_empresa}! 🐾\n\nAté logo! 😊",
     icone: "fa-gift",
@@ -153,7 +122,20 @@ exports.statusWhatsapp = async (req, res) => {
   const empresaId = req.query.empresaId || 1;
   const statusAtual = whatsappService.obterStatus(empresaId);
 
-  // Buscar também do banco para casos de restart do servidor
+  // Se o cliente em memória está conectado, confiar nele (fonte da verdade)
+  if (statusAtual && statusAtual.status === "conectado") {
+    return res.json(statusAtual);
+  }
+  if (
+    statusAtual &&
+    (statusAtual.status === "aguardando_qr" ||
+      statusAtual.status === "inicializando" ||
+      statusAtual.status === "autenticado")
+  ) {
+    return res.json(statusAtual);
+  }
+
+  // Cliente não existe em memória — verificar o banco
   try {
     const { WhatsappSession } = require("../models");
     const session = await WhatsappSession.findOne({
@@ -161,19 +143,17 @@ exports.statusWhatsapp = async (req, res) => {
     });
 
     if (session) {
-      // Se o cliente em memória não existe mas o banco indica conectado,
-      // o status real é desconectado (servidor reiniciou)
-      if (!statusAtual || statusAtual.status === "desconectado") {
-        return res.json({
-          status: "desconectado",
-          numero: session.numero,
-          ultimaConexao: session.ultimaConexao,
-        });
-      }
+      return res.json({
+        status: "desconectado",
+        numero: session.numero,
+        ultimaConexao: session.ultimaConexao,
+      });
     }
   } catch (_) {}
 
-  return res.json(statusAtual);
+  return res.json(
+    statusAtual || { status: "desconectado", numero: null, qrBase64: null },
+  );
 };
 
 /**
@@ -205,6 +185,29 @@ exports.desconectarWhatsapp = async (req, res) => {
     await whatsappService.desconectar(String(empresaId));
     return res.json({ sucesso: true });
   } catch (err) {
+    return res.status(500).json({ sucesso: false, erro: err.message });
+  }
+};
+
+/**
+ * POST /api/marketing/whatsapp/resetar
+ * Limpa sessão corrompida/expirada e reconecta (gera novo QR).
+ */
+exports.resetarWhatsapp = async (req, res) => {
+  const empresaId = req.body.empresaId || 1;
+
+  try {
+    console.log(
+      `[Marketing] Reset de sessão WhatsApp para empresa ${empresaId}`,
+    );
+    const resultado = await whatsappService.limparSessao(String(empresaId));
+    // Após limpar, já inicializa nova conexão para gerar QR
+    const inicResult = await whatsappService.inicializarCliente(
+      String(empresaId),
+    );
+    return res.json({ sucesso: true, resultado, inicResult });
+  } catch (err) {
+    console.error("[Marketing] Erro ao resetar WhatsApp:", err.message);
     return res.status(500).json({ sucesso: false, erro: err.message });
   }
 };
@@ -284,6 +287,24 @@ exports.listarMensagens = async (req, res) => {
       );
       mensagens = seeds;
     }
+
+    // Sincronizar títulos com MENSAGENS_PADRAO (corrige títulos antigos/errados)
+    const tituloMap = new Map(MENSAGENS_PADRAO.map((m) => [m.tipo, m.titulo]));
+    for (const m of mensagens) {
+      const tituloCorreto = tituloMap.get(m.tipo);
+      if (tituloCorreto && m.titulo !== tituloCorreto) {
+        await m.update({ titulo: tituloCorreto });
+        m.titulo = tituloCorreto;
+      }
+    }
+
+    // Ocultar tipos removidos do sistema
+    const TIPOS_REMOVIDOS = [
+      "pet_liberado_portal",
+      "plano_banhos_concluido",
+      "lembrete_produtos",
+    ];
+    mensagens = mensagens.filter((m) => !TIPOS_REMOVIDOS.includes(m.tipo));
 
     return res.json(mensagens);
   } catch (err) {
@@ -513,6 +534,29 @@ exports.estatisticas = async (req, res) => {
 // ──────────────────────────────────────────────
 
 /**
+ * Normaliza configuracaoEnvio para o formato novo { hora, dias: [...] }.
+ * Aceita formato legado { tipo: 'no_dia', hora } ou { tipo: 'dias_antes', valor, hora }.
+ */
+function normalizarConfig(config) {
+  if (!config) return { hora: "09:00", dias: [0] };
+  const parsed = typeof config === "string" ? JSON.parse(config) : config;
+
+  // Novo formato: { hora, dias: [...] }
+  if (parsed.dias && Array.isArray(parsed.dias)) {
+    return { hora: parsed.hora || "09:00", dias: parsed.dias };
+  }
+  // Legado: { tipo: 'no_dia', hora }
+  if (parsed.tipo === "no_dia") {
+    return { hora: parsed.hora || "09:00", dias: [0] };
+  }
+  // Legado: { tipo: 'dias_antes', valor, hora }
+  if (parsed.tipo === "dias_antes") {
+    return { hora: parsed.hora || "09:00", dias: [Number(parsed.valor) || 1] };
+  }
+  return { hora: parsed.hora || "09:00", dias: [0] };
+}
+
+/**
  * Dispara mensagem automática baseada em tipo de evento.
  * Chamado pelo clienteController, agendamentoController, etc.
  *
@@ -520,7 +564,7 @@ exports.estatisticas = async (req, res) => {
  * @param {object} variaveis - { nomeTutor, nomePet, dataAgendamento, horaAgendamento, servico }
  * @param {string} telefone - Número destino
  * @param {Date} dataAgendada - Quando enviar (null = imediato)
- * @param {object} contexto - { clienteId, petId, agendamentoId }
+ * @param {object} contexto - { clienteId, petId, agendamentoId, diasAntes? }
  * @param {number} empresaId
  */
 async function dispararMensagemAutomatica(
@@ -535,14 +579,29 @@ async function dispararMensagemAutomatica(
     const { MensagemAutomatica } = require("../models");
     const { agendarEnvio } = require("../services/whatsappQueue");
 
+    const empId = Number(empresaId) || 1;
+
+    // Garantir que a empresa tenha registros de mensagens automáticas (seed lazy)
+    const totalMsgs = await MensagemAutomatica.count({
+      where: { empresaId: empId },
+    });
+    if (totalMsgs === 0) {
+      await MensagemAutomatica.bulkCreate(
+        MENSAGENS_PADRAO.map((m) => ({ ...m, empresaId: empId })),
+      );
+      console.log(
+        `[Marketing] Seed de mensagens automáticas criado para empresa ${empId}`,
+      );
+    }
+
     // Buscar mensagem ativa do tipo
     const mensagem = await MensagemAutomatica.findOne({
-      where: { tipo, ativo: true, empresaId: Number(empresaId) },
+      where: { tipo, ativo: true, empresaId: empId },
     });
 
     if (!mensagem) {
       console.log(
-        `[Marketing] Mensagem do tipo "${tipo}" n\u00e3o est\u00e1 ativa ou n\u00e3o existe. Nenhum envio gerado.`,
+        `[Marketing] Mensagem do tipo "${tipo}" não está ativa ou não existe. Nenhum envio gerado.`,
       );
       return null;
     }
@@ -564,26 +623,71 @@ async function dispararMensagemAutomatica(
       },
     );
 
-    // Calcular data de envio baseado na configuração da mensagem
-    const dataEnvio = calcularDataEnvio(
-      mensagem.configuracaoEnvio,
-      dataAgendada,
-    );
+    const imagemPathFull = mensagem.imagemPath
+      ? path.join(__dirname, "../..", mensagem.imagemPath)
+      : null;
 
-    // Agendar envio na fila
-    const envio = await agendarEnvio({
-      empresaId,
-      mensagemAutomaticaId: mensagem.id,
-      telefone,
-      conteudoFinal,
-      imagemPath: mensagem.imagemPath
-        ? path.join(__dirname, "../..", mensagem.imagemPath)
-        : null,
-      dataAgendada: dataEnvio,
-      contexto,
-    });
+    const config = normalizarConfig(mensagem.configuracaoEnvio);
 
-    return envio;
+    // Se contexto já tem diasAntes (chamada do cron), agendar UMA vez para hoje na hora configurada
+    if (contexto && contexto.diasAntes !== undefined) {
+      const agora = new Date();
+      const [hora, min] = (config.hora || "09:00").split(":").map(Number);
+      const dataEnvio = new Date();
+      dataEnvio.setHours(hora, min, 0, 0);
+      // Se o horário já passou hoje, enviar imediatamente
+      const dataFinal = dataEnvio <= agora ? agora : dataEnvio;
+
+      const envio = await agendarEnvio({
+        empresaId,
+        mensagemAutomaticaId: mensagem.id,
+        telefone,
+        conteudoFinal,
+        imagemPath: imagemPathFull,
+        dataAgendada: dataFinal,
+        contexto,
+      });
+      return envio;
+    }
+
+    // Sem dataReferencia (ex: boas_vindas) → enviar imediatamente
+    if (!dataAgendada) {
+      const envio = await agendarEnvio({
+        empresaId,
+        mensagemAutomaticaId: mensagem.id,
+        telefone,
+        conteudoFinal,
+        imagemPath: imagemPathFull,
+        dataAgendada: new Date(),
+        contexto: { ...contexto, diasAntes: 0 },
+      });
+      return envio;
+    }
+
+    // Com dataReferencia (ex: lembrete_agendamento) → criar envio para CADA dia configurado
+    const agora = new Date();
+    const envios = [];
+
+    for (const dia of config.dias) {
+      const ref = new Date(dataAgendada);
+      ref.setDate(ref.getDate() - dia);
+      const [hora, min] = (config.hora || "09:00").split(":").map(Number);
+      ref.setHours(hora, min, 0, 0);
+      const dataEnvio = ref <= agora ? agora : ref;
+
+      const envio = await agendarEnvio({
+        empresaId,
+        mensagemAutomaticaId: mensagem.id,
+        telefone,
+        conteudoFinal,
+        imagemPath: imagemPathFull,
+        dataAgendada: dataEnvio,
+        contexto: { ...contexto, diasAntes: dia },
+      });
+      if (envio) envios.push(envio);
+    }
+
+    return envios.length > 0 ? envios : null;
   } catch (err) {
     console.error(
       `[Marketing] Erro ao disparar mensagem "${tipo}":`,
@@ -643,3 +747,4 @@ async function obterNomeEmpresa(empresaId) {
 
 // Exportar a função para uso em outros controllers
 exports.dispararMensagemAutomatica = dispararMensagemAutomatica;
+exports.normalizarConfig = normalizarConfig;

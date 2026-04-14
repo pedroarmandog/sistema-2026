@@ -27,4 +27,16 @@ router.get("/vendas-hoje", dashboardController.vendasHoje);
 // Rota para ticket médio das vendas (dia)
 router.get("/ticket-medio", dashboardController.ticketMedio);
 
+// Rota para periódicos (serviços a renovar nos próximos 7 dias)
+router.get("/periodicos", dashboardController.periodicos);
+
+// Rota para contas a pagar vencendo hoje
+router.get("/contas-a-pagar-hoje", dashboardController.contasAPagarHoje);
+
+// Rota para indicadores do atendimento (agendados, checkin, prontos)
+router.get(
+  "/indicadores-atendimento",
+  dashboardController.indicadoresAtendimento,
+);
+
 module.exports = router;

@@ -51,16 +51,36 @@ exports.login = async (req, res) => {
 
         if (empresa) {
           console.log("✅ Empresa encontrada:", empresa.nome);
-          usuarioEncontrado = await Usuario.findOne({
+          // Encontrar usuário ativo vinculado especificamente a esta empresa (campo `empresas`)
+          const usuariosAtivos = await Usuario.findAll({
             where: { ativo: true },
             order: [["id", "ASC"]],
+          });
+          usuarioEncontrado = usuariosAtivos.find((u) => {
+            const arr = Array.isArray(u.empresas) ? u.empresas : [];
+            return arr.some((item) => {
+              if (item == null) return false;
+              if (typeof item === "number")
+                return Number(item) === Number(empresa.id);
+              if (typeof item === "string")
+                return String(item) === String(empresa.id);
+              if (typeof item === "object") {
+                const raw = item.id !== undefined ? item.id : item.empresaId;
+                return raw != null && Number(raw) === Number(empresa.id);
+              }
+              return false;
+            });
           });
 
           if (usuarioEncontrado) {
             loginViaEmpresa = true;
             console.log(
-              "✅ Usando primeiro usuário ativo da empresa:",
+              "✅ Usando usuário vinculado à empresa:",
               usuarioEncontrado.nome,
+            );
+          } else {
+            console.log(
+              "⚠️ Nenhum usuário vinculado à empresa encontrado (login via email da empresa)",
             );
           }
         } else {

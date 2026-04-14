@@ -1,0 +1,9 @@
+{
+  "usuarioId": 1,
+  "empresas": [
+    {
+      "id": "1",
+      "nome": "MERCADINHO FALCAO LTDA"
+    }
+  ]
+}

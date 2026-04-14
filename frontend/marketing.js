@@ -1,20 +1,51 @@
 ﻿// ============================================
-// Marketing.js â€” MÃ³dulo de Mensagens AutomÃ¡ticas via WhatsApp
+// Marketing.js — Módulo de Mensagens Automáticas via WhatsApp
 // --------------------------------------------
 // Dados 100% persistidos no banco (MySQL).
 // SEM localStorage.
-// ComunicaÃ§Ã£o em tempo real via Server-Sent Events (SSE).
+// Comunicação em tempo real via Server-Sent Events (SSE).
 // ============================================
 
-console.log("[Marketing] MÃ³dulo carregado");
+console.log("[Marketing] Módulo carregado");
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// CONFIGURAÃ‡Ã•ES
+// CONFIGURAÇÕES
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const API = "http://localhost:3000/api/marketing";
-const EMPRESA_ID = 1; // Futura expansÃ£o SaaS: obter do contexto de login
 
-// Estado em memÃ³ria (espelho do banco â€” nÃ£o Ã© fonte da verdade)
+// Obter empresaId do usuário logado (cookie → API → empresas[0])
+let EMPRESA_ID = 1; // fallback
+let _empresaIdPromise = (async function detectarEmpresaId() {
+  try {
+    const ca = document.cookie.split(";");
+    let usuarioId = null;
+    for (const c of ca) {
+      const t = c.trim();
+      if (t.startsWith("usuarioLogadoId=")) {
+        usuarioId = t.substring("usuarioLogadoId=".length);
+        break;
+      }
+    }
+    if (!usuarioId) return;
+    const r = await fetch("http://localhost:3000/api/usuarios/" + usuarioId);
+    if (!r.ok) return;
+    const u = await r.json();
+    if (!u?.empresas?.length) return;
+    const e = u.empresas[0];
+    const id =
+      typeof e === "number"
+        ? e
+        : typeof e === "string"
+          ? parseInt(e, 10)
+          : e?.id || e?.ID || null;
+    if (id) {
+      EMPRESA_ID = id;
+      console.log("[Marketing] empresaId detectado:", EMPRESA_ID);
+    }
+  } catch (_) {}
+})();
+
+// Estado em memória (espelho do banco — não é fonte da verdade)
 let _mensagens = []; // array de MensagemAutomatica vinda da API
 let _sseSource = null; // EventSource para atualizaÃ§Ãµes em tempo real
 let _modalMsgAtualId = null; // ID da mensagem sendo editada/ativada
@@ -28,7 +59,9 @@ document.addEventListener("DOMContentLoaded", function () {
   inicializarMarketing();
 });
 
-function inicializarMarketing() {
+async function inicializarMarketing() {
+  // Aguardar detecção do empresaId antes de buscar status/mensagens
+  await _empresaIdPromise;
   carregarStatusWhatsapp();
   carregarMensagens();
   conectarSSE();
@@ -45,7 +78,7 @@ async function carregarStatusWhatsapp() {
     atualizarUIWhatsapp(data);
   } catch (err) {
     console.warn(
-      "[Marketing] NÃ£o foi possÃ­vel obter status WhatsApp:",
+      "[Marketing] Não foi possível obter status WhatsApp:",
       err.message,
     );
   }
@@ -100,7 +133,7 @@ function conectarSSE() {
 
     _sseSource.onerror = function () {
       console.warn(
-        "[Marketing SSE] ConexÃ£o perdida. Tentando reconectar em 10s...",
+        "[Marketing SSE] Conexão perdida. Tentando reconectar em 10s...",
       );
       _sseSource.close();
       _sseSource = null;
@@ -123,6 +156,18 @@ function tratarEventoSSE(data) {
       break;
     case "desconectado":
       onWhatsappDesconectado(data);
+      break;
+    case "erro":
+      onWhatsappErro(data);
+      break;
+    case "status":
+      // Status intermediário (ex: "Sessão expirada. Gerando novo QR Code...")
+      if (data.status === "inicializando") {
+        document.getElementById("qrStatusDesconectado").style.display = "none";
+        document.getElementById("qrStatusAguardando").style.display = "block";
+        document.getElementById("qrImageContainer").style.display = "none";
+        document.getElementById("qrStatusConectado").style.display = "none";
+      }
       break;
     case "status_inicial":
       atualizarUIWhatsapp(data);
@@ -153,7 +198,7 @@ function onWhatsappConectado(data) {
     document.getElementById("qrImageContainer").style.display = "none";
     document.getElementById("qrStatusConectado").style.display = "block";
     document.getElementById("qrNumeroConectado").textContent = data.numero
-      ? `NÃºmero: +${data.numero}`
+      ? `Número: +${data.numero}`
       : "";
     document.getElementById("qrBtnDesconectar").style.display = "block";
   }
@@ -161,6 +206,7 @@ function onWhatsappConectado(data) {
 
 function onWhatsappDesconectado(data) {
   atualizarUIWhatsapp({ status: "desconectado" });
+  pararPollingQR();
 
   const modal = document.getElementById("modalQRCode");
   if (modal && modal.style.display !== "none") {
@@ -171,7 +217,25 @@ function onWhatsappDesconectado(data) {
     document.getElementById("qrBtnDesconectar").style.display = "none";
     document.getElementById("btnIniciarConexao").disabled = false;
     document.getElementById("btnIniciarConexao").textContent =
-      "Iniciar ConexÃ£o";
+      "Iniciar Conexão";
+  }
+}
+
+function onWhatsappErro(data) {
+  console.warn("[Marketing] Erro WhatsApp:", data.mensagem);
+  pararPollingQR();
+
+  const modal = document.getElementById("modalQRCode");
+  if (modal && modal.style.display !== "none") {
+    document.getElementById("qrStatusAguardando").style.display = "none";
+    document.getElementById("qrImageContainer").style.display = "none";
+    document.getElementById("qrStatusConectado").style.display = "none";
+    document.getElementById("qrStatusDesconectado").style.display = "block";
+    const btn = document.getElementById("btnIniciarConexao");
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fab fa-whatsapp"></i> Tentar Novamente';
+    }
   }
 }
 
@@ -192,7 +256,7 @@ function abrirModalConexaoWhatsapp() {
 
       const num = document.getElementById("wppNumeroExibido").textContent;
       document.getElementById("qrNumeroConectado").textContent =
-        `NÃºmero: ${num}`;
+        `Número: ${num}`;
     }
 
     document.getElementById("modalQRCode").style.display = "flex";
@@ -217,7 +281,7 @@ function resetarModalQR() {
   const btn = document.getElementById("btnIniciarConexao");
   if (btn) {
     btn.disabled = false;
-    btn.innerHTML = '<i class="fab fa-whatsapp"></i> Iniciar ConexÃ£o';
+    btn.innerHTML = '<i class="fab fa-whatsapp"></i> Iniciar Conexão';
   }
 }
 
@@ -233,19 +297,20 @@ async function iniciarConexaoWhatsapp() {
   document.getElementById("qrStatusAguardando").style.display = "block";
 
   try {
-    const res = await fetch(`${API}/whatsapp/conectar`, {
+    // Primeiro tenta resetar sessão (limpa corrompida se existir) e conectar
+    const res = await fetch(`${API}/whatsapp/resetar`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ empresaId: EMPRESA_ID }),
     });
     const data = await res.json();
-    console.log("[Marketing] Resposta ao conectar:", data);
+    console.log("[Marketing] Resposta ao conectar (via resetar):", data);
 
     // Iniciar polling de QR (método confiável, complementar ao SSE)
     iniciarPollingQR();
   } catch (err) {
-    console.error("[Marketing] Erro ao iniciar conex\u00e3o:", err.message);
-    alert("Erro ao iniciar conex\u00e3o WhatsApp. Verifique o servidor.");
+    console.error("[Marketing] Erro ao iniciar conexão:", err.message);
+    alert("Erro ao iniciar conexão WhatsApp. Verifique o servidor.");
     resetarModalQR();
   }
 }
@@ -260,6 +325,10 @@ function iniciarPollingQR() {
     if (tentativas > MAX_TENTATIVAS) {
       pararPollingQR();
       console.warn("[Marketing] Timeout ao aguardar QR Code (3 min)");
+      // Mostrar estado de erro em vez de ficar no spinner
+      onWhatsappErro({
+        mensagem: "Timeout ao aguardar QR Code. Tente novamente.",
+      });
       return;
     }
     try {
@@ -275,6 +344,13 @@ function iniciarPollingQR() {
       } else if (data.status === "conectado") {
         pararPollingQR();
         onWhatsappConectado(data);
+      } else if (data.status === "erro" || data.status === "desconectado") {
+        // Backend limpou (timeout, auth_failure, etc)
+        // Se o status mudou para desconectado durante polling, parar e mostrar erro
+        if (tentativas > 5 && data.status === "desconectado") {
+          pararPollingQR();
+          onWhatsappErro({ mensagem: "Conexão falhou. Tente novamente." });
+        }
       }
     } catch (err) {
       console.warn("[Marketing Polling] Erro:", err.message);
@@ -319,7 +395,7 @@ async function carregarMensagens() {
   } catch (err) {
     console.error("[Marketing] Erro ao carregar mensagens:", err.message);
     document.getElementById("listaMensagensAtivas").innerHTML =
-      '<div style="color:#ef4444;padding:16px;font-size:13px;">Erro ao carregar mensagens. Backend disponÃ­vel?</div>';
+      '<div style="color:#ef4444;padding:16px;font-size:13px;">Erro ao carregar mensagens. Backend disponível?</div>';
   }
 }
 
@@ -336,7 +412,7 @@ function renderizarMensagens() {
   const listaAtivas = document.getElementById("listaMensagensAtivas");
   if (ativas.length === 0) {
     listaAtivas.innerHTML =
-      '<div style="color:#aaa;padding:16px;font-size:13px;">Nenhuma mensagem ativa. Ative uma mensagem na lista Ã  direita.</div>';
+      '<div style="color:#aaa;padding:16px;font-size:13px;">Nenhuma mensagem ativa. Ative uma mensagem na lista à direita.</div>';
   } else {
     listaAtivas.innerHTML = ativas.map((m) => renderCardAtiva(m)).join("");
   }
@@ -345,7 +421,7 @@ function renderizarMensagens() {
   const listaInativas = document.getElementById("listaMensagensInativas");
   if (inativas.length === 0) {
     listaInativas.innerHTML =
-      '<div style="color:#aaa;padding:16px;font-size:13px;">Todas as mensagens estÃ£o ativas!</div>';
+      '<div style="color:#aaa;padding:16px;font-size:13px;">Todas as mensagens estão ativas!</div>';
   } else {
     listaInativas.innerHTML = inativas
       .map((m) => renderCardInativa(m))
@@ -355,18 +431,26 @@ function renderizarMensagens() {
 
 function renderCardAtiva(m) {
   const config = m.configuracaoEnvio
-    ? JSON.parse(
-        typeof m.configuracaoEnvio === "string"
-          ? m.configuracaoEnvio
-          : JSON.stringify(m.configuracaoEnvio),
-      )
+    ? typeof m.configuracaoEnvio === "string"
+      ? JSON.parse(m.configuracaoEnvio)
+      : m.configuracaoEnvio
     : null;
 
-  const configLabel = config
-    ? config.tipo === "no_dia"
-      ? `No dia, Ã s ${config.hora || "09:00"}h`
-      : `${config.valor || 1} dia(s) antes, Ã s ${config.hora || "09:00"}h`
-    : "Imediato";
+  let configLabel = "Imediato";
+  if (config) {
+    if (config.dias && Array.isArray(config.dias)) {
+      const hora = config.hora || "09:00";
+      const dias = [...config.dias].sort((a, b) => a - b);
+      const labels = dias.map((d) =>
+        d === 0 ? "No dia" : `${d} dia${d > 1 ? "s" : ""} antes`,
+      );
+      configLabel = `${labels.join(" + ")}, às ${hora}h`;
+    } else if (config.tipo === "no_dia") {
+      configLabel = `No dia, às ${config.hora || "09:00"}h`;
+    } else if (config.tipo === "dias_antes") {
+      configLabel = `${config.valor || 1} dia(s) antes, às ${config.hora || "09:00"}h`;
+    }
+  }
 
   return `
     <div class="message-card">
@@ -412,7 +496,7 @@ async function abrirModalEditar(id) {
   document.getElementById("modalMsgConteudo").value = msg.conteudo || "";
   document.getElementById("painelVariaveis").style.display = "none";
 
-  // Ãcone
+  // Ícone
   const iconeEl = document.getElementById("modalMsgIcone");
   iconeEl.className = `fas ${msg.icone || "fa-calendar"}`;
 
@@ -465,25 +549,25 @@ function removerImagem() {
   document.getElementById("modalMsgImagemNome").textContent = "";
   document.getElementById("modalMsgImagem").value = "";
 
-  // Marcar para remover imagem existente (salvo ao avanÃ§ar)
+  // Marcar para remover imagem existente (salvo ao avançar)
   const msg = _mensagens.find((m) => m.id === _modalMsgAtualId);
   if (msg) msg._removerImagem = true;
 }
 
 /**
- * AvanÃ§a do Modal de EdiÃ§Ã£o para o Modal de ConfiguraÃ§Ã£o de Envio.
- * Salva o texto (e imagem se houver) antes de avanÃ§ar.
+ * Avança do Modal de Edição para o Modal de Configuração de Envio.
+ * Salva o texto (e imagem se houver) antes de avançar.
  */
 async function avancarParaConfiguracao() {
   const id = _modalMsgAtualId;
   const conteudo = document.getElementById("modalMsgConteudo").value.trim();
 
   if (!conteudo) {
-    alert("O texto da mensagem nÃ£o pode estar em branco.");
+    alert("O texto da mensagem não pode estar em branco.");
     return;
   }
 
-  // Salvar texto + imagem no banco antes de avanÃ§ar
+  // Salvar texto + imagem no banco antes de avançar
   try {
     const formData = new FormData();
     formData.append("conteudo", conteudo);
@@ -520,7 +604,7 @@ async function avancarParaConfiguracao() {
     ? msg.titulo
     : "Configurar Envio";
 
-  // PrÃ©-preencher configuraÃ§Ã£o existente
+  // Pré-preencher configuração existente
   const config =
     msg && msg.configuracaoEnvio
       ? typeof msg.configuracaoEnvio === "string"
@@ -528,26 +612,46 @@ async function avancarParaConfiguracao() {
         : msg.configuracaoEnvio
       : null;
 
+  // Desmarcar todos os checkboxes primeiro
+  document
+    .querySelectorAll('input[name="diasEnvio"]')
+    .forEach((cb) => (cb.checked = false));
+
   if (config) {
-    const radio = document.querySelector(
-      `input[name="tipoEnvio"][value="${config.tipo === "no_dia" ? "no_dia" : config.valor + "_dias_antes"}"]`,
-    );
-    if (radio) radio.checked = true;
-    if (config.tipo === "no_dia" && config.hora) {
-      document.getElementById("horaEnvioNoDia").value = config.hora;
+    if (config.dias && Array.isArray(config.dias)) {
+      // Novo formato: { hora, dias: [0, 1, 3] }
+      for (const d of config.dias) {
+        const cb = document.querySelector(
+          `input[name="diasEnvio"][value="${d}"]`,
+        );
+        if (cb) cb.checked = true;
+      }
+      document.getElementById("horaEnvio").value = config.hora || "09:00";
+    } else if (config.tipo === "no_dia") {
+      // Formato legado
+      const cb = document.querySelector('input[name="diasEnvio"][value="0"]');
+      if (cb) cb.checked = true;
+      document.getElementById("horaEnvio").value = config.hora || "09:00";
+    } else if (config.tipo === "dias_antes") {
+      // Formato legado
+      const cb = document.querySelector(
+        `input[name="diasEnvio"][value="${config.valor || 1}"]`,
+      );
+      if (cb) cb.checked = true;
+      document.getElementById("horaEnvio").value = config.hora || "09:00";
     }
+  } else {
+    // Padrão: marcar "No dia"
+    const cb = document.querySelector('input[name="diasEnvio"][value="0"]');
+    if (cb) cb.checked = true;
+    document.getElementById("horaEnvio").value = "09:00";
   }
 
-  atualizarOpcaoEnvio();
   document.getElementById("modalConfigurarEnvio").style.display = "flex";
 }
 
 function atualizarOpcaoEnvio() {
-  const selecionado = document.querySelector('input[name="tipoEnvio"]:checked');
-  const container = document.getElementById("containerHoraDiasAntes");
-  if (!selecionado || !container) return;
-
-  container.style.display = selecionado.value !== "no_dia" ? "block" : "none";
+  // Com checkboxes, o horário é sempre visível
 }
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -562,26 +666,21 @@ async function ativarMensagemConfirmado() {
   btn.disabled = true;
   btn.textContent = "Ativando...";
 
-  // Montar configuracaoEnvio a partir do formulÃ¡rio
-  const tipoSelecionado = document.querySelector(
-    'input[name="tipoEnvio"]:checked',
-  ).value;
-  let configuracaoEnvio;
+  // Coletar checkboxes marcados
+  const checkboxes = document.querySelectorAll(
+    'input[name="diasEnvio"]:checked',
+  );
+  const dias = Array.from(checkboxes).map((cb) => parseInt(cb.value, 10));
 
-  if (tipoSelecionado === "no_dia") {
-    configuracaoEnvio = {
-      tipo: "no_dia",
-      hora: document.getElementById("horaEnvioNoDia").value || "09:00",
-    };
-  } else {
-    const partes = tipoSelecionado.split("_");
-    const dias = parseInt(partes[0], 10);
-    configuracaoEnvio = {
-      tipo: "dias_antes",
-      valor: dias,
-      hora: document.getElementById("horaEnvioDiasAntes").value || "09:00",
-    };
+  if (dias.length === 0) {
+    alert("Selecione pelo menos um dia para envio.");
+    btn.disabled = false;
+    btn.textContent = "Ativar";
+    return;
   }
+
+  const hora = document.getElementById("horaEnvio").value || "09:00";
+  const configuracaoEnvio = { hora, dias };
 
   try {
     const res = await fetch(`${API}/mensagens/${id}/ativar`, {
@@ -593,8 +692,8 @@ async function ativarMensagemConfirmado() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
     fecharModal("modalConfigurarEnvio");
-    await carregarMensagens(); // Recarregar do banco
-    mostrarToast("âœ… Mensagem ativada com sucesso!", "sucesso");
+    await carregarMensagens();
+    mostrarToast("Mensagem ativada com sucesso!", "sucesso");
   } catch (err) {
     console.error("[Marketing] Erro ao ativar mensagem:", err.message);
     alert("Erro ao ativar mensagem. Tente novamente.");
@@ -605,7 +704,7 @@ async function ativarMensagemConfirmado() {
 }
 
 async function desativarMensagem(id) {
-  if (!confirm("Desativar esta mensagem automÃ¡tica?")) return;
+  if (!confirm("Desativar esta mensagem automática?")) return;
 
   try {
     const res = await fetch(`${API}/mensagens/${id}/desativar`, {
@@ -623,7 +722,7 @@ async function desativarMensagem(id) {
 }
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// UTILITÃRIOS
+// UTILITÁRIOS
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function fecharModal(id) {
@@ -689,7 +788,7 @@ document.addEventListener("click", function (e) {
 });
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// FUNÃ‡Ã•ES DO DROPDOWN INÃCIO RÃPIDO
+// FUNÇÕES DO DROPDOWN INÍCIO RÁPIDO
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function novoAtendimento() {
@@ -712,7 +811,7 @@ function novaContaPagar() {
 }
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// EXPORTAR (compatibilidade com outros mÃ³dulos)
+// EXPORTAR (compatibilidade com outros módulos)
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 window.MarketingSystem = {
   carregarMensagens,

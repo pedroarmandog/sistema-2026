@@ -34,11 +34,13 @@ exports.buscarCaixa = async (req, res) => {
 // Buscar status do caixa aberto
 exports.buscarCaixaAberto = async (req, res) => {
   try {
+    // Filtrar por empresa (multi-tenant) e opcionalmente por terminal (numero)
+    const where = { aberto: true };
+    if (req.user?.empresaId) where.empresa_id = req.user.empresaId;
+    if (req.query && req.query.numero) where.numero = req.query.numero;
+
     const caixa = await Caixa.findOne({
-      where: {
-        aberto: true,
-        ...(req.user?.empresaId ? { empresa_id: req.user.empresaId } : {}),
-      },
+      where,
       order: [["dataAbertura", "DESC"]],
     });
     res.json(caixa || { aberto: false });
@@ -51,14 +53,23 @@ exports.buscarCaixaAberto = async (req, res) => {
 // Abrir caixa
 exports.abrirCaixa = async (req, res) => {
   try {
-    // Verificar se já existe caixa aberto
-    const caixaAberto = await Caixa.findOne({ where: { aberto: true } });
+    // Verificar se já existe caixa aberto para a mesma empresa/terminal
+    const where = { aberto: true };
+    if (req.user?.empresaId) where.empresa_id = req.user.empresaId;
+    if (req.body && req.body.numero) where.numero = req.body.numero;
+
+    const caixaAberto = await Caixa.findOne({ where });
     if (caixaAberto) {
-      return res.status(400).json({ erro: "Já existe um caixa aberto" });
+      return res
+        .status(400)
+        .json({ erro: "Já existe um caixa aberto para este terminal/empresa" });
     }
 
     const caixa = await Caixa.create({
-      ...req.body,
+      numero: req.body.numero,
+      usuarioId: req.body.usuarioId || null,
+      usuario: req.body.usuario || null,
+      saldoInicial: req.body.saldoInicial || 0,
       aberto: true,
       dataAbertura: new Date(),
       empresa_id: req.user?.empresaId || null,
@@ -95,15 +106,20 @@ exports.buscarCaixaPorNumero = async (req, res) => {
     const numero = req.params.numero; // Recebe como string (ex: "Caixa 01" ou "01")
 
     // Buscar com o valor exato ou formatado
+    const baseWhere = { numero };
+    if (req.user?.empresaId) baseWhere.empresa_id = req.user.empresaId;
+
     let caixa = await Caixa.findOne({
-      where: { numero },
+      where: baseWhere,
       order: [["dataAbertura", "DESC"]],
     });
 
     // Se não encontrou, tentar com "Caixa XX"
     if (!caixa && !numero.includes("Caixa")) {
+      const where2 = { numero: `Caixa ${numero}` };
+      if (req.user?.empresaId) where2.empresa_id = req.user.empresaId;
       caixa = await Caixa.findOne({
-        where: { numero: `Caixa ${numero}` },
+        where: where2,
         order: [["dataAbertura", "DESC"]],
       });
     }
