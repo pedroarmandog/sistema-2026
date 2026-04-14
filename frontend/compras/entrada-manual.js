@@ -2422,8 +2422,8 @@ async function finalizarEntrada() {
   }
 }
 
-function excluirNota() {
-  if (confirm("Tem certeza que deseja excluir esta nota?")) {
+async function excluirNota() {
+  if (await confirmar("Tem certeza que deseja excluir esta nota?")) {
     // Limpar formulário
     itensEntrada = [];
     itemCounter = 1;

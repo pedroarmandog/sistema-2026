@@ -203,11 +203,12 @@ const encerrarTodasSessoes = async (req, res) => {
 };
 
 /**
- * Verifica se a empresa tem acessos disponíveis (usado no login)
- * Retorna { permitido: boolean, ativas: number, limite: number }
+ * Verifica acessos da empresa e retorna info para o login.
+ * Nunca bloqueia — se over limit, retorna IDs das sessões mais antigas para derrubar.
  */
 async function verificarLimiteAcessos(empresaId) {
-  if (!empresaId) return { permitido: true, ativas: 0, limite: 999 };
+  if (!empresaId)
+    return { permitido: true, ativas: 0, limite: 999, sessoesDerrubar: [] };
 
   try {
     await limparSessoesExpiradas();
@@ -218,7 +219,7 @@ async function verificarLimiteAcessos(empresaId) {
       attributes: ["cnpj"],
     });
     if (!empresa || !empresa.cnpj) {
-      return { permitido: true, ativas: 0, limite: 999 };
+      return { permitido: true, ativas: 0, limite: 999, sessoesDerrubar: [] };
     }
 
     const cnpjLimpo = empresa.cnpj.replace(/\D/g, "");
@@ -228,22 +229,51 @@ async function verificarLimiteAcessos(empresaId) {
     });
 
     if (!empresaPainel) {
-      return { permitido: true, ativas: 0, limite: 999 };
+      return { permitido: true, ativas: 0, limite: 999, sessoesDerrubar: [] };
     }
 
-    const sessoesAtivas = await SessaoAtiva.count({
+    const sessoesAtivas = await SessaoAtiva.findAll({
       where: { empresa_id: empresaPainel.id, ativo: true },
+      attributes: ["id", "token_hash", "data_login"],
+      order: [["data_login", "ASC"]], // mais antigas primeiro
     });
 
+    const totalAtivas = sessoesAtivas.length;
+    // Se já está no limite ou acima, precisamos derrubar as mais antigas para abrir 1 vaga
+    let sessoesDerrubar = [];
+    if (totalAtivas >= empresaPainel.limite_acessos) {
+      const quantasDerrubar = totalAtivas - empresaPainel.limite_acessos + 1;
+      sessoesDerrubar = sessoesAtivas.slice(0, quantasDerrubar).map((s) => ({
+        id: s.id,
+        token_hash: s.token_hash,
+      }));
+    }
+
     return {
-      permitido: sessoesAtivas < empresaPainel.limite_acessos,
-      ativas: sessoesAtivas,
+      permitido: true, // sempre permite — derruba a mais antiga se necessário
+      ativas: totalAtivas,
       limite: empresaPainel.limite_acessos,
       empresaPainelId: empresaPainel.id,
+      sessoesDerrubar,
     };
   } catch (e) {
     console.warn("[acessos] Erro ao verificar limite:", e && e.message);
-    return { permitido: true, ativas: 0, limite: 999 };
+    return { permitido: true, ativas: 0, limite: 999, sessoesDerrubar: [] };
+  }
+}
+
+/**
+ * Verifica se uma sessão (por token_hash) ainda está ativa.
+ * Usado pelo frontend para detectar desconexão.
+ */
+async function verificarSessaoAtiva(tokenHash) {
+  try {
+    const sessao = await SessaoAtiva.findOne({
+      where: { token_hash: tokenHash, ativo: true },
+    });
+    return !!sessao;
+  } catch (e) {
+    return true; // em caso de erro, não desconectar
   }
 }
 
@@ -312,4 +342,5 @@ module.exports = {
   encerrarSessaoPorToken,
   atualizarAtividade,
   limparSessoesExpiradas,
+  verificarSessaoAtiva,
 };

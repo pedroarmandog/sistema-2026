@@ -19,11 +19,20 @@ if (SKIP_DB_SYNC)
   );
 app.use(
   cors({
-    origin: [
-      "http://localhost:3000",
-      "http://127.0.0.1:5500",
-      "http://localhost:5500",
-    ],
+    origin: function (origin, callback) {
+      // Permitir requisições sem origin (ex: same-origin, curl, mobile)
+      if (!origin) return callback(null, true);
+      // Permitir localhost e ngrok
+      if (
+        origin.includes("localhost") ||
+        origin.includes("127.0.0.1") ||
+        origin.includes("ngrok") ||
+        origin.includes("ngrok-free.app")
+      ) {
+        return callback(null, true);
+      }
+      callback(null, true); // liberar para testes — restringir em produção
+    },
     credentials: true,
   }),
 );
@@ -37,6 +46,27 @@ app.get("/favicon.ico", (req, res) => {
   res.sendFile(
     path.join(__dirname, "../frontend/fivecon/Design sem nome (17).png"),
   );
+});
+
+// Middleware para injetar system-modal.js em todas as páginas HTML
+// (garante que o override de alert/confirm/prompt carregue antes de qualquer JS)
+const fs = require("fs");
+app.use((req, res, next) => {
+  if (!req.path.endsWith(".html")) return next();
+  const filePath = path.join(__dirname, "../frontend", req.path);
+  fs.readFile(filePath, "utf8", (err, html) => {
+    if (err) return next(); // arquivo não encontrado, deixa express.static ou 404 tratar
+    const tag =
+      '<script src="/components/system-modal.js" data-system-modal="1"></script>';
+    if (!html.includes("system-modal.js")) {
+      html = html.replace(/<head([^>]*)>/i, `<head$1>\n${tag}`);
+    }
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    res.send(html);
+  });
 });
 
 // Configurar middleware para desabilitar cache de arquivos estáticos

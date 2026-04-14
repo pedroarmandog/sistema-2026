@@ -707,13 +707,13 @@ function handleEditProfissional(profissionalId) {
 }
 
 // Manipular exclusão de profissional
-function handleDeleteProfissional(profissionalId) {
+async function handleDeleteProfissional(profissionalId) {
   console.log("Excluir profissional:", profissionalId);
   const profissional = profissionaisData.find((p) => p.id === profissionalId);
 
   if (profissional) {
     if (
-      confirm(
+      await confirmar(
         `Tem certeza que deseja excluir o profissional "${profissional.nome}"?`,
       )
     ) {

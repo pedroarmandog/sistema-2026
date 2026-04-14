@@ -145,9 +145,9 @@ function showConfirmDeleteModalMeusPets(message, onConfirm) {
     if (!modal) {
       console.warn("confirmDeleteModalMeusPets não encontrada no DOM");
       // fallback para confirm nativo
-      if (window.confirm && window.confirm(message || "Confirmar?")) {
-        if (typeof onConfirm === "function") onConfirm();
-      }
+      confirmar(message || "Confirmar?").then(function (r) {
+        if (r && typeof onConfirm === "function") onConfirm();
+      });
       return;
     }
 
@@ -160,9 +160,9 @@ function showConfirmDeleteModalMeusPets(message, onConfirm) {
     const btnCancel = modal.querySelector("#confirmDeleteCancelMeusPets");
     if (!btnOk || !btnCancel) {
       // fallback
-      if (window.confirm && window.confirm(message || "Confirmar?")) {
-        if (typeof onConfirm === "function") onConfirm();
-      }
+      confirmar(message || "Confirmar?").then(function (r) {
+        if (r && typeof onConfirm === "function") onConfirm();
+      });
       return;
     }
 
@@ -199,9 +199,9 @@ function showConfirmDeleteModalMeusPets(message, onConfirm) {
     document.addEventListener("keydown", escHandler);
   } catch (err) {
     console.error("Erro em showConfirmDeleteModalMeusPets", err);
-    if (window.confirm && window.confirm(message || "Confirmar?")) {
-      if (typeof onConfirm === "function") onConfirm();
-    }
+    confirmar(message || "Confirmar?").then(function (r) {
+      if (r && typeof onConfirm === "function") onConfirm();
+    });
   }
 }
 

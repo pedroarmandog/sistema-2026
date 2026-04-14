@@ -66,4 +66,127 @@ router.get("/envios", marketingController.listarEnvios);
 router.get("/logs", marketingController.listarLogs);
 router.get("/estatisticas", marketingController.estatisticas);
 
+// ── Fila Pendente (controle manual) ───────────────
+router.get("/fila-pendente", async (req, res) => {
+  try {
+    const { EnvioAgendado } = require("../models");
+    const { Op } = require("sequelize");
+    const pendentes = await EnvioAgendado.findAll({
+      where: {
+        status: "pendente",
+        dataAgendada: { [Op.lte]: new Date() },
+      },
+      order: [["dataAgendada", "ASC"]],
+      limit: 100,
+    });
+    res.json({
+      total: pendentes.length,
+      envios: pendentes.map((e) => ({
+        id: e.id,
+        telefone: e.telefoneDestino,
+        conteudo: e.conteudoFinal
+          ? e.conteudoFinal.substring(0, 80) +
+            (e.conteudoFinal.length > 80 ? "..." : "")
+          : "",
+        dataAgendada: e.dataAgendada,
+        tentativas: e.tentativas,
+        empresaId: e.empresaId,
+      })),
+    });
+  } catch (err) {
+    console.error("[Marketing] Erro ao listar fila pendente:", err.message);
+    res.status(500).json({ error: "Erro ao listar fila pendente" });
+  }
+});
+
+// Enviar um único envio pendente
+router.post("/fila-pendente/enviar-um", async (req, res) => {
+  try {
+    const { EnvioAgendado, LogEnvio } = require("../models");
+    const { Op } = require("sequelize");
+    const envio = await EnvioAgendado.findOne({
+      where: {
+        status: "pendente",
+        dataAgendada: { [Op.lte]: new Date() },
+      },
+      order: [["dataAgendada", "ASC"]],
+    });
+    if (!envio) {
+      return res.json({ message: "Nenhum envio pendente", enviado: false });
+    }
+    const whatsappService = require("../services/whatsappService");
+    const empresaId = String(envio.empresaId || 1);
+    if (!whatsappService.isConectado(empresaId)) {
+      return res.status(400).json({ error: "WhatsApp não conectado" });
+    }
+    // Processar o envio
+    await envio.update({
+      status: "enviando",
+      tentativas: envio.tentativas + 1,
+    });
+    const resultado = await whatsappService.enviarMensagem(
+      empresaId,
+      envio.telefoneDestino,
+      envio.conteudoFinal,
+      envio.imagemPath || null,
+    );
+    if (resultado.sucesso) {
+      await envio.update({ status: "enviado", dataEnvio: new Date() });
+      await LogEnvio.create({
+        empresaId: envio.empresaId,
+        envioAgendadoId: envio.id,
+        evento: "envio_sucesso",
+        detalhes: { telefone: envio.telefoneDestino },
+        mensagem: `Envio manual #${envio.id} para ${envio.telefoneDestino}`,
+      }).catch(() => {});
+      return res.json({
+        message: "Enviado com sucesso",
+        enviado: true,
+        envioId: envio.id,
+      });
+    } else {
+      const novoStatus = envio.tentativas >= 3 ? "erro" : "pendente";
+      await envio.update({ status: novoStatus, erroMensagem: resultado.erro });
+      return res.status(400).json({ error: resultado.erro, enviado: false });
+    }
+  } catch (err) {
+    console.error("[Marketing] Erro ao enviar um:", err.message);
+    res.status(500).json({ error: "Erro ao processar envio" });
+  }
+});
+
+// Enviar todos os pendentes
+router.post("/fila-pendente/enviar-todos", async (req, res) => {
+  try {
+    const { processarFila } = require("../services/whatsappQueue");
+    await processarFila();
+    res.json({ message: "Fila processada" });
+  } catch (err) {
+    console.error("[Marketing] Erro ao enviar todos:", err.message);
+    res.status(500).json({ error: "Erro ao processar fila" });
+  }
+});
+
+// Cancelar todos os pendentes
+router.post("/fila-pendente/cancelar-todos", async (req, res) => {
+  try {
+    const { EnvioAgendado } = require("../models");
+    const { Op } = require("sequelize");
+    const [count] = await EnvioAgendado.update(
+      { status: "cancelado" },
+      {
+        where: {
+          status: "pendente",
+          dataAgendada: { [Op.lte]: new Date() },
+        },
+      },
+    );
+    console.log(`[Marketing] ${count} envio(s) cancelado(s) pelo usuário`);
+    res.json({ message: `${count} envio(s) cancelado(s)`, cancelados: count });
+  } catch (err) {
+    console.error("[Marketing] Erro ao cancelar fila:", err.message);
+    res.status(500).json({ error: "Erro ao cancelar fila" });
+  }
+});
+
 module.exports = router;

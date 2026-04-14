@@ -4,6 +4,16 @@
   const jsSrc = "dashboard.js"; // usar o JS do dashboard para manter comportamento (caminho relativo para evitar injeção duplicada)
   const componentPath = "/sidebar-component/sidebar.html";
 
+  // ── Carregar system-modal.js SINCRONAMENTE (substitui alert/confirm nativos) ──
+  if (
+    !document.querySelector("script[data-system-modal]") &&
+    typeof window.confirmar === "undefined"
+  ) {
+    document.write(
+      '<script src="/components/system-modal.js" data-system-modal="1"><\/script>',
+    );
+  }
+
   function ensureCss(href) {
     if (document.querySelector(`link[href="${href}"]`)) return;
     const l = document.createElement("link");

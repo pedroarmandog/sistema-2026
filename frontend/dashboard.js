@@ -52,6 +52,41 @@ document.addEventListener("DOMContentLoaded", function () {
   console.log("🚀 Inicializando Dashboard Pet Cria...");
   console.log("📍 URL atual:", window.location.pathname);
 
+  // ===============================================
+  // Monitoramento de sessão ativa (polling a cada 15s)
+  // Se o admin ou outro login derrubar esta sessão,
+  // redireciona para a página de sessão expirada.
+  // ===============================================
+  (function iniciarMonitorSessao() {
+    let sessaoVerificando = false;
+    const INTERVALO_CHECK = 15000; // 15 segundos
+
+    async function checarSessao() {
+      if (sessaoVerificando) return;
+      sessaoVerificando = true;
+      try {
+        const resp = await fetch("/api/usuarios/sessao-ativa", {
+          credentials: "include",
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.ativa === false) {
+            console.warn("⚠️ Sessão encerrada remotamente — redirecionando...");
+            window.location.href = "/sessao-expirada.html";
+            return;
+          }
+        }
+      } catch (e) {
+        // Erro de rede — ignorar, tentar de novo no próximo ciclo
+      }
+      sessaoVerificando = false;
+    }
+
+    // Primeira verificação após 5 segundos, depois a cada 15s
+    setTimeout(checarSessao, 5000);
+    setInterval(checarSessao, INTERVALO_CHECK);
+  })();
+
   // Verificar IDs duplicados primeiro
   detectarIDsDuplicados();
   console.log("Dashboard JavaScript carregado");

@@ -80,7 +80,7 @@ async function realizarLogin(usuario, senha) {
   try {
     console.log("Enviando requisição de login:", { usuario, senha: "***" });
 
-    const response = await fetch("http://localhost:3000/api/usuarios/login", {
+    const response = await fetch("/api/usuarios/login", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -105,11 +105,6 @@ async function realizarLogin(usuario, senha) {
 
     // Se empresa bloqueada, retornar com flag para o handler redirecionar
     if (data.bloqueado) {
-      return data;
-    }
-
-    // Se limite de acessos atingido, mostrar erro
-    if (data.limite_acessos) {
       return data;
     }
 
@@ -152,18 +147,6 @@ document
           sessionStorage.setItem("empresa_bloqueada", "1");
         } catch (e) {}
         window.location.href = "/painel-admin/sistema-bloqueado.html";
-        return;
-      }
-
-      // Verificar se limite de acessos simultâneos foi atingido
-      if (resultado.limite_acessos) {
-        showNotification(
-          resultado.mensagem ||
-            "Limite de acessos simultâneos atingido. Tente novamente mais tarde.",
-          "error",
-        );
-        btnLogin.disabled = false;
-        btnLogin.textContent = textoOriginal;
         return;
       }
 

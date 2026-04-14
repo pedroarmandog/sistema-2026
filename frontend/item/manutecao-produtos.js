@@ -2188,8 +2188,8 @@ async function abrirDropdownAgrupamento(tdElement, produtoRow) {
           console.debug("[manutecao-produtos] dynamic load failed", err);
         }
 
-        // fallback antigo (prompt) caso o modal não exista
-        const nome = prompt("Nome do novo agrupamento:");
+        // fallback antigo (solicitar) caso o modal não exista
+        const nome = await solicitar("Nome do novo agrupamento:");
         if (!nome) return;
         try {
           const criado = await ApiClient.criarAgrupamento({ nome: nome });

@@ -517,9 +517,9 @@ function configurarListaFormularios() {
     // Configurar botão de remover
     const removeBtn = item.querySelector(".remove-btn");
     if (removeBtn) {
-      removeBtn.addEventListener("click", function (e) {
+      removeBtn.addEventListener("click", async function (e) {
         e.stopPropagation();
-        if (confirm("Deseja remover este formulário?")) {
+        if (await confirmar("Deseja remover este formulário?")) {
           item.remove();
           showNotification("Formulário removido com sucesso!", "success");
         }

@@ -171,14 +171,19 @@ exports.login = async (req, res) => {
 
     // Verificar limite de acessos simultâneos
     const limiteCheck = await verificarLimiteAcessos(_empresaId);
-    if (!limiteCheck.permitido) {
+
+    // Se há sessões para derrubar (limite excedido), derrubá-las antes de registrar a nova
+    if (limiteCheck.sessoesDerrubar && limiteCheck.sessoesDerrubar.length > 0) {
       console.log(
-        `🚫 Limite de acessos atingido para empresa ${_empresaId}: ${limiteCheck.ativas}/${limiteCheck.limite}`,
+        `⚡ Derrubando ${limiteCheck.sessoesDerrubar.length} sessão(ões) antiga(s) para empresa ${_empresaId}`,
       );
-      return res.status(403).json({
-        mensagem: `Limite de acessos simultâneos atingido (${limiteCheck.ativas}/${limiteCheck.limite}). Peça para outro usuário sair ou entre em contato com o suporte.`,
-        limite_acessos: true,
-      });
+      const { SessaoAtiva } = require("../models");
+      for (const sessao of limiteCheck.sessoesDerrubar) {
+        await SessaoAtiva.update(
+          { ativo: false },
+          { where: { id: sessao.id, ativo: true } },
+        );
+      }
     }
 
     // Gerar JWT com empresaId e configurar cookie

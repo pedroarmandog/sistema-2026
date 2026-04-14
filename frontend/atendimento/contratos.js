@@ -602,10 +602,14 @@ function filtrarContratosFaturamento(filtro) {
   }
 }
 
-function faturarMes(mes) {
+async function faturarMes(mes) {
   console.log(`💸 Faturando mês: ${mes}`);
 
-  if (confirm(`Tem certeza que deseja faturar todos os contratos de ${mes}?`)) {
+  if (
+    await confirmar(
+      `Tem certeza que deseja faturar todos os contratos de ${mes}?`,
+    )
+  ) {
     // Simular processo de faturamento
     console.log("Processando faturamento...");
 
@@ -616,10 +620,12 @@ function faturarMes(mes) {
   }
 }
 
-function cancelarFaturamento(mes) {
+async function cancelarFaturamento(mes) {
   console.log(`❌ Cancelando faturamento do mês: ${mes}`);
 
-  if (confirm(`Tem certeza que deseja cancelar o faturamento de ${mes}?`)) {
+  if (
+    await confirmar(`Tem certeza que deseja cancelar o faturamento de ${mes}?`)
+  ) {
     // Simular processo de cancelamento
     console.log("Cancelando faturamento...");
 

@@ -5109,7 +5109,9 @@ function showConfirmDialog(message, onConfirm, opts = {}) {
   } catch (e) {
     console.debug("showConfirmDialog error", e);
     if (typeof onConfirm === "function") {
-      if (confirm(message)) onConfirm();
+      confirmar(message).then(function (r) {
+        if (r) onConfirm();
+      });
     }
   }
 }

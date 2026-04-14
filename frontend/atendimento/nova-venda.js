@@ -1083,12 +1083,12 @@ function inicializarNovaVenda() {
   // NÃO adicionar outro listener aqui para evitar venda duplicada
 
   if (btnNova) {
-    btnNova.addEventListener("click", function () {
+    btnNova.addEventListener("click", async function () {
       if (itensVenda.length > 0) {
         if (
-          !confirm(
+          !(await confirmar(
             "Deseja iniciar uma nova venda? Os dados atuais serão perdidos.",
-          )
+          ))
         ) {
           return;
         }
@@ -3328,7 +3328,7 @@ function configurarModalPagamento(modal, overlay, totalVenda) {
   // Adicionar pagamento
   document
     .getElementById("adicionarPagamento")
-    .addEventListener("click", function () {
+    .addEventListener("click", async function () {
       if (!formaSelecionada) {
         alert("Selecione uma forma de pagamento.");
         return;
@@ -3353,9 +3353,9 @@ function configurarModalPagamento(modal, overlay, totalVenda) {
       const faltante = totalVenda - totalPago;
       if (valor > faltante) {
         if (
-          !confirm(
+          !(await confirmar(
             `Valor informado é maior que o restante (${faltante.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}). Continuar?`,
-          )
+          ))
         ) {
           return;
         }
@@ -3443,9 +3443,9 @@ function configurarModalPagamento(modal, overlay, totalVenda) {
 
           if (valor > faltante) {
             if (
-              !confirm(
+              !(await confirmar(
                 `Valor informado é maior que o restante (${faltante.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}). Continuar?`,
-              )
+              ))
             ) {
               return;
             }
@@ -3476,9 +3476,9 @@ function configurarModalPagamento(modal, overlay, totalVenda) {
       const falta = totalVenda - totalPago;
       if (falta > 0) {
         if (
-          !confirm(
+          !(await confirmar(
             `Ainda falta ${falta.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}. Finalizar mesmo assim?`,
-          )
+          ))
         ) {
           return;
         }

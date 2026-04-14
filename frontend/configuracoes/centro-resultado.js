@@ -482,16 +482,16 @@ function carregarCentrosBackend(){
     }catch(e){ console.error('carregarCentrosBackend erro', e); }
 }
 
-function adicionarCentroResultado() {
+async async function adicionarCentroResultado() {
     // Compatibilidade: abrir modal moderno em vez de usar prompt
     if (typeof abrirModalCentro === 'function') {
         abrirModalCentro();
         return;
     }
     // Fallback: manter comportamento antigo caso modal não exista
-    const descricao = prompt('Digite a descrição do Centro de Resultado:');
+    const descricao = await solicitar('Digite a descrição do Centro de Resultado:');
     if (descricao && descricao.trim()) {
-        const unidadeNegocio = prompt('Digite a Unidade de Negócio:');
+        const unidadeNegocio = await solicitarsolicitar('Digite a Unidade de Negócio:');
         if (unidadeNegocio && unidadeNegocio.trim()) {
             console.log('📝 Adicionando Centro de Resultado:', {
                 descricao: descricao.trim(),
@@ -543,7 +543,7 @@ function handleEditCentro(id) {
     abrirModalCentro({ slug: id, descricao: descricaoAtual, unidade: unidadeAtual });
 }
 
-function handleDeleteCentro(id) {
+async function handleDeleteCentro(id) {
     console.log('🗑️ Excluindo Centro de Resultado:', id);
     const botao = document.querySelector(`[onclick="handleDeleteCentro('${id}')"]`);
     const linha = botao ? botao.closest('tr') : null;
@@ -569,11 +569,11 @@ function handleDeleteCentro(id) {
         .catch(error => { console.error('Erro ao excluir centro:', error); showNotification('Erro ao excluir: ' + error.message, 'error'); });
     }
 
-    // usar openConfirm (modal estilizado) se disponível, senão fallback para confirm()
+    // usar openConfirm (modal estilizado) se disponível, senão fallback para confirmar()
     if (typeof openConfirm === 'function') {
         openConfirm(`Deseja realmente excluir "${descricao}"? Esta ação não poderá ser desfeita.`, doDelete);
     } else {
-        if (confirm('Tem certeza que deseja excluir este Centro de Resultado? Esta ação não poderá ser desfeita.')) doDelete();
+        if (await confirmaronfirmar('Tem certeza que deseja excluir este Centro de Resultado? Esta ação não poderá ser desfeita.')) doDelete();
     }
 }
 
@@ -649,7 +649,7 @@ function showNotification(message, type = 'info') {
 
 // Se não existir uma versão global de openConfirm, criar aqui (modal estilizado)
 if (typeof window.openConfirm !== 'function') {
-    window.openConfirm = function(message, onConfirm) {
+    window.openConfirm = async function(message, onConfirm) {
         try {
             document.querySelectorAll('.qc-overlay, .modal-overlay').forEach(e => e.remove());
             const overlay = document.createElement('div'); overlay.className = 'modal-overlay';
@@ -674,7 +674,7 @@ if (typeof window.openConfirm !== 'function') {
             btnCancel.addEventListener('click', function(e){ e.preventDefault(); close(); });
             btnConfirm.addEventListener('click', function(e){ e.preventDefault(); try{ if (typeof onConfirm === 'function') onConfirm(); } catch(err){ console.debug(err); } close(); });
             overlay.addEventListener('click', function(e){ if (e.target === overlay) close(); });
-        } catch(e) { console.debug('openConfirm shim failed', e); if (typeof onConfirm === 'function' && confirm(message)) onConfirm(); }
+        } catch(e) { console.debug('openConfirm shim failed', e); if (typeof onConfirm === 'function' && (await confirmar(message))) onConfirm(); }
     };
 }
 

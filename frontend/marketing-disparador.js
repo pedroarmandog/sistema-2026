@@ -450,7 +450,11 @@
         btnDel.dataset.instId = it.id;
         btnDel.dataset.instNome = it.nome || it.id;
         btnDel.addEventListener("click", async function () {
-          if (!confirm("Excluir instância " + this.dataset.instNome + "?"))
+          if (
+            !(await confirmar(
+              "Excluir instância " + this.dataset.instNome + "?",
+            ))
+          )
             return;
           try {
             var r = await fetch("/api/instancias/" + this.dataset.instId, {
@@ -745,7 +749,7 @@
             );
           })
           .join("\n");
-        var choice = prompt(
+        var choice = await solicitar(
           "Escolha a instância para o disparo (digite o número #):\n\n" +
             options,
         );

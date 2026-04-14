@@ -11,7 +11,7 @@ console.log("[Marketing] Módulo carregado");
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // CONFIGURAÇÕES
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const API = "http://localhost:3000/api/marketing";
+const API = "/api/marketing";
 
 // Obter empresaId do usuário logado (cookie → API → empresas[0])
 let EMPRESA_ID = 1; // fallback
@@ -27,7 +27,7 @@ let _empresaIdPromise = (async function detectarEmpresaId() {
       }
     }
     if (!usuarioId) return;
-    const r = await fetch("http://localhost:3000/api/usuarios/" + usuarioId);
+    const r = await fetch("/api/usuarios/" + usuarioId);
     if (!r.ok) return;
     const u = await r.json();
     if (!u?.empresas?.length) return;
@@ -65,6 +65,171 @@ async function inicializarMarketing() {
   carregarStatusWhatsapp();
   carregarMensagens();
   conectarSSE();
+  iniciarMonitorFilaPendente();
+}
+
+// ──────────────────────────────────────────────────
+// FILA PENDENTE — alerta + controles manuais
+// ──────────────────────────────────────────────────
+let _filaPendenteInterval = null;
+
+function iniciarMonitorFilaPendente() {
+  verificarFilaPendente();
+  _filaPendenteInterval = setInterval(verificarFilaPendente, 15000); // a cada 15s
+
+  // Botões
+  const btnUm = document.getElementById("btnFilaEnviarUm");
+  const btnTodos = document.getElementById("btnFilaEnviarTodos");
+  const btnCancelar = document.getElementById("btnFilaCancelarTodos");
+
+  if (btnUm) btnUm.addEventListener("click", filaEnviarUm);
+  if (btnTodos) btnTodos.addEventListener("click", filaEnviarTodos);
+  if (btnCancelar) btnCancelar.addEventListener("click", filaCancelarTodos);
+}
+
+async function verificarFilaPendente() {
+  try {
+    const res = await fetch(`${API}/fila-pendente`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const alerta = document.getElementById("filaPendenteAlerta");
+    const msg = document.getElementById("filaPendenteMensagem");
+    if (!alerta || !msg) return;
+
+    if (data.total > 0) {
+      alerta.style.display = "block";
+      msg.textContent = `${data.total} mensagem(ns) pendente(s) na fila aguardando envio`;
+    } else {
+      alerta.style.display = "none";
+    }
+  } catch (e) {
+    // silencioso
+  }
+}
+
+async function filaEnviarUm() {
+  const btn = document.getElementById("btnFilaEnviarUm");
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+  }
+  try {
+    const res = await fetch(`${API}/fila-pendente/enviar-um`, {
+      method: "POST",
+    });
+    const data = await res.json();
+    if (data.enviado) {
+      mostrarNotificacaoFila("Mensagem enviada com sucesso!", "sucesso");
+    } else if (data.error) {
+      mostrarNotificacaoFila(data.error, "erro");
+    } else {
+      mostrarNotificacaoFila("Nenhum envio pendente", "info");
+    }
+  } catch (e) {
+    mostrarNotificacaoFila("Erro ao enviar mensagem", "erro");
+  }
+  if (btn) {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar 1';
+  }
+  verificarFilaPendente();
+}
+
+async function filaEnviarTodos() {
+  const btn = document.getElementById("btnFilaEnviarTodos");
+  if (!(await confirmar("Enviar todas as mensagens pendentes agora?"))) return;
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+  }
+  try {
+    const res = await fetch(`${API}/fila-pendente/enviar-todos`, {
+      method: "POST",
+    });
+    const data = await res.json();
+    mostrarNotificacaoFila("Fila processada! Verifique os logs.", "sucesso");
+  } catch (e) {
+    mostrarNotificacaoFila("Erro ao processar fila", "erro");
+  }
+  if (btn) {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-forward"></i> Enviar Todos';
+  }
+  verificarFilaPendente();
+}
+
+async function filaCancelarTodos() {
+  if (
+    !(await confirmar(
+      "Cancelar todos os envios pendentes? Esta ação não pode ser desfeita.",
+    ))
+  )
+    return;
+  const btn = document.getElementById("btnFilaCancelarTodos");
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cancelando...';
+  }
+  try {
+    const res = await fetch(`${API}/fila-pendente/cancelar-todos`, {
+      method: "POST",
+    });
+    const data = await res.json();
+    mostrarNotificacaoFila(
+      `${data.cancelados || 0} envio(s) cancelado(s)`,
+      "info",
+    );
+  } catch (e) {
+    mostrarNotificacaoFila("Erro ao cancelar fila", "erro");
+  }
+  if (btn) {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-times-circle"></i> Cancelar Todos';
+  }
+  verificarFilaPendente();
+}
+
+function mostrarNotificacaoFila(texto, tipo) {
+  // Remover notificação anterior
+  const old = document.getElementById("notifFila");
+  if (old) old.remove();
+
+  const cores = {
+    sucesso: {
+      bg: "#f0fff4",
+      border: "#68d391",
+      text: "#276749",
+      icon: "fa-check-circle",
+    },
+    erro: {
+      bg: "#fff5f5",
+      border: "#fc8181",
+      text: "#9b2c2c",
+      icon: "fa-exclamation-circle",
+    },
+    info: {
+      bg: "#ebf8ff",
+      border: "#63b3ed",
+      text: "#2b6cb0",
+      icon: "fa-info-circle",
+    },
+  };
+  const c = cores[tipo] || cores.info;
+
+  const alerta = document.getElementById("filaPendenteAlerta");
+  if (!alerta) return;
+
+  const div = document.createElement("div");
+  div.id = "notifFila";
+  div.style.cssText = `margin-top: 8px; padding: 10px 14px; background: ${c.bg}; border: 1px solid ${c.border}; border-radius: 6px; display: flex; align-items: center; gap: 8px; font-size: 12px; color: ${c.text}; font-weight: 500; animation: fadeIn 0.3s ease;`;
+  div.innerHTML = `<i class="fas ${c.icon}"></i> ${texto}`;
+  alerta.parentNode.insertBefore(div, alerta.nextSibling);
+
+  setTimeout(() => {
+    div.style.opacity = "0";
+    div.style.transition = "opacity 0.3s";
+    setTimeout(() => div.remove(), 300);
+  }, 4000);
 }
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -366,7 +531,7 @@ function pararPollingQR() {
 }
 
 async function desconectarWhatsapp() {
-  if (!confirm("Deseja desconectar o WhatsApp?")) return;
+  if (!(await confirmar("Deseja desconectar o WhatsApp?"))) return;
 
   try {
     await fetch(`${API}/whatsapp/desconectar`, {
@@ -704,7 +869,7 @@ async function ativarMensagemConfirmado() {
 }
 
 async function desativarMensagem(id) {
-  if (!confirm("Desativar esta mensagem automática?")) return;
+  if (!(await confirmar("Desativar esta mensagem automática?"))) return;
 
   try {
     const res = await fetch(`${API}/mensagens/${id}/desativar`, {

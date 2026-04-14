@@ -97,17 +97,6 @@ const MENSAGENS_PADRAO = [
     configuracaoEnvio: null,
     ativo: true,
   },
-  {
-    tipo: "programas_fidelidade",
-    titulo: "Programa de Fidelidade",
-    conteudo:
-      "🎁 Olá {nome_tutor}!\n\nVocê está no caminho certo! {nome_pet} já acumulou pontos suficientes para ganhar um benefício especial.\n\nVenha resgatar na {nome_empresa}! 🐾\n\nAté logo! 😊",
-    icone: "fa-gift",
-    descricaoMarketing:
-      "Incentive a fidelização comunicando benefícios do programa de pontos.",
-    configuracaoEnvio: null,
-    ativo: false,
-  },
 ];
 
 // ──────────────────────────────────────────────
@@ -303,6 +292,7 @@ exports.listarMensagens = async (req, res) => {
       "pet_liberado_portal",
       "plano_banhos_concluido",
       "lembrete_produtos",
+      "programas_fidelidade",
     ];
     mensagens = mensagens.filter((m) => !TIPOS_REMOVIDOS.includes(m.tipo));
 

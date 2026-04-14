@@ -639,9 +639,9 @@ function configurarBotoesFormulario() {
   // Botão Cancelar
   const btnCancelar = document.getElementById("btnCancelar");
   if (btnCancelar) {
-    btnCancelar.addEventListener("click", () => {
+    btnCancelar.addEventListener("click", async () => {
       if (
-        confirm(
+        await confirmar(
           "Deseja realmente cancelar? Todas as alterações não salvas serão perdidas.",
         )
       ) {
@@ -831,8 +831,8 @@ function salvarProfissional() {
     });
 }
 
-function limparFormulario() {
-  if (confirm("Deseja limpar todos os campos do formulário?")) {
+async function limparFormulario() {
+  if (await confirmar("Deseja limpar todos os campos do formulário?")) {
     document.getElementById("cadastroProfissionalForm").reset();
     mostrarNotificacao("Formulário limpo.", "info");
   }

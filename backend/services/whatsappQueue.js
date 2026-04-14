@@ -160,9 +160,7 @@ async function processarEnvio(envio, LogEnvio) {
   const empresaId = String(envio.empresaId || 1);
 
   if (!whatsappService.isConectado(empresaId)) {
-    console.warn(
-      `[Queue] WhatsApp não conectado para empresa ${empresaId}. Envio #${envio.id} pendente.`,
-    );
+    // Silencioso — o frontend mostra o alerta de fila pendente
     return;
   }
 
