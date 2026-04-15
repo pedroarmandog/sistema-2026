@@ -381,7 +381,7 @@ async function loadHistoricoIntoTab(petId) {
   if (!resp || !resp.ok) {
     try {
       resp = await fetch(
-        `${location.protocol}//localhost:3000/api/pets/${encodeURIComponent(petId)}/historico`,
+        `http://72.60.244.46:3000/api/pets/${encodeURIComponent(petId)}/historico`,
       );
     } catch (e) {
       resp = null;
@@ -614,7 +614,7 @@ function _abrirModalAdicionarDocumento(petId) {
         }
         if (!r || !r.ok) {
           r = await fetch(
-            `${location.protocol}//localhost:3000/api/pets/${encodeURIComponent(petId)}/documentos`,
+            `http://72.60.244.46:3000/api/pets/${encodeURIComponent(petId)}/documentos`,
             { method: "POST", body: formData },
           );
         }
@@ -660,7 +660,7 @@ async function loadDocumentosIntoTab(petId) {
   if (!resp || !resp.ok) {
     try {
       resp = await fetch(
-        `${location.protocol}//localhost:3000/api/pets/${encodeURIComponent(petId)}/documentos`,
+        `http://72.60.244.46:3000/api/pets/${encodeURIComponent(petId)}/documentos`,
       );
     } catch (e) {
       resp = null;
@@ -862,11 +862,11 @@ async function carregarPet(petId, clienteId) {
       resp = null;
     }
 
-    // Se não obteve resposta OK, tentar o backend padrão (localhost:3000) — útil quando usando Live Server (porta 5500)
+    // Se não obteve resposta OK, tentar o backend padrão (72.60.244.46:3000) — útil quando usando Live Server (porta 5500)
     if (!resp || !resp.ok) {
       try {
         resp = await fetch(
-          `${location.protocol}//localhost:3000/api/pets/${encodeURIComponent(petId)}`,
+          `http://72.60.244.46:3000/api/pets/${encodeURIComponent(petId)}`,
         );
       } catch (err) {
         resp = null;
@@ -970,7 +970,7 @@ function renderPet(pet, clienteId) {
               if (!resp || !resp.ok) {
                 try {
                   resp = await fetch(
-                    `${location.protocol}//localhost:3000/api/clientes/${encodeURIComponent(id)}`,
+                    `http://72.60.244.46:3000/api/clientes/${encodeURIComponent(id)}`,
                   );
                 } catch (e) {
                   resp = null;
@@ -1495,7 +1495,7 @@ async function loadResourceIntoTab(resourceId, petId, clienteId, columns) {
     if (!resp || !resp.ok) {
       try {
         resp = await fetch(
-          `${location.protocol}//localhost:3000/api/pets/${encodeURIComponent(petId)}/${resourceId}`,
+          `http://72.60.244.46:3000/api/pets/${encodeURIComponent(petId)}/${resourceId}`,
         );
       } catch (e) {
         resp = null;
@@ -1518,7 +1518,7 @@ async function loadResourceIntoTab(resourceId, petId, clienteId, columns) {
         if (!pr || !pr.ok) {
           try {
             pr = await fetch(
-              `${location.protocol}//localhost:3000/api/pets/${encodeURIComponent(petId)}`,
+              `http://72.60.244.46:3000/api/pets/${encodeURIComponent(petId)}`,
             );
           } catch (e) {
             pr = null;
@@ -2423,7 +2423,7 @@ function _criarModalRegistro(modalId, titulo, corBtn, fieldsHtml, onSave) {
   return overlay;
 }
 
-/** Helper: faz fetch com fallback localhost:3000 */
+/** Helper: faz fetch com fallback 72.60.244.46:3000 */
 async function _apiFetch(path, options) {
   try {
     const r = await fetch(path, options);
@@ -2431,7 +2431,7 @@ async function _apiFetch(path, options) {
   } catch (e) {
     /* fallback */
   }
-  return fetch(`${location.protocol}//localhost:3000${path}`, options);
+  return fetch(`http://72.60.244.46:3000${path}`, options);
 }
 
 /** Helper: carrega periodicidades e preenche select */

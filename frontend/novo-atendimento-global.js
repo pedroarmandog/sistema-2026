@@ -1,4 +1,4 @@
-// =============================================
+﻿// =============================================
 // SISTEMA GLOBAL DE NOVO ATENDIMENTO
 // Funciona em todas as páginas do sistema
 // =============================================
@@ -1794,8 +1794,8 @@ async function tryFetchAny(path) {
   const baseCandidates = [
     "",
     origin,
-    "http://127.0.0.1:3000",
-    "http://localhost:3000",
+    "http://72.60.244.46:3000",
+    "http://72.60.244.46:3000",
     "http://127.0.0.1:8080",
     "http://localhost:8080",
   ];

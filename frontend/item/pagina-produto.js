@@ -1,4 +1,4 @@
-// Copiado de frontend/dashboard.js - funcionalidades do menu e header
+﻿// Copiado de frontend/dashboard.js - funcionalidades do menu e header
 
 console.log('🚀 menu.js carregado (snippet do dashboard)');
 
@@ -2062,7 +2062,7 @@ function configurarImagemProduto() {
                         imgEl.src = prod.imagem;
                     } else {
                         // Se for nome de arquivo, carregar do servidor
-                        imgEl.src = `http://localhost:3000/uploads/${prod.imagem}`;
+                        imgEl.src = `http://72.60.244.46:3000/uploads/${prod.imagem}`;
                     }
                     imgEl.style.display = 'block';
                     imgEl.style.cursor = 'pointer';

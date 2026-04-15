@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
@@ -113,7 +113,7 @@
                 document.getElementById('loadingOverlay').classList.remove('hidden');
                 
                 // Buscar dados do backend
-                const response = await fetch(`http://localhost:3000/api/relatorios/${reportType}`, {
+                const response = await fetch(`http://72.60.244.46:3000/api/relatorios/${reportType}`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'

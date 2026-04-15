@@ -1,4 +1,4 @@
-console.log('🚀 Novo script de clientes carregado');
+﻿console.log('🚀 Novo script de clientes carregado');
 
 // Esperar o DOM carregar
 document.addEventListener('DOMContentLoaded', function() {
@@ -19,7 +19,7 @@ async function carregarClientesSimples() {
     tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;">⏳ Carregando...</td></tr>';
     
     try {
-        const response = await fetch('http://localhost:3000/api/clientes');
+        const response = await fetch('http://72.60.244.46:3000/api/clientes');
         const data = await response.json();
         
         console.log('📦 Dados:', data);

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
@@ -55,7 +55,7 @@
             log('Testando conexão com backend...');
             
             try {
-                const response = await fetch('http://localhost:3000/api/itens');
+                const response = await fetch('http://72.60.244.46:3000/api/itens');
                 log(`Status: ${response.status} ${response.statusText}`, response.ok ? 'success' : 'error');
                 
                 const data = await response.json();

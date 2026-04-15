@@ -1,4 +1,4 @@
-// Clientes JavaScript
+﻿// Clientes JavaScript
 
 // Abrir modal
 function openModal() {
@@ -33,7 +33,7 @@ async function loadClients() {
     let response = null;
     try {
       response = await fetchWithTimeout(
-        "http://localhost:3000/api/clientes",
+        "http://72.60.244.46:3000/api/clientes",
         {},
         3000,
       );
@@ -141,7 +141,7 @@ function displayClients(clientes) {
       .map((cliente, index) => {
         const isNewest = index === 0;
         const avatar = cliente.imagem_perfil
-          ? `<img src="http://localhost:3000/uploads/${cliente.imagem_perfil}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">`
+          ? `<img src="http://72.60.244.46:3000/uploads/${cliente.imagem_perfil}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">`
           : `<div style="width: 40px; height: 40px; border-radius: 50%; background: #3498db; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">${cliente.nome.charAt(0).toUpperCase()}</div>`;
 
         const newestBadge = isNewest
@@ -230,7 +230,7 @@ async function handleSubmit(e) {
   const formData = new FormData(e.target);
 
   try {
-    const response = await fetch("http://localhost:3000/api/clientes", {
+    const response = await fetch("http://72.60.244.46:3000/api/clientes", {
       method: "POST",
       body: formData,
     });
@@ -286,7 +286,7 @@ async function deleteClient(id) {
     async function () {
       try {
         const response = await fetch(
-          `http://localhost:3000/api/clientes/${id}`,
+          `http://72.60.244.46:3000/api/clientes/${id}`,
           {
             method: "DELETE",
           },
@@ -334,7 +334,7 @@ function refreshClients() {
   setTimeout(() => {
     console.log("� TESTE: Carregando dados reais após 2 segundos...");
 
-    fetch("http://localhost:3000/api/clientes")
+    fetch("http://72.60.244.46:3000/api/clientes")
       .then((response) => {
         console.log("📡 TESTE: Response:", response.status);
         return response.json();
@@ -462,7 +462,7 @@ function refreshClientsFix() {
     `;
 
   // Fazer requisição com timeout e fallback
-  fetchWithTimeout("http://localhost:3000/api/clientes", {}, 4000)
+  fetchWithTimeout("http://72.60.244.46:3000/api/clientes", {}, 4000)
     .catch((err) => {
       console.warn(
         "⚠️ refreshClientsFix: fallback para rota relativa por timeout/erro",
@@ -493,7 +493,7 @@ function refreshClientsFix() {
             .map((cliente, index) => {
               const isNewest = index === 0;
               const avatar = cliente.imagem_perfil
-                ? `<img src="http://localhost:3000/uploads/${cliente.imagem_perfil}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">`
+                ? `<img src="http://72.60.244.46:3000/uploads/${cliente.imagem_perfil}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">`
                 : `<div style="width: 40px; height: 40px; border-radius: 50%; background: #3498db; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 16px;">${cliente.nome.charAt(0).toUpperCase()}</div>`;
 
               return `

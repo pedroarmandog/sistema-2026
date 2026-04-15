@@ -1303,11 +1303,11 @@
               console.warn('⚠️ Erro ao carregar logo da empresa:', e);
           }
 
-          console.log('🚀 Enviando requisição para:', 'http://localhost:3000/api/relatorios/demonstrativo-resultados/pdf');
+          console.log('🚀 Enviando requisição para:', 'http://72.60.244.46:3000/api/relatorios/demonstrativo-resultados/pdf');
           console.log('📦 Payload:', payload);
 
           // chamar backend para gerar PDF
-          const response = await fetch('http://localhost:3000/api/relatorios/demonstrativo-resultados/pdf', {
+          const response = await fetch('http://72.60.244.46:3000/api/relatorios/demonstrativo-resultados/pdf', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload)

@@ -1,4 +1,4 @@
-// Atualizar clientes - VERSÃO FUNCIONAL
+﻿// Atualizar clientes - VERSÃO FUNCIONAL
 function refreshClients() {
     console.log('🔄 Iniciando refresh de clientes...');
     
@@ -29,7 +29,7 @@ function refreshClients() {
     `;
     
     // Fazer requisição
-    fetch('http://localhost:3000/api/clientes')
+    fetch('http://72.60.244.46:3000/api/clientes')
         .then(response => {
             console.log('📡 Response recebido:', response.status);
             return response.json();
@@ -54,7 +54,7 @@ function refreshClients() {
                     const clientesHTML = data.clientes.map((cliente, index) => {
                         const isNewest = index === 0;
                         const avatar = cliente.imagem_perfil ? 
-                            `<img src="http://localhost:3000/uploads/${cliente.imagem_perfil}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">` :
+                            `<img src="http://72.60.244.46:3000/uploads/${cliente.imagem_perfil}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">` :
                             `<div style="width: 40px; height: 40px; border-radius: 50%; background: #3498db; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 16px;">${cliente.nome.charAt(0).toUpperCase()}</div>`;
                         
                         return `

@@ -1,4 +1,4 @@
-// Copiado de frontend/dashboard.js - funcionalidades do menu e header
+﻿// Copiado de frontend/dashboard.js - funcionalidades do menu e header
 
 console.log("🚀 menu.js carregado (snippet do dashboard)");
 
@@ -487,7 +487,7 @@ async function carregarUsuarios() {
   try {
     const API_BASE =
       (window.__API_BASE__ && window.__API_BASE__.toString()) ||
-      "http://localhost:3000";
+      "http://72.60.244.46:3000";
     const response = await fetch(API_BASE + "/api/usuarios");
 
     if (!response.ok) {

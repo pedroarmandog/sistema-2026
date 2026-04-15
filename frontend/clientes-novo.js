@@ -1,4 +1,4 @@
-// Função para configurar event listeners dos filtros manualmente
+﻿// Função para configurar event listeners dos filtros manualmente
 function setupFilterEventListeners() {
     console.log('🔧 Configurando event listeners dos filtros...');
     
@@ -177,7 +177,7 @@ async function loadClients(forceRefresh = false) {
         console.log('📡 Fazendo requisição para /api/clientes...');
         // Adicionar timestamp para evitar cache
         const timestamp = new Date().getTime();
-        const response = await fetch(`http://localhost:3000/api/clientes?_t=${timestamp}&force=${forceRefresh ? '1' : '0'}`, {
+        const response = await fetch(`http://72.60.244.46:3000/api/clientes?_t=${timestamp}&force=${forceRefresh ? '1' : '0'}`, {
             method: 'GET',
             headers: {
                 'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -303,7 +303,7 @@ function refreshClientsFix() {
     
     // Fazer requisição
     const timestamp = new Date().getTime();
-    fetch(`http://localhost:3000/api/clientes?_t=${timestamp}`)
+    fetch(`http://72.60.244.46:3000/api/clientes?_t=${timestamp}`)
     .then(response => {
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -477,7 +477,7 @@ async function performDeleteClient(id, clientName) {
         // Mostrar loading
         showNotification('Excluindo cliente...', 'info');
         
-        const response = await fetch(`http://localhost:3000/api/clientes/${id}`, {
+        const response = await fetch(`http://72.60.244.46:3000/api/clientes/${id}`, {
             method: 'DELETE',
             headers: {
                 'Content-Type': 'application/json'
@@ -1352,7 +1352,7 @@ function updateClientsTable(clients) {
         // Avatar
         let avatar = '';
         if (cliente.imagem_perfil) {
-            avatar = '<img src="http://localhost:3000/uploads/' + cliente.imagem_perfil + '" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">';
+            avatar = '<img src="http://72.60.244.46:3000/uploads/' + cliente.imagem_perfil + '" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">';
         } else {
             avatar = '<div style="width: 40px; height: 40px; border-radius: 50%; background: #3498db; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 16px;">' + cliente.nome.charAt(0).toUpperCase() + '</div>';
         }
@@ -1472,7 +1472,7 @@ async function fetchPetsForClient(clientId, cell) {
         // mostrar apenas o ícone de loading (sem texto) para não alterar a largura
         cell.innerHTML = '<i class="fas fa-spinner fa-spin" style="color:#3498db"></i>';
 
-        const resp = await fetch(`http://localhost:3000/api/pets?cliente_id=${clientId}`);
+        const resp = await fetch(`http://72.60.244.46:3000/api/pets?cliente_id=${clientId}`);
         if (!resp.ok) throw new Error('Erro na requisição');
         const data = await resp.json();
         // aceitar tanto { pets: [...] } quanto array direto
@@ -1720,7 +1720,7 @@ setInterval(async () => {
     // Verificar apenas se a página está visível
     if (!document.hidden && document.hasFocus()) {
         try {
-            const response = await fetch(`http://localhost:3000/api/clientes/check-updates?since=${lastCheckTime}`, {
+            const response = await fetch(`http://72.60.244.46:3000/api/clientes/check-updates?since=${lastCheckTime}`, {
                 method: 'GET',
                 headers: {
                     'Cache-Control': 'no-cache'

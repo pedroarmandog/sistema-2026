@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 
 // Copiado de frontend/dashboard.js - funcionalidades do menu e header
 
@@ -2895,7 +2895,7 @@ function criarCardProduto(produto) {
       imagemSrc = produto.imagem;
     } else {
       // Se for nome de arquivo, carregar do servidor
-      imagemSrc = `http://localhost:3000/uploads/${produto.imagem}`;
+      imagemSrc = `http://72.60.244.46:3000/uploads/${produto.imagem}`;
     }
   }
 

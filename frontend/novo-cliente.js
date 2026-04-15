@@ -1,4 +1,4 @@
-class NovoClienteManager {
+﻿class NovoClienteManager {
   constructor() {
     console.log("🏗️ Constructor NovoClienteManager executado");
     this.clienteIdParaEdicao = null;
@@ -36,7 +36,7 @@ class NovoClienteManager {
   async carregarDadosParaEdicao(clienteId) {
     try {
       const response = await fetch(
-        `http://localhost:3000/api/clientes/${clienteId}`,
+        `http://72.60.244.46:3000/api/clientes/${clienteId}`,
       );
       const data = await response.json();
 
@@ -841,8 +841,8 @@ class NovoClienteManager {
 
       // Definir URL e método baseado no modo
       const url = this.clienteIdParaEdicao
-        ? `http://localhost:3000/api/clientes/${this.clienteIdParaEdicao}`
-        : "http://localhost:3000/api/clientes";
+        ? `http://72.60.244.46:3000/api/clientes/${this.clienteIdParaEdicao}`
+        : "http://72.60.244.46:3000/api/clientes";
 
       const method = this.clienteIdParaEdicao ? "PUT" : "POST";
 

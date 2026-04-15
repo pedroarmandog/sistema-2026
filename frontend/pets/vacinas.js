@@ -1,4 +1,4 @@
-// Script simples para a página de vacinas
+﻿// Script simples para a página de vacinas
 console.log('vacinas.js carregado');
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', function() {
         let resp;
         try { resp = await fetch(`/api/pets/${encodeURIComponent(petId)}/vacinas`); } catch(err) { resp = null; }
         if (!resp || !resp.ok) {
-          try { resp = await fetch(`${location.protocol}//localhost:3000/api/pets/${encodeURIComponent(petId)}/vacinas`); } catch(err) { resp = null; }
+          try { resp = await fetch(`http://72.60.244.46:3000/api/pets/${encodeURIComponent(petId)}/vacinas`); } catch(err) { resp = null; }
         }
         if (resp && resp.ok) {
           const json = await resp.json();

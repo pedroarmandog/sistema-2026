@@ -1,4 +1,4 @@
-// Copiado de frontend/dashboard.js - funcionalidades do menu e header
+﻿// Copiado de frontend/dashboard.js - funcionalidades do menu e header
 
 console.log("🚀 menu.js carregado (snippet do dashboard)");
 
@@ -885,8 +885,8 @@ async function fetchPetsAndClients() {
     // Primeiro tentamos a URL relativa; se falhar, tentamos os backends comuns.
     const tryUrls = (path) => [
       path,
-      "http://localhost:3000" + path,
-      "http://127.0.0.1:3000" + path,
+      "http://72.60.244.46:3000" + path,
+      "http://72.60.244.46:3000" + path,
     ];
 
     async function tryFetchAny(path) {

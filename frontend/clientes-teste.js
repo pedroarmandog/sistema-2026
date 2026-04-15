@@ -1,4 +1,4 @@
-// Script simplificado para teste
+﻿// Script simplificado para teste
 console.log('🚀 Script de teste carregado');
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -17,7 +17,7 @@ async function testLoadClients() {
     
     try {
         console.log('📡 Fazendo requisição...');
-        const response = await fetch('http://localhost:3000/api/clientes');
+        const response = await fetch('http://72.60.244.46:3000/api/clientes');
         
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);

@@ -1,4 +1,4 @@
-// Copiado de frontend/dashboard.js - funcionalidades do menu e header
+﻿// Copiado de frontend/dashboard.js - funcionalidades do menu e header
 
 console.log('🚀 menu.js carregado (snippet do dashboard)');
 
@@ -1043,7 +1043,7 @@ document.getElementById('btnVisualizarRecebiveis')?.addEventListener('click', as
         console.log('🚀 Payload preparado (API futura):', payload);
 
         // TODO: quando API estiver pronta, substituir por:
-        // const response = await fetch('http://localhost:3000/api/relatorios/recebiveis-produto/pdf', {
+        // const response = await fetch('http://72.60.244.46:3000/api/relatorios/recebiveis-produto/pdf', {
         //     method: 'POST',
         //     headers: { 'Content-Type': 'application/json' },
         //     body: JSON.stringify(payload)

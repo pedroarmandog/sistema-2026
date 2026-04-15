@@ -1,4 +1,4 @@
-// =============================================
+﻿// =============================================
 // NOVO CLIENTE MANAGER - PET CRIA
 // =============================================
 
@@ -32,7 +32,7 @@ class NovoClienteManager {
     // Carregar dados do cliente para edição
     async carregarDadosParaEdicao(clienteId) {
         try {
-            const response = await fetch(`http://localhost:3000/api/clientes/${clienteId}`);
+            const response = await fetch(`http://72.60.244.46:3000/api/clientes/${clienteId}`);
             const data = await response.json();
             
             if (data.success) {
@@ -258,8 +258,8 @@ class NovoClienteManager {
 
             // Definir URL e método baseado no modo
             const url = this.clienteIdParaEdicao 
-                ? `http://localhost:3000/api/clientes/${this.clienteIdParaEdicao}`
-                : 'http://localhost:3000/api/clientes';
+                ? `http://72.60.244.46:3000/api/clientes/${this.clienteIdParaEdicao}`
+                : 'http://72.60.244.46:3000/api/clientes';
             
             const method = this.clienteIdParaEdicao ? 'PUT' : 'POST';
 

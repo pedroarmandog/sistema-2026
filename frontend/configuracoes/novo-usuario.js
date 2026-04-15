@@ -1,4 +1,4 @@
-// Dashboard JavaScript
+﻿// Dashboard JavaScript
 /* ========================================
    DASHBOARD JS - PETHUB
    ======================================== */
@@ -118,10 +118,10 @@ async function carregarSetores() {
   console.log("Carregando setores (centros) da API...");
 
   try {
-    // API base: tente usar variável global se definida, senão caia para localhost:3000
+    // API base: tente usar variável global se definida, senão caia para 72.60.244.46:3000
     const API_BASE =
       (window.__API_BASE__ && window.__API_BASE__.toString()) ||
-      "http://localhost:3000";
+      "http://72.60.244.46:3000";
 
     // Buscar do endpoint correto (/api/centros)
     const response = await fetch(API_BASE + "/api/centros");
@@ -329,7 +329,7 @@ async function carregarDadosUsuario(id) {
   try {
     const API_BASE =
       (window.__API_BASE__ && window.__API_BASE__.toString()) ||
-      "http://localhost:3000";
+      "http://72.60.244.46:3000";
     const response = await fetch(API_BASE + "/api/usuarios/" + id);
 
     if (!response.ok) {
@@ -442,7 +442,7 @@ async function carregarEmpresas() {
   try {
     const API_BASE =
       (window.__API_BASE__ && window.__API_BASE__.toString()) ||
-      "http://localhost:3000";
+      "http://72.60.244.46:3000";
     const response = await fetch(API_BASE + "/api/empresas");
 
     console.log("Status da resposta (empresas):", response.status);
@@ -671,7 +671,7 @@ async function salvarUsuario() {
   try {
     const API_BASE =
       (window.__API_BASE__ && window.__API_BASE__.toString()) ||
-      "http://localhost:3000";
+      "http://72.60.244.46:3000";
 
     let url = API_BASE + "/api/usuarios";
     let method = "POST";
@@ -1636,14 +1636,12 @@ function configurarPersistenciaSubmenu(menuItemId, submenuId, submenuName) {
           const rect2 = submenu.getBoundingClientRect();
           const tx = Math.round(rect2.left + 10);
           const ty = Math.round(rect2.top + 40);
-          const elems2 = document
-            .elementsFromPoint(tx, ty)
-            .map((e) => ({
-              tag: e.tagName,
-              cls: e.className,
-              id: e.id,
-              z: window.getComputedStyle(e).zIndex || "auto",
-            }));
+          const elems2 = document.elementsFromPoint(tx, ty).map((e) => ({
+            tag: e.tagName,
+            cls: e.className,
+            id: e.id,
+            z: window.getComputedStyle(e).zIndex || "auto",
+          }));
           console.log("DEBUG pós-fallback - submenu bbox:", {
             rect: rect2,
             elemsAtPointAfterFallback: elems2,

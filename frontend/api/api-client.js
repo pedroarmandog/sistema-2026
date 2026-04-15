@@ -1,13 +1,10 @@
-/**
+﻿/**
  * API Client - Centralizador de chamadas HTTP para o backend
- * Backend: Node.js + MySQL (http://localhost:3000)
+ * Backend: Node.js + MySQL (http://72.60.244.46:3000)
  */
 
-// Detectar se está rodando via Live Server ou servidor normal
-const API_BASE_URL =
-  window.location.port === "3000"
-    ? "http://localhost:3000/api"
-    : "http://localhost:3000/api";
+// URL base da API (produção)
+const API_BASE_URL = "http://72.60.244.46:3000/api";
 
 console.log("[ApiClient] URL base configurada:", API_BASE_URL);
 

@@ -1,4 +1,4 @@
-// Copiado de frontend/dashboard.js - funcionalidades do menu e header
+﻿// Copiado de frontend/dashboard.js - funcionalidades do menu e header
 
 console.log("🚀 menu.js carregado (snippet do dashboard)");
 
@@ -1648,7 +1648,7 @@ async function carregarClientesDoSistema() {
     let response = null;
     try {
       response = await fetchWithTimeout(
-        "http://localhost:3000/api/clientes",
+        "http://72.60.244.46:3000/api/clientes",
         {},
         3000,
       );
@@ -1738,7 +1738,7 @@ async function carregarProfissionaisDoSistema() {
     let response;
     try {
       response = await fetchWithTimeout(
-        "http://localhost:3000/api/profissionais",
+        "http://72.60.244.46:3000/api/profissionais",
         {},
         4000,
       );
@@ -2091,7 +2091,7 @@ async function finalizarVendaComDados() {
 
   // Verificar se o caixa está aberto
   try {
-    const response = await fetch("http://localhost:3000/api/caixas/aberto");
+    const response = await fetch("http://72.60.244.46:3000/api/caixas/aberto");
     const caixa = await response.json();
 
     if (!caixa || caixa.aberto !== true) {

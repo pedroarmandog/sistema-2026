@@ -1,4 +1,4 @@
-// =============================================
+﻿// =============================================
 // CLIENT DETAILS JAVASCRIPT - PET CRIA
 // =============================================
 
@@ -63,10 +63,10 @@ async function carregarDetalhesCliente(clienteId) {
     // Fazer a requisição
     console.log(
       "� Fazendo requisição para:",
-      `http://localhost:3000/api/clientes/${clienteId}`,
+      `http://72.60.244.46:3000/api/clientes/${clienteId}`,
     );
     const response = await fetch(
-      `http://localhost:3000/api/clientes/${clienteId}`,
+      `http://72.60.244.46:3000/api/clientes/${clienteId}`,
     );
     console.log("📡 Response status:", response.status);
     console.log("📡 Response ok:", response.ok);
@@ -133,7 +133,7 @@ function preencherDetalhesCliente(cliente) {
     const avatar = document.getElementById("clienteAvatar");
     if (avatar) {
       if (cliente.imagem_perfil) {
-        avatar.innerHTML = `<img src="http://localhost:3000/uploads/${cliente.imagem_perfil}" alt="${cliente.nome}">`;
+        avatar.innerHTML = `<img src="http://72.60.244.46:3000/uploads/${cliente.imagem_perfil}" alt="${cliente.nome}">`;
       } else {
         const iniciais = cliente.nome
           .split(" ")
@@ -947,7 +947,7 @@ async function toggleStatusCliente() {
 
   try {
     const response = await fetch(
-      `http://localhost:3000/api/clientes/${clienteAtual.id}`,
+      `http://72.60.244.46:3000/api/clientes/${clienteAtual.id}`,
       {
         method: "PUT",
         headers: {
@@ -1209,9 +1209,9 @@ function renderPets(pets) {
         candidates.push(
           window.location.origin + `/frontend/pets/pet-details.html${query}`,
         );
-        // 4) Forçar backend (localhost:3000)
+        // 4) Forçar backend (72.60.244.46:3000)
         candidates.push(
-          `${location.protocol}//localhost:3000/pets/pet-details.html${query}`,
+          `http://72.60.244.46:3000/pets/pet-details.html${query}`,
         );
 
         let found = null;

@@ -1,4 +1,4 @@
-// Dashboard JavaScript
+﻿// Dashboard JavaScript
 /* ========================================
    DASHBOARD JS - PET CRIA
    ======================================== */
@@ -1674,7 +1674,7 @@ function escapeHtml(text) {
     try {
       const API_BASE =
         (window.__API_BASE__ && window.__API_BASE__.toString()) ||
-        "http://localhost:3000";
+        "http://72.60.244.46:3000";
 
       // Buscar dados do usuário
       const responseUsuario = await fetch(

@@ -1,4 +1,4 @@
-// Copiado de frontend/dashboard.js - funcionalidades do menu e header
+﻿// Copiado de frontend/dashboard.js - funcionalidades do menu e header
 
 console.log("🚀 menu.js carregado (snippet do dashboard)");
 
@@ -614,7 +614,7 @@ class CaixaManager {
       this.showNotification("Abrindo caixa...", "info");
 
       // Abrir caixa via API
-      const response = await fetch("http://localhost:3000/api/caixas/abrir", {
+      const response = await fetch("http://72.60.244.46:3000/api/caixas/abrir", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -684,7 +684,7 @@ class CaixaManager {
 
       // Fechar caixa via API
       const response = await fetch(
-        `http://localhost:3000/api/caixas/${this.caixaAtual.id}/fechar`,
+        `http://72.60.244.46:3000/api/caixas/${this.caixaAtual.id}/fechar`,
         {
           method: "PUT",
           headers: {
@@ -724,7 +724,7 @@ class CaixaManager {
     try {
       // Validar senha via API
       const response = await fetch(
-        "http://localhost:3000/api/usuarios/validar-senha",
+        "http://72.60.244.46:3000/api/usuarios/validar-senha",
         {
           method: "POST",
           headers: {
@@ -752,7 +752,7 @@ class CaixaManager {
         ? `?numero=${encodeURIComponent(this.terminalSelecionado)}`
         : "";
       const response = await fetch(
-        `http://localhost:3000/api/caixas/aberto${query}`,
+        `http://72.60.244.46:3000/api/caixas/aberto${query}`,
       );
       const data = await response.json();
 

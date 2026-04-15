@@ -1,4 +1,4 @@
-// Copiado de frontend/dashboard.js - funcionalidades do menu e header
+﻿// Copiado de frontend/dashboard.js - funcionalidades do menu e header
 
 console.log("🚀 menu.js carregado (snippet do dashboard)");
 
@@ -1862,7 +1862,7 @@ async function carregarAgendamento() {
       alert(
         "Erro ao carregar dados do agendamento: " +
           (fetchErr.message || fetchErr) +
-          "\nVerifique se o servidor está rodando e se o endereço http://localhost:3000 está acessível.",
+          "\nVerifique se o servidor está rodando e se o endereço http://72.60.244.46:3000 está acessível.",
       );
       return;
     }

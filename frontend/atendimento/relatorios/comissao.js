@@ -1,4 +1,4 @@
-// Copiado de frontend/dashboard.js - funcionalidades do menu e header
+﻿// Copiado de frontend/dashboard.js - funcionalidades do menu e header
 
 console.log("🚀 menu.js carregado (snippet do dashboard)");
 
@@ -637,7 +637,7 @@ async function visualizarRelatorio() {
   try {
     // 1. Buscar dados
     const respDados = await fetch(
-      "http://localhost:3000/api/relatorios/comissao",
+      "http://72.60.244.46:3000/api/relatorios/comissao",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -654,7 +654,7 @@ async function visualizarRelatorio() {
 
     // 2. Gerar PDF
     const respPdf = await fetch(
-      "http://localhost:3000/api/relatorios/comissao/pdf",
+      "http://72.60.244.46:3000/api/relatorios/comissao/pdf",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -996,7 +996,7 @@ async function gerarPdfComissao() {
 
   try {
     const resp = await fetch(
-      "http://localhost:3000/api/relatorios/comissao/pdf",
+      "http://72.60.244.46:3000/api/relatorios/comissao/pdf",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
