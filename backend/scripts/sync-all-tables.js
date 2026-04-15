@@ -4,7 +4,9 @@
  *
  * Necessário quando o banco "petshop" está vazio ou faltam tabelas.
  */
-require("dotenv").config({ path: require("path").resolve(__dirname, "../../.env") });
+require("dotenv").config({
+  path: require("path").resolve(__dirname, "../../.env"),
+});
 
 const path = require("path");
 
@@ -24,15 +26,27 @@ const ownInstanceModels = [
   { name: "DescontoRelacao", model: require("../models/DescontoRelacao") },
   { name: "HistoricoEstoque", model: require("../models/HistoricoEstoque") },
   { name: "ImpressoraConfig", model: require("../models/ImpressoraConfig") },
-  { name: "ModeloEtiquetaConfig", model: require("../models/ModeloEtiquetaConfig") },
-  { name: "MovimentoCaixa", model: require("../models/MovimentoCaixa").MovimentoCaixa },
+  {
+    name: "ModeloEtiquetaConfig",
+    model: require("../models/ModeloEtiquetaConfig"),
+  },
+  {
+    name: "MovimentoCaixa",
+    model: require("../models/MovimentoCaixa").MovimentoCaixa,
+  },
   { name: "Orcamento", model: require("../models/Orcamento").Orcamento },
-  { name: "PagamentoCaixa", model: require("../models/PagamentoCaixa").PagamentoCaixa },
+  {
+    name: "PagamentoCaixa",
+    model: require("../models/PagamentoCaixa").PagamentoCaixa,
+  },
   { name: "Pelagem", model: require("../models/Pelagem") },
   { name: "PerfilCliente", model: require("../models/PerfilCliente") },
   { name: "PerfilProduto", model: require("../models/PerfilProduto") },
   { name: "Produto", model: require("../models/Produto") },
-  { name: "Profissional", model: require("../models/Profissional").Profissional },
+  {
+    name: "Profissional",
+    model: require("../models/Profissional").Profissional,
+  },
   { name: "Porte", model: require("../models/Porte") },
   { name: "Raca", model: require("../models/Raca") },
   { name: "Venda", model: require("../models/Venda").Venda },
@@ -45,7 +59,9 @@ const ownInstanceModels = [
     console.log("✅ Conexão com o banco OK\n");
 
     // 4) Sincronizar a instância principal (cobre Cliente + factory models + models que importam do Cliente)
-    console.log("--- Sincronizando instância principal (Cliente + factories) ---");
+    console.log(
+      "--- Sincronizando instância principal (Cliente + factories) ---",
+    );
     try {
       await mainSequelize.sync({ alter: true });
       console.log("✅ Instância principal sincronizada\n");
