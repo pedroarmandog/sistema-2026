@@ -432,7 +432,13 @@ const DashboardApp = {
   },
 
   async apiFetch(endpoint) {
-    const res = await fetch(`${this.API_BASE}${endpoint}`);
+    const res = await fetch(`${this.API_BASE}${endpoint}`, {
+      credentials: "include",
+    });
+    if (res.status === 401) {
+      window.location.href = "/login/login.html";
+      throw new Error(`Não autenticado — redirecionando ao login`);
+    }
     if (!res.ok) throw new Error(`API ${endpoint}: ${res.status}`);
     return res.json();
   },

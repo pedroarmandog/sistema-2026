@@ -17,7 +17,7 @@
   if (document.querySelector("script[data-inject-sidebar-proxy]")) return;
   try {
     var s = document.createElement("script");
-    s.src = "/frontend/sidebar-component/inject-sidebar.js";
+    s.src = "/sidebar-component/inject-sidebar.js";
     s.defer = true;
     s.dataset.injectSidebarProxy = "1";
     document.head.appendChild(s);
