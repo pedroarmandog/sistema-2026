@@ -1556,7 +1556,7 @@ const { Cliente, Pet, Agendamento } = require("./models");
 const { sequelize } = require("./models/Cliente");
 if (!SKIP_DB_SYNC) {
   sequelize
-    .sync({ alter: false })
+    .sync({ alter: true })
     .then(async () => {
       console.log("Banco de dados conectado com sucesso ✅");
 
