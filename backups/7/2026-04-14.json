@@ -1,0 +1,67 @@
+{
+  "meta": {
+    "empresa_painel_id": 7,
+    "empresa_sistema_id": 8,
+    "data_referencia": "2026-04-14",
+    "criado_em": "2026-04-15T03:00:01.205Z",
+    "nome_empresa": "Pet Cães e Cia"
+  },
+  "empresa_painel": {
+    "id": 7,
+    "razao_social": "Pet Cães e Cia LTDA",
+    "nome_fantasia": "Pet Cães e Cia",
+    "cnpj": "54543254354656",
+    "cep": "",
+    "endereco": "765t657",
+    "email": null,
+    "telefone": "",
+    "foto": null,
+    "logo": null,
+    "data_adesao": "2026-04-05",
+    "status": "ATIVO",
+    "valor_mensalidade": "99.90",
+    "data_vencimento": "2026-05-05",
+    "intervalo_dias": 30,
+    "proxima_cobranca": "2026-05-05",
+    "limite_acessos": 1,
+    "createdAt": "2026-04-05T20:28:25.000Z",
+    "updatedAt": "2026-04-14T13:41:03.000Z"
+  },
+  "empresa_sistema": {
+    "id": 8,
+    "nome": "Pet Cães e Cia",
+    "razaoSocial": "Pet Cães e Cia LTDA",
+    "cnpj": "54543254354656",
+    "telefone": "",
+    "email": null,
+    "endereco": {
+      "cep": "",
+      "rua": "765t657"
+    },
+    "logo": null,
+    "ativa": true,
+    "createdAt": "2026-04-05T20:28:25.000Z",
+    "updatedAt": "2026-04-05T20:28:25.000Z"
+  },
+  "usuarios": [
+    {
+      "id": 8,
+      "nome": "Bianca Rocha",
+      "usuario": "bianca@petcaes",
+      "senha": "$2b$10$KW8cfboKiFwuGnEPKWpR5OOyITCuDK7uUhNKTvo1M72J.NQ.ueQiC",
+      "grupoUsuario": "Usuario",
+      "profissionalId": null,
+      "ativo": 1,
+      "setorPadraoId": null,
+      "setorPadraoNome": null,
+      "acessoValor": null,
+      "permissoes": [],
+      "empresas": [
+        8
+      ],
+      "createdAt": "2026-04-05T20:28:25.000Z",
+      "updatedAt": "2026-04-05T20:28:25.000Z"
+    }
+  ],
+  "tabelas": {}
+}

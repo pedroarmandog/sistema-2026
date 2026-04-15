@@ -4091,6 +4091,7 @@ document.addEventListener("DOMContentLoaded", function () {
       if (dados.ncm) mapped.ncm = dados.ncm;
       if (dados.codigo) mapped.codigo = dados.codigo;
       if (dados.preco) mapped.preco = dados.preco;
+      if (dados.validade) mapped.validade = dados.validade;
       // chamar preencherFormulario para aplicar valores conhecidos
       preencherFormulario(mapped);
       // abrir painel lateral de edição de NCM/Descrição semelhante ao layout solicitado

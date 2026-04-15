@@ -1,0 +1,33 @@
+{
+  "meta": {
+    "empresa_painel_id": 4,
+    "empresa_sistema_id": null,
+    "data_referencia": "2026-04-14",
+    "criado_em": "2026-04-15T03:00:01.064Z",
+    "nome_empresa": "MERCADINHO FALCAO LTDA"
+  },
+  "empresa_painel": {
+    "id": 4,
+    "razao_social": "MERCADINHO FALCAO LTDA",
+    "nome_fantasia": "MERCADINHO FALCAO LTDA",
+    "cnpj": "91774293437462",
+    "cep": null,
+    "endereco": null,
+    "email": null,
+    "telefone": null,
+    "foto": null,
+    "logo": null,
+    "data_adesao": "2026-03-23",
+    "status": "ATIVO",
+    "valor_mensalidade": "59.90",
+    "data_vencimento": "2026-05-04",
+    "intervalo_dias": 30,
+    "proxima_cobranca": null,
+    "limite_acessos": 1,
+    "createdAt": "2026-03-23T19:17:17.000Z",
+    "updatedAt": "2026-04-14T13:41:00.000Z"
+  },
+  "empresa_sistema": null,
+  "usuarios": [],
+  "tabelas": {}
+}

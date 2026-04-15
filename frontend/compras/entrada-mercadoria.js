@@ -754,6 +754,25 @@ async function criarRascunhoNoServidor(parsed) {
     });
     // Garantir que itens sejam enviados no campo correto do modelo DB
     payload.itens = payload.itens || payload.items || [];
+    // Normalizar itens: garantir que totalBruto/totalAquisicao/fator/entEstoque estejam presentes
+    if (Array.isArray(payload.itens)) {
+      payload.itens = payload.itens.map(function (it) {
+        const quantidade = Number(it.quantidade || it.qCom || 0) || 0;
+        const unitario = Number(it.unitario || it.vUnCom || it.preco || 0) || 0;
+        const total =
+          Number(it.totalBruto || it.total || it.vProd || 0) ||
+          quantidade * unitario ||
+          0;
+        return Object.assign({}, it, {
+          quantidade: quantidade,
+          unitario: unitario,
+          fator: Number(it.fator) || 1,
+          entEstoque: Number(it.entEstoque) || quantidade,
+          totalBruto: total,
+          totalAquisicao: Number(it.totalAquisicao) || total,
+        });
+      });
+    }
     // Normalizar fornecedor: evitar enviar objeto (que vira "[object Object]" no DB)
     try {
       if (payload.fornecedor && typeof payload.fornecedor === "object") {
@@ -838,6 +857,22 @@ async function carregarRascunhos() {
 
     // Adicionar entradas à lista
     entradas.forEach((entrada) => {
+      // Calcular valor a partir dos itens se valorTotal/totalProdutos estiverem zerados
+      let valorCalculado =
+        Number(entrada.valorTotal) || Number(entrada.totalProdutos) || 0;
+      if (
+        !valorCalculado &&
+        Array.isArray(entrada.itens) &&
+        entrada.itens.length > 0
+      ) {
+        valorCalculado = entrada.itens.reduce((sum, it) => {
+          return (
+            sum +
+            (Number(it.totalBruto) || Number(it.total) || Number(it.vProd) || 0)
+          );
+        }, 0);
+      }
+
       const entradaFormatada = {
         id: entrada.id,
         fornecedor:
@@ -846,7 +881,7 @@ async function carregarRascunhos() {
           "-",
         numero: entrada.numero || "-",
         emissao: entrada.dataEmissao ? formatarData(entrada.dataEmissao) : "-",
-        valor: entrada.valorTotal || entrada.totalProdutos || 0,
+        valor: valorCalculado,
         situacao: entrada.situacao || "pendente",
         relProdutos: entrada.itens && entrada.itens.length > 0 ? "✓" : "-",
         _data: entrada,
@@ -1365,6 +1400,39 @@ function configurarEventListenersEntrada() {
           lote = getText(med, "nLote") || "";
         }
 
+        // 1b) tags <rastro> (rastreabilidade — padrão NF-e para lote/validade em rações, alimentos, etc.)
+        if (!validade) {
+          const rastros = prod.getElementsByTagName
+            ? prod.getElementsByTagName("rastro")
+            : [];
+          for (let r = 0; r < rastros.length; r++) {
+            const rastro = rastros[r];
+            const dVal =
+              getText(rastro, "dVal") || getText(rastro, "dVenc") || "";
+            if (dVal) {
+              validade = dVal;
+              lote = lote || getText(rastro, "nLote") || "";
+              break;
+            }
+          }
+          // fallback: procurar rastro diretamente em <det>
+          if (!validade) {
+            const rastrosDet = det.getElementsByTagName
+              ? det.getElementsByTagName("rastro")
+              : [];
+            for (let r = 0; r < rastrosDet.length; r++) {
+              const rastro = rastrosDet[r];
+              const dVal =
+                getText(rastro, "dVal") || getText(rastro, "dVenc") || "";
+              if (dVal) {
+                validade = dVal;
+                lote = lote || getText(rastro, "nLote") || "";
+                break;
+              }
+            }
+          }
+        }
+
         // 2) procurar tags diretamente em <det> ou em <prod>
         validade =
           validade ||
@@ -1376,6 +1444,7 @@ function configurarEventListenersEntrada() {
         lote = lote || getText(det, "nLote") || getText(prod, "nLote") || "";
 
         // 3) procurar em elementos de informação adicional (<infAdProd>, <obsFisco>, texto livre)
+        // Extrair APENAS datas do texto, não usar o texto inteiro como validade
         if (!validade) {
           const cand =
             getText(det, "infAdProd") ||
@@ -1383,18 +1452,34 @@ function configurarEventListenersEntrada() {
             getText(det, "obsFisco") ||
             getText(prod, "infAdProd") ||
             "";
-          if (cand) validade = cand;
+          if (cand) {
+            // Tentar extrair data de validade do texto livre
+            // Procurar padrões como "VAL: DD/MM/YYYY", "VALIDADE: YYYY-MM-DD", "DT.VAL", etc.
+            const valPatterns = [
+              /(?:val(?:idade)?|dt\.?\s*val|venc(?:imento)?)[:\s]*(\d{2}[\/\-]\d{2}[\/\-]\d{4})/i,
+              /(?:val(?:idade)?|dt\.?\s*val|venc(?:imento)?)[:\s]*(\d{4}[\/\-]\d{2}[\/\-]\d{2})/i,
+              /(?:val(?:idade)?|dt\.?\s*val|venc(?:imento)?)[:\s]*(\d{2}[\/\-]\d{4})/i,
+              /(\d{2}[\/\-]\d{2}[\/\-]\d{4})/,
+              /(\d{4}-\d{2}-\d{2})/,
+            ];
+            for (const p of valPatterns) {
+              const m = cand.match(p);
+              if (m) {
+                validade = m[1] || m[0];
+                break;
+              }
+            }
+          }
         }
 
-        // 4) se ainda não achou, tentar extrair pela procura de padrões de data no conteúdo do <det>
+        // 4) se ainda não achou, tentar extrair pela procura de padrões de data formatada no conteúdo do <det>
+        // NÃO usar /\d{8}/ pois pega NCM, códigos de produto etc.
         if (!validade) {
           const txt = det.textContent || "";
-          // procurar padrões: YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY, YYYYMMDD, DDMMYYYY
           const patterns = [
             /\d{4}-\d{2}-\d{2}/,
             /\d{2}\/\d{2}\/\d{4}/,
             /\d{2}-\d{2}-\d{4}/,
-            /\d{8}/,
           ];
           for (const p of patterns) {
             const m = txt.match(p);
@@ -1774,6 +1859,8 @@ function configurarEventListenersEntrada() {
               ncm: it.ncm || it.NCM || "",
               codigo: it.codigo || it.cProd || "",
               preco: Number(it.unitario || it.vUnCom || it.preco || 0) || 0,
+              validade:
+                it.validade || it.dVenc || it.dVal || it.dataValidade || "",
               // manter referência original para eventual retorno
               _orig_parsed_index: idx,
             };
@@ -2132,37 +2219,50 @@ function configurarEventListenersEntrada() {
   })();
 
   // Converte várias formas de data (YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY, YYYYMMDD, DDMMYYYY, timestamps) para YYYY-MM-DD
+  // Valida se uma data ISO YYYY-MM-DD é plausível (mês 1-12, dia 1-31, ano 2000-2099)
+  function isPlausibleDate(iso) {
+    if (!iso || iso.length < 10) return false;
+    const y = parseInt(iso.substring(0, 4), 10);
+    const m = parseInt(iso.substring(5, 7), 10);
+    const d = parseInt(iso.substring(8, 10), 10);
+    return y >= 2000 && y <= 2099 && m >= 1 && m <= 12 && d >= 1 && d <= 31;
+  }
+
   function normalizeDateToISO(s) {
     if (!s) return "";
     s = String(s).trim();
-    // já no formato ISO
-    const isoMatch = s.match(/^\d{4}-\d{2}-\d{2}/);
-    if (isoMatch) return isoMatch[0];
-    // formato DD/MM/YYYY ou DD-MM-YYYY
+    let result = "";
+    // já no formato ISO (YYYY-MM-DD) — pode estar dentro de texto maior
+    const isoMatch = s.match(/(\d{4}-\d{2}-\d{2})/);
+    if (isoMatch) {
+      result = isoMatch[1];
+      if (isPlausibleDate(result)) return result;
+    }
+    // formato DD/MM/YYYY ou DD-MM-YYYY — pode estar dentro de texto maior
     const dmy = s.match(/(\d{2})[\/\-](\d{2})[\/\-](\d{4})/);
     if (dmy) {
       const [_, d, m, y] = dmy;
-      return `${y}-${m}-${d}`;
+      result = `${y}-${m}-${d}`;
+      if (isPlausibleDate(result)) return result;
     }
-    // formatos compactos: YYYYMMDD ou DDMMYYYY
+    // formato parcial MM/YYYY (comum em rações: "VAL 07/2026") — assume dia 01
+    const mmyyyy = s.match(/(\d{2})[\/\-](\d{4})/);
+    if (mmyyyy) {
+      const [_, m, y] = mmyyyy;
+      result = `${y}-${m}-01`;
+      if (isPlausibleDate(result)) return result;
+    }
+    // formatos compactos: YYYYMMDD ou DDMMYYYY (string inteira, exatamente 8 dígitos)
     const compact = s.match(/^(\d{8})$/);
     if (compact) {
       const v = compact[1];
-      // decidir se é YYYYMMDD ou DDMMYYYY: se os primeiros 4 > 31 então é YYYYMMDD
       const first4 = parseInt(v.substring(0, 4), 10);
       if (first4 > 31) {
-        // YYYYMMDD
-        const y = v.substring(0, 4);
-        const m = v.substring(4, 6);
-        const d = v.substring(6, 8);
-        return `${y}-${m}-${d}`;
+        result = `${v.substring(0, 4)}-${v.substring(4, 6)}-${v.substring(6, 8)}`;
       } else {
-        // DDMMYYYY
-        const d = v.substring(0, 2);
-        const m = v.substring(2, 4);
-        const y = v.substring(4, 8);
-        return `${y}-${m}-${d}`;
+        result = `${v.substring(4, 8)}-${v.substring(2, 4)}-${v.substring(0, 2)}`;
       }
+      if (isPlausibleDate(result)) return result;
     }
     // tentar interpretar como Date
     const parsed = Date.parse(s);
@@ -2171,7 +2271,8 @@ function configurarEventListenersEntrada() {
       const yyyy = dt.getFullYear();
       const mm = String(dt.getMonth() + 1).padStart(2, "0");
       const dd = String(dt.getDate()).padStart(2, "0");
-      return `${yyyy}-${mm}-${dd}`;
+      result = `${yyyy}-${mm}-${dd}`;
+      if (isPlausibleDate(result)) return result;
     }
     return "";
   }
@@ -2664,33 +2765,38 @@ function configurarEventListenersEntrada() {
       if (!confirmed) return;
 
       // Excluir cada entrada do banco via DELETE
-      const promises = selecionados.map(async (id) => {
-        try {
-          const res = await fetch("/api/entrada/manual/" + id, {
-            method: "DELETE",
-          });
-          if (!res.ok) throw new Error("Status " + res.status);
-          // remover do cache local
-          entradasData = entradasData.filter(
-            (e) => String(e.id) !== String(id),
-          );
-          return { id, ok: true };
-        } catch (err) {
-          console.error("Erro ao excluir entrada", id, err);
-          return { id, ok: false, err: String(err) };
-        }
+      const apiResults = await Promise.all(
+        selecionados.map(async (id) => {
+          try {
+            const res = await fetch("/api/entrada/manual/" + id, {
+              method: "DELETE",
+            });
+            if (!res.ok) throw new Error("Status " + res.status);
+            return { id, ok: true };
+          } catch (err) {
+            console.error("Erro ao excluir entrada", id, err);
+            return { id, ok: false, err: String(err) };
+          }
+        }),
+      );
+
+      // SEMPRE remover do cache local — o usuário já confirmou a exclusão
+      selecionados.forEach((id) => {
+        entradasData = entradasData.filter((e) => String(e.id) !== String(id));
       });
 
-      const results = await Promise.all(promises);
-      const failed = results.filter((r) => !r.ok);
+      const failed = apiResults.filter((r) => !r.ok);
       if (failed.length) {
+        console.warn("Entradas que falharam no servidor:", failed);
         try {
           showEntradaToast(
-            `${failed.length} entrada(s) não puderam ser excluídas. Veja console para detalhes.`,
+            `Removido da lista. ${failed.length} entrada(s) podem não ter sido excluídas do banco — verifique se o servidor está ativo.`,
             5200,
           );
         } catch (e) {
-          alert(`${failed.length} entrada(s) não puderam ser excluídas.`);
+          alert(
+            `Removido da lista. ${failed.length} entrada(s) podem não ter sido excluídas do banco.`,
+          );
         }
       } else {
         try {

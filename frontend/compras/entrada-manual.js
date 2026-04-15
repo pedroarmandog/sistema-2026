@@ -1537,15 +1537,29 @@ function checkAndPopulateDraft() {
       entrada.itens.length > 0
     ) {
       let _num = 1;
-      itensEntrada = entrada.itens.map((it) => ({
-        ...it,
-        id: it.id || Date.now() + _num,
-        numero: it.numero || _num,
-        validade:
-          normalizeDateToISO(
-            it.validade || it.dataValidade || it.dVenc || "",
-          ) || "",
-      }));
+      itensEntrada = entrada.itens.map((it) => {
+        const quantidade = Number(it.quantidade || it.qCom || 0) || 0;
+        const unitario = Number(it.unitario || it.vUnCom || it.preco || 0) || 0;
+        const total =
+          Number(it.totalBruto || it.total || it.vProd || 0) ||
+          quantidade * unitario ||
+          0;
+        return {
+          ...it,
+          id: it.id || Date.now() + _num,
+          numero: it.numero || _num,
+          quantidade: quantidade,
+          unitario: unitario,
+          fator: Number(it.fator) || 1,
+          entEstoque: Number(it.entEstoque) || quantidade,
+          totalBruto: total,
+          totalAquisicao: Number(it.totalAquisicao) || total,
+          validade:
+            normalizeDateToISO(
+              it.validade || it.dataValidade || it.dVenc || "",
+            ) || "",
+        };
+      });
       let _c = 1;
       itensEntrada.forEach((i) => {
         i.numero = _c++;
@@ -1610,22 +1624,50 @@ function applyDraftData(entrada) {
         entrada.categoriaFinanceira;
     }
 
-    if (
-      entrada.itens &&
-      Array.isArray(entrada.itens) &&
-      entrada.itens.length > 0
-    ) {
+    // Normalizar itens: suportar tanto 'itens' quanto 'items'
+    const rawItens =
+      entrada.itens && Array.isArray(entrada.itens) && entrada.itens.length > 0
+        ? entrada.itens
+        : entrada.items &&
+            Array.isArray(entrada.items) &&
+            entrada.items.length > 0
+          ? entrada.items
+          : typeof entrada.itens === "string"
+            ? (function () {
+                try {
+                  const p = JSON.parse(entrada.itens);
+                  return Array.isArray(p) ? p : [];
+                } catch (e) {
+                  return [];
+                }
+              })()
+            : [];
+    if (rawItens.length > 0) {
       // Normalizar validade e garantir id/numero em cada item
       let _num = 1;
-      itensEntrada = entrada.itens.map((it) => ({
-        ...it,
-        id: it.id || Date.now() + _num,
-        numero: it.numero || _num,
-        validade:
-          normalizeDateToISO(
-            it.validade || it.dataValidade || it.dVenc || "",
-          ) || "",
-      }));
+      itensEntrada = rawItens.map((it) => {
+        const quantidade = Number(it.quantidade || it.qCom || 0) || 0;
+        const unitario = Number(it.unitario || it.vUnCom || it.preco || 0) || 0;
+        const total =
+          Number(it.totalBruto || it.total || it.vProd || 0) ||
+          quantidade * unitario ||
+          0;
+        return {
+          ...it,
+          id: it.id || Date.now() + _num,
+          numero: it.numero || _num,
+          quantidade: quantidade,
+          unitario: unitario,
+          fator: Number(it.fator) || 1,
+          entEstoque: Number(it.entEstoque) || quantidade,
+          totalBruto: total,
+          totalAquisicao: Number(it.totalAquisicao) || total,
+          validade:
+            normalizeDateToISO(
+              it.validade || it.dataValidade || it.dVenc || "",
+            ) || "",
+        };
+      });
       // Recalcular numeração sequencial e itemCounter
       let _c = 1;
       itensEntrada.forEach((i) => {
@@ -1637,15 +1679,8 @@ function applyDraftData(entrada) {
       calcularTotais();
     }
 
-    // Totais se fornecidos
-    if (entrada.totalProdutos && document.getElementById("totalProdutos"))
-      document.getElementById("totalProdutos").value = formatarMoeda(
-        Number(entrada.totalProdutos || 0),
-      );
-    if (entrada.valorTotal && document.getElementById("valorTotal"))
-      document.getElementById("valorTotal").value = formatarMoeda(
-        Number(entrada.valorTotal || 0),
-      );
+    // Recalcular totais a partir dos itens (não usar valores salvos no DB que podem estar zerados)
+    // calcularTotais() já foi chamado acima após renderizarItens()
 
     showSimpleToast("Entrada carregada do servidor");
   } catch (e) {
@@ -1727,17 +1762,38 @@ function populateFromImported(obj) {
 }
 
 // Converte várias formas de data (YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY, timestamps) para YYYY-MM-DD
+// Valida se uma data ISO YYYY-MM-DD é plausível (mês 1-12, dia 1-31, ano 2000-2099)
+function isPlausibleDate(iso) {
+  if (!iso || iso.length < 10) return false;
+  const y = parseInt(iso.substring(0, 4), 10);
+  const m = parseInt(iso.substring(5, 7), 10);
+  const d = parseInt(iso.substring(8, 10), 10);
+  return y >= 2000 && y <= 2099 && m >= 1 && m <= 12 && d >= 1 && d <= 31;
+}
+
 function normalizeDateToISO(s) {
   if (!s) return "";
   s = String(s).trim();
-  // já no formato ISO
-  const isoMatch = s.match(/^\d{4}-\d{2}-\d{2}/);
-  if (isoMatch) return isoMatch[0];
-  // formato DD/MM/YYYY ou DD-MM-YYYY
+  let result = "";
+  // já no formato ISO (YYYY-MM-DD) — pode estar dentro de texto maior
+  const isoMatch = s.match(/(\d{4}-\d{2}-\d{2})/);
+  if (isoMatch) {
+    result = isoMatch[1];
+    if (isPlausibleDate(result)) return result;
+  }
+  // formato DD/MM/YYYY ou DD-MM-YYYY — pode estar dentro de texto maior
   const dmy = s.match(/(\d{2})[\/\-](\d{2})[\/\-](\d{4})/);
   if (dmy) {
     const [_, d, m, y] = dmy;
-    return `${y}-${m}-${d}`;
+    result = `${y}-${m}-${d}`;
+    if (isPlausibleDate(result)) return result;
+  }
+  // formato parcial MM/YYYY (comum em rações: "VAL 07/2026") — assume dia 01
+  const mmyyyy = s.match(/(\d{2})[\/\-](\d{4})/);
+  if (mmyyyy) {
+    const [_, m, y] = mmyyyy;
+    result = `${y}-${m}-01`;
+    if (isPlausibleDate(result)) return result;
   }
   // tentar interpretar como timestamp ou Date parse
   const parsed = Date.parse(s);
@@ -1746,7 +1802,8 @@ function normalizeDateToISO(s) {
     const yyyy = dt.getFullYear();
     const mm = String(dt.getMonth() + 1).padStart(2, "0");
     const dd = String(dt.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
+    result = `${yyyy}-${mm}-${dd}`;
+    if (isPlausibleDate(result)) return result;
   }
   return "";
 }
@@ -2144,7 +2201,8 @@ function configurarDropdownCategoriaFinanceira() {
 }
 
 function formatarMoeda(valor) {
-  return valor.toLocaleString("pt-BR", {
+  const num = Number(valor) || 0;
+  return num.toLocaleString("pt-BR", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
@@ -2201,15 +2259,26 @@ async function finalizarEntrada() {
       despesaExtra:
         parseFloat(document.getElementById("despesaExtra")?.value) || 0,
       totalProdutos: itensEntrada.reduce(
-        (sum, item) => sum + item.totalBruto,
+        (sum, item) => sum + (Number(item.totalBruto) || 0),
         0,
       ),
-      valorTotal:
-        parseFloat(
-          (document.getElementById("valorTotal")?.value || "0")
-            .replace(".", "")
-            .replace(",", "."),
-        ) || 0,
+      valorTotal: (function () {
+        // Calcular valor total a partir dos itens + taxas (evitar salvar 0 no banco)
+        const tp = itensEntrada.reduce(
+          (s, i) => s + (Number(i.totalBruto) || 0),
+          0,
+        );
+        const desc =
+          parseFloat(document.getElementById("desconto")?.value) || 0;
+        const seg = parseFloat(document.getElementById("seguro")?.value) || 0;
+        const desp = parseFloat(document.getElementById("despesa")?.value) || 0;
+        const icms = parseFloat(document.getElementById("icmsST")?.value) || 0;
+        const fr = parseFloat(document.getElementById("frete")?.value) || 0;
+        const ip = parseFloat(document.getElementById("ipi")?.value) || 0;
+        const de =
+          parseFloat(document.getElementById("despesaExtra")?.value) || 0;
+        return tp - desc + seg + desp + icms + fr + ip + de;
+      })(),
       centroResultado:
         document.getElementById("centroResultado")?.value.trim() || "",
       categoriaFinanceira:
@@ -2424,9 +2493,39 @@ async function finalizarEntrada() {
 
 async function excluirNota() {
   if (await confirmar("Tem certeza que deseja excluir esta nota?")) {
+    // Excluir do banco de dados via API
+    const entradaId =
+      window.currentEntradaId ||
+      new URLSearchParams(window.location.search).get("id");
+    if (entradaId) {
+      try {
+        const res = await fetch(
+          "/api/entrada/manual/" + encodeURIComponent(entradaId),
+          {
+            method: "DELETE",
+          },
+        );
+        if (!res.ok) {
+          console.warn("Excluir nota falhou:", res.status, res.statusText);
+        } else {
+          console.log("✅ Nota", entradaId, "excluída do banco");
+        }
+      } catch (e) {
+        console.error("Erro ao excluir nota do banco:", e);
+      }
+    }
+    // Limpar sessionStorage
+    try {
+      sessionStorage.removeItem("entradaImported");
+      sessionStorage.removeItem("entradaImported_auto");
+      sessionStorage.removeItem("editingEntrada");
+      sessionStorage.removeItem("mappingSelections");
+    } catch (e) {}
     // Limpar formulário
     itensEntrada = [];
+    window.itensEntrada = itensEntrada;
     itemCounter = 1;
+    window.currentEntradaId = null;
     renderizarItens();
     calcularTotais();
     if (document.getElementById("fornecedor"))
@@ -2435,9 +2534,21 @@ async function excluirNota() {
       document.getElementById("numero").value = "";
     if (document.getElementById("serie"))
       document.getElementById("serie").value = "";
+    if (document.getElementById("dataEmissao"))
+      document.getElementById("dataEmissao").value = "";
+    if (document.getElementById("dataEntrada"))
+      document.getElementById("dataEntrada").value = "";
     if (document.getElementById("chaveAcesso"))
       document.getElementById("chaveAcesso").value = "";
-    alert("Nota excluída.");
+    if (document.getElementById("centroResultado"))
+      document.getElementById("centroResultado").value = "";
+    if (document.getElementById("categoriaFinanceira"))
+      document.getElementById("categoriaFinanceira").value = "";
+    showSimpleToast("Nota excluída com sucesso");
+    // Redirecionar para a listagem
+    setTimeout(() => {
+      window.location.href = "./entrada-mercadoria.html";
+    }, 800);
   }
 }
 
