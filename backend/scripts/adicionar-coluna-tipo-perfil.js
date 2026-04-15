@@ -2,8 +2,8 @@
 
 async function adicionarColunaTipo() {
     const conn = await mysql.createConnection({
-        host: '72.60.244.46',
-        user: 'root',
+        host: 'localhost',
+        user: 'pethub',
         password: 'PetHub@123',
         database: 'petshop'
     });

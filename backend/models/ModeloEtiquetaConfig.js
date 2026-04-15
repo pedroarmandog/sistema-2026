@@ -2,7 +2,7 @@
 
 // Mesma conexão simples usada em ImpressoraConfig
 const sequelize = new Sequelize('petshop', 'pethub', 'PetHub@123', {
-    host: '72.60.244.46',
+    host: 'localhost',
     dialect: 'mysql'
 });
 

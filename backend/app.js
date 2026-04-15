@@ -1,3 +1,4 @@
+require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") });
 const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
@@ -40,6 +41,7 @@ app.use(bodyParser.json({ limit: "10mb" })); // aumentar limite para aceitar log
 app.use(bodyParser.urlencoded({ limit: "10mb", extended: true }));
 app.use(cookieParser());
 app.use("/uploads", express.static(path.join(__dirname, "../uploads"))); // imagens públicas
+app.use("/logos", express.static(path.join(__dirname, "../logos"))); // logos SVG do sistema
 
 // Rota para favicon.ico (browsers buscam este path automaticamente)
 app.get("/favicon.ico", (req, res) => {
