@@ -1,3 +1,4 @@
+/* @ts-nocheck */
 // @ts-nocheck
 require("dotenv").config({
   path: require("path").resolve(__dirname, "../.env"),

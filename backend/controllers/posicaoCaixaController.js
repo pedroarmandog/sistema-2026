@@ -1,7 +1,9 @@
 // Controller: Posição de Caixa
 // Gerencia registro de pagamentos e consultas do caixa do dia
 const { PagamentoCaixa } = require("../models/PagamentoCaixa");
-const { Op, fn, col } = require("sequelize");
+const { Venda } = require("../models/Venda");
+const { Agendamento } = require("../models/Agendamento");
+const { Op, fn, col, where, literal } = require("sequelize");
 
 // ──────────────────────────────────────────────
 // POST /api/posicao-caixa — Registrar novo pagamento
@@ -94,16 +96,116 @@ exports.listarHoje = async (req, res) => {
       59,
     );
 
-    const movimentacoes = await PagamentoCaixa.findAll({
-      where: {
-        data_movimentacao: {
-          [Op.between]: [inicioDia, fimDia],
-        },
-      },
+    const movimentos = [];
+
+    // 1) Movimentos manuais registrados em PagamentoCaixa
+    const manuais = await PagamentoCaixa.findAll({
+      where: { data_movimentacao: { [Op.between]: [inicioDia, fimDia] } },
       order: [["data_movimentacao", "DESC"]],
+      raw: true,
+    });
+    manuais.forEach((m) => {
+      movimentos.push({
+        origem: "manual",
+        referencia: m.id,
+        data: m.data_movimentacao,
+        cliente: m.cliente_nome || null,
+        pet: m.pet_nome || null,
+        servico: m.servico || null,
+        forma_pagamento: m.forma_pagamento,
+        valor: Number(m.valor) || 0,
+      });
     });
 
-    res.json(movimentacoes);
+    // 2) Vendas realizadas em nova-venda (todas com totalPago > 0 ou pagamentos)
+    const vendas = await Venda.findAll({
+      where: {
+        data: { [Op.between]: [inicioDia, fimDia] },
+        [Op.or]: [{ totalPago: { [Op.gt]: 0 } }, where(literal("JSON_LENGTH(pagamentos)"), ">", 0)],
+      },
+      order: [["data", "DESC"]],
+      raw: true,
+    });
+
+    vendas.forEach((v) => {
+      const pagamentos = v.pagamentos || [];
+      // pagamentos pode ser array de objetos
+      try {
+        (Array.isArray(pagamentos) ? pagamentos : []).forEach((p) => {
+          const forma = p.forma || p.forma_pagamento || p.tipo || "outro";
+          const valor = Number(p.valor || p.amount || p.valorPago || p.total) || 0;
+          movimentos.push({
+            origem: "venda",
+            referencia: v.id,
+            data: v.data,
+            cliente: v.cliente || null,
+            pet: null,
+            servico: "Venda",
+            forma_pagamento: forma,
+            valor,
+          });
+        });
+      } catch (e) {
+        // fallback: somar totalPago como único movimento
+        movimentos.push({
+          origem: "venda",
+          referencia: v.id,
+          data: v.data,
+          cliente: v.cliente || null,
+          pet: null,
+          servico: "Venda",
+          forma_pagamento: "desconhecido",
+          valor: Number(v.totalPago) || 0,
+        });
+      }
+    });
+
+    // 3) Agendamentos finalizados (pagamentos em agendamento-detalhes)
+    const agendados = await Agendamento.findAll({
+      where: {
+        dataAgendamento: { [Op.between]: [inicioDia, fimDia] },
+        status: "concluido",
+        [Op.or]: [{ totalPago: { [Op.gt]: 0 } }, where(literal("JSON_LENGTH(pagamentos)"), ">", 0)],
+      },
+      order: [["dataAgendamento", "DESC"]],
+      raw: true,
+    });
+
+    agendados.forEach((a) => {
+      const pagamentos = a.pagamentos || [];
+      try {
+        (Array.isArray(pagamentos) ? pagamentos : []).forEach((p) => {
+          const forma = p.forma || p.forma_pagamento || p.tipo || "outro";
+          const valor = Number(p.valor || p.amount || p.valorPago || p.total) || 0;
+          movimentos.push({
+            origem: "agendamento",
+            referencia: a.id,
+            data: a.dataAgendamento,
+            cliente: null,
+            pet: a.petId || null,
+            servico: a.servico || null,
+            forma_pagamento: forma,
+            valor,
+          });
+        });
+      } catch (e) {
+        movimentos.push({
+          origem: "agendamento",
+          referencia: a.id,
+          data: a.dataAgendamento,
+          cliente: null,
+          pet: a.petId || null,
+          servico: a.servico || null,
+          forma_pagamento: "desconhecido",
+          valor: Number(a.totalPago) || 0,
+        });
+      }
+    });
+
+    // Ordenar por data desc
+    movimentos.sort((a, b) => new Date(b.data) - new Date(a.data));
+
+    res.json(movimentos);
   } catch (error) {
     console.error("Erro ao listar movimentações do dia:", error);
     res.status(500).json({ erro: "Erro ao listar movimentações" });
@@ -133,31 +235,66 @@ exports.resumoCaixa = async (req, res) => {
       59,
     );
 
-    // Buscar totais agrupados por forma de pagamento
-    const totais = await PagamentoCaixa.findAll({
+    // Vamos agregar de 3 fontes: PagamentoCaixa (manuais), Vendas, Agendamentos
+    const resumo = { dinheiro: 0, pix: 0, cartao: 0, outro: 0, total_geral: 0 };
+
+    // 1) PagamentoCaixa
+    const totaisManuais = await PagamentoCaixa.findAll({
       attributes: ["forma_pagamento", [fn("SUM", col("valor")), "total"]],
-      where: {
-        data_movimentacao: {
-          [Op.between]: [inicioDia, fimDia],
-        },
-      },
+      where: { data_movimentacao: { [Op.between]: [inicioDia, fimDia] } },
       group: ["forma_pagamento"],
       raw: true,
     });
-
-    // Montar objeto de resumo
-    const resumo = {
-      dinheiro: 0,
-      pix: 0,
-      cartao: 0,
-      total_geral: 0,
-    };
-
-    totais.forEach((item) => {
-      const val = parseFloat(item.total) || 0;
-      resumo[item.forma_pagamento] = val;
+    totaisManuais.forEach((t) => {
+      const forma = t.forma_pagamento || "outro";
+      const val = Number(t.total) || 0;
+      resumo[forma] = (resumo[forma] || 0) + val;
       resumo.total_geral += val;
     });
+
+    // 2) Vendas
+    const vendas = await Venda.findAll({
+      where: {
+        data: { [Op.between]: [inicioDia, fimDia] },
+        [Op.or]: [{ totalPago: { [Op.gt]: 0 } }, where(literal("JSON_LENGTH(pagamentos)"), ">", 0)],
+      },
+      raw: true,
+    });
+    vendas.forEach((v) => {
+      const pagamentos = v.pagamentos || [];
+      (Array.isArray(pagamentos) ? pagamentos : []).forEach((p) => {
+        const forma = p.forma || p.forma_pagamento || p.tipo || "outro";
+        const val = Number(p.valor || p.amount || p.total || v.totalPago) || 0;
+        resumo[forma] = (resumo[forma] || 0) + val;
+        resumo.total_geral += val;
+      });
+    });
+
+    // 3) Agendamentos
+    const agendados = await Agendamento.findAll({
+      where: {
+        dataAgendamento: { [Op.between]: [inicioDia, fimDia] },
+        status: "concluido",
+        [Op.or]: [{ totalPago: { [Op.gt]: 0 } }, where(literal("JSON_LENGTH(pagamentos)"), ">", 0)],
+      },
+      raw: true,
+    });
+    agendados.forEach((a) => {
+      const pagamentos = a.pagamentos || [];
+      (Array.isArray(pagamentos) ? pagamentos : []).forEach((p) => {
+        const forma = p.forma || p.forma_pagamento || p.tipo || "outro";
+        const val = Number(p.valor || p.amount || p.total || a.totalPago) || 0;
+        resumo[forma] = (resumo[forma] || 0) + val;
+        resumo.total_geral += val;
+      });
+    });
+
+    // Garantir campos padrão
+    resumo.dinheiro = Number(resumo.dinheiro || 0);
+    resumo.pix = Number(resumo.pix || 0);
+    resumo.cartao = Number(resumo.cartao || 0);
+    resumo.outro = Number(resumo.outro || 0);
+    resumo.total_geral = Number(resumo.total_geral || 0);
 
     res.json(resumo);
   } catch (error) {
