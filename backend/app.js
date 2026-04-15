@@ -14,12 +14,6 @@ const path = require("path");
 const models = require("./models");
 console.log("✅ Modelos e associações carregados");
 
-// Permite pular a sincronização automática do DB em casos de desenvolvimento
-const SKIP_DB_SYNC = process.env.SKIP_DB_SYNC === "false";
-if (SKIP_DB_SYNC)
-  console.log(
-    "⚠️ SKIP_DB_SYNC=true — sincronização do DB foi desabilitada para esta execução",
-  );
 app.use(
   cors({
     origin: function (origin, callback) {
@@ -140,369 +134,49 @@ app.use("/api/disparador", disparadorRoutes);
 app.use("/api/instancias", instanciaRoutes);
 // Integrar módulo Entrada de Mercadoria (Prisma + TypeScript)
 // entrada-mercadoria (compiled router)
-if (!SKIP_DB_SYNC) {
-  try {
-    const entradaRouter = require("./entrada-mercadoria/dist/routes/entradaRouter");
-    app.use("/api/entrada", entradaRouter);
-    console.log("Mounted entrada-mercadoria from dist");
-  } catch (err) {
-    console.warn(
-      "entrada-mercadoria router not found in dist. To enable, run prisma generate/migrate and ensure dist exists.",
-    );
-    // Fallback de desenvolvimento: expor endpoints mínimos para permitir o frontend funcionar
-    console.log("⚠️ Montando stubs de /api/entrada (desenvolvimento)");
-    // lista simples de entradas (memória) — não persistente
-    const __DEV_ENTRADAS = [];
-
-    app.get("/api/entrada/manual", (req, res) => {
-      // retornar todas as entradas em memória
-      return res.json(__DEV_ENTRADAS);
-    });
-
-    app.post("/api/entrada/manual", (req, res) => {
-      try {
-        const payload = req.body || {};
-        // mapear campos conhecidos do frontend para os campos do modelo
-        const mapped = Object.assign({}, payload);
-        mapped.categoriaFinanceira =
-          mapped.categoriaFinanceira ||
-          mapped.tipoEntrada ||
-          mapped.tipo ||
-          null;
-        mapped.observacao = mapped.observacao || mapped.observacoes || null;
-        mapped.situacao = mapped.situacao || mapped.status || "pendente";
-        mapped.dataEmissao = mapped.dataEmissao || mapped.data || null;
-        // mapear valor para campo do modelo
-        mapped.valorTotal =
-          mapped.valorTotal || mapped.valor || mapped.total || 0;
-        const id = mapped.id || "sim-" + Date.now();
-        const created = Object.assign({}, mapped, {
-          id,
-          createdAt: new Date(),
-        });
-        __DEV_ENTRADAS.unshift(created);
-        console.log(
-          "[api/entrada/manual][stub] POST payload:",
-          payload,
-          "=> saved:",
-          created,
-        );
-        return res.json(created);
-      } catch (e) {
-        console.error("Stub POST /api/entrada/manual error", e);
-        return res.status(500).json({ error: "Erro interno stub" });
-      }
-    });
-
-    app.put("/api/entrada/manual/:id", (req, res) => {
-      try {
-        const id = req.params.id;
-        const body = req.body || {};
-        // mapear campos conhecidos
-        const mapped = Object.assign({}, body);
-        mapped.categoriaFinanceira =
-          mapped.categoriaFinanceira ||
-          mapped.tipoEntrada ||
-          mapped.tipo ||
-          null;
-        mapped.observacao = mapped.observacao || mapped.observacoes || null;
-        mapped.situacao = mapped.situacao || mapped.status || "pendente";
-        mapped.dataEmissao = mapped.dataEmissao || mapped.data || null;
-        mapped.valorTotal =
-          mapped.valorTotal || mapped.valor || mapped.total || 0;
-
-        const idx = __DEV_ENTRADAS.findIndex(
-          (x) => String(x.id) === String(id),
-        );
-        if (idx === -1) {
-          const created = Object.assign({}, mapped, {
-            id,
-            updatedAt: new Date(),
-          });
-          __DEV_ENTRADAS.unshift(created);
-          console.log(
-            "[api/entrada/manual][stub] PUT create payload:",
-            body,
-            "=> saved:",
-            created,
-          );
-          return res.json(created);
-        }
-        __DEV_ENTRADAS[idx] = Object.assign({}, __DEV_ENTRADAS[idx], mapped, {
-          id,
-          updatedAt: new Date(),
-        });
-        console.log(
-          "[api/entrada/manual][stub] PUT update id=",
-          id,
-          "payload:",
-          body,
-          "=> saved:",
-          __DEV_ENTRADAS[idx],
-        );
-        return res.json(__DEV_ENTRADAS[idx]);
-      } catch (e) {
-        console.error("Stub PUT /api/entrada/manual/:id error", e);
-        return res.status(500).json({ error: "Erro interno stub" });
-      }
-    });
-  }
-} else {
-  console.log(
-    "⚠️ SKIP_DB_SYNC=true — forçando stubs de /api/entrada (desenvolvimento) com tentativa de persistência em DB",
+try {
+  const entradaRouter = require("./entrada-mercadoria/dist/routes/entradaRouter");
+  app.use("/api/entrada", entradaRouter);
+  console.log("Mounted entrada-mercadoria from dist");
+} catch (err) {
+  console.warn(
+    "entrada-mercadoria router not found in dist. To enable, run prisma generate/migrate and ensure dist exists.",
   );
+  // Fallback de desenvolvimento: expor endpoints mínimos para permitir o frontend funcionar
+  console.log("⚠️ Montando stubs de /api/entrada (desenvolvimento)");
+  // lista simples de entradas (memória) — não persistente
   const __DEV_ENTRADAS = [];
-  const { Entrada } = require("./models");
 
-  app.get("/api/entrada/manual", authUser, async (req, res) => {
-    const empresaId = req.user?.empresaId;
-    // Tentar carregar do banco; em falha, usar memória
-    try {
-      if (Entrada && typeof Entrada.findAll === "function") {
-        const where = {};
-        if (empresaId) where.empresa_id = empresaId;
-        const rows = await Entrada.findAll({
-          where,
-          order: [["createdAt", "DESC"]],
-          limit: 200,
-        });
-        return res.json(rows.map((r) => r.toJSON()));
-      }
-    } catch (err) {
-      console.warn(
-        "Falha ao buscar entradas do DB, usando fallback em memória:",
-        err && err.message,
-      );
-    }
+  app.get("/api/entrada/manual", (req, res) => {
+    // retornar todas as entradas em memória
     return res.json(__DEV_ENTRADAS);
   });
 
-  // Rota para consulta por chave de acesso (SEFAZ)
-  app.get("/api/entrada", async (req, res) => {
-    const { chave } = req.query;
-    if (!chave) {
-      return res.status(400).json({ error: "Parâmetro chave é obrigatório" });
-    }
+  app.post("/api/entrada/manual", (req, res) => {
     try {
-      if (Entrada && typeof Entrada.findOne === "function") {
-        const nota = await Entrada.findOne({ where: { chaveAcesso: chave } });
-        if (nota) {
-          return res.json(nota.toJSON());
-        }
-      }
-    } catch (err) {
-      console.warn(
-        "Erro ao buscar entrada por chave no DB:",
-        err && err.message,
-      );
-    }
-    // Fallback: buscar em memória
-    const found = __DEV_ENTRADAS.find((e) => e.chaveAcesso === chave);
-    if (found) {
-      return res.json(found);
-    }
-    return res.status(404).json({ error: "Nota não localizada" });
-  });
-
-  app.post("/api/entrada/manual", authUser, async (req, res) => {
-    const payload = req.body || {};
-    const empresaId = req.user?.empresaId;
-    // Primeiro tentar persistir no DB
-    try {
-      if (Entrada && typeof Entrada.create === "function") {
-        // mapear campos do payload para os atributos do modelo
-        const mapped = Object.assign({}, payload);
-        if (empresaId) mapped.empresa_id = empresaId;
-        mapped.categoriaFinanceira =
-          mapped.categoriaFinanceira ||
-          mapped.tipoEntrada ||
-          mapped.tipo ||
-          null;
-        mapped.observacao = mapped.observacao || mapped.observacoes || null;
-        mapped.situacao = mapped.situacao || mapped.status || "pendente";
-        mapped.dataEmissao = mapped.dataEmissao || mapped.data || null;
-        mapped.valorTotal =
-          mapped.valorTotal || mapped.valor || mapped.total || 0;
-        // Normalizar: o frontend pode enviar 'items' ou 'itens' — garantir que 'itens' seja populado
-        mapped.itens = mapped.itens || mapped.items || [];
-
-        const created = await Entrada.create(mapped);
-        // garantir que a resposta contenha explicitamente os campos esperados
-        const saved = created.toJSON();
-        saved.itens =
-          saved.itens && saved.itens.length > 0
-            ? saved.itens
-            : mapped.itens || [];
-        saved.observacao = saved.observacao || mapped.observacao || "";
-        saved.categoriaFinanceira =
-          saved.categoriaFinanceira || mapped.categoriaFinanceira || "";
-        saved.tipoEntrada =
-          saved.tipoEntrada ||
-          saved.categoriaFinanceira ||
-          mapped.tipoEntrada ||
-          "";
-        saved.valorTotal =
-          saved.valorTotal != null ? saved.valorTotal : mapped.valorTotal || 0;
-        saved.situacao = saved.situacao || mapped.situacao || "Pendente";
-        console.log(
-          "[api/entrada/manual][db] POST payload:",
-          payload,
-          "=> saved:",
-          saved,
-        );
-        // Se estiver Finalizado/Concluído, criar/atualizar produtos e ajustar estoque
-        try {
-          saved.updatedProducts = [];
-          const situacaoStr = String(saved.situacao || "").toLowerCase();
-          const isConcluido =
-            situacaoStr.includes("final") ||
-            situacaoStr.includes("conclui") ||
-            situacaoStr === "concluido";
-          if (saved && isConcluido) {
-            const Produto = require("./models").Produto;
-            const HistoricoEstoque = require("./models").HistoricoEstoque;
-            const itens = Array.isArray(saved.itens)
-              ? saved.itens
-              : payload.itens || [];
-            for (const it of itens) {
-              try {
-                // Calcular quantidade correta (entEstoque tem prioridade sobre quantidade * fator)
-                const fatorVal = Number(it.fator || 1) || 1;
-                const qtdEstoque = Number(it.entEstoque || 0) || 0;
-                const quantidade =
-                  qtdEstoque ||
-                  Math.round(Number(it.quantidade || 0) * fatorVal) ||
-                  0;
-                if (quantidade === 0) continue;
-
-                // Localizar produto: matchedId > id > codigo
-                let prod = null;
-                if (it.matchedId) {
-                  prod = await Produto.findByPk(String(it.matchedId));
-                }
-                if (!prod && it.id && String(it.id).length < 20) {
-                  prod = await Produto.findByPk(String(it.id));
-                }
-                if (!prod && it.codigo) {
-                  prod = await Produto.findOne({
-                    where: { codigo: String(it.codigo) },
-                  });
-                }
-
-                if (!prod) {
-                  // Produto não existe: criar no catálogo com estoque inicial
-                  const nomeItem = (
-                    it.descricao ||
-                    it.nome ||
-                    it.xProd ||
-                    ""
-                  ).trim();
-                  if (!nomeItem) continue;
-                  try {
-                    const [[rowMax]] = await Produto.sequelize.query(
-                      "SELECT MAX(CAST(id AS UNSIGNED)) AS maxId FROM itens",
-                    );
-                    const maxId =
-                      rowMax && rowMax.maxId !== null
-                        ? Number(rowMax.maxId)
-                        : 0;
-                    prod = await Produto.create({
-                      id: String((maxId || 0) + 1),
-                      nome: nomeItem,
-                      codigo: it.codigo || "",
-                      preco: Number(it.unitario || it.preco || 0) || 0,
-                      custoBase: Number(it.unitario || it.preco || 0) || 0,
-                      ncm: it.ncm || it.NCM || "",
-                      validade: it.validade || "",
-                      estoqueAtual: quantidade,
-                      fatorCompra: String(fatorVal),
-                    });
-                    console.log(
-                      `[entrada/manual] Produto criado: ${nomeItem} (id=${prod.id}) estoque=${quantidade}`,
-                    );
-                    try {
-                      if (
-                        HistoricoEstoque &&
-                        typeof HistoricoEstoque.create === "function"
-                      ) {
-                        await HistoricoEstoque.create({
-                          produtoId: String(prod.id),
-                          produtoNome: prod.nome,
-                          dataMovimento: saved.dataEmissao || new Date(),
-                          operacao: "Entrada",
-                          estoqueAnterior: 0,
-                          quantidade: quantidade,
-                          novoEstoque: quantidade,
-                          observacao: `Produto criado via entrada ${saved.id}`,
-                        });
-                      }
-                    } catch (e) {}
-                    saved.updatedProducts.push(
-                      prod.get ? prod.get({ plain: true }) : prod,
-                    );
-                  } catch (createErr) {
-                    console.warn(
-                      "Erro criando produto na entrada:",
-                      createErr && createErr.message,
-                    );
-                  }
-                  continue;
-                }
-
-                // Produto existente: incrementar estoque
-                const atual = Number(prod.estoqueAtual) || 0;
-                const novo = atual + quantidade;
-                const updatedProd = await prod.update({ estoqueAtual: novo });
-                console.log(
-                  `[entrada/manual] Estoque atualizado: ${prod.nome} ${atual} → ${novo}`,
-                );
-                if (
-                  HistoricoEstoque &&
-                  typeof HistoricoEstoque.create === "function"
-                ) {
-                  await HistoricoEstoque.create({
-                    produtoId: String(prod.id),
-                    produtoNome: prod.nome,
-                    dataMovimento: saved.dataEmissao || new Date(),
-                    operacao: "Entrada",
-                    estoqueAnterior: atual,
-                    quantidade: quantidade,
-                    novoEstoque: novo,
-                    observacao: `Entrada automática via nota ${saved.id}`,
-                  });
-                }
-                saved.updatedProducts.push(
-                  updatedProd.get
-                    ? updatedProd.get({ plain: true })
-                    : updatedProd,
-                );
-              } catch (e) {
-                console.warn(
-                  "Erro ajustando estoque (POST entrada):",
-                  e && e.message,
-                );
-              }
-            }
-          }
-        } catch (e) {
-          console.warn(
-            "Erro no pós-processamento de entrada (POST):",
-            e && e.message,
-          );
-        }
-        return res.json(saved);
-      }
-    } catch (err) {
-      console.warn(
-        "Erro ao criar entrada no DB, usando fallback em memória:",
-        err && err.message,
-      );
-    }
-    // Fallback em memória
-    try {
-      const id = payload.id || "sim-" + Date.now();
-      const created = Object.assign({}, payload, { id, createdAt: new Date() });
+      const payload = req.body || {};
+      // mapear campos conhecidos do frontend para os campos do modelo
+      const mapped = Object.assign({}, payload);
+      mapped.categoriaFinanceira =
+        mapped.categoriaFinanceira || mapped.tipoEntrada || mapped.tipo || null;
+      mapped.observacao = mapped.observacao || mapped.observacoes || null;
+      mapped.situacao = mapped.situacao || mapped.status || "pendente";
+      mapped.dataEmissao = mapped.dataEmissao || mapped.data || null;
+      // mapear valor para campo do modelo
+      mapped.valorTotal =
+        mapped.valorTotal || mapped.valor || mapped.total || 0;
+      const id = mapped.id || "sim-" + Date.now();
+      const created = Object.assign({}, mapped, {
+        id,
+        createdAt: new Date(),
+      });
       __DEV_ENTRADAS.unshift(created);
+      console.log(
+        "[api/entrada/manual][stub] POST payload:",
+        payload,
+        "=> saved:",
+        created,
+      );
       return res.json(created);
     } catch (e) {
       console.error("Stub POST /api/entrada/manual error", e);
@@ -510,246 +184,47 @@ if (!SKIP_DB_SYNC) {
     }
   });
 
-  app.put("/api/entrada/manual/:id", async (req, res) => {
-    const id = req.params.id;
-    const body = req.body || {};
+  app.put("/api/entrada/manual/:id", (req, res) => {
     try {
-      if (Entrada && typeof Entrada.findByPk === "function") {
-        const mapped = Object.assign({}, body);
-        mapped.categoriaFinanceira =
-          mapped.categoriaFinanceira ||
-          mapped.tipoEntrada ||
-          mapped.tipo ||
-          null;
-        mapped.observacao = mapped.observacao || mapped.observacoes || null;
-        mapped.situacao = mapped.situacao || mapped.status || "pendente";
-        mapped.dataEmissao = mapped.dataEmissao || mapped.data || null;
-        mapped.valorTotal =
-          mapped.valorTotal || mapped.valor || mapped.total || 0;
-        // Normalizar: o frontend pode enviar 'items' ou 'itens'
-        mapped.itens = mapped.itens || mapped.items || undefined;
+      const id = req.params.id;
+      const body = req.body || {};
+      // mapear campos conhecidos
+      const mapped = Object.assign({}, body);
+      mapped.categoriaFinanceira =
+        mapped.categoriaFinanceira || mapped.tipoEntrada || mapped.tipo || null;
+      mapped.observacao = mapped.observacao || mapped.observacoes || null;
+      mapped.situacao = mapped.situacao || mapped.status || "pendente";
+      mapped.dataEmissao = mapped.dataEmissao || mapped.data || null;
+      mapped.valorTotal =
+        mapped.valorTotal || mapped.valor || mapped.total || 0;
 
-        const existing = await Entrada.findByPk(id);
-        if (existing) {
-          await existing.update(mapped);
-          const updated = existing.toJSON();
-          updated.itens =
-            updated.itens && updated.itens.length > 0
-              ? updated.itens
-              : mapped.itens || [];
-          updated.observacao = updated.observacao || mapped.observacao || "";
-          updated.categoriaFinanceira =
-            updated.categoriaFinanceira || mapped.categoriaFinanceira || "";
-          updated.tipoEntrada =
-            updated.tipoEntrada ||
-            updated.categoriaFinanceira ||
-            mapped.tipoEntrada ||
-            "";
-          updated.valorTotal =
-            updated.valorTotal != null
-              ? updated.valorTotal
-              : mapped.valorTotal || 0;
-          updated.situacao = updated.situacao || mapped.situacao || "Pendente";
-          console.log(
-            "[api/entrada/manual][db] PUT update id=",
-            id,
-            "payload:",
-            body,
-            "=> saved:",
-            updated,
-          );
-          // pós-processar ajuste de estoque se situação for Finalizado e retornar produtos atualizados
-          try {
-            updated.updatedProducts = [];
-            if (
-              updated &&
-              String(updated.situacao).toLowerCase().includes("final")
-            ) {
-              const Produto = require("./models").Produto;
-              const HistoricoEstoque = require("./models").HistoricoEstoque;
-              const itens = Array.isArray(updated.itens)
-                ? updated.itens
-                : mapped.itens || [];
-              for (const it of itens) {
-                try {
-                  const quantidade =
-                    Number(it.quantidade || it.qty || it.qtd || 0) || 0;
-                  if (quantidade === 0) continue;
-                  let prod = null;
-                  if (it.id) {
-                    prod = await Produto.findByPk(String(it.id));
-                  }
-                  if (!prod && it.codigo) {
-                    prod = await Produto.findOne({
-                      where: { codigo: String(it.codigo) },
-                    });
-                  }
-                  if (!prod) continue;
-                  const atual = Number(prod.estoqueAtual) || 0;
-                  const novo = atual + quantidade;
-                  const updatedProd = await prod.update({ estoqueAtual: novo });
-                  if (
-                    HistoricoEstoque &&
-                    typeof HistoricoEstoque.create === "function"
-                  ) {
-                    await HistoricoEstoque.create({
-                      produtoId: String(prod.id),
-                      produtoNome: prod.nome,
-                      dataMovimento: updated.dataEmissao || new Date(),
-                      operacao: "Entrada",
-                      estoqueAnterior: atual,
-                      quantidade: quantidade,
-                      novoEstoque: novo,
-                      observacao: `Entrada automática via nota ${updated.id}`,
-                    });
-                  }
-                  try {
-                    updated.updatedProducts.push(
-                      updatedProd.get
-                        ? updatedProd.get({ plain: true })
-                        : updatedProd,
-                    );
-                  } catch (e) {
-                    updated.updatedProducts.push(updatedProd);
-                  }
-                } catch (e) {
-                  console.warn(
-                    "Erro ajustando estoque (PUT update entrada):",
-                    e && e.message,
-                  );
-                }
-              }
-            }
-          } catch (e) {
-            console.warn(
-              "Erro no pós-processamento de entrada (PUT update):",
-              e && e.message,
-            );
-          }
-          return res.json(updated);
-        }
-        // criar se não existir
-        const created = await Entrada.create(Object.assign({}, mapped, { id }));
-        const createdJson = created.toJSON();
-        createdJson.itens =
-          createdJson.itens && createdJson.itens.length > 0
-            ? createdJson.itens
-            : mapped.itens || [];
-        createdJson.observacao =
-          createdJson.observacao || mapped.observacao || "";
-        createdJson.categoriaFinanceira =
-          createdJson.categoriaFinanceira || mapped.categoriaFinanceira || "";
-        createdJson.tipoEntrada =
-          createdJson.tipoEntrada ||
-          createdJson.categoriaFinanceira ||
-          mapped.tipoEntrada ||
-          "";
-        createdJson.valorTotal =
-          createdJson.valorTotal != null
-            ? createdJson.valorTotal
-            : mapped.valorTotal || 0;
-        createdJson.situacao =
-          createdJson.situacao || mapped.situacao || "Pendente";
-        console.log(
-          "[api/entrada/manual][db] PUT create id=",
-          id,
-          "payload:",
-          body,
-          "=> saved:",
-          createdJson,
-        );
-        // pós-processar ajuste de estoque se finalizado e retornar produtos atualizados
-        try {
-          createdJson.updatedProducts = [];
-          if (
-            createdJson &&
-            String(createdJson.situacao).toLowerCase().includes("final")
-          ) {
-            const Produto = require("./models").Produto;
-            const HistoricoEstoque = require("./models").HistoricoEstoque;
-            const itens = Array.isArray(createdJson.itens)
-              ? createdJson.itens
-              : mapped.itens || [];
-            for (const it of itens) {
-              try {
-                const quantidade =
-                  Number(it.quantidade || it.qty || it.qtd || 0) || 0;
-                if (quantidade === 0) continue;
-                let prod = null;
-                if (it.id) {
-                  prod = await Produto.findByPk(String(it.id));
-                }
-                if (!prod && it.codigo) {
-                  prod = await Produto.findOne({
-                    where: { codigo: String(it.codigo) },
-                  });
-                }
-                if (!prod) continue;
-                const atual = Number(prod.estoqueAtual) || 0;
-                const novo = atual + quantidade;
-                const updatedProd = await prod.update({ estoqueAtual: novo });
-                if (
-                  HistoricoEstoque &&
-                  typeof HistoricoEstoque.create === "function"
-                ) {
-                  await HistoricoEstoque.create({
-                    produtoId: String(prod.id),
-                    produtoNome: prod.nome,
-                    dataMovimento: createdJson.dataEmissao || new Date(),
-                    operacao: "Entrada",
-                    estoqueAnterior: atual,
-                    quantidade: quantidade,
-                    novoEstoque: novo,
-                    observacao: `Entrada automática via nota ${createdJson.id}`,
-                  });
-                }
-                try {
-                  createdJson.updatedProducts.push(
-                    updatedProd.get
-                      ? updatedProd.get({ plain: true })
-                      : updatedProd,
-                  );
-                } catch (e) {
-                  createdJson.updatedProducts.push(updatedProd);
-                }
-              } catch (e) {
-                console.warn(
-                  "Erro ajustando estoque (PUT create entrada):",
-                  e && e.message,
-                );
-              }
-            }
-          }
-        } catch (e) {
-          console.warn(
-            "Erro no pós-processamento de entrada (PUT create):",
-            e && e.message,
-          );
-        }
-        return res.json(createdJson);
-      }
-    } catch (err) {
-      console.warn(
-        "Erro ao atualizar/criar entrada no DB, fallback em memória:",
-        err && err.message,
-      );
-    }
-
-    // Fallback em memória
-    try {
       const idx = __DEV_ENTRADAS.findIndex((x) => String(x.id) === String(id));
       if (idx === -1) {
-        const created = Object.assign({}, body || {}, {
+        const created = Object.assign({}, mapped, {
           id,
           updatedAt: new Date(),
         });
         __DEV_ENTRADAS.unshift(created);
+        console.log(
+          "[api/entrada/manual][stub] PUT create payload:",
+          body,
+          "=> saved:",
+          created,
+        );
         return res.json(created);
       }
-      __DEV_ENTRADAS[idx] = Object.assign({}, __DEV_ENTRADAS[idx], body, {
+      __DEV_ENTRADAS[idx] = Object.assign({}, __DEV_ENTRADAS[idx], mapped, {
         id,
         updatedAt: new Date(),
       });
+      console.log(
+        "[api/entrada/manual][stub] PUT update id=",
+        id,
+        "payload:",
+        body,
+        "=> saved:",
+        __DEV_ENTRADAS[idx],
+      );
       return res.json(__DEV_ENTRADAS[idx]);
     } catch (e) {
       console.error("Stub PUT /api/entrada/manual/:id error", e);
@@ -1552,250 +1027,80 @@ app.get("/api/editar-produto", async (req, res) => {
 
 const { Cliente, Pet, Agendamento } = require("./models");
 
-// Sincronizar modelos com o banco de dados (apenas se necessário)
+// ═══════════════════════════════════════════════════════════════════
+// SINCRONIZAÇÃO DO BANCO — cria TODAS as tabelas automaticamente
+// ═══════════════════════════════════════════════════════════════════
 const { sequelize } = require("./models/Cliente");
-if (!SKIP_DB_SYNC) {
-  sequelize
-    .sync({ alter: true })
-    .then(async () => {
-      console.log("Banco de dados conectado com sucesso ✅");
 
-      // Sincronizar modelos de controle de acessos (tabela nova + coluna nova)
+async function syncAllTables() {
+  try {
+    await sequelize.authenticate();
+    console.log("✅ Conexão com MySQL OK — banco: petshop");
+
+    // 1) Sync principal: cobre Cliente + todos os factory models (Usuario, Empresa, etc.)
+    await sequelize.sync();
+    console.log("✅ Tabelas da instância principal criadas");
+
+    // 2) Modelos com instância própria de Sequelize (cada um tem seu new Sequelize)
+    //    Precisam de .sync() individual
+    const ownInstanceModels = [
+      ["Agendamento", require("./models/Agendamento").Agendamento],
+      ["Box", require("./models/Box")],
+      ["Caixa", require("./models/Caixa").Caixa],
+      ["DescontoRelacao", require("./models/DescontoRelacao").DescontoRelacao],
+      ["HistoricoEstoque", require("./models/HistoricoEstoque")],
+      ["ImpressoraConfig", require("./models/ImpressoraConfig")],
+      ["ModeloEtiquetaConfig", require("./models/ModeloEtiquetaConfig")],
+      ["MovimentoCaixa", require("./models/MovimentoCaixa").MovimentoCaixa],
+      ["Orcamento", require("./models/Orcamento").Orcamento],
+      ["PagamentoCaixa", require("./models/PagamentoCaixa").PagamentoCaixa],
+      ["Pelagem", require("./models/Pelagem")],
+      ["PerfilCliente", require("./models/PerfilCliente")],
+      ["PerfilProduto", require("./models/PerfilProduto")],
+      ["Porte", require("./models/Porte")],
+      ["Produto", require("./models/Produto")],
+      ["Profissional", require("./models/Profissional").Profissional],
+      ["Raca", require("./models/Raca")],
+      ["Venda", require("./models/Venda").Venda],
+    ];
+
+    for (const [name, model] of ownInstanceModels) {
       try {
-        const { SessaoAtiva, EmpresaPainel } = require("./models");
-        await SessaoAtiva.sync({ alter: true });
-        await EmpresaPainel.sync({ alter: true });
-        console.log("✅ Tabelas de controle de acessos sincronizadas");
-      } catch (e) {
-        console.warn(
-          "⚠️ Aviso ao sincronizar tabelas de acessos:",
-          e && e.message,
-        );
+        if (model && typeof model.sync === "function") {
+          await model.sync();
+          console.log(`  ✅ ${name}`);
+        }
+      } catch (err) {
+        console.warn(`  ⚠️ ${name}: ${err.message}`);
       }
-
-      // Criar usuário inicial padrão se não existir
-      try {
-        const criarUsuarioInicial = require("./scripts/seed-usuario-inicial");
-        await criarUsuarioInicial();
-      } catch (error) {
-        console.warn("⚠️  Aviso ao criar usuário inicial:", error.message);
-      }
-
-      // Criar admin inicial do painel se não existir
-      try {
-        const criarAdminInicial = require("./scripts/seed-admin-painel");
-        await criarAdminInicial();
-      } catch (error) {
-        console.warn(
-          "⚠️  Aviso ao criar admin inicial do painel:",
-          error.message,
-        );
-      }
-    })
-    .catch((error) => {
-      console.error("❌ Erro ao conectar banco:", error);
-    });
-} else {
-  console.log(
-    "⚠️ SKIP_DB_SYNC habilitado — pulando sequelize.sync() principal",
-  );
-}
-
-// Garantir que o modelo Produto (itens) esteja sincronizado com o banco
-try {
-  const ProdutoModel = require("./models/Produto");
-  if (!SKIP_DB_SYNC) {
-    if (ProdutoModel && typeof ProdutoModel.sync === "function") {
-      ProdutoModel.sync({ alter: true })
-        .then(() => {
-          console.log("Tabela `itens` sincronizada/atualizada ✅");
-        })
-        .catch((err) => {
-          console.warn(
-            "Não foi possível sincronizar tabela `itens`:",
-            err && err.message,
-          );
-        });
     }
-  } else {
-    console.log("⚠️ SKIP_DB_SYNC habilitado — pulando sync da tabela `itens`");
-  }
-} catch (e) {
-  console.warn(
-    "Aviso: falha ao carregar/sincronizar modelo Produto:",
-    e && e.message,
-  );
-}
 
-// Garantir que a tabela de Fornecedores exista e esteja sincronizada
-try {
-  const Fornecedor = require("./models/Fornecedor");
-  if (!SKIP_DB_SYNC) {
-    if (Fornecedor && typeof Fornecedor.sync === "function") {
-      Fornecedor.sync({ alter: true })
-        .then(() => {
-          console.log("Tabela `fornecedores` sincronizada/atualizada ✅");
-        })
-        .catch((err) => {
-          console.warn(
-            "Não foi possível sincronizar tabela `fornecedores`:",
-            err && err.message,
-          );
-        });
+    // 3) Verificar total de tabelas criadas
+    const [tables] = await sequelize.query("SHOW TABLES");
+    console.log(`\n✅ Total de tabelas no banco: ${tables.length}`);
+
+    // 4) Seeds: criar usuário e admin iniciais
+    try {
+      const criarUsuarioInicial = require("./scripts/seed-usuario-inicial");
+      await criarUsuarioInicial();
+    } catch (e) {
+      console.warn("⚠️ Seed usuário inicial:", e.message);
     }
-  } else {
-    console.log(
-      "⚠️ SKIP_DB_SYNC habilitado — pulando sync da tabela `fornecedores`",
-    );
-  }
-} catch (e) {
-  console.warn(
-    "Aviso: falha ao carregar/sincronizar modelo Fornecedor:",
-    e && e.message,
-  );
-}
-
-// Garantir que as tabelas de Comissão e PerfilComissao tenham empresa_id
-try {
-  const { Comissao, PerfilComissao } = require("./models");
-  const sequelize = require("./models").sequelize;
-  if (!SKIP_DB_SYNC) {
-    // Dropar índices antigos que não incluem empresa_id
-    const dropOldIndexes = async () => {
-      try {
-        await sequelize
-          .query(
-            "ALTER TABLE `comissoes` DROP INDEX `comissoes_perfil_produto_perfil_vendedor`",
-          )
-          .catch(() => {});
-        await sequelize
-          .query(
-            "ALTER TABLE `perfis_comissao` DROP INDEX `perfis_comissao_perfil_vendedor_tipo`",
-          )
-          .catch(() => {});
-        console.log("Índices antigos de comissão removidos (se existiam)");
-      } catch (_) {}
-    };
-    dropOldIndexes().then(async () => {
-      if (Comissao && typeof Comissao.sync === "function") {
-        await Comissao.sync({ alter: true })
-          .then(() =>
-            console.log("Tabela `comissoes` sincronizada/atualizada ✅"),
-          )
-          .catch((err) =>
-            console.warn(
-              "Não foi possível sincronizar tabela `comissoes`:",
-              err && err.message,
-            ),
-          );
-      }
-      if (PerfilComissao && typeof PerfilComissao.sync === "function") {
-        await PerfilComissao.sync({ alter: true })
-          .then(() =>
-            console.log("Tabela `perfis_comissao` sincronizada/atualizada ✅"),
-          )
-          .catch((err) =>
-            console.warn(
-              "Não foi possível sincronizar tabela `perfis_comissao`:",
-              err && err.message,
-            ),
-          );
-      }
-    });
-  }
-} catch (e) {
-  console.warn(
-    "Aviso: falha ao sincronizar tabelas de comissão:",
-    e && e.message,
-  );
-}
-
-// Garantir que a tabela movimentacoes_caixa (Posição de Caixa) exista
-try {
-  const { PagamentoCaixa } = require("./models/PagamentoCaixa");
-  if (!SKIP_DB_SYNC) {
-    if (PagamentoCaixa && typeof PagamentoCaixa.sync === "function") {
-      PagamentoCaixa.sync({ alter: true })
-        .then(() => {
-          console.log(
-            "Tabela `movimentacoes_caixa` sincronizada/atualizada ✅",
-          );
-        })
-        .catch((err) => {
-          console.warn(
-            "Não foi possível sincronizar tabela `movimentacoes_caixa`:",
-            err && err.message,
-          );
-        });
+    try {
+      const criarAdminInicial = require("./scripts/seed-admin-painel");
+      await criarAdminInicial();
+    } catch (e) {
+      console.warn("⚠️ Seed admin painel:", e.message);
     }
+
+    console.log("🎉 Sincronização do banco completa!\n");
+  } catch (err) {
+    console.error("❌ Erro fatal na sincronização:", err.message);
   }
-} catch (e) {
-  console.warn(
-    "Aviso: falha ao carregar/sincronizar modelo PagamentoCaixa:",
-    e && e.message,
-  );
 }
 
-// Garantir que a tabela de configuração de impressora exista e sincronize
-try {
-  const ImpressoraConfig = require("./models/ImpressoraConfig");
-  if (!SKIP_DB_SYNC) {
-    if (ImpressoraConfig && typeof ImpressoraConfig.sync === "function") {
-      ImpressoraConfig.sync({ alter: true })
-        .then(() => {
-          console.log("Tabela `impressora_config` sincronizada/atualizada ✅");
-        })
-        .catch((err) => {
-          console.warn(
-            "Não foi possível sincronizar tabela `impressora_config`:",
-            err && err.message,
-          );
-        });
-    }
-  } else {
-    console.log(
-      "⚠️ SKIP_DB_SYNC habilitado — pulando sync da tabela `impressora_config`",
-    );
-  }
-} catch (e) {
-  console.warn(
-    "Aviso: falha ao carregar/sincronizar modelo ImpressoraConfig:",
-    e && e.message,
-  );
-}
-
-// Garantir que a tabela de configuração do modelo de etiqueta exista e sincronize
-try {
-  const ModeloEtiquetaConfig = require("./models/ModeloEtiquetaConfig");
-  if (!SKIP_DB_SYNC) {
-    if (
-      ModeloEtiquetaConfig &&
-      typeof ModeloEtiquetaConfig.sync === "function"
-    ) {
-      ModeloEtiquetaConfig.sync({ alter: true })
-        .then(() => {
-          console.log(
-            "Tabela `modelo_etiqueta_config` sincronizada/atualizada ✅",
-          );
-        })
-        .catch((err) => {
-          console.warn(
-            "Não foi possível sincronizar tabela `modelo_etiqueta_config`:",
-            err && err.message,
-          );
-        });
-    }
-  } else {
-    console.log(
-      "⚠️ SKIP_DB_SYNC habilitado — pulando sync da tabela `modelo_etiqueta_config`",
-    );
-  }
-} catch (e) {
-  console.warn(
-    "Aviso: falha ao carregar/sincronizar modelo ModeloEtiquetaConfig:",
-    e && e.message,
-  );
-}
+// Executar sync na inicialização
+syncAllTables();
 
 // Endpoints para selecionar/obter impressora
 app.get("/api/impressora", async (req, res) => {
@@ -1891,118 +1196,6 @@ app.post("/api/modelo-etiqueta", async (req, res) => {
       .json({ error: "Erro ao salvar configuração de modelo de etiqueta" });
   }
 });
-
-// Garantir que modelos menores (perfis, descontos) também tenham suas tabelas criadas
-try {
-  const PerfilProduto = require("./models/PerfilProduto");
-  if (!SKIP_DB_SYNC) {
-    if (PerfilProduto && typeof PerfilProduto.sync === "function") {
-      PerfilProduto.sync({ alter: true })
-        .then(() => {
-          console.log("Tabela `perfis_produto` sincronizada/atualizada ✅");
-        })
-        .catch((err) => {
-          console.warn(
-            "Não foi possível sincronizar tabela `perfis_produto`:",
-            err && err.message,
-          );
-        });
-    }
-  } else {
-    console.log(
-      "⚠️ SKIP_DB_SYNC habilitado — pulando sync da tabela `perfis_produto`",
-    );
-  }
-} catch (e) {
-  console.warn(
-    "Aviso: falha ao carregar/sincronizar modelo PerfilProduto:",
-    e && e.message,
-  );
-}
-
-try {
-  const descontoModule = require("./models/DescontoRelacao");
-  const DescontoRelacao =
-    descontoModule && descontoModule.DescontoRelacao
-      ? descontoModule.DescontoRelacao
-      : null;
-  if (!SKIP_DB_SYNC) {
-    if (DescontoRelacao && typeof DescontoRelacao.sync === "function") {
-      DescontoRelacao.sync({ alter: true })
-        .then(() => {
-          console.log("Tabela `descontos_relacoes` sincronizada/atualizada ✅");
-        })
-        .catch((err) => {
-          console.warn(
-            "Não foi possível sincronizar tabela `descontos_relacoes`:",
-            err && err.message,
-          );
-        });
-    }
-  } else {
-    console.log(
-      "⚠️ SKIP_DB_SYNC habilitado — pulando sync da tabela `descontos_relacoes`",
-    );
-  }
-} catch (e) {
-  console.warn(
-    "Aviso: falha ao carregar/sincronizar modelo DescontoRelacao:",
-    e && e.message,
-  );
-}
-
-// Garantir que a tabela de Perfis de Cliente exista
-try {
-  const PerfilCliente = require("./models/PerfilCliente");
-  if (!SKIP_DB_SYNC) {
-    if (PerfilCliente && typeof PerfilCliente.sync === "function") {
-      PerfilCliente.sync({ alter: true })
-        .then(() => {
-          console.log("Tabela `perfis_cliente` sincronizada/atualizada ✅");
-        })
-        .catch((err) => {
-          console.warn(
-            "Não foi possível sincronizar tabela `perfis_cliente`:",
-            err && err.message,
-          );
-        });
-    }
-  } else {
-    console.log(
-      "⚠️ SKIP_DB_SYNC habilitado — pulando sync da tabela `perfis_cliente`",
-    );
-  }
-} catch (e) {
-  console.warn(
-    "Aviso: falha ao carregar/sincronizar modelo PerfilCliente:",
-    e && e.message,
-  );
-}
-
-// Garantir que o modelo Usuario esteja sincronizado com o banco
-try {
-  const { Usuario } = require("./models");
-  if (!SKIP_DB_SYNC) {
-    if (Usuario && typeof Usuario.sync === "function") {
-      Usuario.sync({ alter: true })
-        .then(() => {
-          console.log("Tabela `usuarios` sincronizada/atualizada ✅");
-        })
-        .catch((err) => {
-          console.error(
-            "Erro ao sincronizar tabela `usuarios`:",
-            err && err.message,
-          );
-        });
-    }
-  } else {
-    console.log(
-      "⚠️ SKIP_DB_SYNC habilitado — pulando sync da tabela `usuarios`",
-    );
-  }
-} catch (e) {
-  console.error("Erro ao carregar/sincronizar modelo Usuario:", e && e.message);
-}
 
 // ── Handler global: evita crash por erros do Puppeteer/WhatsApp ──────────────
 process.on("unhandledRejection", (reason, promise) => {
