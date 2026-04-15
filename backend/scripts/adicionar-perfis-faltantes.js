@@ -1,10 +1,10 @@
-const mysql = require('mysql2/promise');
+﻿const mysql = require('mysql2/promise');
 
 async function adicionarPerfisFaltantes() {
     const conn = await mysql.createConnection({
-        host: 'localhost',
+        host: '72.60.244.46',
         user: 'root',
-        password: '@Pedropro14',
+        password: 'PetHub@123',
         database: 'petshop'
     });
 

@@ -12,7 +12,7 @@ const models = require("./models");
 console.log("✅ Modelos e associações carregados");
 
 // Permite pular a sincronização automática do DB em casos de desenvolvimento
-const SKIP_DB_SYNC = process.env.SKIP_DB_SYNC === "true";
+const SKIP_DB_SYNC = process.env.SKIP_DB_SYNC === "false";
 if (SKIP_DB_SYNC)
   console.log(
     "⚠️ SKIP_DB_SYNC=true — sincronização do DB foi desabilitada para esta execução",

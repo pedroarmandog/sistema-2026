@@ -1,8 +1,8 @@
-// Model: PagamentoCaixa
+﻿// Model: PagamentoCaixa
 // Tabela movimentacoes_caixa — registra pagamentos de serviços no caixa do dia
 const { Sequelize, DataTypes } = require("sequelize");
-const sequelize = new Sequelize("petshop", "root", "@Pedropro14", {
-  host: "localhost",
+const sequelize = new Sequelize("petshop", "pethub", "PetHub@123", {
+  host: "72.60.244.46",
   dialect: "mysql",
 });
 

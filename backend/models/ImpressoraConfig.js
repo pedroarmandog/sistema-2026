@@ -1,8 +1,8 @@
-const { Sequelize, DataTypes } = require('sequelize');
+﻿const { Sequelize, DataTypes } = require('sequelize');
 
 // Conexão simples (mesma DB usada por outros modelos neste projeto)
-const sequelize = new Sequelize('petshop', 'root', '@Pedropro14', {
-    host: 'localhost',
+const sequelize = new Sequelize('petshop', 'pethub', 'PetHub@123', {
+    host: '72.60.244.46',
     dialect: 'mysql'
 });
 

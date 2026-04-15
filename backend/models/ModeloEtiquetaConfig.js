@@ -1,8 +1,8 @@
-const { Sequelize, DataTypes } = require('sequelize');
+﻿const { Sequelize, DataTypes } = require('sequelize');
 
 // Mesma conexão simples usada em ImpressoraConfig
-const sequelize = new Sequelize('petshop', 'root', '@Pedropro14', {
-    host: 'localhost',
+const sequelize = new Sequelize('petshop', 'pethub', 'PetHub@123', {
+    host: '72.60.244.46',
     dialect: 'mysql'
 });
 
