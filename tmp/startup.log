@@ -1,0 +1,168 @@
+◇ injected env (2) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+✅ Associações Cliente ↔ Pet ↔ Agendamento configuradas
+✅ Associações Cliente ↔ Venda configuradas
+✅ Associações EmpresaPainel ↔ PagamentoPainel configuradas
+✅ Associações EmpresaPainel ↔ SessaoAtiva configuradas
+✅ Modelos e associações carregados
+Mounted entrada-mercadoria from dist
+Executing (default): SELECT 1+1 AS result
+✅ Conexão com MySQL OK — banco: petshop
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'Clientes' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `Clientes`
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'grupos_clientes' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `grupos_clientes`
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'fornecedores' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `fornecedores`
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'entradas_mercadoria' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `entradas_mercadoria`
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'saidas_mercadoria' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `saidas_mercadoria`
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'agrupamentos' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `agrupamentos`
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'perfis_comissao' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `perfis_comissao`
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'comissoes' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `comissoes`
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'empresas' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `empresas`
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'periodicidades' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `periodicidades`
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'whatsapp_sessions' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `whatsapp_sessions`
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'mensagens_automaticas' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `mensagens_automaticas`
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'envios_agendados' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `envios_agendados`
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'logs_envio' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `logs_envio`
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'campanhas' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `campanhas`
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'contatos_campanha' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `contatos_campanha`
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'blacklist_disparador' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `blacklist_disparador`
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'usuarios' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `usuarios`
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'user_filters' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `user_filters`
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'admins' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `admins`
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'empresas_painel' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `empresas_painel`
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'pagamentos_painel' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `pagamentos_painel`
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'admin_impersonation_tokens' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `admin_impersonation_tokens`
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'backups_empresa' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `backups_empresa`
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'sessoes_ativas' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `sessoes_ativas`
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'categorias_financeiras' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `categorias_financeiras`
+✅ Tabelas da instância principal criadas
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'agendamentos' AND TABLE_SCHEMA = 'petshop'
+Executing (default): CREATE TABLE IF NOT EXISTS `agendamentos` (`id` INTEGER auto_increment , `dataAgendamento` DATETIME NOT NULL COMMENT 'Data e hora do agendamento', `horario` TIME NOT NULL COMMENT 'Horário do agendamento (formato HH:MM)', `servico` VARCHAR(200) NOT NULL COMMENT 'Tipo de serviço (consulta, banho, vacina, etc.)', `servicos` JSON COMMENT 'Array de serviços/produtos detalhados (cada item com nome, quantidade, valor, etc.)', `pagamentos` JSON COMMENT 'Array de pagamentos efetuados (forma, valor, detalhes)', `totalPago` DECIMAL(10,2) DEFAULT 0 COMMENT 'Total efetivamente pago no atendimento', `prontuario` JSON COMMENT 'Registros do prontuário clínico (anotações, receituário, etc.)', `clinica_state` JSON COMMENT 'Estado da UI da aba clínica (ultima aba/sub-aba selecionada)', `observacoes` TEXT COMMENT 'Observações sobre o agendamento', `profissional` VARCHAR(100) COMMENT 'Nome do profissional responsável', `valor` DECIMAL(10,2) DEFAULT 0 COMMENT 'Valor do serviço', `status` ENUM('agendado', 'checkin', 'pronto', 'concluido', 'cancelado') NOT NULL DEFAULT 'agendado' COMMENT 'Status do agendamento', `taxidog` TINYINT(1) DEFAULT false COMMENT 'Indica se o agendamento teve serviço de taxi dog', `petId` INTEGER NOT NULL COMMENT 'ID do pet relacionado', `empresa_id` INTEGER COMMENT 'ID da empresa proprietária do agendamento', `createdAt` DATETIME NOT NULL, `updatedAt` DATETIME NOT NULL, PRIMARY KEY (`id`), FOREIGN KEY (`petId`) REFERENCES `pets` (`id`) ON DELETE CASCADE ON UPDATE CASCADE) ENGINE=InnoDB;
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'boxes' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `boxes`
+  ✅ Box
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'caixas' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `caixas`
+  ✅ Caixa
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'descontos_relacoes' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `descontos_relacoes`
+  ✅ DescontoRelacao
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'historico_estoque' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `historico_estoque`
+  ✅ HistoricoEstoque
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'impressora_config' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `impressora_config`
+  ✅ ImpressoraConfig
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'modelo_etiqueta_config' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `modelo_etiqueta_config`
+  ✅ ModeloEtiquetaConfig
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'movimentos_caixa' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `movimentos_caixa`
+  ✅ MovimentoCaixa
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'orcamentos' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `orcamentos`
+  ✅ Orcamento
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'movimentacoes_caixa' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `movimentacoes_caixa`
+  ✅ PagamentoCaixa
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'pelagens' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `pelagens`
+  ✅ Pelagem
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'perfis_cliente' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `perfis_cliente`
+  ✅ PerfilCliente
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'perfis_produto' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `perfis_produto`
+  ✅ PerfilProduto
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'portes' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `portes`
+  ✅ Porte
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'itens' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `itens`
+  ✅ Produto
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'profissionais' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `profissionais`
+  ✅ Profissional
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'racas' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `racas`
+  ✅ Raca
+Executing (default): SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_NAME = 'vendas' AND TABLE_SCHEMA = 'petshop'
+Executing (default): SHOW INDEX FROM `vendas`
+  ✅ Venda
+Executing (default): SHOW TABLES
+
+✅ Total de tabelas no banco: 43
+Executing (default): SELECT `id`, `nome`, `usuario`, `senha`, `grupoUsuario`, `profissionalId`, `ativo`, `setorPadraoId`, `setorPadraoNome`, `acessoValor`, `permissoes`, `empresas`, `createdAt`, `updatedAt` FROM `usuarios` AS `Usuario` WHERE `Usuario`.`usuario` = 'admin';
+ℹ️  Usuário inicial já existe
+Executing (default): SELECT `id`, `nome`, `sobrenome`, `email`, `senha`, `cpf`, `telefone`, `foto`, `ativo`, `createdAt`, `updatedAt` FROM `admins` AS `Admin` WHERE `Admin`.`email` = 'pedro@pethub.com';
+ℹ️  Admin inicial do painel já existe
+🎉 Sincronização do banco completa!
+
+🚀 Servidor rodando na porta 3000 ✅
+🔗 URL: http://localhost:3000
+✅ [Queue] Agendador de mensagens WhatsApp iniciado (executa a cada minuto)
+✅ Cron de verificação de vencimentos iniciado
+✅ Cron de backup diário iniciado (00:00)
+✅ Cron de mensagens de aniversário iniciado (08:00 diário)
+✅ Cron de vencimentos (vacinas/vermifugos/antiparasitários) iniciado (09:00 diário)
+Executing (default): SELECT `id`, `razao_social`, `nome_fantasia`, `cnpj`, `cep`, `endereco`, `email`, `telefone`, `foto`, `logo`, `data_adesao`, `status`, `valor_mensalidade`, `data_vencimento`, `intervalo_dias`, `proxima_cobranca`, `limite_acessos`, `createdAt`, `updatedAt` FROM `empresas_painel` AS `EmpresaPainel`;
+Executing (default): UPDATE `empresas_painel` SET `status`=?,`updatedAt`=? WHERE `data_vencimento` = ? AND `status` = ?
+Executing (default): UPDATE `empresas_painel` SET `status`=?,`updatedAt`=? WHERE `data_vencimento` < '2026-04-15' AND `status` IN ('ATIVO', 'VENCIDO')
+[cron] Verificação de vencimentos concluída em 2026-04-15
+[WhatsApp] Chrome Puppeteer zumbis eliminados (se havia).
+Executing (default): UPDATE `mensagens_automaticas` SET `conteudo`=?,`configuracaoEnvio`=?,`descricaoMarketing`=?,`updatedAt`=? WHERE `tipo` = ?
+Executing (default): SELECT `id`, `empresaId`, `nome`, `numero`, `status`, `sessionData`, `ultimaConexao`, `createdAt`, `updatedAt` FROM `whatsapp_sessions` AS `WhatsappSession` WHERE (`WhatsappSession`.`nome` IS NULL OR `WhatsappSession`.`nome` = '') AND `WhatsappSession`.`empresaId` > 0 AND `WhatsappSession`.`status` = 'conectado';
+[WhatsApp] Nenhuma sessão ativa para reconectar.
+[startup] Verificando mensagens automáticas pendentes (aniversários + vencimentos)...
+[cron] Processando aniversariantes (multi-dia)...
+Executing (default): SELECT `id`, `empresaId`, `tipo`, `titulo`, `conteudo`, `imagemPath`, `ativo`, `configuracaoEnvio`, `icone`, `descricaoMarketing`, `createdAt`, `updatedAt` FROM `mensagens_automaticas` AS `MensagemAutomatica` WHERE `MensagemAutomatica`.`tipo` = 'aniversario_pet' AND `MensagemAutomatica`.`ativo` = true;
+Executing (default): SELECT `id`, `empresaId`, `tipo`, `titulo`, `conteudo`, `imagemPath`, `ativo`, `configuracaoEnvio`, `icone`, `descricaoMarketing`, `createdAt`, `updatedAt` FROM `mensagens_automaticas` AS `MensagemAutomatica` WHERE `MensagemAutomatica`.`tipo` = 'aniversario_tutor' AND `MensagemAutomatica`.`ativo` = true;
+[cron] Processamento de aniversariantes concluído.
+[cron] Processando vacinas/vermifugos/antiparasitários vencendo (multi-dia)...
+Executing (default): SELECT `id`, `empresaId`, `tipo`, `titulo`, `conteudo`, `imagemPath`, `ativo`, `configuracaoEnvio`, `icone`, `descricaoMarketing`, `createdAt`, `updatedAt` FROM `mensagens_automaticas` AS `MensagemAutomatica` WHERE `MensagemAutomatica`.`tipo` = 'vacinas_vencendo' AND `MensagemAutomatica`.`ativo` = true;
+[cron] Nenhuma empresa com 'vacinas_vencendo' ativa. Pulando.
+[startup] Verificação de mensagens automáticas concluída.
+Executing (default): UPDATE `envios_agendados` SET `status`=?,`updatedAt`=? WHERE `status` = ? AND `updatedAt` < '2026-04-15 21:28:00'
+Executing (default): SELECT `id`, `empresaId`, `mensagemAutomaticaId`, `telefoneDestino`, `conteudoFinal`, `imagemPath`, `status`, `dataAgendada`, `dataEnvio`, `tentativas`, `contexto`, `erroMensagem`, `createdAt`, `updatedAt` FROM `envios_agendados` AS `EnvioAgendado` WHERE `EnvioAgendado`.`status` = 'pendente' AND `EnvioAgendado`.`dataAgendada` <= '2026-04-15 21:33:00' AND `EnvioAgendado`.`tentativas` < 3 ORDER BY `EnvioAgendado`.`dataAgendada` ASC LIMIT 20;
+Executing (default): UPDATE `envios_agendados` SET `status`=?,`updatedAt`=? WHERE `status` = ? AND `updatedAt` < '2026-04-15 21:29:00'
+Executing (default): SELECT `id`, `empresaId`, `mensagemAutomaticaId`, `telefoneDestino`, `conteudoFinal`, `imagemPath`, `status`, `dataAgendada`, `dataEnvio`, `tentativas`, `contexto`, `erroMensagem`, `createdAt`, `updatedAt` FROM `envios_agendados` AS `EnvioAgendado` WHERE `EnvioAgendado`.`status` = 'pendente' AND `EnvioAgendado`.`dataAgendada` <= '2026-04-15 21:34:00' AND `EnvioAgendado`.`tentativas` < 3 ORDER BY `EnvioAgendado`.`dataAgendada` ASC LIMIT 20;
+Executing (default): UPDATE `envios_agendados` SET `status`=?,`updatedAt`=? WHERE `status` = ? AND `updatedAt` < '2026-04-15 21:30:00'
+Executing (default): SELECT `id`, `empresaId`, `mensagemAutomaticaId`, `telefoneDestino`, `conteudoFinal`, `imagemPath`, `status`, `dataAgendada`, `dataEnvio`, `tentativas`, `contexto`, `erroMensagem`, `createdAt`, `updatedAt` FROM `envios_agendados` AS `EnvioAgendado` WHERE `EnvioAgendado`.`status` = 'pendente' AND `EnvioAgendado`.`dataAgendada` <= '2026-04-15 21:35:00' AND `EnvioAgendado`.`tentativas` < 3 ORDER BY `EnvioAgendado`.`dataAgendada` ASC LIMIT 20;
+Executing (default): UPDATE `envios_agendados` SET `status`=?,`updatedAt`=? WHERE `status` = ? AND `updatedAt` < '2026-04-15 21:31:00'
+Executing (default): SELECT `id`, `empresaId`, `mensagemAutomaticaId`, `telefoneDestino`, `conteudoFinal`, `imagemPath`, `status`, `dataAgendada`, `dataEnvio`, `tentativas`, `contexto`, `erroMensagem`, `createdAt`, `updatedAt` FROM `envios_agendados` AS `EnvioAgendado` WHERE `EnvioAgendado`.`status` = 'pendente' AND `EnvioAgendado`.`dataAgendada` <= '2026-04-15 21:36:00' AND `EnvioAgendado`.`tentativas` < 3 ORDER BY `EnvioAgendado`.`dataAgendada` ASC LIMIT 20;
+Executing (default): UPDATE `envios_agendados` SET `status`=?,`updatedAt`=? WHERE `status` = ? AND `updatedAt` < '2026-04-15 21:32:00'
+Executing (default): SELECT `id`, `empresaId`, `mensagemAutomaticaId`, `telefoneDestino`, `conteudoFinal`, `imagemPath`, `status`, `dataAgendada`, `dataEnvio`, `tentativas`, `contexto`, `erroMensagem`, `createdAt`, `updatedAt` FROM `envios_agendados` AS `EnvioAgendado` WHERE `EnvioAgendado`.`status` = 'pendente' AND `EnvioAgendado`.`dataAgendada` <= '2026-04-15 21:37:00' AND `EnvioAgendado`.`tentativas` < 3 ORDER BY `EnvioAgendado`.`dataAgendada` ASC LIMIT 20;
+Executing (default): UPDATE `envios_agendados` SET `status`=?,`updatedAt`=? WHERE `status` = ? AND `updatedAt` < '2026-04-15 21:33:00'
+Executing (default): SELECT `id`, `empresaId`, `mensagemAutomaticaId`, `telefoneDestino`, `conteudoFinal`, `imagemPath`, `status`, `dataAgendada`, `dataEnvio`, `tentativas`, `contexto`, `erroMensagem`, `createdAt`, `updatedAt` FROM `envios_agendados` AS `EnvioAgendado` WHERE `EnvioAgendado`.`status` = 'pendente' AND `EnvioAgendado`.`dataAgendada` <= '2026-04-15 21:38:00' AND `EnvioAgendado`.`tentativas` < 3 ORDER BY `EnvioAgendado`.`dataAgendada` ASC LIMIT 20;
+Executing (default): UPDATE `envios_agendados` SET `status`=?,`updatedAt`=? WHERE `status` = ? AND `updatedAt` < '2026-04-15 21:34:00'
+Executing (default): SELECT `id`, `empresaId`, `mensagemAutomaticaId`, `telefoneDestino`, `conteudoFinal`, `imagemPath`, `status`, `dataAgendada`, `dataEnvio`, `tentativas`, `contexto`, `erroMensagem`, `createdAt`, `updatedAt` FROM `envios_agendados` AS `EnvioAgendado` WHERE `EnvioAgendado`.`status` = 'pendente' AND `EnvioAgendado`.`dataAgendada` <= '2026-04-15 21:39:00' AND `EnvioAgendado`.`tentativas` < 3 ORDER BY `EnvioAgendado`.`dataAgendada` ASC LIMIT 20;
+Executing (default): UPDATE `envios_agendados` SET `status`=?,`updatedAt`=? WHERE `status` = ? AND `updatedAt` < '2026-04-15 21:35:00'
+Executing (default): SELECT `id`, `empresaId`, `mensagemAutomaticaId`, `telefoneDestino`, `conteudoFinal`, `imagemPath`, `status`, `dataAgendada`, `dataEnvio`, `tentativas`, `contexto`, `erroMensagem`, `createdAt`, `updatedAt` FROM `envios_agendados` AS `EnvioAgendado` WHERE `EnvioAgendado`.`status` = 'pendente' AND `EnvioAgendado`.`dataAgendada` <= '2026-04-15 21:40:00' AND `EnvioAgendado`.`tentativas` < 3 ORDER BY `EnvioAgendado`.`dataAgendada` ASC LIMIT 20;
+Executing (default): UPDATE `envios_agendados` SET `status`=?,`updatedAt`=? WHERE `status` = ? AND `updatedAt` < '2026-04-15 21:36:00'
+Executing (default): SELECT `id`, `empresaId`, `mensagemAutomaticaId`, `telefoneDestino`, `conteudoFinal`, `imagemPath`, `status`, `dataAgendada`, `dataEnvio`, `tentativas`, `contexto`, `erroMensagem`, `createdAt`, `updatedAt` FROM `envios_agendados` AS `EnvioAgendado` WHERE `EnvioAgendado`.`status` = 'pendente' AND `EnvioAgendado`.`dataAgendada` <= '2026-04-15 21:41:00' AND `EnvioAgendado`.`tentativas` < 3 ORDER BY `EnvioAgendado`.`dataAgendada` ASC LIMIT 20;
+Executing (default): UPDATE `envios_agendados` SET `status`=?,`updatedAt`=? WHERE `status` = ? AND `updatedAt` < '2026-04-15 21:37:00'
+Executing (default): SELECT `id`, `empresaId`, `mensagemAutomaticaId`, `telefoneDestino`, `conteudoFinal`, `imagemPath`, `status`, `dataAgendada`, `dataEnvio`, `tentativas`, `contexto`, `erroMensagem`, `createdAt`, `updatedAt` FROM `envios_agendados` AS `EnvioAgendado` WHERE `EnvioAgendado`.`status` = 'pendente' AND `EnvioAgendado`.`dataAgendada` <= '2026-04-15 21:42:00' AND `EnvioAgendado`.`tentativas` < 3 ORDER BY `EnvioAgendado`.`dataAgendada` ASC LIMIT 20;

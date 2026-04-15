@@ -1,3 +1,4 @@
+// @ts-nocheck
 require("dotenv").config({
   path: require("path").resolve(__dirname, "../.env"),
 });
@@ -1096,11 +1097,14 @@ async function syncAllTables() {
     console.log("🎉 Sincronização do banco completa!\n");
   } catch (err) {
     console.error("❌ Erro fatal na sincronização:", err.message);
+    console.error(
+      "⚠️ O servidor será iniciado mesmo assim, mas algumas tabelas podem não existir.",
+    );
   }
 }
 
-// Executar sync na inicialização
-syncAllTables();
+// Executar sync e SÓ DEPOIS iniciar o servidor
+syncAllTables().then(() => startServer());
 
 // Endpoints para selecionar/obter impressora
 app.get("/api/impressora", async (req, res) => {
@@ -1238,458 +1242,468 @@ process.on("uncaughtException", (err) => {
   // Não encerrar o processo para erros não críticos
 });
 
-// Iniciar o servidor
-const server = app.listen(3000, () => {
-  console.log("🚀 Servidor rodando na porta 3000 ✅");
-  console.log("🔗 URL: http://localhost:3000");
+// Iniciar o servidor SOMENTE após sync do banco
+function startServer() {
+  const server = app.listen(3000, () => {
+    console.log("🚀 Servidor rodando na porta 3000 ✅");
+    console.log("🔗 URL: http://localhost:3000");
 
-  // Iniciar agendador de mensagens WhatsApp (node-cron)
-  try {
-    const { iniciarAgendador } = require("./services/whatsappQueue");
-    iniciarAgendador();
-  } catch (err) {
-    console.warn(
-      "⚠️ Não foi possível iniciar agendador WhatsApp:",
-      err.message,
-    );
-  }
-
-  // Cron: verificação de vencimentos do painel admin (todo dia às 00:30)
-  try {
-    const cron = require("node-cron");
-    const {
-      verificarVencimentos,
-    } = require("./controllers/empresaPainelController");
-    cron.schedule("30 0 * * *", () => {
-      console.log("[cron] Executando verificação de vencimentos...");
-      verificarVencimentos();
-    });
-    // Executar verificação ao iniciar também
-    verificarVencimentos();
-    console.log("✅ Cron de verificação de vencimentos iniciado");
-  } catch (err) {
-    console.warn(
-      "⚠️ Não foi possível iniciar cron de vencimentos:",
-      err.message,
-    );
-  }
-
-  // Cron: backup automático diário de todas as empresas (todo dia às 00:00)
-  try {
-    const cron = require("node-cron");
-    const {
-      executarBackupGeral,
-      verificarEExecutarBackupSeNecessario,
-    } = require("./services/backupService");
-
-    // Verificar na inicialização se o backup de hoje já foi feito
-    verificarEExecutarBackupSeNecessario();
-
-    cron.schedule("0 0 * * *", async () => {
-      console.log("[cron] Executando backup diário automático...");
-      try {
-        await executarBackupGeral();
-      } catch (err) {
-        console.error("[cron] Erro no backup diário:", err && err.message);
-      }
-    });
-    console.log("✅ Cron de backup diário iniciado (00:00)");
-  } catch (err) {
-    console.warn("⚠️ Não foi possível iniciar cron de backup:", err.message);
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  // Função reutilizável: processar aniversariantes do dia
-  // ═══════════════════════════════════════════════════════════════
-  async function processarAniversariantes() {
-    console.log("[cron] Processando aniversariantes (multi-dia)...");
+    // Iniciar agendador de mensagens WhatsApp (node-cron)
     try {
-      const { Pet, Cliente, MensagemAutomatica } = require("./models");
-      const { Op } = require("sequelize");
+      const { iniciarAgendador } = require("./services/whatsappQueue");
+      iniciarAgendador();
+    } catch (err) {
+      console.warn(
+        "⚠️ Não foi possível iniciar agendador WhatsApp:",
+        err.message,
+      );
+    }
+
+    // Cron: verificação de vencimentos do painel admin (todo dia às 00:30)
+    try {
+      const cron = require("node-cron");
       const {
-        dispararMensagemAutomatica,
-        normalizarConfig,
-      } = require("./controllers/marketingController");
-
-      const hoje = new Date();
-
-      // ── Buscar configs ativas por empresa ──
-      const msgsPet = await MensagemAutomatica.findAll({
-        where: { tipo: "aniversario_pet", ativo: true },
+        verificarVencimentos,
+      } = require("./controllers/empresaPainelController");
+      cron.schedule("30 0 * * *", () => {
+        console.log("[cron] Executando verificação de vencimentos...");
+        verificarVencimentos();
       });
-      const msgsTutor = await MensagemAutomatica.findAll({
-        where: { tipo: "aniversario_tutor", ativo: true },
+      // Executar verificação ao iniciar também
+      verificarVencimentos();
+      console.log("✅ Cron de verificação de vencimentos iniciado");
+    } catch (err) {
+      console.warn(
+        "⚠️ Não foi possível iniciar cron de vencimentos:",
+        err.message,
+      );
+    }
+
+    // Cron: backup automático diário de todas as empresas (todo dia às 00:00)
+    try {
+      const cron = require("node-cron");
+      const {
+        executarBackupGeral,
+        verificarEExecutarBackupSeNecessario,
+      } = require("./services/backupService");
+
+      // Verificar na inicialização se o backup de hoje já foi feito
+      verificarEExecutarBackupSeNecessario();
+
+      cron.schedule("0 0 * * *", async () => {
+        console.log("[cron] Executando backup diário automático...");
+        try {
+          await executarBackupGeral();
+        } catch (err) {
+          console.error("[cron] Erro no backup diário:", err && err.message);
+        }
       });
+      console.log("✅ Cron de backup diário iniciado (00:00)");
+    } catch (err) {
+      console.warn("⚠️ Não foi possível iniciar cron de backup:", err.message);
+    }
 
-      const configsPet = new Map();
-      const allDiasPet = new Set();
-      for (const m of msgsPet) {
-        const cfg = normalizarConfig(m.configuracaoEnvio);
-        configsPet.set(m.empresaId, cfg);
-        for (const d of cfg.dias) allDiasPet.add(d);
+    // ═══════════════════════════════════════════════════════════════
+    // Função reutilizável: processar aniversariantes do dia
+    // ═══════════════════════════════════════════════════════════════
+    async function processarAniversariantes() {
+      console.log("[cron] Processando aniversariantes (multi-dia)...");
+      try {
+        const { Pet, Cliente, MensagemAutomatica } = require("./models");
+        const { Op } = require("sequelize");
+        const {
+          dispararMensagemAutomatica,
+          normalizarConfig,
+        } = require("./controllers/marketingController");
+
+        const hoje = new Date();
+
+        // ── Buscar configs ativas por empresa ──
+        const msgsPet = await MensagemAutomatica.findAll({
+          where: { tipo: "aniversario_pet", ativo: true },
+        });
+        const msgsTutor = await MensagemAutomatica.findAll({
+          where: { tipo: "aniversario_tutor", ativo: true },
+        });
+
+        const configsPet = new Map();
+        const allDiasPet = new Set();
+        for (const m of msgsPet) {
+          const cfg = normalizarConfig(m.configuracaoEnvio);
+          configsPet.set(m.empresaId, cfg);
+          for (const d of cfg.dias) allDiasPet.add(d);
+        }
+
+        const configsTutor = new Map();
+        const allDiasTutor = new Set();
+        for (const m of msgsTutor) {
+          const cfg = normalizarConfig(m.configuracaoEnvio);
+          configsTutor.set(m.empresaId, cfg);
+          for (const d of cfg.dias) allDiasTutor.add(d);
+        }
+
+        // Helper para parsear mês/dia de data_nascimento
+        function parseMesDia(dataNasc) {
+          const dateStr =
+            typeof dataNasc === "string"
+              ? dataNasc.split("T")[0]
+              : dataNasc.toISOString().split("T")[0];
+          const [, mesStr, diaStr] = dateStr.split("-");
+          return [parseInt(mesStr, 10), parseInt(diaStr, 10)];
+        }
+
+        // ── Aniversário de PETS ──
+        if (allDiasPet.size > 0) {
+          const pets = await Pet.findAll({
+            where: { data_nascimento: { [Op.not]: null } },
+            include: [
+              {
+                model: Cliente,
+                as: "cliente",
+                attributes: ["id", "nome", "telefone", "empresa_id"],
+              },
+            ],
+          });
+
+          for (const pet of pets) {
+            const dataNasc = pet.data_nascimento;
+            if (!dataNasc) continue;
+            const [mesNasc, diaNasc] = parseMesDia(dataNasc);
+            const tutor = pet.cliente;
+            if (!tutor?.telefone) continue;
+            const cfg = configsPet.get(tutor.empresa_id);
+            if (!cfg) continue;
+
+            for (const diasAntes of cfg.dias) {
+              const target = new Date(hoje);
+              target.setDate(target.getDate() + diasAntes);
+              if (
+                target.getMonth() + 1 === mesNasc &&
+                target.getDate() === diaNasc
+              ) {
+                await dispararMensagemAutomatica(
+                  "aniversario_pet",
+                  {
+                    nomeTutor: tutor.nome || "Tutor",
+                    nomePet: pet.nome || "Pet",
+                    nomeEmpresa: "nossa clínica",
+                  },
+                  tutor.telefone,
+                  hoje,
+                  { clienteId: tutor.id, petId: pet.id, diasAntes },
+                  tutor.empresa_id,
+                );
+              }
+            }
+          }
+        }
+
+        // ── Aniversário de TUTORES ──
+        if (allDiasTutor.size > 0) {
+          const clientes = await Cliente.findAll({
+            where: { data_nascimento: { [Op.not]: null } },
+          });
+
+          for (const cliente of clientes) {
+            const dataNasc = cliente.data_nascimento;
+            if (!dataNasc) continue;
+            const [mesNasc, diaNasc] = parseMesDia(dataNasc);
+            if (!cliente.telefone) continue;
+            const cfg = configsTutor.get(cliente.empresa_id);
+            if (!cfg) continue;
+
+            for (const diasAntes of cfg.dias) {
+              const target = new Date(hoje);
+              target.setDate(target.getDate() + diasAntes);
+              if (
+                target.getMonth() + 1 === mesNasc &&
+                target.getDate() === diaNasc
+              ) {
+                const primeiroPet = await Pet.findOne({
+                  where: { cliente_id: cliente.id },
+                  attributes: ["nome"],
+                });
+                await dispararMensagemAutomatica(
+                  "aniversario_tutor",
+                  {
+                    nomeTutor: cliente.nome || "Cliente",
+                    nomePet: primeiroPet?.nome || "seu pet",
+                    nomeEmpresa: "nossa clínica",
+                  },
+                  cliente.telefone,
+                  hoje,
+                  { clienteId: cliente.id, diasAntes },
+                  cliente.empresa_id,
+                );
+              }
+            }
+          }
+        }
+
+        console.log("[cron] Processamento de aniversariantes concluído.");
+      } catch (err) {
+        console.error("[cron] Erro ao processar aniversariantes:", err.message);
       }
+    }
 
-      const configsTutor = new Map();
-      const allDiasTutor = new Set();
-      for (const m of msgsTutor) {
-        const cfg = normalizarConfig(m.configuracaoEnvio);
-        configsTutor.set(m.empresaId, cfg);
-        for (const d of cfg.dias) allDiasTutor.add(d);
-      }
+    // ═══════════════════════════════════════════════════════════════
+    // Função reutilizável: processar vacinas/vermifugos/antiparasitários vencendo hoje
+    // ═══════════════════════════════════════════════════════════════
+    async function processarVencimentos() {
+      console.log(
+        "[cron] Processando vacinas/vermifugos/antiparasitários vencendo (multi-dia)...",
+      );
+      try {
+        const {
+          MensagemAutomatica,
+          Agendamento,
+          Pet,
+          Cliente,
+          Periodicidade,
+        } = require("./models");
+        const {
+          dispararMensagemAutomatica,
+          normalizarConfig,
+        } = require("./controllers/marketingController");
 
-      // Helper para parsear mês/dia de data_nascimento
-      function parseMesDia(dataNasc) {
-        const dateStr =
-          typeof dataNasc === "string"
-            ? dataNasc.split("T")[0]
-            : dataNasc.toISOString().split("T")[0];
-        const [, mesStr, diaStr] = dateStr.split("-");
-        return [parseInt(mesStr, 10), parseInt(diaStr, 10)];
-      }
+        // Buscar todas as empresas que têm vacinas_vencendo ativo
+        const mensagensAtivas = await MensagemAutomatica.findAll({
+          where: { tipo: "vacinas_vencendo", ativo: true },
+        });
+        if (mensagensAtivas.length === 0) {
+          console.log(
+            "[cron] Nenhuma empresa com 'vacinas_vencendo' ativa. Pulando.",
+          );
+          return;
+        }
 
-      // ── Aniversário de PETS ──
-      if (allDiasPet.size > 0) {
-        const pets = await Pet.findAll({
-          where: { data_nascimento: { [Op.not]: null } },
+        // Normalizar config por empresaId (multi-dia)
+        const configPorEmpresa = new Map();
+        for (const m of mensagensAtivas) {
+          configPorEmpresa.set(
+            m.empresaId,
+            normalizarConfig(m.configuracaoEnvio),
+          );
+        }
+
+        const hoje = new Date();
+
+        // Buscar todas as periodicidades para calcular data de renovação
+        const periodicidades = await Periodicidade.findAll();
+        const periodicidadesMap = new Map(
+          periodicidades.map((p) => [p.descricao.trim().toLowerCase(), p]),
+        );
+
+        // Buscar agendamentos concluídos que têm vacina/vermifugo/antiparasitário
+        const agendamentos = await Agendamento.findAll({
+          where: { status: "concluido" },
           include: [
             {
-              model: Cliente,
-              as: "cliente",
-              attributes: ["id", "nome", "telefone", "empresa_id"],
+              model: Pet,
+              as: "pet",
+              include: [{ model: Cliente, as: "cliente" }],
             },
           ],
         });
 
-        for (const pet of pets) {
-          const dataNasc = pet.data_nascimento;
-          if (!dataNasc) continue;
-          const [mesNasc, diaNasc] = parseMesDia(dataNasc);
-          const tutor = pet.cliente;
-          if (!tutor?.telefone) continue;
-          const cfg = configsPet.get(tutor.empresa_id);
-          if (!cfg) continue;
+        let notificados = 0;
 
-          for (const diasAntes of cfg.dias) {
-            const target = new Date(hoje);
-            target.setDate(target.getDate() + diasAntes);
-            if (
-              target.getMonth() + 1 === mesNasc &&
-              target.getDate() === diaNasc
-            ) {
-              await dispararMensagemAutomatica(
-                "aniversario_pet",
-                {
-                  nomeTutor: tutor.nome || "Tutor",
-                  nomePet: pet.nome || "Pet",
-                  nomeEmpresa: "nossa clínica",
-                },
-                tutor.telefone,
-                hoje,
-                { clienteId: tutor.id, petId: pet.id, diasAntes },
-                tutor.empresa_id,
-              );
+        for (const ag of agendamentos) {
+          let servicos = ag.servicos;
+          if (!servicos) continue;
+          if (typeof servicos === "string") {
+            try {
+              servicos = JSON.parse(servicos);
+            } catch (_) {
+              continue;
             }
           }
-        }
-      }
+          if (!Array.isArray(servicos)) continue;
 
-      // ── Aniversário de TUTORES ──
-      if (allDiasTutor.size > 0) {
-        const clientes = await Cliente.findAll({
-          where: { data_nascimento: { [Op.not]: null } },
-        });
-
-        for (const cliente of clientes) {
-          const dataNasc = cliente.data_nascimento;
-          if (!dataNasc) continue;
-          const [mesNasc, diaNasc] = parseMesDia(dataNasc);
-          if (!cliente.telefone) continue;
-          const cfg = configsTutor.get(cliente.empresa_id);
-          if (!cfg) continue;
-
-          for (const diasAntes of cfg.dias) {
-            const target = new Date(hoje);
-            target.setDate(target.getDate() + diasAntes);
+          for (const s of servicos) {
+            const meta = s.meta || {};
             if (
-              target.getMonth() + 1 === mesNasc &&
-              target.getDate() === diaNasc
-            ) {
-              const primeiroPet = await Pet.findOne({
-                where: { cliente_id: cliente.id },
-                attributes: ["nome"],
-              });
-              await dispararMensagemAutomatica(
-                "aniversario_tutor",
-                {
-                  nomeTutor: cliente.nome || "Cliente",
-                  nomePet: primeiroPet?.nome || "seu pet",
-                  nomeEmpresa: "nossa clínica",
-                },
-                cliente.telefone,
-                hoje,
-                { clienteId: cliente.id, diasAntes },
-                cliente.empresa_id,
-              );
-            }
-          }
-        }
-      }
-
-      console.log("[cron] Processamento de aniversariantes concluído.");
-    } catch (err) {
-      console.error("[cron] Erro ao processar aniversariantes:", err.message);
-    }
-  }
-
-  // ═══════════════════════════════════════════════════════════════
-  // Função reutilizável: processar vacinas/vermifugos/antiparasitários vencendo hoje
-  // ═══════════════════════════════════════════════════════════════
-  async function processarVencimentos() {
-    console.log(
-      "[cron] Processando vacinas/vermifugos/antiparasitários vencendo (multi-dia)...",
-    );
-    try {
-      const {
-        MensagemAutomatica,
-        Agendamento,
-        Pet,
-        Cliente,
-        Periodicidade,
-      } = require("./models");
-      const {
-        dispararMensagemAutomatica,
-        normalizarConfig,
-      } = require("./controllers/marketingController");
-
-      // Buscar todas as empresas que têm vacinas_vencendo ativo
-      const mensagensAtivas = await MensagemAutomatica.findAll({
-        where: { tipo: "vacinas_vencendo", ativo: true },
-      });
-      if (mensagensAtivas.length === 0) {
-        console.log(
-          "[cron] Nenhuma empresa com 'vacinas_vencendo' ativa. Pulando.",
-        );
-        return;
-      }
-
-      // Normalizar config por empresaId (multi-dia)
-      const configPorEmpresa = new Map();
-      for (const m of mensagensAtivas) {
-        configPorEmpresa.set(
-          m.empresaId,
-          normalizarConfig(m.configuracaoEnvio),
-        );
-      }
-
-      const hoje = new Date();
-
-      // Buscar todas as periodicidades para calcular data de renovação
-      const periodicidades = await Periodicidade.findAll();
-      const periodicidadesMap = new Map(
-        periodicidades.map((p) => [p.descricao.trim().toLowerCase(), p]),
-      );
-
-      // Buscar agendamentos concluídos que têm vacina/vermifugo/antiparasitário
-      const agendamentos = await Agendamento.findAll({
-        where: { status: "concluido" },
-        include: [
-          {
-            model: Pet,
-            as: "pet",
-            include: [{ model: Cliente, as: "cliente" }],
-          },
-        ],
-      });
-
-      let notificados = 0;
-
-      for (const ag of agendamentos) {
-        let servicos = ag.servicos;
-        if (!servicos) continue;
-        if (typeof servicos === "string") {
-          try {
-            servicos = JSON.parse(servicos);
-          } catch (_) {
-            continue;
-          }
-        }
-        if (!Array.isArray(servicos)) continue;
-
-        for (const s of servicos) {
-          const meta = s.meta || {};
-          if (
-            !["vacina", "vermifugo", "antiparasitario"].includes(
-              meta.tipoEspecial,
+              !["vacina", "vermifugo", "antiparasitario"].includes(
+                meta.tipoEspecial,
+              )
             )
-          )
-            continue;
+              continue;
 
-          const dataAplic = meta.dataAplic || ag.dataAgendamento || null;
-          const renovacaoLabel = meta.renovacao || meta.proximaDose || "";
-          if (!dataAplic || !renovacaoLabel) continue;
+            const dataAplic = meta.dataAplic || ag.dataAgendamento || null;
+            const renovacaoLabel = meta.renovacao || meta.proximaDose || "";
+            if (!dataAplic || !renovacaoLabel) continue;
 
-          // Calcular data de renovação
-          const p = periodicidadesMap.get(renovacaoLabel.trim().toLowerCase());
-          if (!p || !p.dias) continue;
-
-          const dStr =
-            typeof dataAplic === "string"
-              ? dataAplic.slice(0, 10)
-              : new Date(dataAplic).toISOString().slice(0, 10);
-          const [year, month, day] = dStr.split("-").map(Number);
-          const dRenov = new Date(year, month - 1, day);
-          if (isNaN(dRenov)) continue;
-          dRenov.setDate(dRenov.getDate() + Number(p.dias));
-          const renovStr = `${dRenov.getFullYear()}-${String(dRenov.getMonth() + 1).padStart(2, "0")}-${String(dRenov.getDate()).padStart(2, "0")}`;
-
-          // Verificar se a empresa deste cliente tem vacinas_vencendo ativo
-          const pet = ag.pet;
-          if (!pet?.cliente?.telefone) continue;
-          const empId = pet.cliente.empresa_id;
-          const cfgEmpresa = configPorEmpresa.get(empId);
-          if (!cfgEmpresa) continue;
-
-          // Multi-dia: checar cada dia configurado
-          for (const diasAntes of cfgEmpresa.dias) {
-            const targetDate = new Date(
-              hoje.getFullYear(),
-              hoje.getMonth(),
-              hoje.getDate() + diasAntes,
+            // Calcular data de renovação
+            const p = periodicidadesMap.get(
+              renovacaoLabel.trim().toLowerCase(),
             );
-            const targetStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, "0")}-${String(targetDate.getDate()).padStart(2, "0")}`;
+            if (!p || !p.dias) continue;
 
-            if (renovStr !== targetStr) continue;
+            const dStr =
+              typeof dataAplic === "string"
+                ? dataAplic.slice(0, 10)
+                : new Date(dataAplic).toISOString().slice(0, 10);
+            const [year, month, day] = dStr.split("-").map(Number);
+            const dRenov = new Date(year, month - 1, day);
+            if (isNaN(dRenov)) continue;
+            dRenov.setDate(dRenov.getDate() + Number(p.dias));
+            const renovStr = `${dRenov.getFullYear()}-${String(dRenov.getMonth() + 1).padStart(2, "0")}-${String(dRenov.getDate()).padStart(2, "0")}`;
 
-            const tipoLabel =
-              meta.tipoEspecial === "vacina"
-                ? "vacina"
-                : meta.tipoEspecial === "vermifugo"
-                  ? "vermífugo"
-                  : "antiparasitário";
-            const produtoNome = s.nome || meta.nome || tipoLabel;
+            // Verificar se a empresa deste cliente tem vacinas_vencendo ativo
+            const pet = ag.pet;
+            if (!pet?.cliente?.telefone) continue;
+            const empId = pet.cliente.empresa_id;
+            const cfgEmpresa = configPorEmpresa.get(empId);
+            if (!cfgEmpresa) continue;
 
-            await dispararMensagemAutomatica(
-              "vacinas_vencendo",
-              {
-                nomeTutor: pet.cliente.nome || "Tutor",
-                nomePet: pet.nome || "Pet",
-                produto: produtoNome,
-                tipoEspecial: tipoLabel,
-                dataRenovacao: dRenov.toLocaleDateString("pt-BR"),
-              },
-              pet.cliente.telefone,
-              dRenov,
-              {
-                clienteId: pet.cliente.id,
-                petId: pet.id,
-                agendamentoId: ag.id,
-                diasAntes,
-              },
-              empId,
-            );
-            notificados++;
+            // Multi-dia: checar cada dia configurado
+            for (const diasAntes of cfgEmpresa.dias) {
+              const targetDate = new Date(
+                hoje.getFullYear(),
+                hoje.getMonth(),
+                hoje.getDate() + diasAntes,
+              );
+              const targetStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, "0")}-${String(targetDate.getDate()).padStart(2, "0")}`;
+
+              if (renovStr !== targetStr) continue;
+
+              const tipoLabel =
+                meta.tipoEspecial === "vacina"
+                  ? "vacina"
+                  : meta.tipoEspecial === "vermifugo"
+                    ? "vermífugo"
+                    : "antiparasitário";
+              const produtoNome = s.nome || meta.nome || tipoLabel;
+
+              await dispararMensagemAutomatica(
+                "vacinas_vencendo",
+                {
+                  nomeTutor: pet.cliente.nome || "Tutor",
+                  nomePet: pet.nome || "Pet",
+                  produto: produtoNome,
+                  tipoEspecial: tipoLabel,
+                  dataRenovacao: dRenov.toLocaleDateString("pt-BR"),
+                },
+                pet.cliente.telefone,
+                dRenov,
+                {
+                  clienteId: pet.cliente.id,
+                  petId: pet.id,
+                  agendamentoId: ag.id,
+                  diasAntes,
+                },
+                empId,
+              );
+              notificados++;
+            }
           }
         }
+
+        console.log(
+          `[cron] Vencimentos processados: ${notificados} notificação(ões).`,
+        );
+      } catch (err) {
+        console.error("[cron] Erro ao processar vencimentos:", err.message);
       }
+    }
 
+    // Cron: mensagens de aniversário (pets e tutores) — todo dia às 08:00
+    try {
+      const cron = require("node-cron");
+      cron.schedule("0 8 * * *", processarAniversariantes);
       console.log(
-        `[cron] Vencimentos processados: ${notificados} notificação(ões).`,
+        "✅ Cron de mensagens de aniversário iniciado (08:00 diário)",
       );
-    } catch (err) {
-      console.error("[cron] Erro ao processar vencimentos:", err.message);
-    }
-  }
-
-  // Cron: mensagens de aniversário (pets e tutores) — todo dia às 08:00
-  try {
-    const cron = require("node-cron");
-    cron.schedule("0 8 * * *", processarAniversariantes);
-    console.log("✅ Cron de mensagens de aniversário iniciado (08:00 diário)");
-  } catch (err) {
-    console.warn(
-      "⚠️ Não foi possível iniciar cron de aniversários:",
-      err.message,
-    );
-  }
-
-  // Cron: vacinas/vermifugos/antiparasitários vencendo — todo dia às 09:00
-  try {
-    const cron = require("node-cron");
-    cron.schedule("0 9 * * *", processarVencimentos);
-    console.log(
-      "✅ Cron de vencimentos (vacinas/vermifugos/antiparasitários) iniciado (09:00 diário)",
-    );
-  } catch (err) {
-    console.warn(
-      "⚠️ Não foi possível iniciar cron de vencimentos:",
-      err.message,
-    );
-  }
-
-  // Reconectar automaticamente sessões WhatsApp que estavam ativas
-  // (usa arquivos de sessão salvos em disco — sem precisar de novo QR)
-  setTimeout(async () => {
-    try {
-      const { reconectarSessoesAtivas } = require("./services/whatsappService");
-      await reconectarSessoesAtivas();
-    } catch (err) {
-      console.warn("⚠️ Erro ao reconectar sessões WhatsApp:", err.message);
-    }
-  }, 3000); // aguarda 3s para o DB estar pronto
-
-  // Garantir template atualizado do vacinas_vencendo (sem alterar ativo de outras empresas)
-  setTimeout(async () => {
-    try {
-      const { MensagemAutomatica } = require("./models");
-      // Apenas atualizar o template do vacinas_vencendo para manter sincronizado
-      await MensagemAutomatica.update(
-        {
-          conteudo:
-            "💉 Oi {nome_tutor}!\n\nPassando para avisar que a {produto} de {nome_pet} vence hoje!\n\nNão esqueça de agendar na {nome_empresa} para manter {nome_pet} protegido(a). 🐾\n\nEntre em contato! 😊",
-          configuracaoEnvio: { tipo: "no_dia", hora: "09:00" },
-          descricaoMarketing:
-            "Mantenha os clientes informados sobre vacinas/vermífugos/antiparasitários vencendo para garantir visitas regulares.",
-        },
-        { where: { tipo: "vacinas_vencendo" } },
-      );
-    } catch (err) {
-      console.warn("⚠️ Erro ao ajustar mensagens automáticas:", err.message);
-    }
-  }, 5000);
-
-  // Executar aniversariantes + vencimentos no startup (caso horário do cron já tenha passado)
-  // Aguarda 90s para dar tempo do WhatsApp headless reconectar
-  setTimeout(async () => {
-    try {
-      console.log(
-        "[startup] Verificando mensagens automáticas pendentes (aniversários + vencimentos)...",
-      );
-      await processarAniversariantes();
-      await processarVencimentos();
-      console.log("[startup] Verificação de mensagens automáticas concluída.");
     } catch (err) {
       console.warn(
-        "⚠️ Erro ao processar mensagens automáticas no startup:",
+        "⚠️ Não foi possível iniciar cron de aniversários:",
         err.message,
       );
     }
-  }, 30000); // aguarda WhatsApp headless reconectar antes de processar
 
-  const address = server.address();
-  if (address) {
-    console.log("📊 Endereço:", address);
-    console.log("🌐 Hostname:", address.address);
-    console.log("👂 Escutando na porta:", address.port);
-  }
-});
+    // Cron: vacinas/vermifugos/antiparasitários vencendo — todo dia às 09:00
+    try {
+      const cron = require("node-cron");
+      cron.schedule("0 9 * * *", processarVencimentos);
+      console.log(
+        "✅ Cron de vencimentos (vacinas/vermifugos/antiparasitários) iniciado (09:00 diário)",
+      );
+    } catch (err) {
+      console.warn(
+        "⚠️ Não foi possível iniciar cron de vencimentos:",
+        err.message,
+      );
+    }
 
-server.on("error", (error) => {
-  console.error("❌ Erro no servidor:", error.message);
-  if (error.code === "EADDRINUSE") {
-    console.error("🚫 Porta 3000 já está em uso!");
-  }
-});
+    // Reconectar automaticamente sessões WhatsApp que estavam ativas
+    // (usa arquivos de sessão salvos em disco — sem precisar de novo QR)
+    setTimeout(async () => {
+      try {
+        const {
+          reconectarSessoesAtivas,
+        } = require("./services/whatsappService");
+        await reconectarSessoesAtivas();
+      } catch (err) {
+        console.warn("⚠️ Erro ao reconectar sessões WhatsApp:", err.message);
+      }
+    }, 3000); // aguarda 3s para o DB estar pronto
 
-server.on("listening", () => {
-  console.log("✅ Servidor pronto para receber conexões!");
-});
+    // Garantir template atualizado do vacinas_vencendo (sem alterar ativo de outras empresas)
+    setTimeout(async () => {
+      try {
+        const { MensagemAutomatica } = require("./models");
+        // Apenas atualizar o template do vacinas_vencendo para manter sincronizado
+        await MensagemAutomatica.update(
+          {
+            conteudo:
+              "💉 Oi {nome_tutor}!\n\nPassando para avisar que a {produto} de {nome_pet} vence hoje!\n\nNão esqueça de agendar na {nome_empresa} para manter {nome_pet} protegido(a). 🐾\n\nEntre em contato! 😊",
+            configuracaoEnvio: { tipo: "no_dia", hora: "09:00" },
+            descricaoMarketing:
+              "Mantenha os clientes informados sobre vacinas/vermífugos/antiparasitários vencendo para garantir visitas regulares.",
+          },
+          { where: { tipo: "vacinas_vencendo" } },
+        );
+      } catch (err) {
+        console.warn("⚠️ Erro ao ajustar mensagens automáticas:", err.message);
+      }
+    }, 5000);
+
+    // Executar aniversariantes + vencimentos no startup (caso horário do cron já tenha passado)
+    // Aguarda 90s para dar tempo do WhatsApp headless reconectar
+    setTimeout(async () => {
+      try {
+        console.log(
+          "[startup] Verificando mensagens automáticas pendentes (aniversários + vencimentos)...",
+        );
+        await processarAniversariantes();
+        await processarVencimentos();
+        console.log(
+          "[startup] Verificação de mensagens automáticas concluída.",
+        );
+      } catch (err) {
+        console.warn(
+          "⚠️ Erro ao processar mensagens automáticas no startup:",
+          err.message,
+        );
+      }
+    }, 30000); // aguarda WhatsApp headless reconectar antes de processar
+
+    const address = server.address();
+    if (address) {
+      console.log("📊 Endereço:", address);
+      console.log("🌐 Hostname:", address.address);
+      console.log("👂 Escutando na porta:", address.port);
+    }
+  });
+
+  server.on("error", (error) => {
+    console.error("❌ Erro no servidor:", error.message);
+    if (error.code === "EADDRINUSE") {
+      console.error("🚫 Porta 3000 já está em uso!");
+    }
+  });
+
+  server.on("listening", () => {
+    console.log("✅ Servidor pronto para receber conexões!");
+  });
+} // fim startServer()
