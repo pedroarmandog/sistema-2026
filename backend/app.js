@@ -3,6 +3,35 @@
 require("dotenv").config({
   path: require("path").resolve(__dirname, "../.env"),
 });
+// Garantir CHROME_PATH antes de carregar módulos que podem usar Puppeteer
+try {
+  if (!process.env.CHROME_PATH) {
+    const fs = require("fs");
+    const candidates = [
+      "/usr/bin/google-chrome",
+      "/usr/bin/google-chrome-stable",
+      "/usr/bin/chromium-browser",
+      "/usr/bin/chromium",
+      "/snap/bin/chromium",
+    ];
+    for (const p of candidates) {
+      if (fs.existsSync(p)) {
+        process.env.CHROME_PATH = p;
+        console.log(`[startup] CHROME_PATH definido para: ${p}`);
+        break;
+      }
+    }
+  } else {
+    console.log(
+      `[startup] CHROME_PATH já definido: ${process.env.CHROME_PATH}`,
+    );
+  }
+} catch (e) {
+  console.warn(
+    "[startup] Falha ao definir CHROME_PATH automaticamente:",
+    e && e.message,
+  );
+}
 const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
