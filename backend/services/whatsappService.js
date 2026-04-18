@@ -218,17 +218,33 @@ async function inicializarCliente(empresaId) {
   }
 
   // Obter caminho do Chromium correto (debug detalhado)
-  // Prioridade: 1) CHROME_PATH env 2) detector local (puppeteerLauncher) 3) puppeteer.executablePath()
+  // Prioridade (segura): 1) CHROME_PATH (somente se existir) 2) detector local (puppeteerLauncher)
+  // 3) binário do sistema (usr/bin...) 4) puppeteer.executablePath() (somente se existir no FS)
   let executablePath;
   let selectedFrom = null;
   let envPath = process.env.CHROME_PATH || null;
   let launcherPath = null;
   let puppeteerPath = null;
   try {
+    // Validar CHROME_PATH (não apenas checar presença da variável)
     if (envPath) {
-      executablePath = envPath;
-      selectedFrom = "env";
-    } else {
+      try {
+        if (fs.existsSync(envPath)) {
+          executablePath = envPath;
+          selectedFrom = "env";
+        } else {
+          console.warn(
+            `[WhatsApp][${chave}] CHROME_PATH definido (${envPath}) mas arquivo não existe — ignorando.`,
+          );
+          envPath = null;
+        }
+      } catch (e) {
+        envPath = null;
+      }
+    }
+
+    // Se não definido via env, tentar o launcher (que checa caminhos do sistema)
+    if (!executablePath) {
       try {
         const launcher = require("./puppeteerLauncher");
         launcherPath = launcher.findChromePath();
@@ -239,18 +255,23 @@ async function inicializarCliente(empresaId) {
       } catch (e) {
         launcherPath = null;
       }
+    }
 
-      if (!executablePath) {
-        try {
-          const p = require("puppeteer");
-          if (typeof p.executablePath === "function") {
-            puppeteerPath = p.executablePath();
-            executablePath = puppeteerPath || undefined;
-            selectedFrom = puppeteerPath ? "puppeteer" : null;
+    // Se ainda nada, tentar o valor vindo do pacote puppeteer (apenas se existir no FS)
+    if (!executablePath) {
+      try {
+        const p = require("puppeteer");
+        if (typeof p.executablePath === "function") {
+          puppeteerPath = p.executablePath();
+          if (puppeteerPath && fs.existsSync(puppeteerPath)) {
+            executablePath = puppeteerPath;
+            selectedFrom = "puppeteer";
+          } else {
+            puppeteerPath = null;
           }
-        } catch (e) {
-          puppeteerPath = null;
         }
+      } catch (e) {
+        puppeteerPath = null;
       }
     }
   } catch (e) {
@@ -275,6 +296,17 @@ async function inicializarCliente(empresaId) {
           break;
         }
       } catch (_) {}
+    }
+  } catch (_) {}
+
+  // Verificação final: garantir que o arquivo selecionado exista no FS
+  try {
+    if (executablePath && !fs.existsSync(executablePath)) {
+      console.warn(
+        `[WhatsApp][${chave}] Caminho selecionado não existe: ${executablePath} — removendo seleção.`,
+      );
+      executablePath = undefined;
+      selectedFrom = null;
     }
   } catch (_) {}
 
