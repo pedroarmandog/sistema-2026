@@ -7,6 +7,7 @@
  * - Emite eventos para o frontend via Server-Sent Events (SSE).
  * - Anti-spam: delay aleatório entre envios + limite por minuto.
  */
+console.log("🔥 ARQUIVO CERTO CARREGADO - WHATSAPP SERVICE 🔥");
 
 const { Client, LocalAuth } = require("whatsapp-web.js");
 const QRCode = require("qrcode");
