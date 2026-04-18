@@ -422,14 +422,16 @@ async function inicializarCliente(empresaId) {
         const browser = client.pupBrowser;
         // debug: inspecionar processo do browser lançado
         try {
-          if (browser && typeof browser.process === 'function') {
+          if (browser && typeof browser.process === "function") {
             const proc = browser.process();
             console.log(
-              `[WhatsApp][${chave}] Browser process spawnfile: ${proc && (proc.spawnfile || proc.spawnpath || proc.execPath) || '(unknown)'} args: ${proc && proc.spawnargs ? proc.spawnargs.join(' ') : '(none)'}`,
+              `[WhatsApp][${chave}] Browser process spawnfile: ${(proc && (proc.spawnfile || proc.spawnpath || proc.execPath)) || "(unknown)"} args: ${proc && proc.spawnargs ? proc.spawnargs.join(" ") : "(none)"}`,
             );
           }
         } catch (e) {
-          console.log(`[WhatsApp][${chave}] Debug: falha ao inspecionar browser.process(): ${e && e.message}`);
+          console.log(
+            `[WhatsApp][${chave}] Debug: falha ao inspecionar browser.process(): ${e && e.message}`,
+          );
         }
         if (browser) {
           const pages = await browser.pages();
