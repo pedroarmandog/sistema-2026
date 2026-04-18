@@ -1032,7 +1032,9 @@ const { Cliente, Pet, Agendamento } = require("./models");
 // ═══════════════════════════════════════════════════════════════════
 // SINCRONIZAÇÃO DO BANCO — cria TODAS as tabelas automaticamente
 // ═══════════════════════════════════════════════════════════════════
-const { sequelize } = require("./models/Cliente");
+// Usar a instância exportada por `./models` (garante que todos os modelos
+// já foram inicializados antes do sync)
+const { sequelize } = require("./models");
 
 async function syncAllTables() {
   try {
