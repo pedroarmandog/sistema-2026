@@ -250,29 +250,39 @@ async function inicializarCliente(empresaId) {
   // Disparador (chave "disp_X") abre Chrome visível; marketing automático roda headless
   const isDisparador = chave.startsWith("disp_");
 
+  // Montar options do Puppeteer dinamicamente e só definir executablePath se existir
+  const puppeteerOptions = {
+    headless: !isDisparador,
+    handleSIGINT: false,
+    handleSIGTERM: false,
+    handleSIGHUP: false,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-accelerated-2d-canvas",
+      "--no-first-run",
+      "--no-zygote",
+      "--disable-gpu",
+      "--disable-extensions",
+      "--disable-background-networking",
+    ],
+  };
+
+  if (executablePath) {
+    puppeteerOptions.executablePath = executablePath;
+  } else {
+    console.warn(
+      `[WhatsApp][${chave}] executablePath não definido; o Puppeteer usará seu binário interno/fallback se disponível. Defina CHROME_PATH ou instale google-chrome em /usr/bin`,
+    );
+  }
+
   const client = new Client({
     authStrategy: new LocalAuth({
       clientId: `empresa_${chave}`,
       dataPath: SESSION_DIR,
     }),
-    puppeteer: {
-      headless: !isDisparador,
-      executablePath: '/usr/bin/google-chrome',
-      handleSIGINT: false,
-      handleSIGTERM: false,
-      handleSIGHUP: false,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-accelerated-2d-canvas",
-        "--no-first-run",
-        "--no-zygote",
-        "--disable-gpu",
-        "--disable-extensions",
-        "--disable-background-networking",
-      ],
-    },
+    puppeteer: puppeteerOptions,
   });
 
   // Estado local do cliente
