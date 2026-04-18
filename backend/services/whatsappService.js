@@ -325,36 +325,21 @@ async function inicializarCliente(empresaId) {
   // Disparador (chave "disp_X") abre Chrome visível; marketing automático roda headless
   const isDisparador = chave.startsWith("disp_");
 
-  // Montar options do Puppeteer dinamicamente e só definir executablePath se existir
   const puppeteerOptions = {
-    headless: !isDisparador,
-    handleSIGINT: false,
-    handleSIGTERM: false,
-    handleSIGHUP: false,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-accelerated-2d-canvas",
-      "--no-first-run",
-      "--no-zygote",
-      "--disable-gpu",
-      "--disable-extensions",
-      "--disable-background-networking",
-    ],
-  };
-
-  if (executablePath) {
-    puppeteerOptions.executablePath = executablePath;
-  } else {
-    console.warn(
-      `[WhatsApp][${chave}] Nenhum executablePath definido; o Puppeteer usará seu binário interno/fallback. Recomendo definir CHROME_PATH=/usr/bin/google-chrome`,
-    );
-  }
-
-  console.log(
-    `[WhatsApp][${chave}] puppeteerOptions: ${util.inspect(puppeteerOptions, { depth: 2 })}`,
-  );
+  headless: true, // força headless no servidor
+  executablePath: "/usr/bin/google-chrome", // 🔥 FORÇADO
+  handleSIGINT: false,
+  handleSIGTERM: false,
+  handleSIGHUP: false,
+  args: [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--no-first-run",
+    "--no-zygote",
+  ],
+};
 
   // Criar o cliente WhatsApp com as opções do Puppeteer
   const client = new Client({
