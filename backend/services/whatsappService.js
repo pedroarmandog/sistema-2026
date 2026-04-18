@@ -251,6 +251,8 @@ async function inicializarCliente(empresaId) {
   const isDisparador = chave.startsWith("disp_");
 
   // Montar options do Puppeteer dinamicamente e só definir executablePath se existir
+  console.log("USANDO CHROME EM:", '/usr/bin/google-chrome');
+  console.log("PUPPETEER OPTIONS:", puppeteerOptions);
   const puppeteerOptions = {
   headless: !isDisparador,
   executablePath: '/usr/bin/google-chrome', // 🔥 FORÇADO
