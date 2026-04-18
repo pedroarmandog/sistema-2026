@@ -13,6 +13,12 @@ const QRCode = require("qrcode");
 const path = require("path");
 const fs = require("fs");
 const { spawnSync } = require("child_process");
+const util = require("util");
+
+// Debug: identificar qual arquivo foi carregado e PID do processo
+console.log(
+  `[WhatsApp] carregado: ${__filename} pid=${process.pid} NODE_ENV=${process.env.NODE_ENV || "(undef)"} CHROME_PATH=${process.env.CHROME_PATH || "(undef)"}`,
+);
 
 // Mapa de clientes WhatsApp por empresaId
 const clientsMap = new Map();
@@ -211,31 +217,39 @@ async function inicializarCliente(empresaId) {
     } catch (_) {}
   }
 
-  // Obter caminho do Chromium correto
-  // Prioridade: 1) CHROME_PATH env 2) nosso detector (services/puppeteerLauncher.findChromePath)
-  // 3) puppeteer.executablePath() (se o pacote puppeteer foi instalado e trouxe Chromium)
+  // Obter caminho do Chromium correto (debug detalhado)
+  // Prioridade: 1) CHROME_PATH env 2) detector local (puppeteerLauncher) 3) puppeteer.executablePath()
   let executablePath;
+  let selectedFrom = null;
+  let envPath = process.env.CHROME_PATH || null;
+  let launcherPath = null;
+  let puppeteerPath = null;
   try {
-    if (process.env.CHROME_PATH) {
-      executablePath = process.env.CHROME_PATH;
+    if (envPath) {
+      executablePath = envPath;
+      selectedFrom = "env";
     } else {
-      // tentar usar o detector local (procura /usr/bin/google-chrome* ou /snap/bin)
       try {
         const launcher = require("./puppeteerLauncher");
-        executablePath = launcher.findChromePath() || undefined;
+        launcherPath = launcher.findChromePath();
+        if (launcherPath) {
+          executablePath = launcherPath;
+          selectedFrom = "launcher";
+        }
       } catch (e) {
-        executablePath = undefined;
+        launcherPath = null;
       }
 
-      // Se ainda não encontrou, tentar usar o caminho do puppeteer (caso o pacote puppeteer esteja instalado)
       if (!executablePath) {
         try {
           const p = require("puppeteer");
           if (typeof p.executablePath === "function") {
-            executablePath = p.executablePath();
+            puppeteerPath = p.executablePath();
+            executablePath = puppeteerPath || undefined;
+            selectedFrom = puppeteerPath ? "puppeteer" : null;
           }
         } catch (e) {
-          // ignore
+          puppeteerPath = null;
         }
       }
     }
@@ -243,34 +257,60 @@ async function inicializarCliente(empresaId) {
     executablePath = undefined;
   }
 
-  console.log(
-    `[WhatsApp][${chave}] Puppeteer executablePath selecionado: ${executablePath || "(nenhum)"}`,
-  );
+  // Mostrar debug de caminhos candidatos
+  try {
+    const resolvedWhatsApp = require.resolve("whatsapp-web.js");
+    console.log(
+      `[WhatsApp][${chave}] execPath debug -> env:${envPath} launcher:${launcherPath} puppeteer:${puppeteerPath} selected:${executablePath || "(nenhum)"} source:${selectedFrom} whatsappModule:${resolvedWhatsApp}`,
+    );
+  } catch (_) {
+    console.log(
+      `[WhatsApp][${chave}] execPath debug -> env:${envPath} launcher:${launcherPath} puppeteer:${puppeteerPath} selected:${executablePath || "(nenhum)"} source:${selectedFrom}`,
+    );
+  }
 
   // Disparador (chave "disp_X") abre Chrome visível; marketing automático roda headless
   const isDisparador = chave.startsWith("disp_");
 
   // Montar options do Puppeteer dinamicamente e só definir executablePath se existir
-  console.log("USANDO CHROME EM:", '/usr/bin/google-chrome');
-  console.log("PUPPETEER OPTIONS:", puppeteerOptions);
   const puppeteerOptions = {
-  headless: !isDisparador,
-  executablePath: '/usr/bin/google-chrome', // 🔥 FORÇADO
-  handleSIGINT: false,
-  handleSIGTERM: false,
-  handleSIGHUP: false,
-  args: [
-    "--no-sandbox",
-    "--disable-setuid-sandbox",
-    "--disable-dev-shm-usage",
-    "--disable-accelerated-2d-canvas",
-    "--no-first-run",
-    "--no-zygote",
-    "--disable-gpu",
-    "--disable-extensions",
-    "--disable-background-networking",
-  ],
-};
+    headless: !isDisparador,
+    handleSIGINT: false,
+    handleSIGTERM: false,
+    handleSIGHUP: false,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-accelerated-2d-canvas",
+      "--no-first-run",
+      "--no-zygote",
+      "--disable-gpu",
+      "--disable-extensions",
+      "--disable-background-networking",
+    ],
+  };
+
+  if (executablePath) {
+    puppeteerOptions.executablePath = executablePath;
+  } else {
+    console.warn(
+      `[WhatsApp][${chave}] Nenhum executablePath definido; o Puppeteer usará seu binário interno/fallback. Recomendo definir CHROME_PATH=/usr/bin/google-chrome`,
+    );
+  }
+
+  console.log(
+    `[WhatsApp][${chave}] puppeteerOptions: ${util.inspect(puppeteerOptions, { depth: 2 })}`,
+  );
+
+  // Criar o cliente WhatsApp com as opções do Puppeteer
+  const client = new Client({
+    authStrategy: new LocalAuth({
+      clientId: `empresa_${chave}`,
+      dataPath: SESSION_DIR,
+    }),
+    puppeteer: puppeteerOptions,
+  });
 
   // Estado local do cliente
   const estado = {
@@ -380,6 +420,17 @@ async function inicializarCliente(empresaId) {
       // Fechar abas extras (about:blank) que o Puppeteer abre
       try {
         const browser = client.pupBrowser;
+        // debug: inspecionar processo do browser lançado
+        try {
+          if (browser && typeof browser.process === 'function') {
+            const proc = browser.process();
+            console.log(
+              `[WhatsApp][${chave}] Browser process spawnfile: ${proc && (proc.spawnfile || proc.spawnpath || proc.execPath) || '(unknown)'} args: ${proc && proc.spawnargs ? proc.spawnargs.join(' ') : '(none)'}`,
+            );
+          }
+        } catch (e) {
+          console.log(`[WhatsApp][${chave}] Debug: falha ao inspecionar browser.process(): ${e && e.message}`);
+        }
         if (browser) {
           const pages = await browser.pages();
           for (const page of pages) {
