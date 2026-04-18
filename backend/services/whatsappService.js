@@ -257,6 +257,27 @@ async function inicializarCliente(empresaId) {
     executablePath = undefined;
   }
 
+  // FORÇAR preferência por binário do sistema se existir (evita fallback para cache do puppeteer)
+  try {
+    const systemCandidates = [
+      "/usr/bin/google-chrome",
+      "/usr/bin/google-chrome-stable",
+      "/usr/bin/chromium-browser",
+      "/usr/bin/chromium",
+      "/snap/bin/chromium",
+    ];
+    for (const p of systemCandidates) {
+      if (!p) continue;
+      try {
+        if (fs.existsSync(p)) {
+          executablePath = p;
+          selectedFrom = "system";
+          break;
+        }
+      } catch (_) {}
+    }
+  } catch (_) {}
+
   // Mostrar debug de caminhos candidatos
   try {
     const resolvedWhatsApp = require.resolve("whatsapp-web.js");
