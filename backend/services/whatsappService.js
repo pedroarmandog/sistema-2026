@@ -257,7 +257,7 @@ async function inicializarCliente(empresaId) {
     }),
     puppeteer: {
       headless: !isDisparador,
-      executablePath,
+      executablePath: '/usr/bin/google-chrome',
       handleSIGINT: false,
       handleSIGTERM: false,
       handleSIGHUP: false,
