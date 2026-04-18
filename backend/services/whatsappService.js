@@ -221,7 +221,7 @@ async function inicializarCliente(empresaId) {
   // Obter caminho do Chromium correto (debug detalhado)
   // Prioridade (segura): 1) CHROME_PATH (somente se existir) 2) detector local (puppeteerLauncher)
   // 3) binário do sistema (usr/bin...) 4) puppeteer.executablePath() (somente se existir no FS)
-  let executablePath;
+  let executablePath = "/usr/bin/google-chrome";
   let selectedFrom = null;
   let envPath = process.env.CHROME_PATH || null;
   let launcherPath = null;
@@ -244,19 +244,7 @@ async function inicializarCliente(empresaId) {
       }
     }
 
-    // Se não definido via env, tentar o launcher (que checa caminhos do sistema)
-    if (!executablePath) {
-      try {
-        const launcher = require("./puppeteerLauncher");
-        launcherPath = launcher.findChromePath();
-        if (launcherPath) {
-          executablePath = launcherPath;
-          selectedFrom = "launcher";
-        }
-      } catch (e) {
-        launcherPath = null;
-      }
-    }
+    
 
     // Se ainda nada, tentar o valor vindo do pacote puppeteer (apenas se existir no FS)
     if (!executablePath) {
