@@ -212,12 +212,40 @@ async function inicializarCliente(empresaId) {
   }
 
   // Obter caminho do Chromium correto
+  // Prioridade: 1) CHROME_PATH env 2) nosso detector (services/puppeteerLauncher.findChromePath)
+  // 3) puppeteer.executablePath() (se o pacote puppeteer foi instalado e trouxe Chromium)
   let executablePath;
   try {
-    executablePath = require("puppeteer").executablePath();
-  } catch (_) {
+    if (process.env.CHROME_PATH) {
+      executablePath = process.env.CHROME_PATH;
+    } else {
+      // tentar usar o detector local (procura /usr/bin/google-chrome* ou /snap/bin)
+      try {
+        const launcher = require("./puppeteerLauncher");
+        executablePath = launcher.findChromePath() || undefined;
+      } catch (e) {
+        executablePath = undefined;
+      }
+
+      // Se ainda não encontrou, tentar usar o caminho do puppeteer (caso o pacote puppeteer esteja instalado)
+      if (!executablePath) {
+        try {
+          const p = require("puppeteer");
+          if (typeof p.executablePath === "function") {
+            executablePath = p.executablePath();
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+    }
+  } catch (e) {
     executablePath = undefined;
   }
+
+  console.log(
+    `[WhatsApp][${chave}] Puppeteer executablePath selecionado: ${executablePath || "(nenhum)"}`,
+  );
 
   // Disparador (chave "disp_X") abre Chrome visível; marketing automático roda headless
   const isDisparador = chave.startsWith("disp_");
