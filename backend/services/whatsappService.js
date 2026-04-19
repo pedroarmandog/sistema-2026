@@ -315,8 +315,11 @@ async function inicializarCliente(empresaId) {
   const isDisparador = chave.startsWith("disp_");
 
   const puppeteerOptions = {
-  headless: true, // força headless no servidor
-  executablePath: "/usr/bin/google-chrome", // 🔥 FORÇADO
+  headless: true,
+
+  // ✅ Usa o caminho que você calculou acima
+  executablePath: executablePath || undefined,
+
   handleSIGINT: false,
   handleSIGTERM: false,
   handleSIGHUP: false,
