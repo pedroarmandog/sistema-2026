@@ -7,6 +7,8 @@
  * - Emite eventos para o frontend via Server-Sent Events (SSE).
  * - Anti-spam: delay aleatório entre envios + limite por minuto.
  */
+
+console.log("Olaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 process.env.PUPPETEER_EXECUTABLE_PATH = "/usr/bin/google-chrome";
 process.env.CHROME_PATH = "/usr/bin/google-chrome";
 
