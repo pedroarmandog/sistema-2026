@@ -8,9 +8,7 @@
  * - Anti-spam: delay aleatório entre envios + limite por minuto.
  */
 
-
-process.env.PUPPETEER_EXECUTABLE_PATH = "/usr/bin/google-chrome";
-process.env.CHROME_PATH = "/usr/bin/google-chrome";
+// Não forçar variáveis de ambiente aqui — respeitar o que o ambiente fornece
 
 const { Client, LocalAuth } = require("whatsapp-web.js");
 const QRCode = require("qrcode");
@@ -36,13 +34,14 @@ const MAX_AUTO_RETRY = 1;
 
 // Contador anti-spam: mensagens enviadas no último minuto
 const spamCounter = new Map(); // empresaId -> { count, resetAt }
-
 const MAX_MSG_POR_MINUTO = 10;
 const MIN_DELAY_MS = 3000;
 const MAX_DELAY_MS = 10000;
 
-// Diretório para armazenar sessões locais
+// Diretório para armazenar sessões locais (LocalAuth)
 const SESSION_DIR = path.join(__dirname, "../../tmp/whatsapp-sessions");
+
+// (fragment removido — validação será feita no fluxo de inicialização do cliente)
 
 /**
  * Retorna o diretório de sessão no disco para uma empresa, se existir.
@@ -222,83 +221,123 @@ async function inicializarCliente(empresaId) {
   }
 
   // Obter caminho do Chromium correto (debug detalhado)
-  // Prioridade (segura): 1) CHROME_PATH (somente se existir) 2) detector local (puppeteerLauncher)
-  // 3) binário do sistema (usr/bin...) 4) puppeteer.executablePath() (somente se existir no FS)
-  let executablePath = "/usr/bin/google-chrome";
+  // Prioridade (segura): 1) CHROME_PATH (somente se existir e for executável)
+  // 2) detector local (puppeteerLauncher) 3) binário do sistema (usr/bin...)
+  // 4) puppeteer.executablePath() (somente se existir e for executável)
+  let executablePath = undefined;
   let selectedFrom = null;
   let envPath = process.env.CHROME_PATH || null;
   let launcherPath = null;
   let puppeteerPath = null;
   try {
-    // Validar CHROME_PATH (não apenas checar presença da variável)
+    // 1) CHROME_PATH — validar existência e permissão de execução
     if (envPath) {
       try {
-        if (fs.existsSync(envPath)) {
-          executablePath = envPath;
-          selectedFrom = "env";
-        } else {
-          console.warn(
-            `[WhatsApp][${chave}] CHROME_PATH definido (${envPath}) mas arquivo não existe — ignorando.`,
-          );
-          envPath = null;
-        }
-      } catch (e) {
+        fs.accessSync(envPath, fs.constants.X_OK);
+        executablePath = envPath;
+        selectedFrom = "env";
+      } catch (err) {
+        console.warn(
+          `[WhatsApp][${chave}] CHROME_PATH definido (${envPath}) mas não é executável/visível — ignorando. ${err && err.message}`,
+        );
         envPath = null;
       }
     }
 
-    
+    // 2) Detector local (puppeteerLauncher)
+    if (!executablePath) {
+      try {
+        const launcher = require("./puppeteerLauncher");
+        launcherPath = launcher.findChromePath();
+        if (launcherPath) {
+          try {
+            fs.accessSync(launcherPath, fs.constants.X_OK);
+            executablePath = launcherPath;
+            selectedFrom = "launcher";
+          } catch (err) {
+            console.warn(
+              `[WhatsApp][${chave}] Launcher detectou ${launcherPath} mas não é executável — ignorando. ${err && err.message}`,
+            );
+            launcherPath = null;
+          }
+        }
+      } catch (err) {
+        launcherPath = null;
+      }
+    }
 
-    // Se ainda nada, tentar o valor vindo do pacote puppeteer (apenas se existir no FS)
+    // 3) Preferir binário do sistema (caso o launcher não tenha retornado)
+    if (!executablePath) {
+      const systemCandidates = [
+        "/usr/bin/google-chrome",
+        "/usr/bin/google-chrome-stable",
+        "/usr/bin/chromium-browser",
+        "/usr/bin/chromium",
+        "/snap/bin/chromium",
+      ];
+      for (const p of systemCandidates) {
+        try {
+          fs.accessSync(p, fs.constants.X_OK);
+          executablePath = p;
+          selectedFrom = "system";
+          break;
+        } catch (_) {
+          // ignorar candidatos não executáveis
+        }
+      }
+    }
+
+    // 4) Por fim, tentar puppeteer.executablePath() (somente se for executável)
     if (!executablePath) {
       try {
         const p = require("puppeteer");
         if (typeof p.executablePath === "function") {
           puppeteerPath = p.executablePath();
-          if (puppeteerPath && fs.existsSync(puppeteerPath)) {
-            executablePath = puppeteerPath;
-            selectedFrom = "puppeteer";
-          } else {
+          try {
+            if (puppeteerPath) {
+              fs.accessSync(puppeteerPath, fs.constants.X_OK);
+              executablePath = puppeteerPath;
+              selectedFrom = "puppeteer";
+            }
+          } catch (_) {
             puppeteerPath = null;
           }
         }
-      } catch (e) {
+      } catch (err) {
         puppeteerPath = null;
       }
     }
   } catch (e) {
     executablePath = undefined;
+    selectedFrom = null;
   }
 
-  // FORÇAR preferência por binário do sistema se existir (evita fallback para cache do puppeteer)
+  // Verificação final: testar se o binário realmente pode ser executado (ex: --version)
   try {
-    const systemCandidates = [
-      "/usr/bin/google-chrome",
-      "/usr/bin/google-chrome-stable",
-      "/usr/bin/chromium-browser",
-      "/usr/bin/chromium",
-      "/snap/bin/chromium",
-    ];
-    for (const p of systemCandidates) {
-      if (!p) continue;
+    if (executablePath) {
       try {
-        if (fs.existsSync(p)) {
-          executablePath = p;
-          selectedFrom = "system";
-          break;
+        const check = spawnSync(executablePath, ["--version"], {
+          encoding: "utf8",
+          timeout: 3000,
+        });
+        if (check.error || check.status !== 0) {
+          console.warn(
+            `[WhatsApp][${chave}] Falha no teste do binário ${executablePath}: ${check.error ? check.error.message : check.stderr || check.stdout}`,
+          );
+          executablePath = undefined;
+          selectedFrom = null;
+        } else {
+          console.log(
+            `[WhatsApp][${chave}] Exec test ok: ${check.stdout || check.stderr}`,
+          );
         }
-      } catch (_) {}
-    }
-  } catch (_) {}
-
-  // Verificação final: garantir que o arquivo selecionado exista no FS
-  try {
-    if (executablePath && !fs.existsSync(executablePath)) {
-      console.warn(
-        `[WhatsApp][${chave}] Caminho selecionado não existe: ${executablePath} — removendo seleção.`,
-      );
-      executablePath = undefined;
-      selectedFrom = null;
+      } catch (err) {
+        console.warn(
+          `[WhatsApp][${chave}] Erro ao testar executável ${executablePath}: ${err && err.message}`,
+        );
+        executablePath = undefined;
+        selectedFrom = null;
+      }
     }
   } catch (_) {}
 
@@ -318,23 +357,29 @@ async function inicializarCliente(empresaId) {
   const isDisparador = chave.startsWith("disp_");
 
   const puppeteerOptions = {
-  headless: true,
+    headless: !isDisparador,
 
-  // ✅ Usa o caminho que você calculou acima
-  executablePath: executablePath || undefined,
+    // ✅ Usa o caminho que você calculou acima
+    executablePath: executablePath || undefined,
 
-  handleSIGINT: false,
-  handleSIGTERM: false,
-  handleSIGHUP: false,
-  args: [
-    "--no-sandbox",
-    "--disable-setuid-sandbox",
-    "--disable-dev-shm-usage",
-    "--disable-gpu",
-    "--no-first-run",
-    "--no-zygote",
-  ],
-};
+    handleSIGINT: false,
+    handleSIGTERM: false,
+    handleSIGHUP: false,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--no-first-run",
+      "--no-zygote",
+    ],
+  };
+
+  console.log(
+    `[WhatsApp][${chave}] puppeteerOptions: ${util.inspect(puppeteerOptions, {
+      depth: 2,
+    })}`,
+  );
 
   // Criar o cliente WhatsApp com as opções do Puppeteer
   const client = new Client({
