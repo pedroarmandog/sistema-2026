@@ -7,7 +7,8 @@
  * - Emite eventos para o frontend via Server-Sent Events (SSE).
  * - Anti-spam: delay aleatório entre envios + limite por minuto.
  */
-console.log("🔥 ARQUIVO CERTO CARREGADO - WHATSAPP SERVICE 🔥");
+process.env.PUPPETEER_EXECUTABLE_PATH = "/usr/bin/google-chrome";
+process.env.CHROME_PATH = "/usr/bin/google-chrome";
 
 const { Client, LocalAuth } = require("whatsapp-web.js");
 const QRCode = require("qrcode");
