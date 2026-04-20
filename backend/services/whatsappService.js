@@ -10,7 +10,6 @@
 
 // Não forçar variáveis de ambiente aqui — respeitar o que o ambiente fornece
 
-const { Client, LocalAuth } = require("whatsapp-web.js");
 const QRCode = require("qrcode");
 const path = require("path");
 const fs = require("fs");
@@ -380,6 +379,12 @@ async function inicializarCliente(empresaId) {
       depth: 2,
     })}`,
   );
+
+  // Requerir whatsapp-web.js APÓS garantir CHROME_PATH/executablePath
+  try {
+    if (executablePath) process.env.CHROME_PATH = executablePath;
+  } catch (_) {}
+  const { Client, LocalAuth } = require("whatsapp-web.js");
 
   // Criar o cliente WhatsApp com as opções do Puppeteer
   const client = new Client({
