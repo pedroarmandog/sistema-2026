@@ -540,61 +540,17 @@ router.post("/:id/cancelar", async (req, res) => {
   try {
     const { id } = req.params;
     const { usuario: usuarioLogin, senha } = req.body;
-
     if (!usuarioLogin || !senha) {
       return res
         .status(400)
         .json({ error: "Usuário e senha são obrigatórios" });
     }
 
-    const user = await Usuario.findOne({ where: { usuario: usuarioLogin } });
-    if (!user || !user.ativo) {
-      return res
-        .status(401)
-        .json({ error: "Usuário não encontrado ou inativo" });
-    }
-
-    const bcrypt = require("bcryptjs");
-    const senhaValida = await bcrypt.compare(senha, user.senha);
-    if (!senhaValida) {
-      return res.status(401).json({ error: "Credenciais inválidas" });
-    }
-
-    // Nova regra: pode cancelar se for gerente principal (id=1), LOGIN INICIAL,
-    // OU grupoUsuario for 'admin' ou 'gerente' (case-insensitive), ativo e vinculado à empresa do agendamento
-    const isLoginInicial =
-      (user.nome || "").trim().toUpperCase() === "LOGIN INICIAL";
-    const isGerentePrincipal = user.id === 1;
-    const grupo = (user.grupoUsuario || "").toLowerCase();
-    const isGerenteOuAdmin =
-      grupo.includes("admin") || grupo.includes("gerente");
-
-    // Verificar vínculo com a empresa do agendamento, se não for master
-    let empresaOk = true;
-    if (!isGerentePrincipal && !isLoginInicial) {
-      // Buscar agendamento para pegar empresa_id
-      const agendamento = await Agendamento.findByPk(id);
-      if (!agendamento) {
-        return res.status(404).json({ error: "Agendamento não encontrado" });
-      }
-      // Usuário deve estar vinculado à empresa do agendamento
-      const empresas = Array.isArray(user.empresas) ? user.empresas : [];
-      empresaOk =
-        empresas.includes(agendamento.empresa_id) ||
-        empresas.includes(Number(agendamento.empresa_id));
-      if (!isGerenteOuAdmin || !empresaOk) {
-        return res.status(403).json({
-          error:
-            "Apenas gerente/admin da empresa ou o gerente principal (usuário 1) ou LOGIN INICIAL podem autorizar o cancelamento.",
-        });
-      }
-    }
     const bcrypt = require("bcryptjs");
     const { Admin } = require("../models");
     let user = await Usuario.findOne({ where: { usuario: usuarioLogin } });
     let tipo = "Usuario";
     if (!user) {
-      // Tentar como admin (painel)
       user = await Admin.findOne({ where: { email: usuarioLogin } });
       tipo = "Admin";
     }
@@ -603,6 +559,7 @@ router.post("/:id/cancelar", async (req, res) => {
         .status(401)
         .json({ error: "Usuário/Admin não encontrado ou inativo" });
     }
+
     let senhaValida = false;
     if (tipo === "Usuario") {
       senhaValida = await bcrypt.compare(senha, user.senha);
@@ -613,13 +570,12 @@ router.post("/:id/cancelar", async (req, res) => {
       return res.status(401).json({ error: "Credenciais inválidas" });
     }
 
-    // Permissão: Admin (painel) pode cancelar se for ativo
+    // Permissão: Admin (painel) pode cancelar qualquer agendamento da empresa
     if (tipo === "Admin") {
-      // Admin do painel pode cancelar qualquer agendamento da empresa
       // (Opcional: checar se admin está vinculado à empresa do agendamento, se necessário)
+      // Admin ativo pode cancelar
     } else {
-      // Nova regra: pode cancelar se for gerente principal (id=1), LOGIN INICIAL,
-      // OU grupoUsuario for 'admin' ou 'gerente' (case-insensitive), ativo e vinculado à empresa do agendamento
+      // Usuário comum: precisa ser gerente principal, LOGIN INICIAL, ou admin/gerente da empresa do agendamento
       const isLoginInicial =
         (user.nome || "").trim().toUpperCase() === "LOGIN INICIAL";
       const isGerentePrincipal = user.id === 1;
@@ -627,7 +583,6 @@ router.post("/:id/cancelar", async (req, res) => {
       const isGerenteOuAdmin =
         grupo.includes("admin") || grupo.includes("gerente");
 
-      // Verificar vínculo com a empresa do agendamento, se não for master
       let empresaOk = true;
       if (!isGerentePrincipal && !isLoginInicial) {
         // Buscar agendamento para pegar empresa_id
@@ -649,14 +604,16 @@ router.post("/:id/cancelar", async (req, res) => {
       }
     }
 
+    // Cancelar agendamento
     const agendamento = await Agendamento.findByPk(id);
     if (!agendamento) {
       return res.status(404).json({ error: "Agendamento não encontrado" });
     }
-
     await agendamento.update({ status: "cancelado" });
 
-    console.log(`🚫 Agendamento ${id} cancelado por gerente: ${user.nome}`);
+    console.log(
+      `🚫 Agendamento ${id} cancelado por: ${user.nome || user.email}`,
+    );
     res.json({ message: "Agendamento cancelado com sucesso" });
   } catch (error) {
     console.error("Erro ao cancelar agendamento:", error);
