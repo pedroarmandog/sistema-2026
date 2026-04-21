@@ -4404,6 +4404,9 @@ async function finalizarCobranca() {
                 : ""),
             profissionalId: agendamentoAtual.profissionalId || null,
           };
+          // Marcar seed com o id do agendamento para que a venda possa ser relacionada
+          if (agendamentoAtual && agendamentoAtual.id)
+            seed.agendamentoId = agendamentoAtual.id;
           abrirModalPagamento(totalVenda, seed);
         } else {
           console.warn("abrirModalPagamento não disponível");

@@ -137,7 +137,23 @@ exports.listarHoje = async (req, res) => {
       });
     });
 
-    // 2) Vendas realizadas em nova-venda (todas com totalPago > 0 ou pagamentos)
+    // 2) Agendamentos finalizados (buscamos primeiro para evitar duplicar vendas geradas por agendamento)
+    const agendados = await Agendamento.findAll({
+      where: {
+        dataAgendamento: { [Op.between]: [inicioDia, fimDia] },
+        status: "concluido",
+        [Op.or]: [
+          { totalPago: { [Op.gt]: 0 } },
+          where(literal("JSON_LENGTH(pagamentos)"), ">", 0),
+        ],
+      },
+      order: [["dataAgendamento", "DESC"]],
+      raw: true,
+    });
+
+    const agendamentoIds = new Set((agendados || []).map((a) => Number(a.id)));
+
+    // 3) Vendas realizadas em nova-venda (todas com totalPago > 0 ou pagamentos)
     const vendas = await Venda.findAll({
       where: {
         data: { [Op.between]: [inicioDia, fimDia] },
@@ -150,9 +166,29 @@ exports.listarHoje = async (req, res) => {
       raw: true,
     });
 
-    vendas.forEach((v) => {
+    for (const v of vendas) {
+      // Tentar detectar se a venda está vinculada a um agendamento (metadata em `totais`)
+      let vendaAgId = null;
+      try {
+        const totaisObj =
+          typeof v.totais === "string"
+            ? JSON.parse(v.totais || "{}")
+            : v.totais || {};
+        vendaAgId =
+          totaisObj.agendamentoId ||
+          (totaisObj.meta && totaisObj.meta.agendamentoId) ||
+          v.agendamentoId ||
+          null;
+      } catch (e) {
+        vendaAgId = v.agendamentoId || null;
+      }
+
+      // Se esta venda foi originada de um agendamento que já está na lista, ignorar para evitar duplicata
+      if (vendaAgId && agendamentoIds.has(Number(vendaAgId))) {
+        continue;
+      }
+
       const pagamentos = v.pagamentos || [];
-      // pagamentos pode ser array de objetos
       try {
         (Array.isArray(pagamentos) ? pagamentos : []).forEach((p) => {
           const forma = normalizeForma(
@@ -184,22 +220,9 @@ exports.listarHoje = async (req, res) => {
           valor: Number(v.totalPago) || 0,
         });
       }
-    });
+    }
 
-    // 3) Agendamentos finalizados (pagamentos em agendamento-detalhes)
-    const agendados = await Agendamento.findAll({
-      where: {
-        dataAgendamento: { [Op.between]: [inicioDia, fimDia] },
-        status: "concluido",
-        [Op.or]: [
-          { totalPago: { [Op.gt]: 0 } },
-          where(literal("JSON_LENGTH(pagamentos)"), ">", 0),
-        ],
-      },
-      order: [["dataAgendamento", "DESC"]],
-      raw: true,
-    });
-
+    // 4) Agendamentos finalizados (pagamentos em agendamento-detalhes) - agora processamos os agendados
     agendados.forEach((a) => {
       const pagamentos = a.pagamentos || [];
       try {
@@ -284,30 +307,7 @@ exports.resumoCaixa = async (req, res) => {
       resumo.total_geral += val;
     });
 
-    // 2) Vendas
-    const vendas = await Venda.findAll({
-      where: {
-        data: { [Op.between]: [inicioDia, fimDia] },
-        [Op.or]: [
-          { totalPago: { [Op.gt]: 0 } },
-          where(literal("JSON_LENGTH(pagamentos)"), ">", 0),
-        ],
-      },
-      raw: true,
-    });
-    vendas.forEach((v) => {
-      const pagamentos = v.pagamentos || [];
-      (Array.isArray(pagamentos) ? pagamentos : []).forEach((p) => {
-        const forma = normalizeForma(
-          p.forma || p.forma_pagamento || p.tipo || "outro",
-        );
-        const val = Number(p.valor || p.amount || p.total || v.totalPago) || 0;
-        resumo[forma] = (resumo[forma] || 0) + val;
-        resumo.total_geral += val;
-      });
-    });
-
-    // 3) Agendamentos
+    // 2) Agendamentos e Vendas - evitar duplicatas quando uma venda foi criada a partir de um agendamento
     const agendados = await Agendamento.findAll({
       where: {
         dataAgendamento: { [Op.between]: [inicioDia, fimDia] },
@@ -319,6 +319,49 @@ exports.resumoCaixa = async (req, res) => {
       },
       raw: true,
     });
+    const agendamentoIds = new Set((agendados || []).map((a) => Number(a.id)));
+
+    const vendas = await Venda.findAll({
+      where: {
+        data: { [Op.between]: [inicioDia, fimDia] },
+        [Op.or]: [
+          { totalPago: { [Op.gt]: 0 } },
+          where(literal("JSON_LENGTH(pagamentos)"), ">", 0),
+        ],
+      },
+      raw: true,
+    });
+
+    vendas.forEach((v) => {
+      // Ignorar vendas vinculadas a agendamentos já listados (metadata em `totais`)
+      let vendaAgId = null;
+      try {
+        const totaisObj =
+          typeof v.totais === "string"
+            ? JSON.parse(v.totais || "{}")
+            : v.totais || {};
+        vendaAgId =
+          totaisObj.agendamentoId ||
+          (totaisObj.meta && totaisObj.meta.agendamentoId) ||
+          v.agendamentoId ||
+          null;
+      } catch (e) {
+        vendaAgId = v.agendamentoId || null;
+      }
+      if (vendaAgId && agendamentoIds.has(Number(vendaAgId))) return;
+
+      const pagamentos = v.pagamentos || [];
+      (Array.isArray(pagamentos) ? pagamentos : []).forEach((p) => {
+        const forma = normalizeForma(
+          p.forma || p.forma_pagamento || p.tipo || "outro",
+        );
+        const val = Number(p.valor || p.amount || p.total || v.totalPago) || 0;
+        resumo[forma] = (resumo[forma] || 0) + val;
+        resumo.total_geral += val;
+      });
+    });
+
+    // Agendamentos (somar pagamentos dos agendados)
     agendados.forEach((a) => {
       const pagamentos = a.pagamentos || [];
       (Array.isArray(pagamentos) ? pagamentos : []).forEach((p) => {

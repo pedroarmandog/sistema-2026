@@ -2926,6 +2926,13 @@ function abrirModalPagamento(totalOverride, seed) {
   });
 
   // CONFIGURAR FUNCIONALIDADES
+  // Se o modal foi aberto por outro fluxo (ex: agendamento), propagar referência
+  try {
+    if (typeof seed === "object" && seed && seed.agendamentoId) {
+      modal.dataset.agendamentoId = String(seed.agendamentoId);
+    }
+  } catch (e) {}
+
   configurarModalPagamento(modal, overlay, totalVenda);
 }
 
@@ -3504,6 +3511,16 @@ function configurarModalPagamento(modal, overlay, totalVenda) {
         totalPago: totalPago,
         status: falta <= 0 ? "pago" : "parcial",
       };
+
+      // Se este modal foi aberto a partir de um agendamento, registrar a referência
+      try {
+        if (modal && modal.dataset && modal.dataset.agendamentoId) {
+          dadosVenda.totais = dadosVenda.totais || {};
+          dadosVenda.totais.agendamentoId = Number(modal.dataset.agendamentoId);
+        }
+      } catch (e) {
+        console.warn("Não foi possível anexar agendamentoId à venda:", e);
+      }
 
       // Salvar venda via API (atualizar se já existe como pendente)
       let vendaSalva;
