@@ -24,6 +24,9 @@ console.log(
 // Mapa de clientes WhatsApp por empresaId
 const clientsMap = new Map();
 
+// Contador de tentativas de inicialização para cada empresa (evitar loops)
+const initRetries = new Map();
+
 // Mapa de listeners SSE por empresaId: Set de res (response objects)
 const sseListeners = new Map();
 
@@ -639,10 +642,11 @@ async function inicializarCliente(empresaId) {
         `[WhatsApp][empresa:${chave}] initialize() resolveu com sucesso`,
       );
     })
-    .catch((err) => {
+    .catch(async (err) => {
       const msg = err && err.message ? err.message : String(err);
       console.error(`[WhatsApp][empresa:${chave}] initialize() catch: ${msg}`);
-      // TargetCloseError / frame detached é normal durante a navegação pós-auth — apenas logar
+
+      // Erros normais de navegação/frames — apenas logar e retornar
       if (
         msg.includes("Target closed") ||
         msg.includes("TargetCloseError") ||
@@ -659,6 +663,123 @@ async function inicializarCliente(empresaId) {
         );
         return;
       }
+
+      // Erro específico: binário não encontrado — tentar fallback automático controlado
+      const missingExecMsg =
+        msg.includes(
+          "Browser was not found at the configured executablePath",
+        ) ||
+        msg.toLowerCase().includes("could not find chromium") ||
+        msg.toLowerCase().includes("failed to launch") ||
+        msg.toLowerCase().includes("no usable chromium");
+
+      if (missingExecMsg) {
+        const attempts = initRetries.get(chave) || 0;
+        const MAX_INIT_RETRIES = 2;
+        if (attempts >= MAX_INIT_RETRIES) {
+          console.error(
+            `[WhatsApp][${chave}] Máximo de tentativas de init (${MAX_INIT_RETRIES}) atingido. Não será tentado novamente.`,
+          );
+        } else {
+          initRetries.set(chave, attempts + 1);
+          console.log(
+            `[WhatsApp][${chave}] Erro de execPath detectado — tentando fallback (tentativa ${attempts + 1}/${MAX_INIT_RETRIES})...`,
+          );
+
+          // Tentar encontrar binário do sistema e reexecutar inicialização
+          const systemCandidates = [
+            "/usr/bin/google-chrome",
+            "/usr/bin/google-chrome-stable",
+            "/usr/bin/chromium-browser",
+            "/usr/bin/chromium",
+            "/snap/bin/chromium",
+          ];
+
+          let found = null;
+          for (const p of systemCandidates) {
+            try {
+              fs.accessSync(p, fs.constants.X_OK);
+              const check = spawnSync(p, ["--version"], {
+                encoding: "utf8",
+                timeout: 3000,
+              });
+              if (!check.error && check.status === 0) {
+                found = p;
+                break;
+              }
+            } catch (_) {}
+          }
+
+          if (found) {
+            console.log(
+              `[WhatsApp][${chave}] Encontrado browser do sistema em ${found}, reiniciando inicialização com esse executablePath...`,
+            );
+            try {
+              await client.destroy();
+            } catch (_) {}
+            clientsMap.delete(chave);
+            try {
+              process.env.CHROME_PATH = found;
+            } catch (_) {}
+            // Re-chamar a função para recriar o cliente com o novo CHROME_PATH
+            try {
+              return await inicializarCliente(empresaId);
+            } catch (e) {
+              console.error(
+                `[WhatsApp][${chave}] Falha ao re-inicializar com fallback: ${e && e.message}`,
+              );
+            }
+          }
+
+          // Se não encontrou binário do sistema, verificar política de auto-install
+          const autoInstall =
+            process.env.AUTO_INSTALL_CHROME === "1" ||
+            process.env.AUTO_INSTALL_CHROME_ON_FAILURE === "1";
+          if (autoInstall) {
+            console.log(
+              `[WhatsApp][${chave}] AUTO_INSTALL_CHROME habilitado — tentando executar script de instalação...`,
+            );
+            try {
+              const installer = require("path").join(
+                __dirname,
+                "scripts",
+                "install_chrome_ubuntu.sh",
+              );
+              const res = spawnSync("bash", [installer], {
+                stdio: "inherit",
+                timeout: 0,
+              });
+              if (res && res.status === 0) {
+                console.log(
+                  `[WhatsApp][${chave}] Instalação automática concluída. Tentando re-detectar...`,
+                );
+                // Rechamar inicializarCliente para nova detecção
+                try {
+                  await client.destroy();
+                } catch (_) {}
+                clientsMap.delete(chave);
+                try {
+                  return await inicializarCliente(empresaId);
+                } catch (e) {
+                  console.error(
+                    `[WhatsApp][${chave}] Falha ao re-inicializar após instalação: ${e && e.message}`,
+                  );
+                }
+              } else {
+                console.warn(
+                  `[WhatsApp][${chave}] Script de instalação retornou status não-zero: ${res && res.status}`,
+                );
+              }
+            } catch (e) {
+              console.warn(
+                `[WhatsApp][${chave}] Falha ao executar instalador automático: ${e && e.message}`,
+              );
+            }
+          }
+        }
+      }
+
+      // Fallback padrão: marcar erro e notificar frontend
       console.error(`[WhatsApp][empresa:${chave}] Erro ao inicializar:`, msg);
       estado.status = "erro";
       emitirSSE(chave, "erro", { mensagem: msg });
