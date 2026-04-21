@@ -240,6 +240,16 @@ async function inicializarCliente(empresaId) {
           `[WhatsApp][${chave}] CHROME_PATH definido (${envPath}) mas não é executável/visível — ignorando. ${err && err.message}`,
         );
         envPath = null;
+        // Remover variável de ambiente obsoleta para evitar que bibliotecas
+        // dependentes (ex: whatsapp-web.js) leiam um caminho inválido no require-time
+        try {
+          if (process.env.CHROME_PATH) {
+            delete process.env.CHROME_PATH;
+            console.log(
+              `[WhatsApp][${chave}] process.env.CHROME_PATH inválido removido`,
+            );
+          }
+        } catch (_) {}
       }
     }
 
@@ -382,7 +392,19 @@ async function inicializarCliente(empresaId) {
 
   // Requerir whatsapp-web.js APÓS garantir CHROME_PATH/executablePath
   try {
-    if (executablePath) process.env.CHROME_PATH = executablePath;
+    if (executablePath) {
+      process.env.CHROME_PATH = executablePath;
+    } else {
+      // Garantir que não deixamos uma CHROME_PATH inválida no ambiente
+      try {
+        if (process.env.CHROME_PATH) {
+          delete process.env.CHROME_PATH;
+          console.log(
+            `[WhatsApp][${chave}] Nenhum executável válido encontrado — CHROME_PATH ambiente removido`,
+          );
+        }
+      } catch (_) {}
+    }
   } catch (_) {}
   const { Client, LocalAuth } = require("whatsapp-web.js");
 
