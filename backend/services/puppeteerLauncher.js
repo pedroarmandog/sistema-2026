@@ -1,27 +1,36 @@
 const fs = require("fs");
 const path = require("path");
 
-// Tentativa de usar puppeteer-extra + stealth se disponível, senão fallback para puppeteer-core / puppeteer
+// Lazy-resolve de puppeteer (evita efeitos colaterais no require-time)
 let puppeteerPkg = null;
 let useExtra = false;
-try {
-  // prefer puppeteer-extra (stealth plugin) quando disponível
-  const puppeteerExtra = require("puppeteer-extra");
-  const StealthPlugin = require("puppeteer-extra-plugin-stealth");
-  puppeteerExtra.use(StealthPlugin());
-  puppeteerPkg = puppeteerExtra;
-  useExtra = true;
-} catch (e) {
+function resolvePuppeteerPkg() {
+  if (puppeteerPkg) return puppeteerPkg;
+  try {
+    const puppeteerExtra = require("puppeteer-extra");
+    const StealthPlugin = require("puppeteer-extra-plugin-stealth");
+    puppeteerExtra.use(StealthPlugin());
+    puppeteerPkg = puppeteerExtra;
+    useExtra = true;
+    return puppeteerPkg;
+  } catch (e) {
+    // fallback
+  }
   try {
     puppeteerPkg = require("puppeteer-core");
-  } catch (e2) {
-    try {
-      puppeteerPkg = require("puppeteer");
-    } catch (e3) {
-      throw new Error(
-        "Instale puppeteer-core (ou puppeteer) e opcionalmente puppeteer-extra + puppeteer-extra-plugin-stealth",
-      );
-    }
+    useExtra = false;
+    return puppeteerPkg;
+  } catch (e) {
+    // fallback
+  }
+  try {
+    puppeteerPkg = require("puppeteer");
+    useExtra = false;
+    return puppeteerPkg;
+  } catch (e) {
+    throw new Error(
+      "Instale puppeteer-core (ou puppeteer) e opcionalmente puppeteer-extra + puppeteer-extra-plugin-stealth",
+    );
   }
 }
 
@@ -73,8 +82,9 @@ async function launchBrowser({ headless = true, extraArgs = [] } = {}) {
     defaultViewport: { width: 1280, height: 800 },
   };
 
-  // Se estiver usando puppeteer-extra, ele expõe .launch()
-  const browser = await puppeteerPkg.launch(launchOpts);
+  // Lazy-load do pacote puppeteer (evita efeitos no require-time)
+  const pkg = resolvePuppeteerPkg();
+  const browser = await pkg.launch(launchOpts);
   return browser;
 }
 

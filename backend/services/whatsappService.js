@@ -807,19 +807,30 @@ async function inicializarCliente(empresaId) {
           }
 
           // Se não encontrou binário do sistema, verificar política de auto-install
-          const autoInstall =
+          let autoInstall =
             process.env.AUTO_INSTALL_CHROME === "1" ||
             process.env.AUTO_INSTALL_CHROME_ON_FAILURE === "1";
+          try {
+            // Se estivermos rodando como root no Linux, permitir auto-install por padrão
+            if (
+              !autoInstall &&
+              process.platform !== "win32" &&
+              typeof process.getuid === "function" &&
+              process.getuid() === 0
+            ) {
+              autoInstall = true;
+              console.log(
+                `[WhatsApp][${chave}] Rodando como root — habilitando AUTO_INSTALL_CHROME_ON_FAILURE por padrão`,
+              );
+            }
+          } catch (_) {}
           if (autoInstall) {
             console.log(
               `[WhatsApp][${chave}] AUTO_INSTALL_CHROME habilitado — tentando executar script de instalação...`,
             );
             try {
-              const installer = require("path").join(
-                __dirname,
-                "scripts",
-                "install_chrome_ubuntu.sh",
-              );
+              // installer está em backend/scripts/install_chrome_ubuntu.sh
+              const installer = path.join(__dirname, "..", "scripts", "install_chrome_ubuntu.sh");
               const res = spawnSync("bash", [installer], {
                 stdio: "inherit",
                 timeout: 0,
