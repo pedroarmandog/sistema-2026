@@ -188,9 +188,21 @@ exports.listarHoje = async (req, res) => {
         continue;
       }
 
-      const pagamentos = v.pagamentos || [];
-      try {
-        (Array.isArray(pagamentos) ? pagamentos : []).forEach((p) => {
+      // pagamentos pode vir como JSON string quando usamos raw: true; parsear com segurança
+      let pagamentosRaw = v.pagamentos || [];
+      let pagamentosArr = [];
+      if (typeof pagamentosRaw === "string") {
+        try {
+          pagamentosArr = JSON.parse(pagamentosRaw || "[]");
+        } catch (e) {
+          pagamentosArr = [];
+        }
+      } else if (Array.isArray(pagamentosRaw)) {
+        pagamentosArr = pagamentosRaw;
+      }
+
+      if (Array.isArray(pagamentosArr) && pagamentosArr.length > 0) {
+        pagamentosArr.forEach((p) => {
           const forma = normalizeForma(
             p.forma || p.forma_pagamento || p.tipo || "outro",
           );
@@ -207,26 +219,40 @@ exports.listarHoje = async (req, res) => {
             valor,
           });
         });
-      } catch (e) {
-        // fallback: somar totalPago como único movimento
-        movimentos.push({
-          origem: "venda",
-          referencia: v.id,
-          data: v.data,
-          cliente: v.cliente || null,
-          pet: null,
-          servico: "Venda",
-          forma_pagamento: "desconhecido",
-          valor: Number(v.totalPago) || 0,
-        });
+      } else {
+        // fallback: somar totalPago como único movimento quando não há array de pagamentos
+        const fallbackVal = Number(v.totalPago) || 0;
+        if (fallbackVal > 0) {
+          movimentos.push({
+            origem: "venda",
+            referencia: v.id,
+            data: v.data,
+            cliente: v.cliente || null,
+            pet: null,
+            servico: "Venda",
+            forma_pagamento: "desconhecido",
+            valor: fallbackVal,
+          });
+        }
       }
     }
 
     // 4) Agendamentos finalizados (pagamentos em agendamento-detalhes) - agora processamos os agendados
     agendados.forEach((a) => {
-      const pagamentos = a.pagamentos || [];
-      try {
-        (Array.isArray(pagamentos) ? pagamentos : []).forEach((p) => {
+      let pagamentosRaw = a.pagamentos || [];
+      let pagamentosArr = [];
+      if (typeof pagamentosRaw === "string") {
+        try {
+          pagamentosArr = JSON.parse(pagamentosRaw || "[]");
+        } catch (e) {
+          pagamentosArr = [];
+        }
+      } else if (Array.isArray(pagamentosRaw)) {
+        pagamentosArr = pagamentosRaw;
+      }
+
+      if (Array.isArray(pagamentosArr) && pagamentosArr.length > 0) {
+        pagamentosArr.forEach((p) => {
           const forma = normalizeForma(
             p.forma || p.forma_pagamento || p.tipo || "outro",
           );
@@ -243,17 +269,20 @@ exports.listarHoje = async (req, res) => {
             valor,
           });
         });
-      } catch (e) {
-        movimentos.push({
-          origem: "agendamento",
-          referencia: a.id,
-          data: a.dataAgendamento,
-          cliente: null,
-          pet: a.petId || null,
-          servico: a.servico || null,
-          forma_pagamento: "desconhecido",
-          valor: Number(a.totalPago) || 0,
-        });
+      } else {
+        const fallbackVal = Number(a.totalPago) || 0;
+        if (fallbackVal > 0) {
+          movimentos.push({
+            origem: "agendamento",
+            referencia: a.id,
+            data: a.dataAgendamento,
+            cliente: null,
+            pet: a.petId || null,
+            servico: a.servico || null,
+            forma_pagamento: "desconhecido",
+            valor: fallbackVal,
+          });
+        }
       }
     });
 
@@ -350,28 +379,71 @@ exports.resumoCaixa = async (req, res) => {
       }
       if (vendaAgId && agendamentoIds.has(Number(vendaAgId))) return;
 
-      const pagamentos = v.pagamentos || [];
-      (Array.isArray(pagamentos) ? pagamentos : []).forEach((p) => {
-        const forma = normalizeForma(
-          p.forma || p.forma_pagamento || p.tipo || "outro",
-        );
-        const val = Number(p.valor || p.amount || p.total || v.totalPago) || 0;
-        resumo[forma] = (resumo[forma] || 0) + val;
-        resumo.total_geral += val;
-      });
+      // Parsear pagamentos (raw: true pode devolver string)
+      let pagamentosRaw = v.pagamentos || [];
+      let pagamentosArr = [];
+      if (typeof pagamentosRaw === "string") {
+        try {
+          pagamentosArr = JSON.parse(pagamentosRaw || "[]");
+        } catch (e) {
+          pagamentosArr = [];
+        }
+      } else if (Array.isArray(pagamentosRaw)) {
+        pagamentosArr = pagamentosRaw;
+      }
+
+      if (Array.isArray(pagamentosArr) && pagamentosArr.length > 0) {
+        pagamentosArr.forEach((p) => {
+          const forma = normalizeForma(
+            p.forma || p.forma_pagamento || p.tipo || "outro",
+          );
+          const val =
+            Number(p.valor || p.amount || p.total || v.totalPago) || 0;
+          resumo[forma] = (resumo[forma] || 0) + val;
+          resumo.total_geral += val;
+        });
+      } else {
+        const fallbackVal = Number(v.totalPago) || 0;
+        if (fallbackVal > 0) {
+          const key = normalizeForma("desconhecido");
+          resumo[key] = (resumo[key] || 0) + fallbackVal;
+          resumo.total_geral += fallbackVal;
+        }
+      }
     });
 
     // Agendamentos (somar pagamentos dos agendados)
     agendados.forEach((a) => {
-      const pagamentos = a.pagamentos || [];
-      (Array.isArray(pagamentos) ? pagamentos : []).forEach((p) => {
-        const forma = normalizeForma(
-          p.forma || p.forma_pagamento || p.tipo || "outro",
-        );
-        const val = Number(p.valor || p.amount || p.total || a.totalPago) || 0;
-        resumo[forma] = (resumo[forma] || 0) + val;
-        resumo.total_geral += val;
-      });
+      let pagamentosRaw = a.pagamentos || [];
+      let pagamentosArr = [];
+      if (typeof pagamentosRaw === "string") {
+        try {
+          pagamentosArr = JSON.parse(pagamentosRaw || "[]");
+        } catch (e) {
+          pagamentosArr = [];
+        }
+      } else if (Array.isArray(pagamentosRaw)) {
+        pagamentosArr = pagamentosRaw;
+      }
+
+      if (Array.isArray(pagamentosArr) && pagamentosArr.length > 0) {
+        pagamentosArr.forEach((p) => {
+          const forma = normalizeForma(
+            p.forma || p.forma_pagamento || p.tipo || "outro",
+          );
+          const val =
+            Number(p.valor || p.amount || p.total || a.totalPago) || 0;
+          resumo[forma] = (resumo[forma] || 0) + val;
+          resumo.total_geral += val;
+        });
+      } else {
+        const fallbackVal = Number(a.totalPago) || 0;
+        if (fallbackVal > 0) {
+          const key = normalizeForma("desconhecido");
+          resumo[key] = (resumo[key] || 0) + fallbackVal;
+          resumo.total_geral += fallbackVal;
+        }
+      }
     });
 
     // Garantir campos padrão
