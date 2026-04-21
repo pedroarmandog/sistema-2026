@@ -604,7 +604,7 @@ function mostrarNotificacao(mensagem, tipo) {
     ';font-size:20px"></i><span>' +
     escapeHtml(mensagem) +
     "</span>";
-  notif.style.backgroundColor = "var(--bg-card, #fff)";
+  notif.style.backgroundColor = "var(--bg-card, #da0202)";
   notif.style.color = "var(--text-primary, #333)";
   notif.style.border = "1px solid " + cor;
 
