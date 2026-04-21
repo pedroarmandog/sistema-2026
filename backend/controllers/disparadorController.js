@@ -184,7 +184,7 @@ async function criarCampanha(req, res) {
  * Se não estiver conectada, reinicializa (abre Chrome) e aguarda até 25s.
  * Retorna true se conectou, false se timeout.
  */
-async function aguardarConexao(chaveWpp) {
+async function aguardarConexao(chaveWpp, opts = {}) {
   // Já conectado? Retorna imediatamente
   if (whatsappService.isConectado(chaveWpp)) return true;
 
@@ -194,7 +194,7 @@ async function aguardarConexao(chaveWpp) {
 
   // Reinicializar (abre Chrome e tenta usar sessão salva)
   try {
-    const result = await whatsappService.inicializarCliente(chaveWpp);
+    const result = await whatsappService.inicializarCliente(chaveWpp, opts);
     console.log(
       `[Disparador] inicializarCliente retornou:`,
       JSON.stringify(result),
@@ -250,7 +250,8 @@ async function iniciarCampanha(req, res) {
 
     // Verificar/reconectar o cliente WhatsApp
     const chaveWpp = DISP_PREFIX + String(instanciaId || camp.empresaId || 1);
-    const conectado = await aguardarConexao(chaveWpp);
+    // Ao iniciar campanha manualmente, abrir o Chrome (headful) para monitoramento
+    const conectado = await aguardarConexao(chaveWpp, { headless: false });
     if (!conectado) {
       return res.status(400).json({
         error:

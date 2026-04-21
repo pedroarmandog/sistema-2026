@@ -242,7 +242,7 @@ function matarChromeZumbis() {
  * Inicializa o cliente WhatsApp para uma empresa.
  * Se já existir cliente conectado, retorna o existente.
  */
-async function inicializarCliente(empresaId) {
+async function inicializarCliente(empresaId, opts = {}) {
   const chave = String(empresaId);
 
   // Se já existe e está pronto, retornar
@@ -475,42 +475,47 @@ async function inicializarCliente(empresaId) {
     } catch (_) {}
   }
 
-  // Disparador (chave "disp_X") em VPS sem GUI deve rodar headless.
-  // Forçamos headless para o disparador e garantimos as flags de container.
+  // Disparador (chave "disp_X") — permitir override via opts
   const isDisparador = chave.startsWith("disp_");
 
-  // Determinar comportamento headless: por padrão, executar headless no servidor.
-  // Permite override via PUPPETEER_HEADLESS='0' se necessário.
+  // Determinar comportamento headless:
+  // 1) opts.headless (explicit call)
+  // 2) process.env.PUPPETEER_HEADLESS
+  // 3) default: headless=true (server-friendly)
   let headless = true;
   try {
-    if (process.env.PUPPETEER_HEADLESS !== undefined) {
+    if (opts && typeof opts.headless !== "undefined") {
+      headless = !!opts.headless;
+    } else if (process.env.PUPPETEER_HEADLESS !== undefined) {
       const v = String(process.env.PUPPETEER_HEADLESS).toLowerCase();
-      if (v === "0" || v === "false") headless = false;
-      else headless = true;
+      headless = !(v === "0" || v === "false");
     }
   } catch (_) {}
 
+  // Montar opções do Puppeteer — incluir defaultViewport null quando headful
+  const baseArgs = [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--no-first-run",
+    "--no-zygote",
+  ];
+
+  const headfulExtraArgs = ["--start-maximized", "--window-size=1280,800"];
+
   const puppeteerOptions = {
     headless: headless,
-
-    // ✅ Usa o caminho que você calculou acima
     executablePath:
       executablePath ||
       process.env.PUPPETEER_EXECUTABLE_PATH ||
       process.env.CHROME_PATH ||
       undefined,
-
     handleSIGINT: false,
     handleSIGTERM: false,
     handleSIGHUP: false,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-      "--no-first-run",
-      "--no-zygote",
-    ],
+    args: baseArgs.concat(headless ? [] : headfulExtraArgs),
+    defaultViewport: headless ? { width: 1280, height: 800 } : null,
   };
 
   console.log(
