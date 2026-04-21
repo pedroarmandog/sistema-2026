@@ -532,18 +532,10 @@ async function inicializarCliente(empresaId, opts = {}) {
     defaultViewport: headless ? { width: 1280, height: 800 } : null,
   };
 
-  // Isolar userDataDir por instância para evitar que múltiplos browsers
-  // concorrentes usem o mesmo perfil (evita conflitos ao conectar duas
-  // sessões do mesmo número). Também criamos pasta dedicada para LocalAuth.
-  try {
-    const userDataDir = path.join(SESSION_DIR, `user_data_${chave}`);
-    fs.mkdirSync(userDataDir, { recursive: true });
-    puppeteerOptions.userDataDir = userDataDir;
-  } catch (e) {
-    console.warn(
-      `[WhatsApp][${chave}] Falha ao criar userDataDir: ${e && e.message}`,
-    );
-  }
+  // Nota: não definimos `userDataDir` quando usamos `LocalAuth`, pois
+  // o LocalAuth do whatsapp-web.js não é compatível com um user-supplied
+  // userDataDir. A isolação de sessão é feita via `LocalAuth.dataPath`
+  // (veja mais abaixo) que cria pastas separadas por instância.
 
   console.log(
     `[WhatsApp][${chave}] puppeteerOptions: ${util.inspect(puppeteerOptions, {
