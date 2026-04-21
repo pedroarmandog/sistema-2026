@@ -548,18 +548,19 @@ router.post("/:id/cancelar", async (req, res) => {
 
     const bcrypt = require("bcryptjs");
     const { Admin } = require("../models");
-    let user = await Usuario.findOne({ where: { usuario: usuarioLogin } });
-    let tipo = "Usuario";
+    // Buscar primeiro como Admin (painel)
+    let user = await Admin.findOne({ where: { email: usuarioLogin } });
+    let tipo = "Admin";
     if (user) {
       console.log(
-        `[CANCELAMENTO] Usuario encontrado: id=${user.id}, nome=${user.nome}, grupo=${user.grupoUsuario}, ativo=${user.ativo}, empresas=${JSON.stringify(user.empresas)}`,
+        `[CANCELAMENTO] Admin encontrado: id=${user.id}, nome=${user.nome}, email=${user.email}, ativo=${user.ativo}`,
       );
     } else {
-      user = await Admin.findOne({ where: { email: usuarioLogin } });
-      tipo = "Admin";
+      user = await Usuario.findOne({ where: { usuario: usuarioLogin } });
+      tipo = "Usuario";
       if (user) {
         console.log(
-          `[CANCELAMENTO] Admin encontrado: id=${user.id}, nome=${user.nome}, email=${user.email}, ativo=${user.ativo}`,
+          `[CANCELAMENTO] Usuario encontrado: id=${user.id}, nome=${user.nome}, grupo=${user.grupoUsuario}, ativo=${user.ativo}, empresas=${JSON.stringify(user.empresas)}`,
         );
       }
     }
