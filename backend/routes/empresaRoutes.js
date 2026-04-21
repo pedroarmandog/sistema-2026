@@ -12,4 +12,8 @@ router.post("/", authUser, empresaController.criarEmpresa);
 router.put("/:id", authUser, empresaController.atualizarEmpresa);
 router.delete("/:id", authUser, empresaController.deletarEmpresa);
 
+// Rotas para última chave Pix
+router.get("/pix/ultima", authUser, empresaController.getUltimaChavePix);
+router.post("/pix/ultima", authUser, empresaController.setUltimaChavePix);
+
 module.exports = router;

@@ -1,3 +1,48 @@
+// Buscar última chave Pix da empresa
+exports.getUltimaChavePix = async (req, res) => {
+  try {
+    const empresaId = req.user?.empresaId;
+    if (!empresaId) {
+      return res
+        .status(400)
+        .json({ erro: "Empresa não identificada no token" });
+    }
+    const empresa = await Empresa.findByPk(empresaId);
+    if (!empresa) {
+      return res.status(404).json({ erro: "Empresa não encontrada" });
+    }
+    res.json({ ultimaChavePix: empresa.ultimaChavePix || "" });
+  } catch (error) {
+    console.error("Erro ao buscar última chave Pix:", error);
+    res.status(500).json({ erro: "Erro ao buscar última chave Pix" });
+  }
+};
+
+// Atualizar última chave Pix da empresa
+exports.setUltimaChavePix = async (req, res) => {
+  try {
+    const empresaId = req.user?.empresaId;
+    if (!empresaId) {
+      return res
+        .status(400)
+        .json({ erro: "Empresa não identificada no token" });
+    }
+    const { ultimaChavePix } = req.body;
+    if (typeof ultimaChavePix !== "string") {
+      return res.status(400).json({ erro: "Chave Pix inválida" });
+    }
+    const empresa = await Empresa.findByPk(empresaId);
+    if (!empresa) {
+      return res.status(404).json({ erro: "Empresa não encontrada" });
+    }
+    empresa.ultimaChavePix = ultimaChavePix;
+    await empresa.save();
+    res.json({ sucesso: true, ultimaChavePix });
+  } catch (error) {
+    console.error("Erro ao atualizar última chave Pix:", error);
+    res.status(500).json({ erro: "Erro ao atualizar última chave Pix" });
+  }
+};
 const { Empresa, Usuario } = require("../models");
 const { Op } = require("sequelize");
 const fs = require("fs");

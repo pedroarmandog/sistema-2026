@@ -1,0 +1,23 @@
+{
+  "development": {
+    "username": "pethub",
+    "password": "PetHub@123",
+    "database": "petshop",
+    "host": "127.0.0.1",
+    "dialect": "mysql"
+  },
+  "test": {
+    "username": "pethub",
+    "password": "PetHub@123",
+    "database": "petshop",
+    "host": "127.0.0.1",
+    "dialect": "mysql"
+  },
+  "production": {
+    "username": "pethub",
+    "password": "PetHub@123",
+    "database": "petshop",
+    "host": "127.0.0.1",
+    "dialect": "mysql"
+  }
+}

@@ -2755,42 +2755,24 @@ function abrirModalPagamento(totalOverride, seed) {
                 
                 <!-- Débito -->
                 <div id="campos-debito" class="campos-forma" style="display: none;">
-                    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 15px;">
-                        <div>
-                            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">Operadora</label>
-                            <input type="text" id="operadora-debito" placeholder="Operadora" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; outline: none;">
-                        </div>
-                        <div>
-                            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">N° NSU <i class="fas fa-lock" title="Campo bloqueado" style="margin-left:8px;color:#777;font-size:12px"></i></label>
-                            <input type="text" id="nsu-debito" placeholder="NSU" disabled title="NSU bloqueado" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; outline: none; background:#f5f5f5; cursor:not-allowed;">
-                        </div>
-                    </div>
-                    <div style="margin-top: 15px;">
-                        <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">Valor *</label>
-                        <input type="number" id="valor-debito" placeholder="0,00" step="0.01" min="0" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px; outline: none;">
-                    </div>
+                  <div style="margin-top: 15px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">Valor *</label>
+                    <input type="number" id="valor-debito" placeholder="0,00" step="0.01" min="0" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px; outline: none;">
+                  </div>
                 </div>
                 
                 <!-- Crédito -->
                 <div id="campos-credito" class="campos-forma" style="display: none;">
-                    <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 15px;">
-                        <div>
-                            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">Operadora</label>
-                            <input type="text" id="operadora-credito" placeholder="Operadora" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; outline: none;">
-                        </div>
-                        <div>
-                            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">N° NSU <i class="fas fa-lock" title="Campo bloqueado" style="margin-left:8px;color:#777;font-size:12px"></i></label>
-                            <input type="text" id="nsu-credito" placeholder="NSU" disabled title="NSU bloqueado" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; outline: none; background:#f5f5f5; cursor:not-allowed;">
-                        </div>
-                        <div>
-                            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">N° Parc. *</label>
-                            <input type="number" id="parcelas-credito" value="1" min="1" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; outline: none;">
-                        </div>
+                  <div style="display: grid; grid-template-columns: 1fr; gap: 15px;">
+                    <div>
+                      <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">N° Parc. *</label>
+                      <input type="number" id="parcelas-credito" value="1" min="1" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; outline: none;">
                     </div>
-                    <div style="margin-top: 15px;">
-                        <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">Valor *</label>
-                        <input type="number" id="valor-credito" placeholder="0,00" step="0.01" min="0" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px; outline: none;">
-                    </div>
+                  </div>
+                  <div style="margin-top: 15px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">Valor *</label>
+                    <input type="number" id="valor-credito" placeholder="0,00" step="0.01" min="0" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px; outline: none;">
+                  </div>
                 </div>
                 
                 <!-- Pix -->
@@ -2864,13 +2846,7 @@ function abrirModalPagamento(totalOverride, seed) {
                 <div id="listaPagamentosItems" style="background:#fff;padding:10px;border:1px solid #e9ecef;border-radius:8px;max-height:140px;overflow:auto;color:#333;"></div>
             </div>
 
-            <!-- Caixa/Conta -->
-            <div style="margin-bottom: 20px;">
-                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">Caixa/Conta</label>
-                <select id="caixaContaModal" style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 14px; outline: none;">
-                    <option value="Frente de caixa nº 2 - 13/06/2025">Frente de caixa nº 2 - 13/06/2025</option>
-                </select>
-            </div>
+
             
             <!-- Botões -->
             <div style="display: flex; gap: 15px; justify-content: flex-end;">
@@ -3114,10 +3090,12 @@ function configurarModalPagamento(modal, overlay, totalVenda) {
           // Parcelas já vem com 1 preenchido
           break;
         case "pix":
-          // Não usar localStorage por segurança; deixar campo em branco e focar
+          // Preencher automaticamente com a última chave PIX salva
           setTimeout(() => {
             try {
-              document.getElementById("chave-pix").value = "";
+              const ultimaChavePix =
+                localStorage.getItem("ultimaChavePix") || "";
+              document.getElementById("chave-pix").value = ultimaChavePix;
             } catch (e) {}
             try {
               document.getElementById("chave-pix").focus();
@@ -3236,9 +3214,6 @@ function configurarModalPagamento(modal, overlay, totalVenda) {
           return null;
         }
         dadosPagamento.valor = valorDebito;
-        dadosPagamento.operadora =
-          document.getElementById("operadora-debito").value;
-        dadosPagamento.nsu = document.getElementById("nsu-debito").value;
         break;
 
       case "credito":
@@ -3255,9 +3230,6 @@ function configurarModalPagamento(modal, overlay, totalVenda) {
           return null;
         }
         dadosPagamento.valor = valorCredito;
-        dadosPagamento.operadora =
-          document.getElementById("operadora-credito").value;
-        dadosPagamento.nsu = document.getElementById("nsu-credito").value;
         dadosPagamento.parcelas = parcelas;
         break;
 
@@ -3273,7 +3245,12 @@ function configurarModalPagamento(modal, overlay, totalVenda) {
           alert("Digite uma chave PIX válida.");
           return null;
         }
-        // Não salvar no localStorage por segurança; persistir no servidor se necessário
+        // Salvar última chave PIX no localStorage
+        try {
+          if (chavePix) {
+            localStorage.setItem("ultimaChavePix", chavePix);
+          }
+        } catch (e) {}
         dadosPagamento.valor = valorPix;
         dadosPagamento.chavePix = chavePix;
         break;
