@@ -560,16 +560,34 @@ router.post("/:id/cancelar", async (req, res) => {
       return res.status(401).json({ error: "Credenciais inválidas" });
     }
 
-    // Regra de autorização: pode cancelar quem tiver id = 1 (gerente principal)
-    // ou cujo nome seja "LOGIN INICIAL" (usuário master do sistema)
+    // Nova regra: pode cancelar se for gerente principal (id=1), LOGIN INICIAL,
+    // OU grupoUsuario for 'admin' ou 'gerente' (case-insensitive), ativo e vinculado à empresa do agendamento
     const isLoginInicial =
       (user.nome || "").trim().toUpperCase() === "LOGIN INICIAL";
-    const isGerente = user.id === 1;
-    if (!isGerente && !isLoginInicial) {
-      return res.status(403).json({
-        error:
-          "Apenas o gerente principal (usuário 1) ou o LOGIN INICIAL podem autorizar o cancelamento.",
-      });
+    const isGerentePrincipal = user.id === 1;
+    const grupo = (user.grupoUsuario || "").toLowerCase();
+    const isGerenteOuAdmin =
+      grupo.includes("admin") || grupo.includes("gerente");
+
+    // Verificar vínculo com a empresa do agendamento, se não for master
+    let empresaOk = true;
+    if (!isGerentePrincipal && !isLoginInicial) {
+      // Buscar agendamento para pegar empresa_id
+      const agendamento = await Agendamento.findByPk(id);
+      if (!agendamento) {
+        return res.status(404).json({ error: "Agendamento não encontrado" });
+      }
+      // Usuário deve estar vinculado à empresa do agendamento
+      const empresas = Array.isArray(user.empresas) ? user.empresas : [];
+      empresaOk =
+        empresas.includes(agendamento.empresa_id) ||
+        empresas.includes(Number(agendamento.empresa_id));
+      if (!isGerenteOuAdmin || !empresaOk) {
+        return res.status(403).json({
+          error:
+            "Apenas gerente/admin da empresa ou o gerente principal (usuário 1) ou LOGIN INICIAL podem autorizar o cancelamento.",
+        });
+      }
     }
 
     const agendamento = await Agendamento.findByPk(id);
