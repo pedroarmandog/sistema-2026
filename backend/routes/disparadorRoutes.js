@@ -26,6 +26,7 @@ router.post(
 router.post("/start/:id", controller.iniciarCampanha);
 router.post("/pause/:id", controller.pausarCampanha);
 router.post("/continue/:id", controller.continuarCampanha);
+router.get("/eventos/:id", controller.eventoSSE);
 router.get("/logs/:id", controller.obterLogs);
 router.get("/contacts/:id", controller.obterContatos);
 router.get("/config", controller.carregarConfig);

@@ -23,6 +23,48 @@ function normalizeNumber(raw) {
 // ── Mapa de workers ativos (campanhaId → timer) ──
 const activeWorkers = new Map();
 
+// SSE listeners por campanhaId: Set de response objects
+const sseListeners = new Map();
+
+function adicionarListenerSSE(campId, res) {
+  const chave = String(campId);
+  if (!sseListeners.has(chave)) sseListeners.set(chave, new Set());
+  sseListeners.get(chave).add(res);
+
+  res.on("close", () => {
+    const s = sseListeners.get(chave);
+    if (s) s.delete(res);
+  });
+}
+
+function enviarEventoCampanha(campId, payload) {
+  try {
+    const chave = String(campId);
+    const set = sseListeners.get(chave);
+    if (!set || set.size === 0) return;
+    const data = JSON.stringify(payload);
+    for (const res of set) {
+      try {
+        res.write(`data: ${data}\n\n`);
+      } catch (e) {
+        set.delete(res);
+      }
+    }
+  } catch (_) {}
+}
+
+function replacePlaceholders(template, contato, phone) {
+  if (!template) return "";
+  let out = String(template);
+  const fullname = contato && contato.nome ? String(contato.nome).trim() : "";
+  const firstname = fullname ? fullname.split(/\s+/)[0] : "";
+  const phoneVal = contato && contato.numero ? contato.numero : phone || "";
+  out = out.replace(/\[\[firstname\]\]/gi, firstname || "cliente");
+  out = out.replace(/\[\[fullname\]\]/gi, fullname || "cliente");
+  out = out.replace(/\[\[phone\]\]/gi, phoneVal || "");
+  return out;
+}
+
 async function criarCampanha(req, res) {
   try {
     const empresaId = req.body.empresaId || 1;
@@ -319,6 +361,27 @@ function startWorker(campanha, instanciaId) {
     let desconectadoRetries = 0;
     const MAX_DESCONECTADO_RETRIES = 10;
 
+    // Enviar estado inicial de progresso (snapshot)
+    try {
+      const total = await Contato.count({ where: { campanhaId: campId } });
+      const enviados = await Contato.count({
+        where: { campanhaId: campId, status: "enviado" },
+      });
+      const erros = await Contato.count({
+        where: { campanhaId: campId, status: "erro" },
+      });
+      const pendentes = Math.max(0, total - enviados - erros);
+      const percent = total > 0 ? Math.round((enviados / total) * 100) : 0;
+      enviarEventoCampanha(campId, {
+        evento: "progress",
+        total,
+        enviados,
+        pendentes,
+        erros,
+        percent,
+      });
+    } catch (e) {}
+
     while (!parado) {
       try {
         // Verificar se campanha ainda está rodando
@@ -390,6 +453,8 @@ function startWorker(campanha, instanciaId) {
           );
           campAtual.status = "finalizada";
           await campAtual.save();
+          // enviar evento final
+          enviarEventoCampanha(campId, { evento: "finished" });
           break;
         }
 
@@ -409,11 +474,37 @@ function startWorker(campanha, instanciaId) {
         envio.tentativas = (envio.tentativas || 0) + 1;
         await envio.save();
 
+        // Marcar contato como enviando (se aplicável) e notificar
+        let contato = null;
+        if (ctx.contatoId) {
+          contato = await Contato.findByPk(ctx.contatoId);
+          try {
+            await Contato.update(
+              { status: "enviando" },
+              { where: { id: ctx.contatoId } },
+            );
+          } catch (e) {}
+          enviarEventoCampanha(campId, {
+            evento: "contact",
+            contatoId: ctx.contatoId,
+            status: "enviando",
+            numero: envio.telefoneDestino,
+          });
+        }
+
+        // Preparar mensagem com placeholders
+        const template = envio.conteudoFinal || campanha.mensagemTemplate || "";
+        const textoEnvio = replacePlaceholders(
+          template,
+          contato,
+          envio.telefoneDestino,
+        );
+
         // Enviar via whatsappService
         const resultado = await whatsappService.enviarMensagem(
           empresaId,
           envio.telefoneDestino,
-          envio.conteudoFinal,
+          textoEnvio,
           envio.imagemPath
             ? path.join(__dirname, "../../", envio.imagemPath)
             : null,
@@ -429,12 +520,42 @@ function startWorker(campanha, instanciaId) {
               { status: "enviado" },
               { where: { id: ctx.contatoId } },
             );
+            enviarEventoCampanha(campId, {
+              evento: "contact",
+              contatoId: ctx.contatoId,
+              status: "enviado",
+              numero: envio.telefoneDestino,
+            });
           }
 
           enviadosNoCiclo++;
           console.log(
             `[Disparador] ✅ Enviado para ${envio.telefoneDestino} (${enviadosNoCiclo}${limitePorCiclo ? "/" + limitePorCiclo : ""})`,
           );
+
+          // emitir progresso
+          try {
+            const total = await Contato.count({
+              where: { campanhaId: campId },
+            });
+            const enviados = await Contato.count({
+              where: { campanhaId: campId, status: "enviado" },
+            });
+            const erros = await Contato.count({
+              where: { campanhaId: campId, status: "erro" },
+            });
+            const pendentes = Math.max(0, total - enviados - erros);
+            const percent =
+              total > 0 ? Math.round((enviados / total) * 100) : 0;
+            enviarEventoCampanha(campId, {
+              evento: "progress",
+              total,
+              enviados,
+              pendentes,
+              erros,
+              percent,
+            });
+          } catch (e) {}
         } else {
           const erroMsg = resultado.erro || "Falha desconhecida";
 
@@ -460,11 +581,42 @@ function startWorker(campanha, instanciaId) {
               { status: "erro" },
               { where: { id: ctx.contatoId } },
             );
+            enviarEventoCampanha(campId, {
+              evento: "contact",
+              contatoId: ctx.contatoId,
+              status: "erro",
+              numero: envio.telefoneDestino,
+              erro: erroMsg,
+            });
           }
 
           console.warn(
             `[Disparador] ❌ Erro ${envio.telefoneDestino}: ${erroMsg}`,
           );
+
+          // emitir progresso parcial
+          try {
+            const total = await Contato.count({
+              where: { campanhaId: campId },
+            });
+            const enviados = await Contato.count({
+              where: { campanhaId: campId, status: "enviado" },
+            });
+            const erros = await Contato.count({
+              where: { campanhaId: campId, status: "erro" },
+            });
+            const pendentes = Math.max(0, total - enviados - erros);
+            const percent =
+              total > 0 ? Math.round((enviados / total) * 100) : 0;
+            enviarEventoCampanha(campId, {
+              evento: "progress",
+              total,
+              enviados,
+              pendentes,
+              erros,
+              percent,
+            });
+          } catch (e) {}
         }
 
         // Aguardar intervalo + delay aleatório antes do próximo envio
@@ -568,6 +720,52 @@ async function obterContatos(req, res) {
   }
 }
 
+async function eventoSSE(req, res) {
+  try {
+    const id = req.params.id;
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    if (res.flushHeaders) res.flushHeaders();
+
+    // Heartbeat para manter conexão viva
+    const hb = setInterval(() => {
+      try {
+        res.write(`: heartbeat\n\n`);
+      } catch (e) {
+        clearInterval(hb);
+      }
+    }, 20000);
+
+    adicionarListenerSSE(id, res);
+
+    // Enviar snapshot inicial de progresso
+    try {
+      const total = await Contato.count({ where: { campanhaId: id } });
+      const enviados = await Contato.count({
+        where: { campanhaId: id, status: "enviado" },
+      });
+      const erros = await Contato.count({
+        where: { campanhaId: id, status: "erro" },
+      });
+      const pendentes = Math.max(0, total - enviados - erros);
+      const percent = total > 0 ? Math.round((enviados / total) * 100) : 0;
+      res.write(
+        `data: ${JSON.stringify({ evento: "progress", total, enviados, pendentes, erros, percent })}\n\n`,
+      );
+    } catch (e) {}
+
+    req.on("close", () => {
+      clearInterval(hb);
+      // listener removal ocorre no adicionarListenerSSE por close
+    });
+  } catch (err) {
+    try {
+      res.end();
+    } catch (e) {}
+  }
+}
+
 /**
  * Salva configuração global do disparador no banco (WhatsappSession com nome='config_disparador').
  */
@@ -628,6 +826,7 @@ module.exports = {
   iniciarCampanha,
   pausarCampanha,
   continuarCampanha,
+  eventoSSE,
   obterLogs,
   obterContatos,
   salvarConfig,

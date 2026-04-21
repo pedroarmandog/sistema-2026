@@ -1809,6 +1809,36 @@
                 </button>
               </div>
             </div>
+            <!-- Progresso do disparador -->
+            <div id="disparadorProgress" style="display: none; margin: 8px 0">
+              <div style="display: flex; gap: 12px; align-items: center">
+                <div><strong id="dp_total">0</strong> contatos</div>
+                <div><strong id="dp_sent">0</strong> enviados</div>
+                <div><strong id="dp_pending">0</strong> pendentes</div>
+                <div><strong id="dp_error">0</strong> erros</div>
+                <div style="margin-left: auto">
+                  <span id="dp_percent">0%</span>
+                </div>
+              </div>
+              <div
+                style="
+                  background: #e6e6e6;
+                  height: 10px;
+                  border-radius: 6px;
+                  overflow: hidden;
+                  margin-top: 6px;
+                "
+              >
+                <div
+                  id="dp_bar"
+                  style="
+                    height: 100%;
+                    width: 0%;
+                    background: linear-gradient(90deg, #34d399, #10b981);
+                  "
+                ></div>
+              </div>
+            </div>
             <div
               id="instanciasList"
               style="

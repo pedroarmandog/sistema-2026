@@ -42,6 +42,7 @@
   let lastCampanhaId = null;
   let pollingTimer = null;
   let qrEventSource = null; // SSE para QR
+  let campaignEventSource = null; // SSE para progresso do disparador
 
   // ══════════════════════════════════════════
   //  CONFIG: CARREGAR / SALVAR DO BANCO
@@ -117,6 +118,7 @@
         modal.style.display = "none";
         stopPolling();
         closeQRStream();
+        closeCampaignStream();
       }
     }
   });
@@ -673,6 +675,7 @@
           return;
         }
         appendLog("✅ Disparo iniciado! Acompanhe no log abaixo.");
+        startCampaignStream(lastCampanhaId);
         await refreshContatos();
         startPolling();
       } catch (err) {
@@ -691,6 +694,7 @@
         });
         if (!res.ok) appendLog("Erro ao pausar");
         else appendLog("⏸ Campanha pausada.");
+        closeCampaignStream();
         await refreshContatos();
       } catch (e) {
         appendLog("Erro: " + e.message);
@@ -711,6 +715,7 @@
         });
         if (!res.ok) appendLog("Erro ao continuar");
         else appendLog("▶ Campanha retomada.");
+        startCampaignStream(lastCampanhaId);
         await refreshContatos();
         startPolling();
       } catch (e) {
@@ -806,6 +811,120 @@
     } catch (err) {
       console.error(err);
     }
+  }
+
+  // ── SSE: acompanhamento de campanha (progress + status por contato)
+  function startCampaignStream(campId) {
+    closeCampaignStream();
+    if (!campId) return;
+    try {
+      campaignEventSource = new EventSource(
+        "/api/disparador/eventos/" + campId,
+      );
+      campaignEventSource.onmessage = function (e) {
+        try {
+          var payload = JSON.parse(e.data);
+          if (!payload || !payload.evento) return;
+          if (payload.evento === "progress") {
+            updateProgressUI(payload);
+          } else if (payload.evento === "contact") {
+            updateContactRow(payload);
+          } else if (payload.evento === "finished") {
+            appendLog("✅ Campanha finalizada.");
+            updateProgressUI({
+              total: payload.total || 0,
+              enviados: payload.enviados || 0,
+              pendentes: 0,
+              erros: payload.erros || 0,
+              percent: 100,
+            });
+            closeCampaignStream();
+          }
+        } catch (err) {
+          // ignore
+        }
+      };
+      campaignEventSource.onerror = function () {
+        // silent
+      };
+      // mostrar área de progresso
+      var dp = document.getElementById("disparadorProgress");
+      if (dp) dp.style.display = "block";
+    } catch (e) {
+      console.error("Erro ao abrir SSE da campanha:", e && e.message);
+    }
+  }
+
+  function closeCampaignStream() {
+    if (campaignEventSource) {
+      try {
+        campaignEventSource.close();
+      } catch (e) {}
+      campaignEventSource = null;
+    }
+    var dp = document.getElementById("disparadorProgress");
+    if (dp) dp.style.display = "none";
+  }
+
+  function updateProgressUI(payload) {
+    try {
+      var total = payload.total || 0;
+      var enviados = payload.enviados || 0;
+      var pendentes = payload.pendentes || 0;
+      var erros = payload.erros || 0;
+      var percent =
+        payload.percent ||
+        (total > 0 ? Math.round((enviados / total) * 100) : 0);
+      var elTotal = document.getElementById("dp_total");
+      var elSent = document.getElementById("dp_sent");
+      var elPending = document.getElementById("dp_pending");
+      var elError = document.getElementById("dp_error");
+      var elPercent = document.getElementById("dp_percent");
+      var elBar = document.getElementById("dp_bar");
+      if (elTotal) elTotal.textContent = total;
+      if (elSent) elSent.textContent = enviados;
+      if (elPending) elPending.textContent = pendentes;
+      if (elError) elError.textContent = erros;
+      if (elPercent) elPercent.textContent = percent + "%";
+      if (elBar) elBar.style.width = Math.max(0, Math.min(100, percent)) + "%";
+    } catch (e) {}
+  }
+
+  function updateContactRow(payload) {
+    try {
+      if (!payload) return;
+      var numero = payload.numero || "";
+      var status = payload.status || "pendente";
+      // Procurar na tabela pelo número
+      if (!tblBody) return;
+      var rows = tblBody.querySelectorAll("tr");
+      for (var i = 0; i < rows.length; i++) {
+        var tds = rows[i].querySelectorAll("td");
+        if (!tds || tds.length < 3) continue;
+        var numText = (tds[1].textContent || "").trim();
+        if (!numText) continue;
+        if (
+          numText.indexOf(numero) !== -1 ||
+          numero.indexOf(numText) !== -1 ||
+          numText === numero
+        ) {
+          var statusColor =
+            status === "enviado"
+              ? "#22c55e"
+              : status === "erro"
+                ? "#ef4444"
+                : status === "enviando"
+                  ? "#f59e0b"
+                  : "#94a3b8";
+          tds[2].innerHTML =
+            '<span style="color:' +
+            statusColor +
+            ';font-weight:600">' +
+            escapeHtml(status) +
+            "</span>";
+        }
+      }
+    } catch (e) {}
   }
 
   function startPolling() {
