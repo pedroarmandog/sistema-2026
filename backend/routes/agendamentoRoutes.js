@@ -550,11 +550,23 @@ router.post("/:id/cancelar", async (req, res) => {
     const { Admin } = require("../models");
     let user = await Usuario.findOne({ where: { usuario: usuarioLogin } });
     let tipo = "Usuario";
-    if (!user) {
+    if (user) {
+      console.log(
+        `[CANCELAMENTO] Usuario encontrado: id=${user.id}, nome=${user.nome}, grupo=${user.grupoUsuario}, ativo=${user.ativo}, empresas=${JSON.stringify(user.empresas)}`,
+      );
+    } else {
       user = await Admin.findOne({ where: { email: usuarioLogin } });
       tipo = "Admin";
+      if (user) {
+        console.log(
+          `[CANCELAMENTO] Admin encontrado: id=${user.id}, nome=${user.nome}, email=${user.email}, ativo=${user.ativo}`,
+        );
+      }
     }
     if (!user || user.ativo === false) {
+      console.log(
+        `[CANCELAMENTO] Falha: Usuário/Admin não encontrado ou inativo. Login informado: ${usuarioLogin}`,
+      );
       return res
         .status(401)
         .json({ error: "Usuário/Admin não encontrado ou inativo" });
