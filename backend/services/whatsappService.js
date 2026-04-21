@@ -362,6 +362,34 @@ async function inicializarCliente(empresaId) {
     );
   }
 
+  // Forçar fallback para /usr/bin/google-chrome se nenhum executável válido foi encontrado
+  if (!executablePath) {
+    try {
+      const fallback = "/usr/bin/google-chrome";
+      if (fs.existsSync(fallback)) {
+        try {
+          const checkFallback = spawnSync(fallback, ["--version"], {
+            encoding: "utf8",
+            timeout: 3000,
+          });
+          if (!checkFallback.error && checkFallback.status === 0) {
+            executablePath = fallback;
+            selectedFrom = "forced-google-chrome";
+            console.log(
+              `[WhatsApp][${chave}] Forçando fallback executablePath -> ${fallback}`,
+            );
+          } else {
+            console.warn(
+              `[WhatsApp][${chave}] Fallback ${fallback} presente mas falhou no teste: ${checkFallback.error ? checkFallback.error.message : checkFallback.stderr || checkFallback.stdout}`,
+            );
+          }
+        } catch (e) {
+          // silencioso
+        }
+      }
+    } catch (_) {}
+  }
+
   // Disparador (chave "disp_X") abre Chrome visível; marketing automático roda headless
   const isDisparador = chave.startsWith("disp_");
 
