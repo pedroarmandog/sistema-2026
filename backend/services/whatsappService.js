@@ -830,7 +830,12 @@ async function inicializarCliente(empresaId) {
             );
             try {
               // installer está em backend/scripts/install_chrome_ubuntu.sh
-              const installer = path.join(__dirname, "..", "scripts", "install_chrome_ubuntu.sh");
+              const installer = path.join(
+                __dirname,
+                "..",
+                "scripts",
+                "install_chrome_ubuntu.sh",
+              );
               const res = spawnSync("bash", [installer], {
                 stdio: "inherit",
                 timeout: 0,
