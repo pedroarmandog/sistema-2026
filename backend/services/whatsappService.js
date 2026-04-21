@@ -25,6 +25,9 @@ function diagnosticarExecPath(msg, chave) {
     console.log(
       `[WhatsApp][${chave}] process.env.CHROME_PATH='${process.env.CHROME_PATH || "(undef)"}'`,
     );
+    console.log(
+      `[WhatsApp][${chave}] process.env.PUPPETEER_EXECUTABLE_PATH='${process.env.PUPPETEER_EXECUTABLE_PATH || "(undef)"}'`,
+    );
     if (pathReported) {
       try {
         console.log(
@@ -300,7 +303,8 @@ async function inicializarCliente(empresaId) {
   // 4) puppeteer.executablePath() (somente se existir e for executável)
   let executablePath = undefined;
   let selectedFrom = null;
-  let envPath = process.env.CHROME_PATH || null;
+  let envPath =
+    process.env.PUPPETEER_EXECUTABLE_PATH || process.env.CHROME_PATH || null;
   let launcherPath = null;
   let puppeteerPath = null;
   try {
@@ -312,16 +316,22 @@ async function inicializarCliente(empresaId) {
         selectedFrom = "env";
       } catch (err) {
         console.warn(
-          `[WhatsApp][${chave}] CHROME_PATH definido (${envPath}) mas não é executável/visível — ignorando. ${err && err.message}`,
+          `[WhatsApp][${chave}] PUPPETEER_EXECUTABLE_PATH/CHROME_PATH definido (${envPath}) mas não é executável/visível — ignorando. ${err && err.message}`,
         );
         envPath = null;
-        // Remover variável de ambiente obsoleta para evitar que bibliotecas
-        // dependentes (ex: whatsapp-web.js) leiam um caminho inválido no require-time
+        // Remover variáveis de ambiente obsoletas para evitar que bibliotecas
+        // dependentes leiam um caminho inválido no require-time
         try {
           if (process.env.CHROME_PATH) {
             delete process.env.CHROME_PATH;
             console.log(
               `[WhatsApp][${chave}] process.env.CHROME_PATH inválido removido`,
+            );
+          }
+          if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+            delete process.env.PUPPETEER_EXECUTABLE_PATH;
+            console.log(
+              `[WhatsApp][${chave}] process.env.PUPPETEER_EXECUTABLE_PATH inválido removido`,
             );
           }
         } catch (_) {}
@@ -497,13 +507,20 @@ async function inicializarCliente(empresaId) {
   try {
     if (executablePath) {
       process.env.CHROME_PATH = executablePath;
+      process.env.PUPPETEER_EXECUTABLE_PATH = executablePath;
     } else {
-      // Garantir que não deixamos uma CHROME_PATH inválida no ambiente
+      // Garantir que não deixamos variáveis de ambiente inválidas
       try {
         if (process.env.CHROME_PATH) {
           delete process.env.CHROME_PATH;
           console.log(
             `[WhatsApp][${chave}] Nenhum executável válido encontrado — CHROME_PATH ambiente removido`,
+          );
+        }
+        if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+          delete process.env.PUPPETEER_EXECUTABLE_PATH;
+          console.log(
+            `[WhatsApp][${chave}] Nenhum executável válido encontrado — PUPPETEER_EXECUTABLE_PATH ambiente removido`,
           );
         }
       } catch (_) {}

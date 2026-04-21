@@ -48,9 +48,10 @@ const DEFAULT_ARGS = [
 
 function findChromePath() {
   const candidates = [
+    process.env.PUPPETEER_EXECUTABLE_PATH,
     process.env.CHROME_PATH,
-    "/usr/bin/google-chrome-stable",
     "/usr/bin/google-chrome",
+    "/usr/bin/google-chrome-stable",
     "/usr/bin/chromium-browser",
     "/usr/bin/chromium",
     "/snap/bin/chromium",

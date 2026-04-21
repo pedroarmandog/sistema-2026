@@ -17,6 +17,13 @@ try {
     for (const p of candidates) {
       if (fs.existsSync(p)) {
         process.env.CHROME_PATH = p;
+        // Também definir PUPPETEER_EXECUTABLE_PATH como fallback padrão
+        if (!process.env.PUPPETEER_EXECUTABLE_PATH) {
+          process.env.PUPPETEER_EXECUTABLE_PATH = p;
+          console.log(
+            `[startup] PUPPETEER_EXECUTABLE_PATH definido para: ${p}`,
+          );
+        }
         console.log(`[startup] CHROME_PATH definido para: ${p}`);
         break;
       }
@@ -59,6 +66,12 @@ if (!process.env.CHROME_PATH && process.env.AUTO_INSTALL_CHROME === "1") {
         for (const p of candidates) {
           if (fs.existsSync(p)) {
             process.env.CHROME_PATH = p;
+            if (!process.env.PUPPETEER_EXECUTABLE_PATH) {
+              process.env.PUPPETEER_EXECUTABLE_PATH = p;
+              console.log(
+                `[startup] PUPPETEER_EXECUTABLE_PATH definido para: ${p}`,
+              );
+            }
             console.log(`[startup] CHROME_PATH definido para: ${p}`);
             break;
           }
