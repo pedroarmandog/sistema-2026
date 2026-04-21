@@ -16,6 +16,78 @@ const fs = require("fs");
 const { spawnSync } = require("child_process");
 const util = require("util");
 
+// Diagnóstico: inspeciona caminhos mencionados em erro de executablePath
+function diagnosticarExecPath(msg, chave) {
+  try {
+    const match = msg && msg.match && msg.match(/\((\/[^)]+)\)/);
+    const pathReported = match ? match[1] : null;
+    console.log(`[WhatsApp][${chave}] diagnosticarExecPath: msg='${msg}'`);
+    console.log(
+      `[WhatsApp][${chave}] process.env.CHROME_PATH='${process.env.CHROME_PATH || "(undef)"}'`,
+    );
+    if (pathReported) {
+      try {
+        console.log(
+          `[WhatsApp][${chave}] Caminho reportado pelo erro: ${pathReported}`,
+        );
+        console.log(
+          `[WhatsApp][${chave}] exists: ${fs.existsSync(pathReported)}`,
+        );
+        try {
+          const s = fs.statSync(pathReported);
+          console.log(`[WhatsApp][${chave}] stat: ${JSON.stringify(s)}`);
+        } catch (e) {
+          console.log(
+            `[WhatsApp][${chave}] stat falhou para ${pathReported}: ${e && e.message}`,
+          );
+        }
+        // listar pasta pai para ver conteúdo
+        const parent = require("path").dirname(pathReported);
+        try {
+          const files = fs.readdirSync(parent);
+          console.log(
+            `[WhatsApp][${chave}] Conteúdo de ${parent}: ${files.join(", ")}`,
+          );
+        } catch (e) {
+          console.log(
+            `[WhatsApp][${chave}] Falha ao listar ${parent}: ${e && e.message}`,
+          );
+        }
+      } catch (e) {
+        console.log(
+          `[WhatsApp][${chave}] Erro diagnosticando caminho reportado: ${e && e.message}`,
+        );
+      }
+    } else {
+      console.log(
+        `[WhatsApp][${chave}] Nenhum caminho entre parênteses encontrado na mensagem de erro`,
+      );
+    }
+
+    // Tentar inspecionar puppeteer local (se presente)
+    try {
+      const p = require("puppeteer");
+      const exec =
+        typeof p.executablePath === "function"
+          ? p.executablePath()
+          : p.executablePath;
+      console.log(`[WhatsApp][${chave}] puppeteer.executablePath() => ${exec}`);
+      if (exec)
+        console.log(
+          `[WhatsApp][${chave}] fs.existsSync(exec) => ${fs.existsSync(exec)}`,
+        );
+    } catch (e) {
+      console.log(
+        `[WhatsApp][${chave}] puppeteer não disponível ou falha ao obter executablePath: ${e && e.message}`,
+      );
+    }
+  } catch (e) {
+    console.log(
+      `[WhatsApp][${chave}] diagnosticarExecPath error: ${e && e.message}`,
+    );
+  }
+}
+
 // Debug: identificar qual arquivo foi carregado e PID do processo
 console.log(
   `[WhatsApp] carregado: ${__filename} pid=${process.pid} NODE_ENV=${process.env.NODE_ENV || "(undef)"} CHROME_PATH=${process.env.CHROME_PATH || "(undef)"}`,
@@ -674,6 +746,9 @@ async function inicializarCliente(empresaId) {
         msg.toLowerCase().includes("no usable chromium");
 
       if (missingExecMsg) {
+        try {
+          diagnosticarExecPath(msg, chave);
+        } catch (_) {}
         const attempts = initRetries.get(chave) || 0;
         const MAX_INIT_RETRIES = 2;
         if (attempts >= MAX_INIT_RETRIES) {
