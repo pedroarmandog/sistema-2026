@@ -235,7 +235,16 @@ exports.levaTraz = async (req, res) => {
             {
               model: Cliente,
               as: "cliente",
-              attributes: ["nome", "endereco"],
+              attributes: [
+                "nome",
+                "endereco",
+                "numero",
+                "complemento",
+                "bairro",
+                "cidade",
+                "estado",
+                "cep",
+              ],
             },
           ],
         },
@@ -264,11 +273,37 @@ exports.levaTraz = async (req, res) => {
           tipo = "entregar";
         }
 
+        // Formatador simples de endereço completo
+        const cliente = ag.pet?.cliente || {};
+        const partes = [];
+        if (cliente.endereco) partes.push(cliente.endereco);
+        if (cliente.numero) partes.push(String(cliente.numero));
+        let complemento = cliente.complemento
+          ? String(cliente.complemento).trim()
+          : "";
+        const bairro = cliente.bairro ? String(cliente.bairro).trim() : "";
+        const cidade = cliente.cidade ? String(cliente.cidade).trim() : "";
+        const estado = cliente.estado ? String(cliente.estado).trim() : "";
+        if (complemento) partes.push(complemento);
+        const enderecoRuaNum = partes.join(", ");
+        const localidade = [
+          bairro,
+          cidade ? cidade + (estado ? "/" + estado : "") : null,
+        ]
+          .filter(Boolean)
+          .join(" • ");
+        const enderecoCompleto = [enderecoRuaNum, localidade]
+          .filter(Boolean)
+          .join(" — ");
+
         return {
           horario: ag.horario || "Horário não definido",
           petNome: ag.pet?.nome || "Pet não identificado",
           clienteNome: ag.pet?.cliente?.nome || "Cliente não identificado",
-          endereco: ag.pet?.cliente?.endereco || "Endereço não cadastrado",
+          endereco:
+            enderecoCompleto ||
+            ag.pet?.cliente?.endereco ||
+            "Endereço não cadastrado",
           servicos: ag.servicos || ag.servico || "",
           status: ag.status || "agendado",
           tipo,

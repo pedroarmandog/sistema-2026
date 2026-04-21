@@ -734,23 +734,88 @@ const DashboardApp = {
         return;
       }
       el.innerHTML = data
-        .map(
-          (t) => `
-                <div class="widget-list-item taxidog-item">
+        .map((t, idx) => {
+          // mostrar versão curta do endereço no widget (evita poluir layout)
+          const fullAddr = t.endereco || "";
+          const shortAddr =
+            fullAddr.length > 50 ? fullAddr.slice(0, 47) + "..." : fullAddr;
+          return `
+                <div class="widget-list-item taxidog-item" data-idx="${idx}" data-pet="${this.escapeHtml(
+                  t.petNome,
+                )}" data-cliente="${this.escapeHtml(t.clienteNome)}" data-endereco="${this.escapeHtml(
+                  fullAddr,
+                )}">
                     <div class="widget-list-icon"><i class="fas fa-shuttle-van"></i></div>
                     <div class="widget-list-info">
                         <strong>${this.escapeHtml(t.petNome)}</strong>
-                        <span class="widget-list-sub">${this.escapeHtml(t.clienteNome)} &bull; ${this.escapeHtml(t.endereco)}</span>
+                        <span class="widget-list-sub">${this.escapeHtml(t.clienteNome)} &bull; ${this.escapeHtml(
+                          shortAddr,
+                        )}</span>
                     </div>
                     <div class="widget-list-badge">${t.horario}</div>
                 </div>
-            `,
-        )
+            `;
+        })
         .join("");
+
+      // Anexar listeners para abrir modal com detalhes completos ao clicar
+      try {
+        el.querySelectorAll(".taxidog-item").forEach((item) => {
+          item.style.cursor = "pointer";
+          item.addEventListener("click", function () {
+            const pet = this.getAttribute("data-pet") || "";
+            const cliente = this.getAttribute("data-cliente") || "";
+            const endereco = this.getAttribute("data-endereco") || "";
+            try {
+              DashboardApp.showTaxiDogModal({ pet, cliente, endereco });
+            } catch (e) {
+              alert(`${cliente} — ${endereco}`);
+            }
+          });
+        });
+      } catch (e) {
+        console.warn("Não foi possível anexar handlers de Taxi Dog:", e);
+      }
     } catch (err) {
       el.innerHTML = this.errorHTML("Erro ao carregar Taxi Dog");
       console.error("Erro taxi dog:", err);
     }
+  },
+
+  // Mostra modal compacto com dados do Taxi Dog ao clicar no item do dashboard
+  showTaxiDogModal(details) {
+    const pet = details.pet || "";
+    const cliente = details.cliente || "";
+    const endereco = details.endereco || "Endereço não cadastrado";
+
+    // remover modal anterior
+    const existing = document.getElementById("taxiDogModalOverlay");
+    if (existing) existing.remove();
+
+    const overlay = document.createElement("div");
+    overlay.id = "taxiDogModalOverlay";
+    overlay.style.cssText =
+      "position:fixed;inset:0;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;z-index:16000;";
+
+    const modal = document.createElement("div");
+    modal.style.cssText =
+      "background:#fff;border-radius:10px;max-width:460px;width:92%;padding:18px 20px;box-shadow:0 12px 40px rgba(0,0,0,0.25);font-family:inherit;color:#222;";
+
+    modal.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <strong style="font-size:16px">${this.escapeHtml(pet)} — ${this.escapeHtml(cliente)}</strong>
+        <button id="closeTaxiDogModal" style="background:#fff;border:0;font-size:18px;cursor:pointer">✕</button>
+      </div>
+      <div style="font-size:14px;color:#444;line-height:1.4">${this.escapeHtml(endereco)}</div>
+      <div style="margin-top:14px;text-align:right"><button id="okTaxiDogModal" class="btn" style="background:#1976d2;color:#fff;border:0;padding:8px 14px;border-radius:6px;cursor:pointer">Fechar</button></div>
+    `;
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    document.getElementById("closeTaxiDogModal").onclick = () =>
+      overlay.remove();
+    document.getElementById("okTaxiDogModal").onclick = () => overlay.remove();
   },
 
   // === CONTROLE DE VALIDADE ===

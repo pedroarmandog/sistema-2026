@@ -168,6 +168,37 @@ router.get("/:id", async (req, res) => {
       totalPago: agendamento.totalPago || 0,
       taxidog: agendamento.taxidog || false,
     };
+    // Incluir objeto `pet` com cliente aninhado (útil para views que precisam do endereço completo)
+    try {
+      if (agendamento.pet) {
+        agendamentoFormatted.pet = {
+          id: agendamento.pet.id,
+          nome: agendamento.pet.nome,
+          observacao: agendamento.pet.observacao || null,
+        };
+        if (agendamento.pet.cliente) {
+          const c = agendamento.pet.cliente;
+          agendamentoFormatted.pet.cliente = {
+            id: c.id,
+            nome: c.nome,
+            telefone: c.telefone,
+            endereco: c.endereco || null,
+            numero: c.numero || null,
+            complemento: c.complemento || null,
+            bairro: c.bairro || null,
+            cidade: c.cidade || null,
+            estado: c.estado || null,
+            cep: c.cep || null,
+          };
+        }
+      }
+    } catch (e) {
+      // não falhar em caso de estrutura inesperada
+      console.warn(
+        "Aviso: falha ao anexar pet.cliente no agendamentoFormatted:",
+        e,
+      );
+    }
 
     res.json(agendamentoFormatted);
   } catch (error) {

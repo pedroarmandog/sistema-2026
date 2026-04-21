@@ -8829,6 +8829,62 @@ function renderizarTaxidog(agendamento) {
     ? "Desfaça o checkout para alterar o Taxi Dog"
     : "Clique para alterar";
   if (chevron) chevron.style.display = bloqueado ? "none" : "";
+
+  // Exibir endereço completo quando Taxi Dog estiver ativo
+  try {
+    const addrEl = document.getElementById("taxidogAddress");
+    if (!addrEl) return;
+    if (ativo) {
+      // tentar obter dados do cliente do agendamento (várias fontes possíveis)
+      const cliente = agendamento?.pet?.cliente || agendamento?.Cliente || null;
+      const petName =
+        agendamento?.petNome ||
+        agendamento?.pet?.nome ||
+        agendamento?.Pet?.nome ||
+        "";
+
+      if (cliente) {
+        const rua = cliente.endereco || "";
+        const numero = cliente.numero || "";
+        const complemento = cliente.complemento || "";
+        const bairro = cliente.bairro || "";
+        const cidade = cliente.cidade || "";
+        const estado = cliente.estado || "";
+        const cep = cliente.cep || "";
+
+        const line1 = `${escapeHtmlText(cliente.nome || "")} ${petName ? "• " + escapeHtmlText(petName) : ""}`;
+        const parts = [];
+        if (rua)
+          parts.push(
+            escapeHtmlText(rua) + (numero ? ", " + escapeHtmlText(numero) : ""),
+          );
+        if (complemento) parts.push("Compl.: " + escapeHtmlText(complemento));
+        const local = [
+          bairro,
+          cidade ? cidade + (estado ? "/" + estado : "") : null,
+        ]
+          .filter(Boolean)
+          .map(escapeHtmlText)
+          .join(" • ");
+
+        addrEl.innerHTML = `
+          <div style="background:var(--bg-card,#fff);border:1px solid #e9ecef;padding:10px;border-radius:8px;color:var(--text-primary,#222);">
+            <div style="font-weight:600; margin-bottom:6px;">${line1}</div>
+            <div style="font-size:13px;color:#555;">${parts.join(" • ")}</div>
+            ${local ? `<div style="font-size:12px;color:#777;margin-top:6px;">${local}${cep ? " • CEP " + escapeHtmlText(cep) : ""}</div>` : ""}
+          </div>
+        `;
+        addrEl.style.display = "block";
+      } else {
+        addrEl.style.display = "none";
+      }
+    } else {
+      // esconder quando Taxi Dog = Não
+      addrEl.style.display = "none";
+    }
+  } catch (e) {
+    console.warn("Erro ao renderizar endereço Taxi Dog:", e);
+  }
 }
 
 /**
