@@ -475,14 +475,30 @@ async function inicializarCliente(empresaId) {
     } catch (_) {}
   }
 
-  // Disparador (chave "disp_X") abre Chrome visível; marketing automático roda headless
+  // Disparador (chave "disp_X") em VPS sem GUI deve rodar headless.
+  // Forçamos headless para o disparador e garantimos as flags de container.
   const isDisparador = chave.startsWith("disp_");
 
+  // Determinar comportamento headless: por padrão, executar headless no servidor.
+  // Permite override via PUPPETEER_HEADLESS='0' se necessário.
+  let headless = true;
+  try {
+    if (process.env.PUPPETEER_HEADLESS !== undefined) {
+      const v = String(process.env.PUPPETEER_HEADLESS).toLowerCase();
+      if (v === "0" || v === "false") headless = false;
+      else headless = true;
+    }
+  } catch (_) {}
+
   const puppeteerOptions = {
-    headless: !isDisparador,
+    headless: headless,
 
     // ✅ Usa o caminho que você calculou acima
-    executablePath: executablePath || undefined,
+    executablePath:
+      executablePath ||
+      process.env.PUPPETEER_EXECUTABLE_PATH ||
+      process.env.CHROME_PATH ||
+      undefined,
 
     handleSIGINT: false,
     handleSIGTERM: false,
@@ -722,7 +738,7 @@ async function inicializarCliente(empresaId) {
 
   // Inicializar cliente (abre o browser)
   console.log(
-    `[WhatsApp][empresa:${chave}] Iniciando browser Puppeteer (headless: ${!isDisparador})...`,
+    `[WhatsApp][empresa:${chave}] Iniciando browser Puppeteer (headless: ${puppeteerOptions.headless})...`,
   );
   client
     .initialize()
