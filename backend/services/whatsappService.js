@@ -532,6 +532,19 @@ async function inicializarCliente(empresaId, opts = {}) {
     defaultViewport: headless ? { width: 1280, height: 800 } : null,
   };
 
+  // Isolar userDataDir por instância para evitar que múltiplos browsers
+  // concorrentes usem o mesmo perfil (evita conflitos ao conectar duas
+  // sessões do mesmo número). Também criamos pasta dedicada para LocalAuth.
+  try {
+    const userDataDir = path.join(SESSION_DIR, `user_data_${chave}`);
+    fs.mkdirSync(userDataDir, { recursive: true });
+    puppeteerOptions.userDataDir = userDataDir;
+  } catch (e) {
+    console.warn(
+      `[WhatsApp][${chave}] Falha ao criar userDataDir: ${e && e.message}`,
+    );
+  }
+
   console.log(
     `[WhatsApp][${chave}] puppeteerOptions: ${util.inspect(puppeteerOptions, {
       depth: 2,
@@ -563,11 +576,18 @@ async function inicializarCliente(empresaId, opts = {}) {
   } catch (_) {}
   const { Client, LocalAuth } = require("whatsapp-web.js");
 
-  // Criar o cliente WhatsApp com as opções do Puppeteer
+  // Criar pasta de sessão específica para o LocalAuth (evita usar a
+  // mesma raiz para várias instâncias que poderiam conflitar)
+  const localAuthPath = path.join(SESSION_DIR, `empresa_${chave}`);
+  try {
+    fs.mkdirSync(localAuthPath, { recursive: true });
+  } catch (e) {}
+
+  // Criar o cliente WhatsApp com as opções do Puppeteer e LocalAuth isolados
   const client = new Client({
     authStrategy: new LocalAuth({
-      clientId: `empresa_${chave}`,
-      dataPath: SESSION_DIR,
+      // dataPath aponta para a pasta dedicada da instância (não usamos clientId)
+      dataPath: localAuthPath,
     }),
     puppeteer: puppeteerOptions,
   });
