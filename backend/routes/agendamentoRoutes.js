@@ -6,6 +6,8 @@ const path = require("path");
 const { Op } = require("sequelize");
 const { authUser } = require("../middleware/authUser");
 
+console.log("DEBUG CANCELAMENTO: Entrou no endpoint de cancelamento");
+
 // Aplicar auth em toda a rota
 router.use(authUser);
 
