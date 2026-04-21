@@ -489,27 +489,41 @@ async function carregarMovimentacoes() {
     tbody.innerHTML = "";
     movs.forEach((m) => {
       const tr = document.createElement("tr");
+
+      const dataIso =
+        m.data ||
+        m.data_movimentacao ||
+        m.dataAgendamento ||
+        m.createdAt ||
+        null;
+      const cliente = m.cliente || m.cliente_nome || m.clienteNome || "";
+      const pet = m.pet || m.pet_nome || m.petNome || "—";
+      const servico = m.servico || m.servico_name || m.descricao || "";
+      const forma = m.forma_pagamento || m.forma || m.tipo || "outro";
+      const valor = m.valor || m.amount || m.totalPago || 0;
+
       tr.innerHTML =
         "<td>" +
-        formatarDataHora(m.data_movimentacao) +
+        formatarDataHora(dataIso) +
         "</td>" +
         "<td>" +
-        escapeHtml(m.cliente_nome) +
+        escapeHtml(cliente) +
         "</td>" +
         "<td>" +
-        escapeHtml(m.pet_nome || "—") +
+        escapeHtml(pet) +
         "</td>" +
         "<td>" +
-        escapeHtml(m.servico) +
+        escapeHtml(servico) +
         "</td>" +
         '<td><span class="badge-pagamento badge-' +
-        m.forma_pagamento +
+        forma +
         '">' +
-        labelPagamento(m.forma_pagamento) +
+        labelPagamento(forma) +
         "</span></td>" +
         "<td>" +
-        formatarMoeda(m.valor) +
+        formatarMoeda(valor) +
         "</td>";
+
       tbody.appendChild(tr);
     });
   } catch (err) {
