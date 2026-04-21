@@ -565,8 +565,16 @@ function formatarDataHora(iso) {
 
 // Rótulo amigável da forma de pagamento
 function labelPagamento(forma) {
-  var labels = { dinheiro: "Dinheiro", pix: "Pix", cartao: "Cartão" };
-  return labels[forma] || forma;
+  const key = String(forma || "").toLowerCase();
+  if (
+    key === "debito" ||
+    key === "débito" ||
+    key === "credito" ||
+    key === "crédito"
+  )
+    return "Cartão";
+  const labels = { dinheiro: "Dinheiro", pix: "Pix", cartao: "Cartão" };
+  return labels[key] || String(forma || "");
 }
 
 // Escape de HTML para evitar XSS
@@ -604,7 +612,7 @@ function mostrarNotificacao(mensagem, tipo) {
     ';font-size:20px"></i><span>' +
     escapeHtml(mensagem) +
     "</span>";
-  notif.style.backgroundColor = "var(--bg-card, #da0202)";
+  notif.style.backgroundColor = "var(--bg-card, #fff)";
   notif.style.color = "var(--text-primary, #333)";
   notif.style.border = "1px solid " + cor;
 

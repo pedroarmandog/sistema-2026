@@ -5,6 +5,29 @@ const { Venda } = require("../models/Venda");
 const { Agendamento } = require("../models/Agendamento");
 const { Op, fn, col, where, literal } = require("sequelize");
 
+// Normaliza nomes de formas de pagamento para categorias usadas na UI/relatórios
+function normalizeForma(raw) {
+  if (!raw && raw !== 0) return "outro";
+  const s = String(raw).toLowerCase().trim();
+  // Mapear variações de cartão para 'cartao'
+  const cartaoKeys = [
+    "debito",
+    "débito",
+    "credito",
+    "crédito",
+    "card",
+    "cartao",
+    "cartão",
+  ];
+  if (cartaoKeys.includes(s)) return "cartao";
+  // Dinheiro
+  if (["dinheiro", "cash", "especie", "espécie"].includes(s)) return "dinheiro";
+  // Pix
+  if (s.indexOf("pix") !== -1) return "pix";
+  // Caso não reconhecido, categorizar como 'outro'
+  return "outro";
+}
+
 // ──────────────────────────────────────────────
 // POST /api/posicao-caixa — Registrar novo pagamento
 // ──────────────────────────────────────────────
@@ -28,21 +51,17 @@ exports.registrarPagamento = async (req, res) => {
       !forma_pagamento ||
       valor === undefined
     ) {
-      return res
-        .status(400)
-        .json({
-          erro: "Campos obrigatórios: cliente_id, cliente_nome, servico, forma_pagamento, valor",
-        });
+      return res.status(400).json({
+        erro: "Campos obrigatórios: cliente_id, cliente_nome, servico, forma_pagamento, valor",
+      });
     }
 
     // Validar forma de pagamento
     const formasPermitidas = ["dinheiro", "pix", "cartao"];
     if (!formasPermitidas.includes(forma_pagamento)) {
-      return res
-        .status(400)
-        .json({
-          erro: "Forma de pagamento inválida. Use: dinheiro, pix ou cartao",
-        });
+      return res.status(400).json({
+        erro: "Forma de pagamento inválida. Use: dinheiro, pix ou cartao",
+      });
     }
 
     // Validar valor positivo
@@ -105,6 +124,7 @@ exports.listarHoje = async (req, res) => {
       raw: true,
     });
     manuais.forEach((m) => {
+      const forma = normalizeForma(m.forma_pagamento);
       movimentos.push({
         origem: "manual",
         referencia: m.id,
@@ -112,7 +132,7 @@ exports.listarHoje = async (req, res) => {
         cliente: m.cliente_nome || null,
         pet: m.pet_nome || null,
         servico: m.servico || null,
-        forma_pagamento: m.forma_pagamento,
+        forma_pagamento: forma,
         valor: Number(m.valor) || 0,
       });
     });
@@ -121,7 +141,10 @@ exports.listarHoje = async (req, res) => {
     const vendas = await Venda.findAll({
       where: {
         data: { [Op.between]: [inicioDia, fimDia] },
-        [Op.or]: [{ totalPago: { [Op.gt]: 0 } }, where(literal("JSON_LENGTH(pagamentos)"), ">", 0)],
+        [Op.or]: [
+          { totalPago: { [Op.gt]: 0 } },
+          where(literal("JSON_LENGTH(pagamentos)"), ">", 0),
+        ],
       },
       order: [["data", "DESC"]],
       raw: true,
@@ -132,8 +155,11 @@ exports.listarHoje = async (req, res) => {
       // pagamentos pode ser array de objetos
       try {
         (Array.isArray(pagamentos) ? pagamentos : []).forEach((p) => {
-          const forma = p.forma || p.forma_pagamento || p.tipo || "outro";
-          const valor = Number(p.valor || p.amount || p.valorPago || p.total) || 0;
+          const forma = normalizeForma(
+            p.forma || p.forma_pagamento || p.tipo || "outro",
+          );
+          const valor =
+            Number(p.valor || p.amount || p.valorPago || p.total) || 0;
           movimentos.push({
             origem: "venda",
             referencia: v.id,
@@ -165,7 +191,10 @@ exports.listarHoje = async (req, res) => {
       where: {
         dataAgendamento: { [Op.between]: [inicioDia, fimDia] },
         status: "concluido",
-        [Op.or]: [{ totalPago: { [Op.gt]: 0 } }, where(literal("JSON_LENGTH(pagamentos)"), ">", 0)],
+        [Op.or]: [
+          { totalPago: { [Op.gt]: 0 } },
+          where(literal("JSON_LENGTH(pagamentos)"), ">", 0),
+        ],
       },
       order: [["dataAgendamento", "DESC"]],
       raw: true,
@@ -175,8 +204,11 @@ exports.listarHoje = async (req, res) => {
       const pagamentos = a.pagamentos || [];
       try {
         (Array.isArray(pagamentos) ? pagamentos : []).forEach((p) => {
-          const forma = p.forma || p.forma_pagamento || p.tipo || "outro";
-          const valor = Number(p.valor || p.amount || p.valorPago || p.total) || 0;
+          const forma = normalizeForma(
+            p.forma || p.forma_pagamento || p.tipo || "outro",
+          );
+          const valor =
+            Number(p.valor || p.amount || p.valorPago || p.total) || 0;
           movimentos.push({
             origem: "agendamento",
             referencia: a.id,
@@ -246,7 +278,7 @@ exports.resumoCaixa = async (req, res) => {
       raw: true,
     });
     totaisManuais.forEach((t) => {
-      const forma = t.forma_pagamento || "outro";
+      const forma = normalizeForma(t.forma_pagamento || "outro");
       const val = Number(t.total) || 0;
       resumo[forma] = (resumo[forma] || 0) + val;
       resumo.total_geral += val;
@@ -256,14 +288,19 @@ exports.resumoCaixa = async (req, res) => {
     const vendas = await Venda.findAll({
       where: {
         data: { [Op.between]: [inicioDia, fimDia] },
-        [Op.or]: [{ totalPago: { [Op.gt]: 0 } }, where(literal("JSON_LENGTH(pagamentos)"), ">", 0)],
+        [Op.or]: [
+          { totalPago: { [Op.gt]: 0 } },
+          where(literal("JSON_LENGTH(pagamentos)"), ">", 0),
+        ],
       },
       raw: true,
     });
     vendas.forEach((v) => {
       const pagamentos = v.pagamentos || [];
       (Array.isArray(pagamentos) ? pagamentos : []).forEach((p) => {
-        const forma = p.forma || p.forma_pagamento || p.tipo || "outro";
+        const forma = normalizeForma(
+          p.forma || p.forma_pagamento || p.tipo || "outro",
+        );
         const val = Number(p.valor || p.amount || p.total || v.totalPago) || 0;
         resumo[forma] = (resumo[forma] || 0) + val;
         resumo.total_geral += val;
@@ -275,14 +312,19 @@ exports.resumoCaixa = async (req, res) => {
       where: {
         dataAgendamento: { [Op.between]: [inicioDia, fimDia] },
         status: "concluido",
-        [Op.or]: [{ totalPago: { [Op.gt]: 0 } }, where(literal("JSON_LENGTH(pagamentos)"), ">", 0)],
+        [Op.or]: [
+          { totalPago: { [Op.gt]: 0 } },
+          where(literal("JSON_LENGTH(pagamentos)"), ">", 0),
+        ],
       },
       raw: true,
     });
     agendados.forEach((a) => {
       const pagamentos = a.pagamentos || [];
       (Array.isArray(pagamentos) ? pagamentos : []).forEach((p) => {
-        const forma = p.forma || p.forma_pagamento || p.tipo || "outro";
+        const forma = normalizeForma(
+          p.forma || p.forma_pagamento || p.tipo || "outro",
+        );
         const val = Number(p.valor || p.amount || p.total || a.totalPago) || 0;
         resumo[forma] = (resumo[forma] || 0) + val;
         resumo.total_geral += val;
