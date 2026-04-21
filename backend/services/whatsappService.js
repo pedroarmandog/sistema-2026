@@ -251,8 +251,22 @@ async function inicializarCliente(empresaId, opts = {}) {
     if (existente.status === "conectado") {
       return { status: "ja_conectado" };
     }
+    // Se já existe cliente aguardando QR, por padrão retornamos.
+    // Porém, se a chamada pediu explicitamente 'headless: false' (abrir janela),
+    // então devemos destruir o cliente atual e recriar em modo headful.
     if (existente.status === "aguardando_qr") {
-      return { status: "aguardando_qr" };
+      const wantsHeadful =
+        opts && typeof opts.headless !== "undefined" && opts.headless === false;
+      if (!wantsHeadful) {
+        return { status: "aguardando_qr" };
+      }
+      console.log(
+        `[WhatsApp][${chave}] Recriando cliente que estava aguardando QR para abrir navegador (headful)...`,
+      );
+      try {
+        await existente.client.destroy();
+      } catch (_) {}
+      clientsMap.delete(chave);
     }
     if (
       existente.status === "inicializando" ||
