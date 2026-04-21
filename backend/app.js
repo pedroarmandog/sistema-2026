@@ -32,6 +32,48 @@ try {
     e && e.message,
   );
 }
+// Auto-install helper: se definido, tenta instalar google-chrome-stable
+// automaticamente ao iniciar quando nenhum CHROME_PATH válido for encontrado.
+// USE COM CAUTELA: o script usa sudo/apt e requer acesso root.
+if (!process.env.CHROME_PATH && process.env.AUTO_INSTALL_CHROME === "1") {
+  try {
+    console.log(
+      "[startup] AUTO_INSTALL_CHROME=1 detectado — tentando instalar Google Chrome...",
+    );
+    const { spawnSync } = require("child_process");
+    const path = require("path");
+    const script = path.join(__dirname, "scripts", "install_chrome_ubuntu.sh");
+    const res = spawnSync("bash", [script], { stdio: "inherit", timeout: 0 });
+    if (res && res.status === 0) {
+      console.log("[startup] Script de instalação finalizado com sucesso.");
+      // Re-tentar detectar CHROME_PATH
+      try {
+        const fs = require("fs");
+        const candidates = [
+          "/usr/bin/google-chrome",
+          "/usr/bin/google-chrome-stable",
+          "/usr/bin/chromium-browser",
+          "/usr/bin/chromium",
+          "/snap/bin/chromium",
+        ];
+        for (const p of candidates) {
+          if (fs.existsSync(p)) {
+            process.env.CHROME_PATH = p;
+            console.log(`[startup] CHROME_PATH definido para: ${p}`);
+            break;
+          }
+        }
+      } catch (_) {}
+    } else {
+      console.warn(
+        "[startup] Script de instalação terminou com status não-zero",
+        res && res.status,
+      );
+    }
+  } catch (e) {
+    console.warn("[startup] Falha ao executar install script:", e && e.message);
+  }
+}
 const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
