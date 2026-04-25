@@ -1743,9 +1743,10 @@ function escapeHtml(text) {
       return { nome: "Usuário", nomeEmpresa: "Nenhuma empresa cadastrada" };
 
     try {
+      // Por padrão usar caminhos relativos (mesma origem) para evitar problemas
+      // de mixed-content / SSL ao servir o frontend via HTTPS.
       const API_BASE =
-        (window.__API_BASE__ && window.__API_BASE__.toString()) ||
-        "http://72.60.244.46:3000";
+        (window.__API_BASE__ && window.__API_BASE__.toString()) || "";
 
       // Buscar dados do usuário
       const responseUsuario = await fetch(
