@@ -60,6 +60,8 @@ document.addEventListener("DOMContentLoaded", function () {
   (function iniciarMonitorSessao() {
     let sessaoVerificando = false;
     const INTERVALO_CHECK = 15000; // 15 segundos
+    let falhasConsecutivas = 0;
+    const LIMITE_FALHAS = 2; // requer 2 detecções consecutivas antes de redirecionar
 
     async function checarSessao() {
       if (sessaoVerificando) return;
@@ -71,15 +73,32 @@ document.addEventListener("DOMContentLoaded", function () {
         if (resp.ok) {
           const data = await resp.json();
           if (data.ativa === false) {
-            console.warn("⚠️ Sessão encerrada remotamente — redirecionando...");
-            window.location.href = "/sessao-expirada.html";
-            return;
+            falhasConsecutivas++;
+            console.warn(
+              `⚠️ Sessão inativa detectada (${falhasConsecutivas}/${LIMITE_FALHAS}) motivo=${data.motivo}`,
+            );
+            if (falhasConsecutivas >= LIMITE_FALHAS) {
+              console.warn(
+                "⚠️ Sessão encerrada remotamente — redirecionando...",
+              );
+              window.location.href = "/sessao-expirada.html";
+              return;
+            }
+          } else {
+            if (falhasConsecutivas > 0) {
+              console.log(
+                "✅ Sessão reestabelecida, limpando contador de falhas",
+              );
+            }
+            falhasConsecutivas = 0;
           }
         }
       } catch (e) {
-        // Erro de rede — ignorar, tentar de novo no próximo ciclo
+        console.warn("[checarSessao] Erro de rede ao verificar sessão:", e);
+        // Erro de rede — não incrementar contador para evitar falsos positivos
+      } finally {
+        sessaoVerificando = false;
       }
-      sessaoVerificando = false;
     }
 
     // Primeira verificação após 5 segundos, depois a cada 15s
