@@ -282,6 +282,81 @@ exports.buscarUsuario = async (req, res) => {
     const usuarioData = usuario.toJSON();
     delete usuarioData.senha;
 
+    // Normalizar campo `empresas` garantindo formato consistente
+    // Resultado final: usuarioData.empresas = [{ id, nomeFantasia?, razaoSocial?, ... }, ...]
+    try {
+      let raw = usuarioData.empresas;
+      let arr = [];
+      if (Array.isArray(raw)) {
+        arr = raw.slice();
+      } else if (typeof raw === "string" && raw.length > 0) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) arr = parsed;
+        } catch (e) {
+          // fallback: tentar split por vírgula de ids
+          arr = raw
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean);
+        }
+      }
+
+      // Extrair ids numéricos possíveis
+      const empresaIds = arr
+        .map((item) => {
+          if (item == null) return null;
+          if (typeof item === "number") return Number(item);
+          if (typeof item === "string") {
+            const n = parseInt(item, 10);
+            return isNaN(n) ? null : n;
+          }
+          if (typeof item === "object") {
+            const rawId =
+              item.id || item.ID || item.empresaId || item.companyId;
+            const n = parseInt(String(rawId || ""), 10);
+            return isNaN(n) ? null : n;
+          }
+          return null;
+        })
+        .filter((v) => v != null && !isNaN(v));
+
+      // Se encontramos ids, buscar as empresas e sobrescrever o array com objetos ricos
+      if (empresaIds.length > 0) {
+        try {
+          const empresasDoBanco = await Empresa.findAll({
+            where: { id: empresaIds },
+            attributes: ["id", "nome", "razaoSocial", "cnpj", "email"],
+          });
+          if (empresasDoBanco && empresasDoBanco.length > 0) {
+            // Manter a ordem original de empresaIds
+            const empresasMap = new Map();
+            empresasDoBanco.forEach((e) => {
+              const obj = e.toJSON();
+              // mapear nome -> nomeFantasia para compatibilidade com frontend
+              obj.nomeFantasia = obj.nome || obj.nomeFantasia || null;
+              empresasMap.set(Number(e.id), obj);
+            });
+            usuarioData.empresas = empresaIds
+              .map((id) => empresasMap.get(Number(id)) || { id })
+              .filter(Boolean);
+          } else {
+            // Nenhuma empresa encontrada: transformar ids em objetos simples
+            usuarioData.empresas = empresaIds.map((id) => ({ id }));
+          }
+        } catch (e) {
+          // Em caso de erro ao buscar empresas, garantir formato mínimo
+          usuarioData.empresas = empresaIds.map((id) => ({ id }));
+        }
+      } else {
+        // Não havia ids: garantir que `empresas` seja array (vazio)
+        usuarioData.empresas = Array.isArray(arr) ? arr : [];
+      }
+    } catch (e) {
+      // Garantir estrutura de fallback
+      usuarioData.empresas = usuarioData.empresas || [];
+    }
+
     res.json(usuarioData);
   } catch (error) {
     console.error("Erro ao buscar usuário:", error);
