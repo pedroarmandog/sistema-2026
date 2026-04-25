@@ -234,8 +234,8 @@ async function verificarLimiteAcessos(empresaId) {
 
     const sessoesAtivas = await SessaoAtiva.findAll({
       where: { empresa_id: empresaPainel.id, ativo: true },
-      attributes: ["id", "token_hash", "data_login"],
-      order: [["data_login", "ASC"]], // mais antigas primeiro
+      attributes: ["id", "token_hash", "data_login", "ultima_atividade"],
+      order: [["ultima_atividade", "ASC"]], // derrubar as menos recentemente ativas
     });
 
     const totalAtivas = sessoesAtivas.length;

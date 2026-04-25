@@ -6,6 +6,7 @@ const { authUser } = require("../middleware/authUser");
 const {
   encerrarSessaoPorToken,
   verificarSessaoAtiva,
+  atualizarAtividade,
 } = require("../controllers/acessosController");
 
 // Rota de login
@@ -23,6 +24,14 @@ router.get("/sessao-ativa", async (req, res) => {
   }
   const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
   const ativa = await verificarSessaoAtiva(tokenHash);
+  // Renovar última atividade para manter a sessão viva enquanto o dashboard está aberto
+  if (ativa) {
+    try {
+      await atualizarAtividade(tokenHash);
+    } catch (e) {
+      // silencioso
+    }
+  }
   res.json({ ativa, motivo: ativa ? null : "sessao_encerrada" });
 });
 
