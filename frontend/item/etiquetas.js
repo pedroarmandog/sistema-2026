@@ -1262,10 +1262,11 @@ function configurarBotaoVisualizarEtiquetas() {
 
       const modelo =
         (document.getElementById("modeloEtiquetaField") || {}).value || "";
+      const API_BASE =
+        (window.__API_BASE__ && window.__API_BASE__.toString()) ||
+        window.location.origin;
       const apiUrl =
-        window.location.port === "3000"
-          ? "/api/relatorios/etiquetas/pdf"
-          : `${window.location.protocol}//${window.location.hostname}:3000/api/relatorios/etiquetas/pdf`;
+        API_BASE.replace(/\/$/, "") + "/api/relatorios/etiquetas/pdf";
 
       (async function () {
         try {

@@ -1647,11 +1647,7 @@ async function carregarClientesDoSistema() {
     // Usar fetch com timeout e tentar localhost como preferência, depois fallback
     let response = null;
     try {
-      response = await fetchWithTimeout(
-        "http://72.60.244.46:3000/api/clientes",
-        {},
-        3000,
-      );
+      response = await fetchWithTimeout("/api/clientes", {}, 3000);
     } catch (err) {
       console.warn(
         "⚠️ Fallback para rota relativa por timeout/erro",
@@ -1737,11 +1733,7 @@ async function carregarProfissionaisDoSistema() {
   try {
     let response;
     try {
-      response = await fetchWithTimeout(
-        "http://72.60.244.46:3000/api/profissionais",
-        {},
-        4000,
-      );
+      response = await fetchWithTimeout("/api/profissionais", {}, 4000);
     } catch (err) {
       response = await fetchWithTimeout("/api/profissionais", {}, 3000);
     }
@@ -2091,7 +2083,7 @@ async function finalizarVendaComDados() {
 
   // Verificar se o caixa está aberto
   try {
-    const response = await fetch("http://72.60.244.46:3000/api/caixas/aberto");
+    const response = await fetch("/api/caixas/aberto");
     const caixa = await response.json();
 
     if (!caixa || caixa.aberto !== true) {

@@ -1005,8 +1005,11 @@ document.addEventListener("DOMContentLoaded", function () {
               const hasNewLogo =
                 window._currentLogoDataUrl && window._currentLogoDataUrl !== "";
               if (!hasNewLogo) {
-                // logo é o nome do arquivo, construir URL completo
-                preview.src = `http://72.60.244.46:3000/uploads/${empresa.logo}`;
+                // logo é o nome do arquivo, construir URL completo (base configurável)
+                const _API_BASE = window.__API_BASE__
+                  ? window.__API_BASE__.replace(/\/$/, "")
+                  : "";
+                preview.src = _API_BASE + "/uploads/" + empresa.logo;
                 console.log("📸 Logo carregada do servidor:", empresa.logo);
               } else {
                 console.log("🔄 Mantendo logo nova selecionada pelo usuário");

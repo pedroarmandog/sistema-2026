@@ -371,21 +371,12 @@ async function loadHistoricoIntoTab(petId) {
 
   listWrapper.innerHTML = `<div class="hist-loading"><i class="fas fa-circle-notch fa-spin"></i>&nbsp;Carregando...</div>`;
 
-  // Buscar do backend
+  // Buscar do backend (usa _apiFetch com fallback configurável)
   let resp = null;
   try {
-    resp = await fetch(`/api/pets/${encodeURIComponent(petId)}/historico`);
+    resp = await _apiFetch(`/api/pets/${encodeURIComponent(petId)}/historico`);
   } catch (e) {
     resp = null;
-  }
-  if (!resp || !resp.ok) {
-    try {
-      resp = await fetch(
-        `http://72.60.244.46:3000/api/pets/${encodeURIComponent(petId)}/historico`,
-      );
-    } catch (e) {
-      resp = null;
-    }
   }
 
   let items = [];
@@ -605,21 +596,25 @@ function _abrirModalAdicionarDocumento(petId) {
       try {
         let r = null;
         try {
-          r = await fetch(`/api/pets/${encodeURIComponent(petId)}/documentos`, {
-            method: "POST",
-            body: formData,
-          });
+          r = await _apiFetch(
+            `/api/pets/${encodeURIComponent(petId)}/documentos`,
+            {
+              method: "POST",
+              body: formData,
+            },
+          );
         } catch (e) {
           r = null;
         }
-        if (!r || !r.ok) {
-          r = await fetch(
-            `http://72.60.244.46:3000/api/pets/${encodeURIComponent(petId)}/documentos`,
-            { method: "POST", body: formData },
-          );
+        let json = {};
+        if (r && r.json) {
+          try {
+            json = await r.json().catch(() => ({}));
+          } catch (e) {
+            json = {};
+          }
         }
-        const json = await r.json().catch(() => ({}));
-        if (!r.ok) {
+        if (!r || !r.ok) {
           mostrarNotificacao(json.error || "Erro ao salvar documento", "error");
           btnSalvar.disabled = false;
           btnSalvar.textContent = "Salvar";
@@ -653,18 +648,9 @@ async function loadDocumentosIntoTab(petId) {
 
   let resp = null;
   try {
-    resp = await fetch(`/api/pets/${encodeURIComponent(petId)}/documentos`);
+    resp = await _apiFetch(`/api/pets/${encodeURIComponent(petId)}/documentos`);
   } catch (e) {
     resp = null;
-  }
-  if (!resp || !resp.ok) {
-    try {
-      resp = await fetch(
-        `http://72.60.244.46:3000/api/pets/${encodeURIComponent(petId)}/documentos`,
-      );
-    } catch (e) {
-      resp = null;
-    }
   }
 
   let docs = [];
@@ -853,24 +839,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
 async function carregarPet(petId, clienteId) {
   try {
-    // Tentar primeiro o endpoint relativo (quando a aplicação é servida pelo mesmo host)
-    let resp;
+    // Usar _apiFetch que tenta relativo e, caso necessário, usa base configurável
+    let resp = null;
     try {
-      resp = await fetch(`/api/pets/${encodeURIComponent(petId)}`);
+      resp = await _apiFetch(`/api/pets/${encodeURIComponent(petId)}`);
     } catch (err) {
-      // falha de rede ao tentar relativo — será tratado abaixo
       resp = null;
-    }
-
-    // Se não obteve resposta OK, tentar o backend padrão (72.60.244.46:3000) — útil quando usando Live Server (porta 5500)
-    if (!resp || !resp.ok) {
-      try {
-        resp = await fetch(
-          `http://72.60.244.46:3000/api/pets/${encodeURIComponent(petId)}`,
-        );
-      } catch (err) {
-        resp = null;
-      }
     }
 
     if (!resp || !resp.ok) {
@@ -963,18 +937,11 @@ function renderPet(pet, clienteId) {
             try {
               let resp = null;
               try {
-                resp = await fetch(`/api/clientes/${encodeURIComponent(id)}`);
+                resp = await _apiFetch(
+                  `/api/clientes/${encodeURIComponent(id)}`,
+                );
               } catch (e) {
                 resp = null;
-              }
-              if (!resp || !resp.ok) {
-                try {
-                  resp = await fetch(
-                    `http://72.60.244.46:3000/api/clientes/${encodeURIComponent(id)}`,
-                  );
-                } catch (e) {
-                  resp = null;
-                }
               }
               if (resp && resp.ok) {
                 const json = await resp.json();
@@ -1486,20 +1453,11 @@ async function loadResourceIntoTab(resourceId, petId, clienteId, columns) {
   try {
     let resp = null;
     try {
-      resp = await fetch(
+      resp = await _apiFetch(
         `/api/pets/${encodeURIComponent(petId)}/${resourceId}`,
       );
     } catch (e) {
       resp = null;
-    }
-    if (!resp || !resp.ok) {
-      try {
-        resp = await fetch(
-          `http://72.60.244.46:3000/api/pets/${encodeURIComponent(petId)}/${resourceId}`,
-        );
-      } catch (e) {
-        resp = null;
-      }
     }
 
     let items = [];
@@ -1511,18 +1469,9 @@ async function loadResourceIntoTab(resourceId, petId, clienteId, columns) {
       try {
         let pr = null;
         try {
-          pr = await fetch(`/api/pets/${encodeURIComponent(petId)}`);
+          pr = await _apiFetch(`/api/pets/${encodeURIComponent(petId)}`);
         } catch (e) {
           pr = null;
-        }
-        if (!pr || !pr.ok) {
-          try {
-            pr = await fetch(
-              `http://72.60.244.46:3000/api/pets/${encodeURIComponent(petId)}`,
-            );
-          } catch (e) {
-            pr = null;
-          }
         }
         if (pr && pr.ok) {
           const pj = await pr.json();
@@ -2423,15 +2372,21 @@ function _criarModalRegistro(modalId, titulo, corBtn, fieldsHtml, onSave) {
   return overlay;
 }
 
-/** Helper: faz fetch com fallback 72.60.244.46:3000 */
+/** Helper: faz fetch com fallback para `window.__API_BASE__` ou `window.location.origin` (sem IP fixo) */
 async function _apiFetch(path, options) {
   try {
     const r = await fetch(path, options);
-    if (r.ok) return r;
+    if (r && r.ok) return r;
   } catch (e) {
-    /* fallback */
+    // ignore e tentar fallback
   }
-  return fetch(`http://72.60.244.46:3000${path}`, options);
+  const base =
+    (typeof window !== "undefined" &&
+      (window.__API_BASE__ || window.location.origin)) ||
+    "";
+  const p = path && path.startsWith("/") ? path : "/" + (path || "");
+  const url = base ? base.replace(/\/$/, "") + p : p;
+  return fetch(url, options);
 }
 
 /** Helper: carrega periodicidades e preenche select */

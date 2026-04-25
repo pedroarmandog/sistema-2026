@@ -61,13 +61,8 @@ async function carregarDetalhesCliente(clienteId) {
     mostrarCarregamento();
 
     // Fazer a requisição
-    console.log(
-      "� Fazendo requisição para:",
-      `http://72.60.244.46:3000/api/clientes/${clienteId}`,
-    );
-    const response = await fetch(
-      `http://72.60.244.46:3000/api/clientes/${clienteId}`,
-    );
+    console.log("� Fazendo requisição para:", `/api/clientes/${clienteId}`);
+    const response = await fetch(`/api/clientes/${clienteId}`);
     console.log("📡 Response status:", response.status);
     console.log("📡 Response ok:", response.ok);
 
@@ -133,7 +128,7 @@ function preencherDetalhesCliente(cliente) {
     const avatar = document.getElementById("clienteAvatar");
     if (avatar) {
       if (cliente.imagem_perfil) {
-        avatar.innerHTML = `<img src="http://72.60.244.46:3000/uploads/${cliente.imagem_perfil}" alt="${cliente.nome}">`;
+        avatar.innerHTML = `<img src="/uploads/${cliente.imagem_perfil}" alt="${cliente.nome}">`;
       } else {
         const iniciais = cliente.nome
           .split(" ")
@@ -946,16 +941,13 @@ async function toggleStatusCliente() {
   const novoStatus = document.getElementById("statusCliente").checked;
 
   try {
-    const response = await fetch(
-      `http://72.60.244.46:3000/api/clientes/${clienteAtual.id}`,
-      {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ ativo: novoStatus }),
+    const response = await fetch(`/api/clientes/${clienteAtual.id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
       },
-    );
+      body: JSON.stringify({ ativo: novoStatus }),
+    });
 
     const data = await response.json();
 
@@ -1209,9 +1201,9 @@ function renderPets(pets) {
         candidates.push(
           window.location.origin + `/frontend/pets/pet-details.html${query}`,
         );
-        // 4) Forçar backend (72.60.244.46:3000)
+        // 4) Forçar backend: usar origem atual ao invés de IP fixo
         candidates.push(
-          `http://72.60.244.46:3000/pets/pet-details.html${query}`,
+          window.location.origin + `/pets/pet-details.html${query}`,
         );
 
         let found = null;

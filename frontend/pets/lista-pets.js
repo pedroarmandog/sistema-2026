@@ -21,7 +21,7 @@ async function carregarPets() {
 
     mostrarLoading(true);
 
-    const response = await fetch("http://72.60.244.46:3000/api/pets");
+    const response = await fetch("/api/pets");
     if (!response.ok) {
       throw new Error(`Erro HTTP: ${response.status}`);
     }
@@ -46,7 +46,7 @@ async function carregarClientes() {
   try {
     console.log("📡 Carregando lista de clientes...");
 
-    const response = await fetch("http://72.60.244.46:3000/api/clientes");
+    const response = await fetch("/api/clientes");
     if (!response.ok) {
       throw new Error(`Erro HTTP: ${response.status}`);
     }
@@ -252,7 +252,7 @@ async function excluirPet(petId) {
   try {
     console.log("🗑️ Excluindo pet:", petId);
 
-    const response = await fetch(`http://72.60.244.46:3000/api/pets/${petId}`, {
+    const response = await fetch(`/api/pets/${petId}`, {
       method: "DELETE",
     });
 

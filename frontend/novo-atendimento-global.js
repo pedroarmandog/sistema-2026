@@ -1791,14 +1791,9 @@ function debounce(fn, wait) {
 // tenta várias URLs base para contornar execução via live-server (:5500) vs backend em outra porta
 async function tryFetchAny(path) {
   const origin = window.location.origin;
-  const baseCandidates = [
-    "",
-    origin,
-    "http://72.60.244.46:3000",
-    "http://72.60.244.46:3000",
-    "http://127.0.0.1:8080",
-    "http://localhost:8080",
-  ];
+  const API_BASE =
+    (window.__API_BASE__ && window.__API_BASE__.toString()) || origin;
+  const baseCandidates = ["", origin, API_BASE];
   let lastErr = null;
   for (const base of baseCandidates) {
     // montar URL absoluta: se base é '' e path absolute (startsWith '/'), use origin + path

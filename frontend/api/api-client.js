@@ -1,10 +1,12 @@
 ﻿/**
  * API Client - Centralizador de chamadas HTTP para o backend
- * Backend: Node.js + MySQL (http://72.60.244.46:3000)
+ * Backend: Node.js + MySQL (use `window.__API_BASE__` or same-origin)
  */
 
-// URL base da API (produção)
-const API_BASE_URL = "http://72.60.244.46:3000/api";
+// URL base da API (produção). Use variável global `__API_BASE__` se definida,
+// senão cair para rota relativa `/api` para suportar deployment em mesmo domínio.
+const API_BASE_URL =
+  (window.__API_BASE__ && window.__API_BASE__.toString()) || "/api";
 
 console.log("[ApiClient] URL base configurada:", API_BASE_URL);
 

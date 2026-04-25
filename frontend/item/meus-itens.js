@@ -2895,7 +2895,10 @@ function criarCardProduto(produto) {
       imagemSrc = produto.imagem;
     } else {
       // Se for nome de arquivo, carregar do servidor
-      imagemSrc = `http://72.60.244.46:3000/uploads/${produto.imagem}`;
+      const API_BASE =
+        (window.__API_BASE__ && window.__API_BASE__.toString()) ||
+        window.location.origin;
+      imagemSrc = `${API_BASE}/uploads/${produto.imagem}`;
     }
   }
 
@@ -3226,10 +3229,10 @@ function configurarBotoes() {
     try {
       // Se o frontend estiver servido de outra porta (ex: 5500), precisamos apontar
       // para o backend na porta 3000. Quando o frontend já estiver em 3000, usar caminho relativo.
-      let apiUrl = "/api/relatorios/produtos/pdf";
-      if (!(window.location.port === "3000")) {
-        apiUrl = `${window.location.protocol}//${window.location.hostname}:3000/api/relatorios/produtos/pdf`;
-      }
+      const API_BASE =
+        (window.__API_BASE__ && window.__API_BASE__.toString()) ||
+        window.location.origin;
+      let apiUrl = API_BASE.replace(/\/$/, "") + "/api/relatorios/produtos/pdf";
       // obter empresa padrão via API (fallback para localStorage)
       let companyRazao = "PET CRIA LTDA";
       let companyLogo = null;
@@ -4655,15 +4658,13 @@ function exportarProdutosCSV(mode = "resumido", notify = true) {
     csv += "\n";
     csv += headers.join("\t") + "\n";
 
-    const sortedList = (list || [])
-      .slice()
-      .sort((a, b) =>
-        (a.nome || a.descricao || "")
-          .toString()
-          .localeCompare(b.nome || b.descricao || "", "pt-BR", {
-            sensitivity: "base",
-          }),
-      );
+    const sortedList = (list || []).slice().sort((a, b) =>
+      (a.nome || a.descricao || "")
+        .toString()
+        .localeCompare(b.nome || b.descricao || "", "pt-BR", {
+          sensitivity: "base",
+        }),
+    );
     sortedList.forEach((produto) => {
       const id =
         produto && produto.id !== undefined && produto.id !== null
@@ -4796,15 +4797,13 @@ function exportarProdutosXLS(mode = "resumido", notify = true) {
         aoa.push([]);
         aoa.push(headers);
 
-        const sortedList = (list || [])
-          .slice()
-          .sort((a, b) =>
-            (a.nome || a.descricao || "")
-              .toString()
-              .localeCompare(b.nome || b.descricao || "", "pt-BR", {
-                sensitivity: "base",
-              }),
-          );
+        const sortedList = (list || []).slice().sort((a, b) =>
+          (a.nome || a.descricao || "")
+            .toString()
+            .localeCompare(b.nome || b.descricao || "", "pt-BR", {
+              sensitivity: "base",
+            }),
+        );
         sortedList.forEach((p) => {
           const id = p && p.id !== undefined && p.id !== null ? p.id : "";
           const codigo = p.codigo || id || "";

@@ -35,9 +35,10 @@
   // Carregar dados do cliente para edição
   async carregarDadosParaEdicao(clienteId) {
     try {
-      const response = await fetch(
-        `http://72.60.244.46:3000/api/clientes/${clienteId}`,
-      );
+      const API_BASE =
+        (window.__API_BASE__ && window.__API_BASE__.toString()) ||
+        window.location.origin;
+      const response = await fetch(`${API_BASE}/api/clientes/${clienteId}`);
       const data = await response.json();
 
       if (data.success) {
@@ -840,9 +841,12 @@
       }
 
       // Definir URL e método baseado no modo
+      const API_BASE =
+        (window.__API_BASE__ && window.__API_BASE__.toString()) ||
+        window.location.origin;
       const url = this.clienteIdParaEdicao
-        ? `http://72.60.244.46:3000/api/clientes/${this.clienteIdParaEdicao}`
-        : "http://72.60.244.46:3000/api/clientes";
+        ? `${API_BASE}/api/clientes/${this.clienteIdParaEdicao}`
+        : `${API_BASE}/api/clientes`;
 
       const method = this.clienteIdParaEdicao ? "PUT" : "POST";
 

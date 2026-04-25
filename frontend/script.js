@@ -62,7 +62,7 @@ form.addEventListener("submit", async (e) => {
   e.preventDefault();
   const formData = new FormData(form);
 
-  const res = await fetch("http://72.60.244.46:3000/api/clientes", {
+  const res = await fetch("/api/clientes", {
     method: "POST",
     body: formData,
   });
@@ -76,7 +76,7 @@ form.addEventListener("submit", async (e) => {
 // - Limpa a lista atual no HTML
 // - Cria um <li> para cada cliente retornado e adiciona ao elemento 'lista'
 async function listarClientes() {
-  const res = await fetch("http://72.60.244.46:3000/api/clientes");
+  const res = await fetch("/api/clientes");
   const clientes = await res.json();
 
   // Limpa a lista antes de adicionar novamente
@@ -100,7 +100,7 @@ formPet.addEventListener("submit", async (e) => {
   const formData = new FormData(formPet);
 
   // Envia o pet para o backend
-  const res = await fetch("http://72.60.244.46:3000/api/pets", {
+  const res = await fetch("/api/pets", {
     method: "POST",
     body: formData,
   });

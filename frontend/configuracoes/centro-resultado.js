@@ -442,8 +442,8 @@ function inicializarPaginaCentroResultado() {
 }
 
 function carregarCentrosBackend(){
-    // API base: tente usar variável global se definida, senão caia para 72.60.244.46:3000
-    var API_BASE = (window.__API_BASE__ && window.__API_BASE__.toString()) || 'http://72.60.244.46:3000';
+    // API base: use variável global se definida, senão use a origem atual
+    var API_BASE = (window.__API_BASE__ && window.__API_BASE__.toString()) || window.location.origin;
     try{
         fetch(API_BASE + '/api/centros')
         .then(function(resp){ if(!resp.ok) return Promise.reject('fetch-failed'); return resp.json(); })
@@ -556,7 +556,7 @@ async function handleDeleteCentro(id) {
             .replace(/[\u0300-\u036f]/g, '')
             .replace(/[^a-z0-9]+/g, '-')
             .replace(/(^-|-$)/g, '');
-        const API_BASE = (window.__API_BASE__ && window.__API_BASE__.toString()) || 'http://72.60.244.46:3000';
+        const API_BASE = (window.__API_BASE__ && window.__API_BASE__.toString()) || window.location.origin;
         fetch(`${API_BASE}/api/centros/${encodeURIComponent(slug)}`, { method: 'DELETE', headers: { 'Accept': 'application/json' } })
         .then(response => {
             if (!response.ok) return response.json().then(err => { throw new Error(err.error || 'Erro ao excluir'); });
@@ -731,7 +731,7 @@ function salvarCentro() {
     }
 
     const tbody = document.querySelector('.centro-resultado-table tbody');
-    var API_BASE = (window.__API_BASE__ && window.__API_BASE__.toString()) || 'http://72.60.244.46:3000';
+    var API_BASE = (window.__API_BASE__ && window.__API_BASE__.toString()) || window.location.origin;
 
     // if editing, perform PUT to update
     const editing = window.__editingCentroSlug || null;

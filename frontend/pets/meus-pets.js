@@ -883,11 +883,10 @@ async function fetchPetsAndClients() {
     // Tenta várias origens - quando você abre a página com Live Server (porta 5500),
     // a URL relativa `/api/...` não resolve para o backend (que normalmente roda em 3000).
     // Primeiro tentamos a URL relativa; se falhar, tentamos os backends comuns.
-    const tryUrls = (path) => [
-      path,
-      "http://72.60.244.46:3000" + path,
-      "http://72.60.244.46:3000" + path,
-    ];
+    const API_BASE =
+      (window.__API_BASE__ && window.__API_BASE__.toString()) ||
+      window.location.origin;
+    const tryUrls = (path) => [path, API_BASE + path];
 
     async function tryFetchAny(path) {
       const urls = tryUrls(path);

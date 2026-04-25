@@ -636,14 +636,11 @@ async function visualizarRelatorio() {
 
   try {
     // 1. Buscar dados
-    const respDados = await fetch(
-      "http://72.60.244.46:3000/api/relatorios/comissao",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(filtros),
-      },
-    );
+    const respDados = await fetch(`/api/relatorios/comissao`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(filtros),
+    });
     if (!respDados.ok) {
       const err = await respDados.json().catch(() => ({}));
       throw new Error(err.message || `HTTP ${respDados.status}`);
@@ -653,18 +650,15 @@ async function visualizarRelatorio() {
     _filtrosRelatorio = filtros;
 
     // 2. Gerar PDF
-    const respPdf = await fetch(
-      "http://72.60.244.46:3000/api/relatorios/comissao/pdf",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          linhas: dados.linhas,
-          totais: dados.totais,
-          filtros,
-        }),
-      },
-    );
+    const respPdf = await fetch(`/api/relatorios/comissao/pdf`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        linhas: dados.linhas,
+        totais: dados.totais,
+        filtros,
+      }),
+    });
     if (!respPdf.ok) throw new Error(`HTTP ${respPdf.status}`);
 
     const blob = await respPdf.blob();
@@ -995,18 +989,15 @@ async function gerarPdfComissao() {
   mostrarNotificacao("Gerando PDF...", "info");
 
   try {
-    const resp = await fetch(
-      "http://72.60.244.46:3000/api/relatorios/comissao/pdf",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          linhas: _dadosRelatorio.linhas,
-          totais: _dadosRelatorio.totais,
-          filtros: _filtrosRelatorio,
-        }),
-      },
-    );
+    const resp = await fetch(`/api/relatorios/comissao/pdf`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        linhas: _dadosRelatorio.linhas,
+        totais: _dadosRelatorio.totais,
+        filtros: _filtrosRelatorio,
+      }),
+    });
 
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 

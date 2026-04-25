@@ -39,7 +39,10 @@ function verificarPetParaEdicao() {
 // Carregar pet para edição e preencher formulário
 async function carregarPetParaEdicao(petId) {
   try {
-    const response = await fetch(`http://72.60.244.46:3000/api/pets/${petId}`);
+    const API_BASE =
+      (window.__API_BASE__ && window.__API_BASE__.toString()) ||
+      window.location.origin;
+    const response = await fetch(`${API_BASE}/api/pets/${petId}`);
     if (!response.ok) {
       throw new Error("Falha ao carregar pet");
     }
@@ -166,7 +169,10 @@ async function carregarClientes() {
   try {
     console.log("📡 Carregando lista de clientes...");
 
-    const response = await fetch("http://72.60.244.46:3000/api/clientes");
+    const API_BASE =
+      (window.__API_BASE__ && window.__API_BASE__.toString()) ||
+      window.location.origin;
+    const response = await fetch(`${API_BASE}/api/clientes`);
     if (!response.ok) {
       throw new Error(`Erro HTTP: ${response.status}`);
     }
@@ -452,13 +458,19 @@ async function salvarPet() {
     // Enviar para API: se estivermos editando, usar PUT em /api/pets/:id
     let response;
     if (editingPetId) {
-      response = await fetch(`http://72.60.244.46:3000/api/pets/${editingPetId}`, {
+      const API_BASE =
+        (window.__API_BASE__ && window.__API_BASE__.toString()) ||
+        window.location.origin;
+      response = await fetch(`${API_BASE}/api/pets/${editingPetId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       });
     } else {
-      response = await fetch("http://72.60.244.46:3000/api/pets", {
+      const API_BASE =
+        (window.__API_BASE__ && window.__API_BASE__.toString()) ||
+        window.location.origin;
+      response = await fetch(`${API_BASE}/api/pets`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),

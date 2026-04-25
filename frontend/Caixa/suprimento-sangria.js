@@ -446,7 +446,7 @@ class MovimentoCaixaManager {
 
   async loadCaixaInfo() {
     try {
-      const response = await fetch("http://72.60.244.46:3000/api/caixas/aberto");
+      const response = await fetch("/api/caixas/aberto");
       const caixa = await response.json();
 
       if (caixa && caixa.aberto) {
@@ -554,7 +554,7 @@ class MovimentoCaixaManager {
 
   async loadMovimentos(dataInicio = null, dataFim = null) {
     try {
-      let url = "http://72.60.244.46:3000/api/movimentos-caixa";
+      let url = "/api/movimentos-caixa";
       if (dataInicio && dataFim) {
         url += `?dataInicio=${encodeURIComponent(dataInicio)}&dataFim=${encodeURIComponent(dataFim)}`;
       }
@@ -820,7 +820,7 @@ class MovimentoCaixaManager {
     // Buscar caixa aberto
     let caixaAberto = null;
     try {
-      const response = await fetch("http://72.60.244.46:3000/api/caixas/aberto");
+      const response = await fetch("/api/caixas/aberto");
       caixaAberto = await response.json();
 
       if (!caixaAberto || !caixaAberto.aberto) {

@@ -2573,8 +2573,7 @@ function novoPet() {
   console.log("Novo Pet");
   // Abrir modal de cadastro de pet ou redirecionar
   // direcionar para o cadastro de pet (pasta frontend/pets)
-  window.location.href =
-    "http://127.0.0.1:5500/frontend/pets/cadastro-pet.html#";
+  window.location.href = "/pets/cadastro-pet.html";
   closeDropdown();
 }
 
@@ -2587,20 +2586,19 @@ function novoCliente() {
 
 function novoContrato() {
   console.log("Novo Contrato");
-  window.location.href = "http://127.0.0.1:5500/frontend/contrato-novo.html#";
+  window.location.href = "/contrato-novo.html";
   closeDropdown();
 }
 
 function novaVenda() {
   console.log("Nova Venda");
-  window.location.href = "http://127.0.0.1:5500/frontend/venda-nova.html#";
+  window.location.href = "/venda-nova.html";
   closeDropdown();
 }
 
 function novaContaPagar() {
   console.log("Nova Conta a Pagar");
-  window.location.href =
-    "http://127.0.0.1:5500/frontend/contas-pagar-nova.html#";
+  window.location.href = "/contas-pagar-nova.html";
   closeDropdown();
 }
 

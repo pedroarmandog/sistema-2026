@@ -118,10 +118,10 @@ async function carregarSetores() {
   console.log("Carregando setores (centros) da API...");
 
   try {
-    // API base: tente usar variável global se definida, senão caia para 72.60.244.46:3000
+    // API base: tente usar variável global se definida, senão use a origem atual
     const API_BASE =
       (window.__API_BASE__ && window.__API_BASE__.toString()) ||
-      "http://72.60.244.46:3000";
+      window.location.origin;
 
     // Buscar do endpoint correto (/api/centros)
     const response = await fetch(API_BASE + "/api/centros");
@@ -329,7 +329,7 @@ async function carregarDadosUsuario(id) {
   try {
     const API_BASE =
       (window.__API_BASE__ && window.__API_BASE__.toString()) ||
-      "http://72.60.244.46:3000";
+      window.location.origin;
     const response = await fetch(API_BASE + "/api/usuarios/" + id);
 
     if (!response.ok) {
@@ -442,7 +442,7 @@ async function carregarEmpresas() {
   try {
     const API_BASE =
       (window.__API_BASE__ && window.__API_BASE__.toString()) ||
-      "http://72.60.244.46:3000";
+      window.location.origin;
     const response = await fetch(API_BASE + "/api/empresas");
 
     console.log("Status da resposta (empresas):", response.status);
@@ -671,7 +671,7 @@ async function salvarUsuario() {
   try {
     const API_BASE =
       (window.__API_BASE__ && window.__API_BASE__.toString()) ||
-      "http://72.60.244.46:3000";
+      window.location.origin;
 
     let url = API_BASE + "/api/usuarios";
     let method = "POST";
@@ -1227,8 +1227,7 @@ function novoPet() {
   console.log("Novo Pet");
   // Abrir modal de cadastro de pet ou redirecionar
   // direcionar para o cadastro de pet (pasta frontend/pets)
-  window.location.href =
-    "http://127.0.0.1:5500/frontend/pets/cadastro-pet.html#";
+  window.location.href = "/pets/cadastro-pet.html";
   closeDropdown();
 }
 
@@ -1241,20 +1240,19 @@ function novoCliente() {
 
 function novoContrato() {
   console.log("Novo Contrato");
-  window.location.href = "http://127.0.0.1:5500/frontend/contrato-novo.html#";
+  window.location.href = "/contrato-novo.html";
   closeDropdown();
 }
 
 function novaVenda() {
   console.log("Nova Venda");
-  window.location.href = "http://127.0.0.1:5500/frontend/venda-nova.html#";
+  window.location.href = "/venda-nova.html";
   closeDropdown();
 }
 
 function novaContaPagar() {
   console.log("Nova Conta a Pagar");
-  window.location.href =
-    "http://127.0.0.1:5500/frontend/contas-pagar-nova.html#";
+  window.location.href = "/contas-pagar-nova.html";
   closeDropdown();
 }
 

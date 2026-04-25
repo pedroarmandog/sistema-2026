@@ -1862,7 +1862,9 @@ async function carregarAgendamento() {
       alert(
         "Erro ao carregar dados do agendamento: " +
           (fetchErr.message || fetchErr) +
-          "\nVerifique se o servidor está rodando e se o endereço http://72.60.244.46:3000 está acessível.",
+          "\nVerifique se o servidor está rodando e se o backend " +
+          (window.__API_BASE__ || window.location.origin) +
+          " está acessível.",
       );
       return;
     }

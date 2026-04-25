@@ -11,8 +11,9 @@ class DemonstrativoCaixa {
     this.mesAtual2 = new Date(2025, 11, 1); // Dezembro 2025
     this.dataSelecionadaInicio = null;
     this.dataSelecionadaFim = null;
-    // URL base da API (produção)
-    this.apiBase = "http://72.60.244.46:3000";
+    // URL base da API: use variável global `__API_BASE__` se definida, senão rota relativa
+    this.apiBase =
+      (window.__API_BASE__ && window.__API_BASE__.toString()) || "";
     console.log("API base definida como", this.apiBase || "mesma origem");
 
     this.init();

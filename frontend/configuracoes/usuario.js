@@ -487,7 +487,7 @@ async function carregarUsuarios() {
   try {
     const API_BASE =
       (window.__API_BASE__ && window.__API_BASE__.toString()) ||
-      "http://72.60.244.46:3000";
+      window.location.origin;
     const response = await fetch(API_BASE + "/api/usuarios");
 
     if (!response.ok) {

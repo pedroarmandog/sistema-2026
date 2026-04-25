@@ -226,7 +226,7 @@
     if (!window._boxApiCache)
       window._boxApiCache = { pets: null, clients: null, ts: 0 };
 
-    // Tenta vários endpoints (relativo e 72.60.244.46:3000) e retorna o primeiro que funcionar.
+    // Tenta vários endpoints (relativo e API_BASE configurado) e retorna o primeiro que funcionar.
     async function fetchSystemData() {
       const now = Date.now();
       if (
@@ -256,18 +256,11 @@
 
       try {
         const proto = location.protocol;
-        const hostCandidates = [
-          "/api/pets",
-          `http://72.60.244.46:3000/api/pets`,
-          `http://72.60.244.46:3000/api/pets`,
-          `http://72.60.244.46:3000/api/pets`,
-        ];
-        const clientsCandidates = [
-          "/api/clientes",
-          `http://72.60.244.46:3000/api/clientes`,
-          `http://72.60.244.46:3000/api/clientes`,
-          `http://72.60.244.46:3000/api/clientes`,
-        ];
+        const API_BASE =
+          (window.__API_BASE__ && window.__API_BASE__.toString()) ||
+          window.location.origin;
+        const hostCandidates = ["/api/pets", API_BASE + "/api/pets"];
+        const clientsCandidates = ["/api/clientes", API_BASE + "/api/clientes"];
 
         const petsData = (await tryFetchAny(hostCandidates)) || [];
         const clientsData = (await tryFetchAny(clientsCandidates)) || [];

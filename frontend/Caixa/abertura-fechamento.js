@@ -614,7 +614,7 @@ class CaixaManager {
       this.showNotification("Abrindo caixa...", "info");
 
       // Abrir caixa via API
-      const response = await fetch("http://72.60.244.46:3000/api/caixas/abrir", {
+      const response = await fetch("/api/caixas/abrir", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -683,18 +683,15 @@ class CaixaManager {
       const saldoFinal = this.fundoTroco;
 
       // Fechar caixa via API
-      const response = await fetch(
-        `http://72.60.244.46:3000/api/caixas/${this.caixaAtual.id}/fechar`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            saldoFinal: saldoFinal,
-          }),
+      const response = await fetch(`/api/caixas/${this.caixaAtual.id}/fechar`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
         },
-      );
+        body: JSON.stringify({
+          saldoFinal: saldoFinal,
+        }),
+      });
 
       if (!response.ok) {
         const error = await response.json();
@@ -723,19 +720,16 @@ class CaixaManager {
   async validarSenhaUsuario(senha) {
     try {
       // Validar senha via API
-      const response = await fetch(
-        "http://72.60.244.46:3000/api/usuarios/validar-senha",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            usuarioId: this.usuarioLogado?.id,
-            senha: senha,
-          }),
+      const response = await fetch("/api/usuarios/validar-senha", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      );
+        body: JSON.stringify({
+          usuarioId: this.usuarioLogado?.id,
+          senha: senha,
+        }),
+      });
 
       const data = await response.json();
       return data.valida === true;
@@ -751,9 +745,7 @@ class CaixaManager {
       const query = this.terminalSelecionado
         ? `?numero=${encodeURIComponent(this.terminalSelecionado)}`
         : "";
-      const response = await fetch(
-        `http://72.60.244.46:3000/api/caixas/aberto${query}`,
-      );
+      const response = await fetch(`/api/caixas/aberto${query}`);
       const data = await response.json();
 
       if (data && data.aberto === true) {

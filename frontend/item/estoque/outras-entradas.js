@@ -579,10 +579,11 @@ function configurarEventListeners() {
         }
 
         // chamada para backend
-        let apiUrl = "/api/relatorios/entradas/pdf";
-        if (!(window.location.port === "3000")) {
-          apiUrl = `${window.location.protocol}//${window.location.hostname}:3000/api/relatorios/entradas/pdf`;
-        }
+        const API_BASE =
+          (window.__API_BASE__ && window.__API_BASE__.toString()) ||
+          window.location.origin;
+        const apiUrl =
+          API_BASE.replace(/\/$/, "") + "/api/relatorios/entradas/pdf";
 
         // evitar enviar logo gigante (mesma heurística utilizada em outros relatórios)
         let logoToSend = companyLogo;
