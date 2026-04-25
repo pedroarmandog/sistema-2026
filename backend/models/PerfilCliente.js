@@ -1,37 +1,38 @@
-﻿const { Sequelize, DataTypes } = require('sequelize');
-const sequelize = new Sequelize('petshop', 'pethub', 'PetHub@123', {
-    host: 'localhost',
-    dialect: 'mysql'
-});
+﻿const { DataTypes } = require("sequelize");
+const { sequelize } = require("./Cliente");
 
-const PerfilCliente = sequelize.define('PerfilCliente', {
+const PerfilCliente = sequelize.define(
+  "PerfilCliente",
+  {
     id: {
-        type: DataTypes.INTEGER,
-        primaryKey: true,
-        autoIncrement: true
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
     },
     descricao: {
-        type: DataTypes.STRING(255),
-        allowNull: false
+      type: DataTypes.STRING(255),
+      allowNull: false,
     },
     fixo: {
-        type: DataTypes.DECIMAL(5, 2),
-        allowNull: true,
-        defaultValue: null
+      type: DataTypes.DECIMAL(5, 2),
+      allowNull: true,
+      defaultValue: null,
     },
     maximo: {
-        type: DataTypes.DECIMAL(5, 2),
-        allowNull: true,
-        defaultValue: null
+      type: DataTypes.DECIMAL(5, 2),
+      allowNull: true,
+      defaultValue: null,
     },
     gerente: {
-        type: DataTypes.DECIMAL(5, 2),
-        allowNull: true,
-        defaultValue: null
-    }
-}, {
-    tableName: 'perfis_cliente',
-    timestamps: true
-});
+      type: DataTypes.DECIMAL(5, 2),
+      allowNull: true,
+      defaultValue: null,
+    },
+  },
+  {
+    tableName: "perfis_cliente",
+    timestamps: true,
+  },
+);
 
 module.exports = PerfilCliente;

@@ -9,6 +9,13 @@ const {
 } = require("../models");
 const { Op, literal } = require("sequelize");
 
+function handleError(res, context, error) {
+  console.error(context, error);
+  return res
+    .status(500)
+    .json({ erro: context, mensagem: error?.message, stack: error?.stack });
+}
+
 // Produtos com estoque baixo ou sem estoque
 exports.produtosEstoqueBaixo = async (req, res) => {
   try {
@@ -26,8 +33,7 @@ exports.produtosEstoqueBaixo = async (req, res) => {
     console.log(`Encontrados ${produtos.length} produtos com estoque baixo`);
     res.json(produtos);
   } catch (error) {
-    console.error("Erro ao buscar produtos com estoque baixo:", error);
-    res.status(500).json({ erro: "Erro ao buscar produtos" });
+    return handleError(res, "Erro ao buscar produtos com estoque baixo", error);
   }
 };
 
@@ -132,8 +138,7 @@ exports.aniversariantes = async (req, res) => {
       clientes: clientesAniversariantes,
     });
   } catch (error) {
-    console.error("Erro ao buscar aniversariantes:", error);
-    res.status(500).json({ erro: "Erro ao buscar aniversariantes" });
+    return handleError(res, "Erro ao buscar aniversariantes", error);
   }
 };
 
@@ -206,8 +211,7 @@ exports.oportunidadesVenda = async (req, res) => {
 
     res.json(oportunidades);
   } catch (error) {
-    console.error("Erro ao buscar oportunidades de venda:", error);
-    res.status(500).json({ erro: "Erro ao buscar oportunidades" });
+    return handleError(res, "Erro ao buscar oportunidades de venda", error);
   }
 };
 
@@ -312,8 +316,7 @@ exports.levaTraz = async (req, res) => {
 
     res.json(levaTrazList);
   } catch (error) {
-    console.error("Erro ao buscar Taxi Dog:", error);
-    res.status(500).json({ erro: "Erro ao buscar agendamentos" });
+    return handleError(res, "Erro ao buscar Taxi Dog", error);
   }
 };
 
@@ -366,8 +369,11 @@ exports.produtosVencimento = async (req, res) => {
 
     res.json(produtosComValidade);
   } catch (error) {
-    console.error("Erro ao buscar produtos próximos do vencimento:", error);
-    res.status(500).json({ erro: "Erro ao buscar produtos" });
+    return handleError(
+      res,
+      "Erro ao buscar produtos próximos do vencimento",
+      error,
+    );
   }
 };
 
@@ -391,8 +397,7 @@ exports.vendasHoje = async (req, res) => {
 
     res.json({ count });
   } catch (error) {
-    console.error("Erro ao buscar contagem de vendas hoje:", error);
-    res.status(500).json({ erro: "Erro ao buscar vendas" });
+    return handleError(res, "Erro ao buscar contagem de vendas hoje", error);
   }
 };
 
@@ -446,8 +451,7 @@ exports.ticketMedio = async (req, res) => {
 
     res.json({ ticketMedio: parseFloat(ticket.toFixed(2)) });
   } catch (error) {
-    console.error("Erro ao calcular ticket médio:", error);
-    res.status(500).json({ erro: "Erro ao calcular ticket médio" });
+    return handleError(res, "Erro ao calcular ticket médio", error);
   }
 };
 
@@ -525,8 +529,7 @@ exports.periodicos = async (req, res) => {
 
     res.json(Array.from(periodicosMap.values()));
   } catch (error) {
-    console.error("Erro ao buscar periódicos:", error);
-    res.status(500).json({ erro: "Erro ao buscar periódicos" });
+    return handleError(res, "Erro ao buscar periódicos", error);
   }
 };
 
@@ -564,8 +567,7 @@ exports.contasAPagarHoje = async (req, res) => {
 
     res.json(contas);
   } catch (error) {
-    console.error("Erro ao buscar contas a pagar:", error);
-    res.status(500).json({ erro: "Erro ao buscar contas a pagar" });
+    return handleError(res, "Erro ao buscar contas a pagar", error);
   }
 };
 
@@ -596,7 +598,6 @@ exports.indicadoresAtendimento = async (req, res) => {
 
     res.json({ agendados, checkin, prontos });
   } catch (error) {
-    console.error("Erro ao buscar indicadores:", error);
-    res.status(500).json({ erro: "Erro ao buscar indicadores" });
+    return handleError(res, "Erro ao buscar indicadores", error);
   }
 };

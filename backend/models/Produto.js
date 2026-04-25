@@ -1,10 +1,5 @@
-﻿const { Sequelize, DataTypes } = require("sequelize");
-
-// Usar mesma configuração que outros modelos (local MySQL petshop)
-const sequelize = new Sequelize("petshop", "pethub", "PetHub@123", {
-  host: "localhost",
-  dialect: "mysql",
-});
+﻿const { DataTypes } = require("sequelize");
+const { sequelize } = require("./Cliente");
 
 const Produto = sequelize.define(
   "Produto",

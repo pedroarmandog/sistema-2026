@@ -1,8 +1,5 @@
-﻿const { Sequelize, DataTypes } = require("sequelize");
-const sequelize = new Sequelize("petshop", "pethub", "PetHub@123", {
-  host: "localhost",
-  dialect: "mysql",
-});
+﻿const { DataTypes } = require("sequelize");
+const { sequelize } = require("./Cliente");
 
 const Venda = sequelize.define(
   "Venda",
