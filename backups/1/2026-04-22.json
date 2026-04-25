@@ -1,0 +1,84 @@
+{
+  "meta": {
+    "empresa_painel_id": 1,
+    "empresa_sistema_id": 1,
+    "data_referencia": "2026-04-22",
+    "criado_em": "2026-04-23T03:00:00.198Z",
+    "nome_empresa": "MADRE TERESA"
+  },
+  "empresa_painel": {
+    "id": 1,
+    "razao_social": "MADRE TERESA LTDEA",
+    "nome_fantasia": "MADRE TERESA",
+    "cnpj": "21323432432424",
+    "cep": "",
+    "endereco": "RUA LIMEIRA 566",
+    "email": "madre@gmail.com",
+    "telefone": "",
+    "foto": null,
+    "logo": null,
+    "data_adesao": "2026-04-18",
+    "status": "ATIVO",
+    "valor_mensalidade": "99.90",
+    "data_vencimento": "2026-05-18",
+    "intervalo_dias": 30,
+    "proxima_cobranca": "2026-05-18",
+    "limite_acessos": 3,
+    "createdAt": "2026-04-18T13:47:29.000Z",
+    "updatedAt": "2026-04-18T13:47:29.000Z"
+  },
+  "empresa_sistema": {
+    "id": 1,
+    "nome": "MADRE TERESA",
+    "razaoSocial": "MADRE TERESA LTDEA",
+    "cnpj": "21323432432424",
+    "telefone": "",
+    "email": "madre@gmail.com",
+    "endereco": {
+      "cep": "",
+      "rua": "RUA LIMEIRA 566"
+    },
+    "logo": null,
+    "ultimaChavePix": null,
+    "ativa": true,
+    "createdAt": "2026-04-18T13:47:29.000Z",
+    "updatedAt": "2026-04-18T13:47:29.000Z"
+  },
+  "usuarios": [
+    {
+      "id": 2,
+      "nome": "Bianca",
+      "usuario": "bianca@madre",
+      "senha": "$2b$10$qhblQKUDY6A3eUq8DmFPVuDAGawOkKFVzoU1Qxz8Th8yrmPF/ThtS",
+      "grupoUsuario": "Usuario",
+      "profissionalId": null,
+      "ativo": 1,
+      "setorPadraoId": null,
+      "setorPadraoNome": null,
+      "acessoValor": null,
+      "permissoes": [],
+      "empresas": [
+        1
+      ],
+      "createdAt": "2026-04-18T13:47:29.000Z",
+      "updatedAt": "2026-04-18T13:47:29.000Z"
+    }
+  ],
+  "tabelas": {
+    "SessaoAtiva": [
+      {
+        "id": 1,
+        "usuario_id": 2,
+        "empresa_id": 1,
+        "token_hash": "ebe6a68a2401aa320431049320c32b01e4b7820ac11da9d1686d59264113f7f0",
+        "ip_address": "::1",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+        "data_login": "2026-04-18T13:47:35.000Z",
+        "ultima_atividade": "2026-04-18T13:48:21.000Z",
+        "ativo": 1,
+        "createdAt": "2026-04-18T13:47:35.000Z",
+        "updatedAt": "2026-04-18T13:48:21.000Z"
+      }
+    ]
+  }
+}

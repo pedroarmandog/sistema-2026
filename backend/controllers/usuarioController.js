@@ -231,11 +231,13 @@ exports.login = async (req, res) => {
     // Retornar token também no body para clientes que usam Authorization header
     return res.status(200).json({ ...usuarioData, token });
   } catch (error) {
-    console.error("❌ Erro ao fazer login:", error);
-    console.error("Stack trace:", error.stack);
-    return res
-      .status(500)
-      .json({ mensagem: "Erro ao fazer login", erro: error.message });
+    console.error("ERRO LOGIN:", error);
+    // Retornar mensagem e stack para facilitar diagnóstico (remover em produção se necessário)
+    return res.status(500).json({
+      mensagem: "Erro ao fazer login",
+      erro: error && error.message ? error.message : String(error),
+      stack: error && error.stack ? error.stack : null,
+    });
   }
 };
 

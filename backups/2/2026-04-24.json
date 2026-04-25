@@ -1,0 +1,97 @@
+{
+  "meta": {
+    "empresa_painel_id": 2,
+    "empresa_sistema_id": 2,
+    "data_referencia": "2026-04-24",
+    "criado_em": "2026-04-25T15:31:59.622Z",
+    "nome_empresa": "MADRE TERESA"
+  },
+  "empresa_painel": {
+    "id": 2,
+    "razao_social": "MADRE TERESA LTDA",
+    "nome_fantasia": "MADRE TERESA",
+    "cnpj": "21321312313131",
+    "cep": "31573-030",
+    "endereco": "RUA LIMEIRA 566",
+    "email": "madre@gmail.com",
+    "telefone": "(31) 97234-5330",
+    "foto": null,
+    "logo": null,
+    "data_adesao": "2026-04-25",
+    "status": "ATIVO",
+    "valor_mensalidade": "99.90",
+    "data_vencimento": "2026-05-25",
+    "intervalo_dias": 30,
+    "proxima_cobranca": "2026-05-25",
+    "limite_acessos": 3,
+    "createdAt": "2026-04-25T15:16:37.000Z",
+    "updatedAt": "2026-04-25T15:16:37.000Z"
+  },
+  "empresa_sistema": {
+    "id": 2,
+    "nome": "MADRE TERESA",
+    "razaoSocial": "MADRE TERESA LTDA",
+    "cnpj": "21321312313131",
+    "telefone": "(31) 97234-5330",
+    "email": "madre@gmail.com",
+    "endereco": {
+      "cep": "31573-030",
+      "rua": "RUA LIMEIRA 566"
+    },
+    "logo": null,
+    "ultimaChavePix": null,
+    "ativa": true,
+    "createdAt": "2026-04-25T15:16:37.000Z",
+    "updatedAt": "2026-04-25T15:16:37.000Z"
+  },
+  "usuarios": [
+    {
+      "id": 3,
+      "nome": "bianca",
+      "usuario": "bianca@madre",
+      "senha": "$2b$10$js6RnU4KN8IRMSBytRH0nedEaQ6JQj2C6Q7jojmRsEesDmmjNLULe",
+      "grupoUsuario": "Usuario",
+      "profissionalId": null,
+      "ativo": 1,
+      "setorPadraoId": null,
+      "setorPadraoNome": null,
+      "acessoValor": null,
+      "permissoes": [],
+      "empresas": [
+        2
+      ],
+      "createdAt": "2026-04-25T15:16:37.000Z",
+      "updatedAt": "2026-04-25T15:16:37.000Z"
+    }
+  ],
+  "tabelas": {
+    "SessaoAtiva": [
+      {
+        "id": 3,
+        "usuario_id": 3,
+        "empresa_id": 2,
+        "token_hash": "f8aee35f81dbd71c5a65325cd920c87483ddf441cd3865602d691947b4aa6c5c",
+        "ip_address": "::1",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+        "data_login": "2026-04-25T15:16:55.000Z",
+        "ultima_atividade": "2026-04-25T15:25:30.000Z",
+        "ativo": 0,
+        "createdAt": "2026-04-25T15:16:55.000Z",
+        "updatedAt": "2026-04-25T15:25:33.000Z"
+      },
+      {
+        "id": 4,
+        "usuario_id": 3,
+        "empresa_id": 2,
+        "token_hash": "527c006c94b5759a4bad54b10927df83d3a2501fa825962c04c9f53fc63558dd",
+        "ip_address": "::1",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+        "data_login": "2026-04-25T15:25:41.000Z",
+        "ultima_atividade": "2026-04-25T15:31:44.000Z",
+        "ativo": 1,
+        "createdAt": "2026-04-25T15:25:41.000Z",
+        "updatedAt": "2026-04-25T15:31:44.000Z"
+      }
+    ]
+  }
+}

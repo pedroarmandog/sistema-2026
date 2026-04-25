@@ -2,8 +2,8 @@
   "meta": {
     "empresa_painel_id": 1,
     "empresa_sistema_id": 1,
-    "data_referencia": "2026-04-17",
-    "criado_em": "2026-04-18T14:01:04.893Z",
+    "data_referencia": "2026-04-24",
+    "criado_em": "2026-04-25T15:02:39.522Z",
     "nome_empresa": "MADRE TERESA"
   },
   "empresa_painel": {
@@ -39,6 +39,7 @@
       "rua": "RUA LIMEIRA 566"
     },
     "logo": null,
+    "ultimaChavePix": null,
     "ativa": true,
     "createdAt": "2026-04-18T13:47:29.000Z",
     "updatedAt": "2026-04-18T13:47:29.000Z"

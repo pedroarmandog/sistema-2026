@@ -1,7 +1,21 @@
-﻿const { Sequelize, DataTypes } = require("sequelize");
-const sequelize = new Sequelize("petshop", "pethub", "PetHub@123", {
-  host: "localhost",
+﻿const path = require("path");
+require("dotenv").config({
+  path: path.resolve(__dirname, "../../.env"),
+});
+const { Sequelize, DataTypes } = require("sequelize");
+
+const dbName = process.env.DB_NAME || process.env.DATABASE_NAME || "petshop";
+const dbUser = process.env.DB_USER || process.env.DATABASE_USER || "pethub";
+const dbPassword =
+  process.env.DB_PASSWORD || process.env.DATABASE_PASSWORD || "PetHub@123";
+const dbHost = process.env.DB_HOST || process.env.DATABASE_HOST || "localhost";
+const dbPort = process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306;
+
+const sequelize = new Sequelize(dbName, dbUser, dbPassword, {
+  host: dbHost,
+  port: dbPort,
   dialect: "mysql",
+  dialectModule: require("mysql2"),
 });
 
 const Cliente = sequelize.define(
