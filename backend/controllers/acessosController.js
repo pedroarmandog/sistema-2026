@@ -288,6 +288,24 @@ async function registrarSessao(
   userAgent,
 ) {
   try {
+    // Evitar duplicatas: se já existir uma sessão com o mesmo token, apenas atualizar
+    const existente = await SessaoAtiva.findOne({
+      where: { token_hash: tokenHash },
+    });
+    if (existente) {
+      await existente.update({
+        usuario_id: usuarioId,
+        empresa_id: empresaPainelId || existente.empresa_id,
+        ip_address: ip || existente.ip_address,
+        user_agent: userAgent
+          ? userAgent.substring(0, 500)
+          : existente.user_agent,
+        ultima_atividade: new Date(),
+        ativo: true,
+      });
+      return;
+    }
+
     await SessaoAtiva.create({
       usuario_id: usuarioId,
       empresa_id: empresaPainelId,
