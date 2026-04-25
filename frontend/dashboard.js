@@ -2034,15 +2034,22 @@ function escapeHtml(text) {
         if (empresaEl) empresaEl.textContent = dados.nome;
         if (nomeEl) nomeEl.textContent = dados.nomeEmpresa;
 
-        // Atualizar o nome do usuário no header (substituir "Pedro" ou "...")
+        // Atualizar o nome do usuário no header — substituir placeholders
         const userNameSpan = userMenu.querySelector("span");
-        if (
-          userNameSpan &&
-          (userNameSpan.textContent === "Pedro" ||
-            userNameSpan.textContent === "...")
-        ) {
-          const primeiroNome = dados.nome.split(" ")[0];
-          userNameSpan.textContent = primeiroNome;
+        if (userNameSpan) {
+          const current = (userNameSpan.textContent || "").trim();
+          const lower = current.toLowerCase();
+          const isPlaceholder =
+            current === "" ||
+            current === "..." ||
+            current === "Pedro" ||
+            lower === "usuário" ||
+            lower === "usuario" ||
+            current === "-";
+          if (isPlaceholder) {
+            const primeiroNome = (dados.nome || "Usuário").split(" ")[0];
+            userNameSpan.textContent = primeiroNome;
+          }
         }
       });
 
