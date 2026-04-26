@@ -6,11 +6,14 @@ const rateLimit = require("../middleware/rateLimit");
 
 // Todas as rotas do dashboard requerem autenticação
 router.use(authUser);
-// Throttle leve por usuário para evitar múltiplas chamadas rápidas do dashboard
-router.use(rateLimit(2000));
+// NOTE: removido rateLimit global do dashboard para evitar 429 quando o frontend faz múltiplas chamadas paralelas.
+// Aplicar rate limiting apenas em rotas críticas (ex: login) ou em endpoints específicos quando necessário.
 
 // Rota para produtos com estoque baixo
 router.get("/produtos-estoque-baixo", dashboardController.produtosEstoqueBaixo);
+
+// Rota consolidada: resumo do dashboard (clientes, agendamentos, vendas, ticket)
+router.get("/resumo", dashboardController.resumo);
 
 // Rota para aniversariantes (pets e clientes)
 router.get("/aniversariantes", dashboardController.aniversariantes);

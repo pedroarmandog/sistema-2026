@@ -148,7 +148,7 @@ router.get("/", async (req, res) => {
 
     res.json(agendamentosFormatted);
   } catch (error) {
-    console.error("Erro ao buscar agendamentos:", error);
+    console.error("[AGENDAMENTOS ERROR] Erro ao buscar agendamentos:", error);
     res.status(500).json({ error: "Erro interno do servidor" });
   }
 });
@@ -227,7 +227,7 @@ router.get("/:id", async (req, res) => {
 
     res.json(agendamentoFormatted);
   } catch (error) {
-    console.error("Erro ao buscar agendamento:", error);
+    console.error("[AGENDAMENTOS ERROR] Erro ao buscar agendamento:", error);
     res.status(500).json({ error: "Erro interno do servidor" });
   }
 });
@@ -393,7 +393,7 @@ router.post("/", async (req, res) => {
       }
     });
   } catch (error) {
-    console.error("Erro ao criar agendamento:", error);
+    console.error("[AGENDAMENTOS ERROR] Erro ao criar agendamento:", error);
     res.status(500).json({ error: "Erro interno do servidor" });
   }
 });

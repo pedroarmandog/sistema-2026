@@ -50,6 +50,76 @@ exports.produtosEstoqueBaixo = async (req, res) => {
   }
 };
 
+// Resumo do dashboard: clientes, agendamentos hoje, vendas hoje, faturamento e ticket médio
+exports.resumo = async (req, res) => {
+  try {
+    const empresaId = req.user?.empresaId;
+    const cacheKey = `dashboard:resumo:${empresaId || "all"}`;
+    const cached = cache.get(cacheKey);
+    if (cached) return res.json(cached);
+
+    const clientesTable = Cliente.getTableName
+      ? Cliente.getTableName()
+      : "clientes";
+    const agTable = Agendamento.getTableName
+      ? Agendamento.getTableName()
+      : "agendamentos";
+    const vendasTable = Venda.getTableName ? Venda.getTableName() : "vendas";
+
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const amanha = new Date(hoje);
+    amanha.setDate(amanha.getDate() + 1);
+
+    const empresaFilter = empresaId ? "AND empresa_id = :empresaId" : "";
+
+    const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    const sql = `SELECT
+      (SELECT COUNT(*) FROM ${clientesTable} WHERE 1=1 ${empresaFilter}) AS clientes,
+      (SELECT COUNT(*) FROM ${clientesTable} WHERE createdAt >= :inicioMes AND createdAt < :amanha ${empresaFilter}) AS clientesMes,
+      (SELECT COUNT(*) FROM ${agTable} WHERE dataAgendamento >= :hoje AND dataAgendamento < :amanha ${empresaFilter}) AS agendamentosHoje,
+      (SELECT COUNT(*) FROM ${vendasTable} WHERE data >= :hoje AND data < :amanha AND status <> 'cancelado' ${empresaFilter}) AS vendasHoje,
+      (SELECT COALESCE(SUM(COALESCE(
+        CAST(JSON_UNQUOTE(JSON_EXTRACT(totais, '$.final')) AS DECIMAL(15,2)),
+        CAST(JSON_UNQUOTE(JSON_EXTRACT(totais, '$.totalFinal')) AS DECIMAL(15,2)),
+        CAST(JSON_UNQUOTE(JSON_EXTRACT(totais, '$.total')) AS DECIMAL(15,2)),
+        0
+      )),0) FROM ${vendasTable} WHERE data >= :hoje AND data < :amanha AND status <> 'cancelado' ${empresaFilter}) AS vendasTotal`;
+
+    const replacements = {
+      inicioMes: inicioMes.toISOString().slice(0, 19).replace("T", " "),
+      hoje: hoje.toISOString().slice(0, 19).replace("T", " "),
+      amanha: amanha.toISOString().slice(0, 19).replace("T", " "),
+    };
+    if (empresaId) replacements.empresaId = empresaId;
+
+    const rows = await sequelize.query(sql, {
+      replacements,
+      type: sequelize.QueryTypes.SELECT,
+    });
+
+    const r = rows && rows[0] ? rows[0] : {};
+    const clientes = Number(r.clientes || 0);
+    const agendamentosHoje = Number(r.agendamentosHoje || 0);
+    const vendasHoje = Number(r.vendasHoje || 0);
+    const vendasTotal = parseFloat(Number(r.vendasTotal || 0));
+    const ticketMedio =
+      vendasHoje > 0 ? parseFloat((vendasTotal / vendasHoje).toFixed(2)) : 0;
+
+    const out = {
+      clientes,
+      agendamentosHoje,
+      vendasHoje,
+      vendasTotal,
+      ticketMedio,
+    };
+    cache.set(cacheKey, out, 15); // TTL 15s
+    res.json(out);
+  } catch (error) {
+    return handleError(res, "Erro ao gerar resumo do dashboard", error);
+  }
+};
+
 // Aniversariantes (Clientes e Pets) dos próximos 7 dias
 exports.aniversariantes = async (req, res) => {
   try {

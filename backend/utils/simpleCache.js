@@ -8,7 +8,9 @@ function _cleanup() {
   }
 }
 
-setInterval(_cleanup, 5000).unref && setInterval(_cleanup, 5000).unref();
+// Cleanup rodando a cada minuto para evitar loops muito frequentes
+const _cleanupInterval = setInterval(_cleanup, 60 * 1000);
+_cleanupInterval.unref && _cleanupInterval.unref();
 
 function set(key, value, ttlSeconds = 10) {
   const expires = ttlSeconds ? Date.now() + ttlSeconds * 1000 : null;

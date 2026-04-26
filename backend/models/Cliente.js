@@ -44,10 +44,45 @@ if (!global.__SEQUELIZE_SINGLETON__) {
         if (global.__DB_METRICS__) global.__DB_METRICS__.qCount++;
       } catch (e) {}
 
+      // Tentar obter contexto da requisição (se disponível)
+      let rid = "-";
+      let rpath = "-";
+      try {
+        const requestContext = require("../services/requestContext");
+        const store = requestContext.getStore
+          ? requestContext.getStore()
+          : null;
+        if (store) {
+          rid = store.requestId || rid;
+          rpath = store.path || rpath;
+        }
+      } catch (e) {}
+
+      // Extrair caller útil da stack (filtrar node_modules/sequelize)
+      let caller = "";
+      try {
+        const st = new Error().stack || "";
+        const lines = st.split("\n").slice(3);
+        for (const l of lines) {
+          if (
+            !l.includes("node_modules") &&
+            !l.includes("(internal") &&
+            !l.includes("sequelize")
+          ) {
+            caller = l.trim();
+            break;
+          }
+        }
+      } catch (e) {}
+
       if (typeof timing === "number") {
-        console.log(`[DB QUERY] [${timing}ms] ${sql}`);
+        console.log(
+          `[DB QUERY] [${timing}ms] rid=${rid} path=${rpath} caller=${caller} ${sql}`,
+        );
       } else {
-        console.log(`[DB QUERY] ${sql}`);
+        console.log(
+          `[DB QUERY] rid=${rid} path=${rpath} caller=${caller} ${sql}`,
+        );
       }
     } catch (e) {
       console.log("[DB QUERY] (log falhou)");
@@ -59,16 +94,17 @@ if (!global.__SEQUELIZE_SINGLETON__) {
     port: dbPort,
     dialect: "mysql",
     dialectModule: require("mysql2"),
-    // Pool configurado para produção seguro (reduzido)
+    // Pool otimizado para reduzir conexões simultâneas
     pool: {
       max: 3,
       min: 0,
-      acquire: 30000,
-      idle: 10000,
+      acquire: 20000,
+      idle: 5000,
     },
-    // Habilita benchmark para receber tempo no logger
-    benchmark: true,
-    logging: dbLogger,
+    // Ativar benchmark apenas em desenvolvimento para ajudar no profiling
+    benchmark: process.env.NODE_ENV !== "production",
+    // Desabilitar logging pesado em produção
+    logging: process.env.NODE_ENV === "production" ? false : dbLogger,
   });
 
   // Instrumentação simples para acompanhar conexões ativas (apenas logs)
@@ -78,23 +114,52 @@ if (!global.__SEQUELIZE_SINGLETON__) {
       let _activeConnections = 0;
       const origGet = mgr.getConnection.bind(mgr);
       const origRelease = mgr.releaseConnection.bind(mgr);
+      const seenThreads = new Set();
 
       mgr.getConnection = async function (options) {
         const conn = await origGet(options);
         _activeConnections++;
+        // tentar extrair threadId/connection id do objeto retornado (mysql2)
+        let tid = "-";
+        try {
+          tid =
+            conn.threadId ||
+            conn.connection?.threadId ||
+            conn._client?.threadId ||
+            tid;
+        } catch (e) {}
+
+        // Logar quando um novo threadId aparecer (nova conexão física)
+        try {
+          if (tid !== "-" && !seenThreads.has(String(tid))) {
+            seenThreads.add(String(tid));
+            console.log(
+              `[DB] NEW physical connection created. threadId=${tid}`,
+            );
+          }
+        } catch (e) {}
+
         console.log(
-          `[DB] connection acquired. Active connections: ${_activeConnections}`,
+          `[DB] connection acquired. Active connections: ${_activeConnections} threadId=${tid}`,
         );
         return conn;
       };
 
       mgr.releaseConnection = async function (connection) {
+        let tid = "-";
+        try {
+          tid =
+            connection?.threadId ||
+            connection?.connection?.threadId ||
+            connection?._client?.threadId ||
+            tid;
+        } catch (e) {}
         try {
           await origRelease(connection);
         } finally {
           _activeConnections = Math.max(0, _activeConnections - 1);
           console.log(
-            `[DB] connection released. Active connections: ${_activeConnections}`,
+            `[DB] connection released. Active connections: ${_activeConnections} threadId=${tid}`,
           );
         }
       };

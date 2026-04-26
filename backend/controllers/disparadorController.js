@@ -728,14 +728,14 @@ async function eventoSSE(req, res) {
     res.setHeader("Connection", "keep-alive");
     if (res.flushHeaders) res.flushHeaders();
 
-    // Heartbeat para manter conexão viva
+    // Heartbeat para manter conexão viva (>=1 minuto)
     const hb = setInterval(() => {
       try {
         res.write(`: heartbeat\n\n`);
       } catch (e) {
         clearInterval(hb);
       }
-    }, 20000);
+    }, 60 * 1000);
 
     adicionarListenerSSE(id, res);
 

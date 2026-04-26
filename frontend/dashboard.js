@@ -7,6 +7,15 @@ console.log("🚀 Dashboard.js carregado - versão debug");
 console.log("📅 Timestamp:", new Date().toISOString());
 console.log("🌐 Location:", window.location.href);
 
+// Global flags to avoid concurrent refreshes and double-init
+let isRefreshing = false;
+let initialized = false;
+
+// Helper delay
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 // Função de debug para detectar IDs duplicados
 function detectarIDsDuplicados() {
   const idsParaVerificar = [
@@ -236,9 +245,11 @@ document.addEventListener("DOMContentLoaded", function () {
   // Inicializar o DashboardApp
   DashboardApp.init();
 
-  // Atualizar dados a cada 30 segundos
+  // Atualizar dados a cada 30 segundos (só se não estiver atualizando)
   setInterval(() => {
-    DashboardApp.refreshAll();
+    if (!isRefreshing) {
+      DashboardApp.refreshAll();
+    }
   }, 30000);
 
   // Garantir que submenus abram por clique (painel lateral) mesmo que a função de persistência não exista
@@ -459,34 +470,129 @@ const DashboardApp = {
   _aniversariantesData: null,
   _currentAniversarianteTab: "pets",
 
+  // Proteção contra execuções concorrentes do refresh
+  _refreshRunning: false,
+
+  // Utilitário: executar funções assíncronas em batches com limite de concorrência
+  // funcs: array de funções que retornam Promise
+  // batchSize: máximo de funções executadas em paralelo por batch
+  // delayMs: tempo (ms) de espera entre batches
+  async _runFunctionsInBatches(funcs, batchSize = 3, delayMs = 300) {
+    if (!Array.isArray(funcs) || funcs.length === 0) return [];
+    const results = [];
+    for (let i = 0; i < funcs.length; i += batchSize) {
+      const batchFuncs = funcs.slice(i, i + batchSize);
+      console.debug(
+        `[requestLimiter] Executando batch ${Math.floor(i / batchSize) + 1} com ${batchFuncs.length} tarefa(s)`,
+      );
+      const promises = batchFuncs.map((f) => {
+        try {
+          return Promise.resolve(f());
+        } catch (e) {
+          return Promise.reject(e);
+        }
+      });
+      const settled = await Promise.allSettled(promises);
+      results.push(...settled);
+      if (i + batchSize < funcs.length && delayMs > 0) {
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
+    }
+    return results;
+  },
+
   async init() {
-    this.refreshAll();
+    if (initialized) return;
+    initialized = true;
+    try {
+      await this.refreshAll();
+    } catch (e) {
+      console.error("[DashboardApp.init] erro:", e);
+    }
   },
 
   async refreshAll() {
-    await Promise.allSettled([
-      this.loadStats(),
-      this.loadIndicadores(),
-      this.loadPeriodicos(),
-      this.loadContasAPagar(),
-      this.loadEstoqueBaixo(),
-      this.loadAniversariantes(),
-      this.loadOportunidades(),
-      this.loadTaxiDog(),
-      this.loadValidade(),
-    ]);
+    // Proteção contra execuções concorrentes global
+    if (isRefreshing) {
+      console.debug(
+        "[DashboardApp] refreshAll já em execução — ignorando chamada concorrente",
+      );
+      return;
+    }
+    isRefreshing = true;
+    try {
+      await this.loadStats();
+      await delay(300);
+
+      await this.loadIndicadores();
+      await delay(300);
+
+      await this.loadPeriodicos();
+      await delay(300);
+
+      await this.loadContasAPagar();
+      await delay(300);
+
+      await this.loadEstoqueBaixo();
+      await delay(300);
+
+      await this.loadAniversariantes();
+      await delay(300);
+
+      await this.loadOportunidades();
+      await delay(300);
+
+      await this.loadTaxiDog();
+      await delay(300);
+
+      await this.loadValidade();
+    } catch (err) {
+      console.error("Erro no refreshAll:", err);
+    } finally {
+      isRefreshing = false;
+    }
   },
 
-  async apiFetch(endpoint) {
-    const res = await fetch(`${this.API_BASE}${endpoint}`, {
-      credentials: "include",
-    });
-    if (res.status === 401) {
-      window.location.href = "/login/login.html";
-      throw new Error(`Não autenticado — redirecionando ao login`);
+  async apiFetch(endpoint, options = {}, retries = 2) {
+    // Monitorar requisições em voo para debug
+    window.__OUTGOING_REQUESTS__ = (window.__OUTGOING_REQUESTS__ || 0) + 1;
+    console.debug(
+      `[apiFetch] start ${endpoint} inFlight=${window.__OUTGOING_REQUESTS__}`,
+    );
+    try {
+      const res = await fetch(`${this.API_BASE}${endpoint}`, {
+        credentials: "include",
+        ...options,
+      });
+
+      if (res.status === 429 && retries > 0) {
+        console.warn("429 recebido, tentando novamente...");
+        await delay(1000);
+        return this.apiFetch(endpoint, options, retries - 1);
+      }
+
+      if (res.status === 401) {
+        window.location.href = "/login/login.html";
+        throw new Error(`Não autenticado — redirecionando ao login`);
+      }
+
+      if (!res.ok) {
+        throw new Error(`API ${endpoint}: ${res.status}`);
+      }
+
+      return await res.json();
+    } catch (err) {
+      console.error("Erro no apiFetch:", err);
+      throw err;
+    } finally {
+      window.__OUTGOING_REQUESTS__ = Math.max(
+        0,
+        (window.__OUTGOING_REQUESTS__ || 1) - 1,
+      );
+      console.debug(
+        `[apiFetch] end ${endpoint} inFlight=${window.__OUTGOING_REQUESTS__}`,
+      );
     }
-    if (!res.ok) throw new Error(`API ${endpoint}: ${res.status}`);
-    return res.json();
   },
 
   dateStr() {
@@ -519,43 +625,19 @@ const DashboardApp = {
   // === STATS CARDS ===
   async loadStats() {
     try {
-      const [agendamentos, vendasHoje, ticketMedio, clientes] =
-        await Promise.allSettled([
-          this.apiFetch(`/agendamentos?data=${this.dateStr()}`),
-          this.apiFetch("/dashboard/vendas-hoje"),
-          this.apiFetch("/dashboard/ticket-medio"),
-          this.apiFetch("/clientes"),
-        ]);
-
-      const agCount =
-        agendamentos.status === "fulfilled" && Array.isArray(agendamentos.value)
-          ? agendamentos.value.length
-          : 0;
+      // Usar endpoint consolidado para reduzir número de requests
+      const data = await this.apiFetch("/dashboard/resumo");
       const elAg = document.getElementById("statAgendamentos");
-      if (elAg) elAg.textContent = agCount;
+      if (elAg) elAg.textContent = data.agendamentosHoje || 0;
 
-      const vCount =
-        vendasHoje.status === "fulfilled" ? vendasHoje.value.count || 0 : 0;
       const elV = document.getElementById("statVendas");
-      if (elV) elV.textContent = vCount;
+      if (elV) elV.textContent = data.vendasHoje || 0;
 
-      const ticket =
-        ticketMedio.status === "fulfilled"
-          ? ticketMedio.value.ticketMedio || 0
-          : 0;
       const elT = document.getElementById("statTicket");
-      if (elT) elT.textContent = this.formatCurrency(ticket);
+      if (elT) elT.textContent = this.formatCurrency(data.ticketMedio || 0);
 
-      if (clientes.status === "fulfilled") {
-        const lista = clientes.value.clientes || clientes.value || [];
-        const agora = new Date();
-        const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1);
-        const count = Array.isArray(lista)
-          ? lista.filter((c) => new Date(c.createdAt) >= inicioMes).length
-          : 0;
-        const elC = document.getElementById("statClientes");
-        if (elC) elC.textContent = count;
-      }
+      const elC = document.getElementById("statClientes");
+      if (elC) elC.textContent = data.clientesMes || data.clientes || 0;
     } catch (err) {
       console.error("Erro ao carregar stats:", err);
     }

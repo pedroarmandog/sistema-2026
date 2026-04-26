@@ -13,8 +13,13 @@ const {
   verificarLimiteAcessos,
 } = require("../controllers/acessosController");
 
-// Rota de login (throttle para reduzir tentativas múltiplas que geram queries)
-router.post("/login", rateLimit(3000), usuarioController.login);
+// Rota de login (limite por minuto, aplicada somente no login)
+// Ajuste: windowMs=60000 (1 minuto), max=150 pedidos por minuto (configurável)
+router.post(
+  "/login",
+  rateLimit({ windowMs: 60000, max: 150 }),
+  usuarioController.login,
+);
 
 // Rota para verificar se a sessão ainda está ativa (polling do frontend)
 // Importante: NÃO recriar sessões aqui — sessões devem ser criadas apenas no login.

@@ -12,12 +12,16 @@
 
 const cron = require("node-cron");
 const whatsappService = require("./whatsappService");
+const executionLock = require("./executionLock");
 
 const MAX_TENTATIVAS = 3;
 let cronJob = null;
 let processando = false;
 const BATCH_SIZE = 10; // buscar 10 mensagens por vez
 let queueBuffer = [];
+let lastRunAt = 0;
+// Mínimo de 1 minuto entre execuções para evitar excesso de queries
+const MIN_INTERVAL_MS = 60 * 1000; // mínimo 60s entre ciclos
 
 /**
  * Inicia o agendador de mensagens.
@@ -29,25 +33,37 @@ function iniciarAgendador() {
     return;
   }
 
-  // Executa a cada minuto
-  cronJob = cron.schedule("* * * * *", async () => {
+  // Executa a cada 5 minutos
+  cronJob = cron.schedule("*/5 * * * *", async () => {
     if (processando) {
       console.log("[Queue] Ciclo anterior ainda em andamento, pulando...");
       return;
     }
 
-    processando = true;
-    try {
-      await processarFila();
-    } catch (err) {
-      console.error("[Queue] Erro no ciclo de processamento:", err.message);
-    } finally {
-      processando = false;
+    // Use o lock global para evitar sobreposição com backups/crons
+    const res = await executionLock.withLock(
+      "whatsappQueue",
+      async () => {
+        processando = true;
+        try {
+          await processarFila();
+        } finally {
+          processando = false;
+        }
+      },
+      { minIntervalMs: MIN_INTERVAL_MS },
+    );
+
+    if (res && res.skipped) {
+      console.log(`[Queue] Ciclo ignorado: ${res.reason}`);
+      return;
     }
+
+    lastRunAt = Date.now();
   });
 
   console.log(
-    "✅ [Queue] Agendador de mensagens WhatsApp iniciado (executa a cada minuto)",
+    "✅ [Queue] Agendador de mensagens WhatsApp iniciado (executa a cada 5 minutos)",
   );
 }
 
@@ -59,22 +75,38 @@ async function processarFila() {
   const { Op } = require("sequelize");
 
   const agora = new Date();
+  // contador estimado de queries desta execução
+  const queriesThisRun = { count: 0 };
+  // Se já houver muitas queries no último minuto, pular execução para evitar sobrecarga
+  try {
+    if (global.__DB_METRICS__ && global.__DB_METRICS__.qCount > 20) {
+      console.warn(
+        `[Queue] Execução pulada: alta taxa de queries no último minuto (${global.__DB_METRICS__.qCount}).`,
+      );
+      return;
+    }
+  } catch (_) {}
 
   // Recuperar envios presos em "enviando" há mais de 5 minutos
   const cincoMinAtras = new Date(agora.getTime() - 5 * 60 * 1000);
-  await EnvioAgendado.update(
-    { status: "pendente" },
-    {
-      where: {
-        status: "enviando",
-        updatedAt: { [Op.lt]: cincoMinAtras },
+  // recuperar envios que ficaram presos (1 query)
+  try {
+    queriesThisRun.count++;
+    await EnvioAgendado.update(
+      { status: "pendente" },
+      {
+        where: {
+          status: "enviando",
+          updatedAt: { [Op.lt]: cincoMinAtras },
+        },
       },
-    },
-  ).catch(() => {});
+    );
+  } catch (_) {}
 
   // Buscar em lote apenas quando o buffer estiver vazio
   let pendentes = [];
   if (queueBuffer.length === 0) {
+    queriesThisRun.count++;
     const fetched = await EnvioAgendado.findAll({
       where: {
         status: "pendente",
@@ -84,7 +116,13 @@ async function processarFila() {
       order: [["dataAgendada", "ASC"]],
       limit: BATCH_SIZE,
     });
-    if (!fetched || fetched.length === 0) return;
+    if (!fetched || fetched.length === 0) {
+      console.log("[Queue] Nenhum envio pendente encontrado.");
+      console.log(
+        `[Queue] Queries estimadas nesta execução: ${queriesThisRun.count}`,
+      );
+      return;
+    }
     queueBuffer = fetched;
   }
 
@@ -106,10 +144,14 @@ async function processarFila() {
     console.log(
       `[Queue] Iniciando processamento do envio #${envio.id} (empresa ${empId})`,
     );
-    await processarEnvio(envio, LogEnvio);
+    await processarEnvio(envio, LogEnvio, queriesThisRun);
     // Delay mínimo entre envios para evitar bursts
     await new Promise((r) => setTimeout(r, 2000));
   }
+
+  console.log(
+    `[Queue] Processado lote de ${pendentes.length} envio(s). Queries estimadas nesta execução: ${queriesThisRun.count}`,
+  );
 }
 
 /**
@@ -168,7 +210,7 @@ async function tentarReconectar(empresaId) {
 /**
  * Processa um único envio da fila.
  */
-async function processarEnvio(envio, LogEnvio) {
+async function processarEnvio(envio, LogEnvio, queriesCounter = { count: 0 }) {
   const empresaId = String(envio.empresaId || 1);
 
   if (!whatsappService.isConectado(empresaId)) {
@@ -177,20 +219,29 @@ async function processarEnvio(envio, LogEnvio) {
   }
 
   // Marcar como "enviando" para evitar processamento duplicado
-  await envio.update({ status: "enviando", tentativas: envio.tentativas + 1 });
+  try {
+    queriesCounter.count++;
+    await envio.update({
+      status: "enviando",
+      tentativas: envio.tentativas + 1,
+    });
+  } catch (_) {}
 
   try {
     // Registrar log de início (não-crítico)
-    await LogEnvio.create({
-      empresaId: envio.empresaId,
-      envioAgendadoId: envio.id,
-      evento: "envio_iniciado",
-      detalhes: {
-        telefone: envio.telefoneDestino,
-        tentativa: envio.tentativas,
-      },
-      mensagem: `Iniciando envio #${envio.id} para ${envio.telefoneDestino}`,
-    }).catch(() => {});
+    try {
+      queriesCounter.count++;
+      await LogEnvio.create({
+        empresaId: envio.empresaId,
+        envioAgendadoId: envio.id,
+        evento: "envio_iniciado",
+        detalhes: {
+          telefone: envio.telefoneDestino,
+          tentativa: envio.tentativas,
+        },
+        mensagem: `Iniciando envio #${envio.id} para ${envio.telefoneDestino}`,
+      }).catch(() => {});
+    } catch (_) {}
 
     // Enviar mensagem
     const resultado = await whatsappService.enviarMensagem(
@@ -201,15 +252,21 @@ async function processarEnvio(envio, LogEnvio) {
     );
 
     if (resultado.sucesso) {
-      await envio.update({ status: "enviado", dataEnvio: new Date() });
+      try {
+        queriesCounter.count++;
+        await envio.update({ status: "enviado", dataEnvio: new Date() });
+      } catch (_) {}
 
-      await LogEnvio.create({
-        empresaId: envio.empresaId,
-        envioAgendadoId: envio.id,
-        evento: "envio_sucesso",
-        detalhes: { telefone: envio.telefoneDestino },
-        mensagem: `Mensagem enviada com sucesso para ${envio.telefoneDestino}`,
-      }).catch(() => {});
+      try {
+        queriesCounter.count++;
+        await LogEnvio.create({
+          empresaId: envio.empresaId,
+          envioAgendadoId: envio.id,
+          evento: "envio_sucesso",
+          detalhes: { telefone: envio.telefoneDestino },
+          mensagem: `Mensagem enviada com sucesso para ${envio.telefoneDestino}`,
+        }).catch(() => {});
+      } catch (_) {}
 
       console.log(
         `[Queue] ✅ Envio #${envio.id} enviado para ${envio.telefoneDestino}`,
@@ -218,19 +275,24 @@ async function processarEnvio(envio, LogEnvio) {
       // Verificar se deve cancelar (máximo de tentativas)
       const novoStatus =
         envio.tentativas >= MAX_TENTATIVAS ? "erro" : "pendente";
+      try {
+        queriesCounter.count++;
+        await envio.update({
+          status: novoStatus,
+          erroMensagem: resultado.erro,
+        });
+      } catch (_) {}
 
-      await envio.update({
-        status: novoStatus,
-        erroMensagem: resultado.erro,
-      });
-
-      await LogEnvio.create({
-        empresaId: envio.empresaId,
-        envioAgendadoId: envio.id,
-        evento: "envio_erro",
-        detalhes: { telefone: envio.telefoneDestino, erro: resultado.erro },
-        mensagem: `Falha no envio #${envio.id}: ${resultado.erro}`,
-      }).catch(() => {});
+      try {
+        queriesCounter.count++;
+        await LogEnvio.create({
+          empresaId: envio.empresaId,
+          envioAgendadoId: envio.id,
+          evento: "envio_erro",
+          detalhes: { telefone: envio.telefoneDestino, erro: resultado.erro },
+          mensagem: `Falha no envio #${envio.id}: ${resultado.erro}`,
+        }).catch(() => {});
+      } catch (_) {}
 
       console.error(
         `[Queue] ❌ Falha no envio #${envio.id}: ${resultado.erro}`,
@@ -238,15 +300,21 @@ async function processarEnvio(envio, LogEnvio) {
     }
   } catch (err) {
     const novoStatus = envio.tentativas >= MAX_TENTATIVAS ? "erro" : "pendente";
-    await envio.update({ status: novoStatus, erroMensagem: err.message });
+    try {
+      queriesCounter.count++;
+      await envio.update({ status: novoStatus, erroMensagem: err.message });
+    } catch (_) {}
 
-    await LogEnvio.create({
-      empresaId: envio.empresaId,
-      envioAgendadoId: envio.id,
-      evento: "envio_erro",
-      detalhes: { erro: err.message },
-      mensagem: `Exceção no envio #${envio.id}: ${err.message}`,
-    }).catch(() => {});
+    try {
+      queriesCounter.count++;
+      await LogEnvio.create({
+        empresaId: envio.empresaId,
+        envioAgendadoId: envio.id,
+        evento: "envio_erro",
+        detalhes: { erro: err.message },
+        mensagem: `Exceção no envio #${envio.id}: ${err.message}`,
+      }).catch(() => {});
+    } catch (_) {}
 
     console.error(`[Queue] Exceção no envio #${envio.id}:`, err.message);
   }
@@ -340,12 +408,22 @@ async function agendarEnvio(params) {
       `[Queue] Envio #${envio.id} agendado para ${params.telefone} em ${params.dataAgendada}`,
     );
 
-    // Tentar processar imediatamente (sem esperar próximo ciclo da fila)
+    // Tentar processar imediatamente (respeitando o lock global)
     if (envio.dataAgendada <= new Date()) {
       setImmediate(async () => {
         try {
-          const { LogEnvio } = require("../models");
-          await processarEnvio(envio, LogEnvio);
+          const res = await executionLock.withLock(
+            "whatsappQueue",
+            async () => {
+              await processarFila();
+            },
+            { minIntervalMs: MIN_INTERVAL_MS },
+          );
+          if (res && res.skipped) {
+            console.log(
+              `[Queue] Agendamento imediato ignorado (lock/interval): ${res.reason}`,
+            );
+          }
         } catch (e) {
           console.warn(
             `[Queue] Falha no disparo imediato #${envio.id}:`,

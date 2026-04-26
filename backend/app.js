@@ -93,6 +93,8 @@ const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const { authUser } = require("./middleware/authUser");
 const app = express();
+// AsyncLocalStorage request context (used by DB logger)
+const requestContext = require("./services/requestContext");
 
 const path = require("path");
 
@@ -124,6 +126,21 @@ app.use(bodyParser.urlencoded({ limit: "10mb", extended: true }));
 app.use(cookieParser());
 app.use("/uploads", express.static(path.join(__dirname, "../uploads"))); // imagens públicas
 app.use("/logos", express.static(path.join(__dirname, "../logos"))); // logos SVG do sistema
+
+// Global API rate limiter (proteger contra flood de requisições do frontend)
+try {
+  const rateLimit = require("./middleware/rateLimit");
+  app.use(
+    "/api/",
+    rateLimit({ windowMs: 60 * 1000, max: 60 }), // 60 requests per minute per IP/user
+  );
+  console.log("✅ Rate limiter global aplicado em /api/ (60req/min)");
+} catch (e) {
+  console.warn(
+    "⚠️ Não foi possível aplicar rate limiter global:",
+    e && e.message,
+  );
+}
 
 // Rota para favicon.ico (browsers buscam este path automaticamente)
 app.get("/favicon.ico", (req, res) => {
@@ -174,6 +191,21 @@ app.use(
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
   next();
+});
+
+// Middleware: criar contexto por requisição para instrumentação de queries
+app.use((req, res, next) => {
+  try {
+    const id = `${Date.now().toString(36)}-${Math.random()
+      .toString(36)
+      .slice(2, 8)}`;
+    requestContext.run(
+      { requestId: id, path: req.originalUrl, method: req.method },
+      () => next(),
+    );
+  } catch (e) {
+    next();
+  }
 });
 
 // Rotas
@@ -1190,8 +1222,34 @@ async function syncAllTables() {
   }
 }
 
-// Executar sync e SÓ DEPOIS iniciar o servidor
-syncAllTables().then(() => startServer());
+// Executar sync somente quando explicitamente habilitado via env `AUTO_SYNC=1`.
+// Por padrão, NÃO rodar sync automático para evitar queries massivas na inicialização.
+const shouldAutoSync =
+  process.env.NODE_ENV !== "production" && process.env.AUTO_SYNC === "1";
+
+if (shouldAutoSync) {
+  console.log(
+    "🔁 AUTO_SYNC=1 — executando syncAllTables antes de iniciar o servidor",
+  );
+  syncAllTables()
+    .then(() => startServer())
+    .catch((err) => {
+      console.error("❌ syncAllTables falhou:", err && err.message);
+      // iniciar servidor mesmo em caso de falha de sync para não bloquear dev
+      startServer();
+    });
+} else {
+  if (process.env.NODE_ENV === "production") {
+    console.log(
+      "⚠️ NODE_ENV=production — sincronização automática desabilitada. Iniciando servidor sem sync.",
+    );
+  } else {
+    console.log(
+      "⚠️ Auto-sync desabilitado (defina AUTO_SYNC=1 para habilitar). Iniciando servidor sem sync.",
+    );
+  }
+  startServer();
+}
 
 // Endpoints para selecionar/obter impressora
 app.get("/api/impressora", async (req, res) => {
@@ -1346,19 +1404,25 @@ function startServer() {
       );
     }
 
-    // Cron: verificação de vencimentos do painel admin (todo dia às 00:30)
+    // Cron: verificação de vencimentos do painel admin (mover para 09:00)
     try {
       const cron = require("node-cron");
       const {
         verificarVencimentos,
       } = require("./controllers/empresaPainelController");
-      cron.schedule("30 0 * * *", () => {
-        console.log("[cron] Executando verificação de vencimentos...");
-        verificarVencimentos();
+      cron.schedule("0 9 * * *", async () => {
+        const executionLock = require("./services/executionLock");
+        const res = await executionLock.withLock(
+          "verificarVencimentos",
+          async () => {
+            console.log("[cron] Executando verificação de vencimentos...");
+            await verificarVencimentos();
+          },
+        );
+        if (res && res.skipped)
+          console.log(`[cron] verificarVencimentos ignorado: ${res.reason}`);
       });
-      // Executar verificação ao iniciar também
-      verificarVencimentos();
-      console.log("✅ Cron de verificação de vencimentos iniciado");
+      console.log("✅ Cron de verificação de vencimentos agendado (09:00)");
     } catch (err) {
       console.warn(
         "⚠️ Não foi possível iniciar cron de vencimentos:",
@@ -1369,23 +1433,18 @@ function startServer() {
     // Cron: backup automático diário de todas as empresas (todo dia às 00:00)
     try {
       const cron = require("node-cron");
-      const {
-        executarBackupGeral,
-        verificarEExecutarBackupSeNecessario,
-      } = require("./services/backupService");
-
-      // Verificar na inicialização se o backup de hoje já foi feito
-      verificarEExecutarBackupSeNecessario();
+      const { executarBackupGeral } = require("./services/backupService");
 
       cron.schedule("0 0 * * *", async () => {
-        console.log("[cron] Executando backup diário automático...");
+        console.log("[cron] Executando backup diário automático (limitado)...");
         try {
-          await executarBackupGeral();
+          // Processar um número limitado de empresas por execução para evitar picos
+          await executarBackupGeral({ maxPerRun: 1, delayBetweenMs: 1000 });
         } catch (err) {
           console.error("[cron] Erro no backup diário:", err && err.message);
         }
       });
-      console.log("✅ Cron de backup diário iniciado (00:00)");
+      console.log("✅ Cron de backup diário iniciado (00:00, limitado)");
     } catch (err) {
       console.warn("⚠️ Não foi possível iniciar cron de backup:", err.message);
     }
@@ -1395,6 +1454,18 @@ function startServer() {
     // ═══════════════════════════════════════════════════════════════
     async function processarAniversariantes() {
       console.log("[cron] Processando aniversariantes (multi-dia)...");
+      // snapshot de métricas DB antes da execução (para contar queries desta execução)
+      let _beforeDbQ = null;
+      if (global.__DB_METRICS__) _beforeDbQ = global.__DB_METRICS__.qCount || 0;
+      // se já houver alta taxa de queries, pular o job para proteger o DB
+      try {
+        if (global.__DB_METRICS__ && global.__DB_METRICS__.qCount > 20) {
+          console.warn(
+            `[cron] processarAniversariantes pulado: alta taxa de queries no último minuto (${global.__DB_METRICS__.qCount})`,
+          );
+          return;
+        }
+      } catch (_) {}
       try {
         const { Pet, Cliente, MensagemAutomatica } = require("./models");
         const { Op } = require("sequelize");
@@ -1542,6 +1613,14 @@ function startServer() {
         }
 
         console.log("[cron] Processamento de aniversariantes concluído.");
+        try {
+          if (global.__DB_METRICS__ && _beforeDbQ !== null) {
+            const _after = global.__DB_METRICS__.qCount || 0;
+            console.log(
+              `[cron] processarAniversariantes - queries nesta execução: ${_after - _beforeDbQ}`,
+            );
+          }
+        } catch (_) {}
       } catch (err) {
         console.error("[cron] Erro ao processar aniversariantes:", err.message);
       }
@@ -1554,6 +1633,18 @@ function startServer() {
       console.log(
         "[cron] Processando vacinas/vermifugos/antiparasitários vencendo (multi-dia)...",
       );
+      // snapshot de métricas DB antes da execução (para contar queries desta execução)
+      let _beforeDbQ = null;
+      if (global.__DB_METRICS__) _beforeDbQ = global.__DB_METRICS__.qCount || 0;
+      // se já houver alta taxa de queries, pular o job para proteger o DB
+      try {
+        if (global.__DB_METRICS__ && global.__DB_METRICS__.qCount > 20) {
+          console.warn(
+            `[cron] processarVencimentos pulado: alta taxa de queries no último minuto (${global.__DB_METRICS__.qCount})`,
+          );
+          return;
+        }
+      } catch (_) {}
       try {
         const {
           MensagemAutomatica,
@@ -1717,6 +1808,14 @@ function startServer() {
         console.log(
           `[cron] Vencimentos processados: ${notificados} notificação(ões).`,
         );
+        try {
+          if (global.__DB_METRICS__ && _beforeDbQ !== null) {
+            const _after = global.__DB_METRICS__.qCount || 0;
+            console.log(
+              `[cron] processarVencimentos - queries nesta execução: ${_after - _beforeDbQ}`,
+            );
+          }
+        } catch (_) {}
       } catch (err) {
         console.error("[cron] Erro ao processar vencimentos:", err.message);
       }
@@ -1725,7 +1824,17 @@ function startServer() {
     // Cron: mensagens de aniversário (pets e tutores) — todo dia às 08:00
     try {
       const cron = require("node-cron");
-      cron.schedule("0 8 * * *", processarAniversariantes);
+      cron.schedule("0 8 * * *", async () => {
+        const executionLock = require("./services/executionLock");
+        const res = await executionLock.withLock(
+          "aniversariantes",
+          async () => {
+            await processarAniversariantes();
+          },
+        );
+        if (res && res.skipped)
+          console.log(`[cron] aniversariantes ignorado: ${res.reason}`);
+      });
       console.log(
         "✅ Cron de mensagens de aniversário iniciado (08:00 diário)",
       );
@@ -1739,7 +1848,17 @@ function startServer() {
     // Cron: vacinas/vermifugos/antiparasitários vencendo — todo dia às 09:00
     try {
       const cron = require("node-cron");
-      cron.schedule("0 9 * * *", processarVencimentos);
+      cron.schedule("0 9 * * *", async () => {
+        const executionLock = require("./services/executionLock");
+        const res = await executionLock.withLock(
+          "processarVencimentos",
+          async () => {
+            await processarVencimentos();
+          },
+        );
+        if (res && res.skipped)
+          console.log(`[cron] processarVencimentos ignorado: ${res.reason}`);
+      });
       console.log(
         "✅ Cron de vencimentos (vacinas/vermifugos/antiparasitários) iniciado (09:00 diário)",
       );
@@ -1750,58 +1869,40 @@ function startServer() {
       );
     }
 
-    // Reconectar automaticamente sessões WhatsApp que estavam ativas
-    // (usa arquivos de sessão salvos em disco — sem precisar de novo QR)
-    setTimeout(async () => {
-      try {
-        const {
-          reconectarSessoesAtivas,
-        } = require("./services/whatsappService");
-        await reconectarSessoesAtivas();
-      } catch (err) {
-        console.warn("⚠️ Erro ao reconectar sessões WhatsApp:", err.message);
-      }
-    }, 3000); // aguarda 3s para o DB estar pronto
+    // Not reconecting WhatsApp sessions at startup anymore to avoid heavy startup work
 
-    // Garantir template atualizado do vacinas_vencendo (sem alterar ativo de outras empresas)
-    setTimeout(async () => {
-      try {
-        const { MensagemAutomatica } = require("./models");
-        // Apenas atualizar o template do vacinas_vencendo para manter sincronizado
-        await MensagemAutomatica.update(
-          {
-            conteudo:
-              "💉 Oi {nome_tutor}!\n\nPassando para avisar que a {produto} de {nome_pet} vence hoje!\n\nNão esqueça de agendar na {nome_empresa} para manter {nome_pet} protegido(a). 🐾\n\nEntre em contato! 😊",
-            configuracaoEnvio: { tipo: "no_dia", hora: "09:00" },
-            descricaoMarketing:
-              "Mantenha os clientes informados sobre vacinas/vermífugos/antiparasitários vencendo para garantir visitas regulares.",
-          },
-          { where: { tipo: "vacinas_vencendo" } },
-        );
-      } catch (err) {
-        console.warn("⚠️ Erro ao ajustar mensagens automáticas:", err.message);
-      }
-    }, 5000);
+    // Atualização opcional de template do vacinas_vencendo no startup.
+    // Para evitar UPDATE automático no startup (conta como query), só executar se
+    // a variável de ambiente `RUN_STARTUP_MESSAGE_UPDATE=1` estiver definida.
+    if (process.env.RUN_STARTUP_MESSAGE_UPDATE === "1") {
+      setTimeout(async () => {
+        try {
+          const { MensagemAutomatica } = require("./models");
+          // Apenas atualizar o template do vacinas_vencendo para manter sincronizado
+          await MensagemAutomatica.update(
+            {
+              conteudo:
+                "💉 Oi {nome_tutor}!\n\nPassando para avisar que a {produto} de {nome_pet} vence hoje!\n\nNão esqueça de agendar na {nome_empresa} para manter {nome_pet} protegido(a). 🐾\n\nEntre em contato! 😊",
+              configuracaoEnvio: { tipo: "no_dia", hora: "09:00" },
+              descricaoMarketing:
+                "Mantenha os clientes informados sobre vacinas/vermífugos/antiparasitários vencendo para garantir visitas regulares.",
+            },
+            { where: { tipo: "vacinas_vencendo" } },
+          );
+        } catch (err) {
+          console.warn(
+            "⚠️ Erro ao ajustar mensagens automáticas:",
+            err.message,
+          );
+        }
+      }, 5000);
+    } else {
+      console.log(
+        "⚠️ Atualização de templates no startup desabilitada (defina RUN_STARTUP_MESSAGE_UPDATE=1 para habilitar)",
+      );
+    }
 
-    // Executar aniversariantes + vencimentos no startup (caso horário do cron já tenha passado)
-    // Aguarda 90s para dar tempo do WhatsApp headless reconectar
-    setTimeout(async () => {
-      try {
-        console.log(
-          "[startup] Verificando mensagens automáticas pendentes (aniversários + vencimentos)...",
-        );
-        await processarAniversariantes();
-        await processarVencimentos();
-        console.log(
-          "[startup] Verificação de mensagens automáticas concluída.",
-        );
-      } catch (err) {
-        console.warn(
-          "⚠️ Erro ao processar mensagens automáticas no startup:",
-          err.message,
-        );
-      }
-    }, 30000); // aguarda WhatsApp headless reconectar antes de processar
+    // Não executar processamento de aniversariantes/vencimentos no startup
 
     const address = server.address();
     if (address) {

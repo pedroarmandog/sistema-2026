@@ -241,7 +241,7 @@ exports.eventoSSE = (req, res) => {
     } catch (_) {
       clearInterval(heartbeat);
     }
-  }, 30000);
+  }, 60 * 1000);
 
   req.on("close", () => clearInterval(heartbeat));
 };

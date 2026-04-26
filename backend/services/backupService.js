@@ -8,6 +8,7 @@ const {
   sequelize,
 } = require("../models");
 const { Op } = require("sequelize");
+const executionLock = require("./executionLock");
 
 const BACKUP_DIR = path.join(__dirname, "../../backups");
 const MAX_BACKUP_DIAS = 7;
@@ -240,33 +241,75 @@ async function limparBackupsAntigos(empresaPainelId) {
 /**
  * Executa backup de TODAS as empresas (chamado pelo cron)
  */
-async function executarBackupGeral() {
-  console.log("[backup] ═══ Iniciando backup diário de todas as empresas ═══");
-  const empresas = await EmpresaPainel.findAll({
-    attributes: ["id", "nome_fantasia"],
-    limit: 10000,
-  });
-  let sucesso = 0;
-  let erros = 0;
+async function executarBackupGeral(opts = {}) {
+  const { maxPerRun = 1, delayBetweenMs = 0 } = opts || {};
 
-  for (const emp of empresas) {
-    try {
-      await realizarBackupEmpresa(emp.id);
-      await limparBackupsAntigos(emp.id);
-      sucesso++;
-    } catch (err) {
-      erros++;
-      console.error(
-        `[backup] ❌ Erro no backup de ${emp.nome_fantasia}:`,
-        err && err.message,
+  return executionLock.withLock("backup", async () => {
+    console.log("[backup] ═══ Iniciando backup diário (limitado) ═══");
+
+    const empresas = await EmpresaPainel.findAll({
+      attributes: ["id", "nome_fantasia"],
+      limit: 10000,
+    });
+
+    // Data de referência = ontem
+    const ontem = new Date();
+    ontem.setDate(ontem.getDate() - 1);
+    const dataRef = ontem.toISOString().split("T")[0];
+
+    // Encontrar empresas que já têm backup para a dataRef
+    const backupsHoje = await BackupEmpresa.findAll({
+      where: { data_referencia: dataRef, status: "COMPLETO" },
+      attributes: ["empresa_painel_id"],
+    });
+    const backedIds = new Set(
+      backupsHoje.map((b) => String(b.empresa_painel_id)),
+    );
+
+    const empresasParaProcessar = empresas.filter(
+      (e) => !backedIds.has(String(e.id)),
+    );
+
+    if (empresasParaProcessar.length === 0) {
+      console.log(
+        `[backup] ✅ Todos os backups já estão feitos para ${dataRef}`,
       );
+      return { sucesso: 0, erros: 0, total: empresas.length, processed: 0 };
     }
-  }
 
-  console.log(
-    `[backup] ═══ Backup diário concluído: ${sucesso} OK, ${erros} erros ═══`,
-  );
-  return { sucesso, erros, total: empresas.length };
+    const toProcess = empresasParaProcessar.slice(0, maxPerRun);
+
+    let sucesso = 0;
+    let erros = 0;
+
+    for (const emp of toProcess) {
+      try {
+        await realizarBackupEmpresa(emp.id);
+        await limparBackupsAntigos(emp.id);
+        sucesso++;
+      } catch (err) {
+        erros++;
+        console.error(
+          `[backup] ❌ Erro no backup de ${emp.nome_fantasia}:`,
+          err && err.message,
+        );
+      }
+
+      if (delayBetweenMs)
+        await new Promise((r) => setTimeout(r, delayBetweenMs));
+    }
+
+    console.log(
+      `[backup] ═══ Backup diário (limitado) concluído: ${sucesso} OK, ${erros} erros — processed ${toProcess.length} of ${empresas.length} ═══`,
+    );
+
+    return {
+      sucesso,
+      erros,
+      total: empresas.length,
+      processed: toProcess.length,
+    };
+  });
 }
 
 /**
@@ -540,9 +583,9 @@ async function verificarEExecutarBackupSeNecessario() {
 
     if (backupsHoje < empresas.length) {
       console.log(
-        `[backup] ⚡ Backup de hoje (${hoje}) incompleto: ${backupsHoje}/${empresas.length} empresas. Executando agora...`,
+        `[backup] ⚡ Backup de hoje (${hoje}) incompleto: ${backupsHoje}/${empresas.length} empresas. Executando agora (limitado)...`,
       );
-      await executarBackupGeral();
+      await executarBackupGeral({ maxPerRun: 1, delayBetweenMs: 1000 });
     } else {
       console.log(
         `[backup] ✅ Backup de hoje (${hoje}) já completo (${backupsHoje}/${empresas.length} empresas).`,
