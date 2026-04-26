@@ -1,0 +1,64 @@
+{
+  "meta": {
+    "empresa_painel_id": 3,
+    "empresa_sistema_id": 3,
+    "data_referencia": "2026-04-25",
+    "criado_em": "2026-04-26T00:48:54.042Z",
+    "nome_empresa": "PET TOSA"
+  },
+  "empresa_painel": {
+    "id": 3,
+    "razao_social": "PETTOSA LTDA",
+    "nome_fantasia": "PET TOSA",
+    "cnpj": "34234322344324",
+    "cep": "",
+    "endereco": "",
+    "email": "pettosa@gmail.com",
+    "telefone": "(22) 34224-2423",
+    "foto": null,
+    "logo": null,
+    "data_adesao": "2026-04-26",
+    "status": "ATIVO",
+    "valor_mensalidade": "99.90",
+    "data_vencimento": "2026-05-26",
+    "intervalo_dias": 30,
+    "proxima_cobranca": "2026-05-26",
+    "limite_acessos": 3,
+    "createdAt": "2026-04-26T00:45:22.000Z",
+    "updatedAt": "2026-04-26T00:45:22.000Z"
+  },
+  "empresa_sistema": {
+    "id": 3,
+    "nome": "PET TOSA",
+    "razaoSocial": "PETTOSA LTDA",
+    "cnpj": "34234322344324",
+    "telefone": "(22) 34224-2423",
+    "email": "pettosa@gmail.com",
+    "endereco": null,
+    "logo": null,
+    "ultimaChavePix": null,
+    "ativa": true,
+    "createdAt": "2026-04-26T00:45:22.000Z",
+    "updatedAt": "2026-04-26T00:45:22.000Z"
+  },
+  "usuarios": [
+    {
+      "id": 4,
+      "nome": "Henrique",
+      "usuario": "henrique@pettosa",
+      "senha": "$2b$10$1JcsIEIfGclPzBSn6y63BecFyPZ5pLtC7HaEgVEbEjA8lPRZH9Sc6",
+      "grupoUsuario": "Usuario",
+      "profissionalId": null,
+      "ativo": 1,
+      "setorPadraoId": null,
+      "setorPadraoNome": null,
+      "acessoValor": null,
+      "permissoes": "[]",
+      "empresas": "[3]",
+      "createdAt": "2026-04-26T00:45:22.000Z",
+      "updatedAt": "2026-04-26T00:45:22.000Z",
+      "empresa_id": null
+    }
+  ],
+  "tabelas": {}
+}
