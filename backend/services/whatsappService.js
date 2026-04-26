@@ -593,6 +593,36 @@ async function inicializarCliente(empresaId, opts = {}) {
     `[WhatsApp][${chave}] Usando Chrome executável: ${puppeteerOptions.executablePath || "(nenhum)"} (fonte: ${selectedFrom || "(nenhum)"})`,
   );
 
+  // Ajustar puppeteerOptions com o executável detectado (se houver) e
+  // sincronizar headless/args com as variáveis calculadas acima.
+  try {
+    if (executablePath) {
+      puppeteerOptions.executablePath = executablePath;
+    } else {
+      // Remover override hard-coded quando não houver executável válido
+      if (puppeteerOptions && puppeteerOptions.executablePath) {
+        delete puppeteerOptions.executablePath;
+      }
+    }
+
+    // Ajustar headless conforme variável calculada
+    puppeteerOptions.headless = headless ? "new" : false;
+
+    // Garantir que os args mínimos estejam presentes e adicionar extras quando headful
+    puppeteerOptions.args = Array.isArray(puppeteerOptions.args)
+      ? Array.from(new Set([...baseArgs, ...puppeteerOptions.args]))
+      : baseArgs.slice();
+    if (!headless) {
+      puppeteerOptions.args = Array.from(
+        new Set([...puppeteerOptions.args, ...headfulExtraArgs]),
+      );
+    }
+  } catch (e) {
+    console.warn(
+      `[WhatsApp][${chave}] Falha ao ajustar puppeteerOptions detectado: ${e && e.message}`,
+    );
+  }
+
   // Requerir whatsapp-web.js APÓS garantir CHROME_PATH/executablePath
   try {
     if (executablePath) {

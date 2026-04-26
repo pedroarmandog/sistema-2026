@@ -661,6 +661,12 @@ const DashboardApp = {
   // === PERIÓDICOS ===
   async loadPeriodicos() {
     const el = document.getElementById("periodicosContent");
+    if (!el) {
+      console.warn(
+        "[DashboardApp] loadPeriodicos: elemento #periodicosContent não encontrado, pulando carregamento.",
+      );
+      return;
+    }
     try {
       const data = await this.apiFetch("/dashboard/periodicos");
       if (!data || data.length === 0) {
@@ -684,7 +690,9 @@ const DashboardApp = {
         )
         .join("");
     } catch (err) {
-      el.innerHTML = this.errorHTML("Erro ao carregar periódicos");
+      try {
+        el.innerHTML = this.errorHTML("Erro ao carregar periódicos");
+      } catch (e) {}
       console.error("Erro periódicos:", err);
     }
   },
@@ -692,6 +700,12 @@ const DashboardApp = {
   // === CONTAS A PAGAR ===
   async loadContasAPagar() {
     const el = document.getElementById("contasContent");
+    if (!el) {
+      console.warn(
+        "[DashboardApp] loadContasAPagar: elemento #contasContent não encontrado, pulando carregamento.",
+      );
+      return;
+    }
     try {
       const data = await this.apiFetch("/dashboard/contas-a-pagar-hoje");
       if (!data || data.length === 0) {
@@ -713,7 +727,9 @@ const DashboardApp = {
         )
         .join("");
     } catch (err) {
-      el.innerHTML = this.errorHTML("Erro ao carregar contas a pagar");
+      try {
+        el.innerHTML = this.errorHTML("Erro ao carregar contas a pagar");
+      } catch (e) {}
       console.error("Erro contas a pagar:", err);
     }
   },
@@ -721,6 +737,12 @@ const DashboardApp = {
   // === ESTOQUE BAIXO ===
   async loadEstoqueBaixo() {
     const el = document.getElementById("estoqueContent");
+    if (!el) {
+      console.warn(
+        "[DashboardApp] loadEstoqueBaixo: elemento #estoqueContent não encontrado, pulando carregamento.",
+      );
+      return;
+    }
     try {
       const data = await this.apiFetch("/dashboard/produtos-estoque-baixo");
       if (!data || data.length === 0) {
@@ -765,7 +787,9 @@ const DashboardApp = {
                 </div>
             `;
     } catch (err) {
-      el.innerHTML = this.errorHTML("Erro ao carregar estoque");
+      try {
+        el.innerHTML = this.errorHTML("Erro ao carregar estoque");
+      } catch (e) {}
       console.error("Erro estoque:", err);
     }
   },
@@ -773,13 +797,21 @@ const DashboardApp = {
   // === ANIVERSARIANTES ===
   async loadAniversariantes() {
     const el = document.getElementById("aniversariantesContent");
+    if (!el) {
+      console.warn(
+        "[DashboardApp] loadAniversariantes: elemento #aniversariantesContent não encontrado, pulando carregamento.",
+      );
+      return;
+    }
     try {
       this._aniversariantesData = await this.apiFetch(
         "/dashboard/aniversariantes",
       );
       this.renderAniversariantes();
     } catch (err) {
-      el.innerHTML = this.errorHTML("Erro ao carregar aniversariantes");
+      try {
+        el.innerHTML = this.errorHTML("Erro ao carregar aniversariantes");
+      } catch (e) {}
       console.error("Erro aniversariantes:", err);
     }
   },
@@ -828,6 +860,12 @@ const DashboardApp = {
   // === OPORTUNIDADES DE VENDA ===
   async loadOportunidades() {
     const el = document.getElementById("oportunidadesContent");
+    if (!el) {
+      console.warn(
+        "[DashboardApp] loadOportunidades: elemento #oportunidadesContent não encontrado, pulando carregamento.",
+      );
+      return;
+    }
     try {
       const data = await this.apiFetch("/dashboard/oportunidades-venda");
       if (!data || data.length === 0) {
@@ -851,7 +889,9 @@ const DashboardApp = {
         )
         .join("");
     } catch (err) {
-      el.innerHTML = this.errorHTML("Erro ao carregar oportunidades");
+      try {
+        el.innerHTML = this.errorHTML("Erro ao carregar oportunidades");
+      } catch (e) {}
       console.error("Erro oportunidades:", err);
     }
   },
@@ -859,6 +899,12 @@ const DashboardApp = {
   // === TAXI DOG ===
   async loadTaxiDog() {
     const el = document.getElementById("taxiDogContent");
+    if (!el) {
+      console.warn(
+        "[DashboardApp] loadTaxiDog: elemento #taxiDogContent não encontrado, pulando carregamento.",
+      );
+      return;
+    }
     try {
       const data = await this.apiFetch("/dashboard/leva-traz");
       if (!data || data.length === 0) {
@@ -911,7 +957,9 @@ const DashboardApp = {
         console.warn("Não foi possível anexar handlers de Taxi Dog:", e);
       }
     } catch (err) {
-      el.innerHTML = this.errorHTML("Erro ao carregar Taxi Dog");
+      try {
+        el.innerHTML = this.errorHTML("Erro ao carregar Taxi Dog");
+      } catch (e) {}
       console.error("Erro taxi dog:", err);
     }
   },
@@ -955,6 +1003,12 @@ const DashboardApp = {
   // === CONTROLE DE VALIDADE ===
   async loadValidade() {
     const el = document.getElementById("validadeContent");
+    if (!el) {
+      console.warn(
+        "[DashboardApp] loadValidade: elemento #validadeContent não encontrado, pulando carregamento.",
+      );
+      return;
+    }
     try {
       const data = await this.apiFetch("/dashboard/produtos-vencimento");
       if (!data || data.length === 0) {
@@ -989,7 +1043,9 @@ const DashboardApp = {
         })
         .join("");
     } catch (err) {
-      el.innerHTML = this.errorHTML("Erro ao carregar controle de validade");
+      try {
+        el.innerHTML = this.errorHTML("Erro ao carregar controle de validade");
+      } catch (e) {}
       console.error("Erro validade:", err);
     }
   },
