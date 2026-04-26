@@ -531,18 +531,20 @@ const DashboardApp = {
         agendamentos.status === "fulfilled" && Array.isArray(agendamentos.value)
           ? agendamentos.value.length
           : 0;
-      document.getElementById("statAgendamentos").textContent = agCount;
+      const elAg = document.getElementById("statAgendamentos");
+      if (elAg) elAg.textContent = agCount;
 
       const vCount =
         vendasHoje.status === "fulfilled" ? vendasHoje.value.count || 0 : 0;
-      document.getElementById("statVendas").textContent = vCount;
+      const elV = document.getElementById("statVendas");
+      if (elV) elV.textContent = vCount;
 
       const ticket =
         ticketMedio.status === "fulfilled"
           ? ticketMedio.value.ticketMedio || 0
           : 0;
-      document.getElementById("statTicket").textContent =
-        this.formatCurrency(ticket);
+      const elT = document.getElementById("statTicket");
+      if (elT) elT.textContent = this.formatCurrency(ticket);
 
       if (clientes.status === "fulfilled") {
         const lista = clientes.value.clientes || clientes.value || [];
@@ -551,7 +553,8 @@ const DashboardApp = {
         const count = Array.isArray(lista)
           ? lista.filter((c) => new Date(c.createdAt) >= inicioMes).length
           : 0;
-        document.getElementById("statClientes").textContent = count;
+        const elC = document.getElementById("statClientes");
+        if (elC) elC.textContent = count;
       }
     } catch (err) {
       console.error("Erro ao carregar stats:", err);
@@ -562,9 +565,12 @@ const DashboardApp = {
   async loadIndicadores() {
     try {
       const data = await this.apiFetch("/dashboard/indicadores-atendimento");
-      document.getElementById("indAgendados").textContent = data.agendados || 0;
-      document.getElementById("indCheckin").textContent = data.checkin || 0;
-      document.getElementById("indProntos").textContent = data.prontos || 0;
+      const indA = document.getElementById("indAgendados");
+      if (indA) indA.textContent = data.agendados || 0;
+      const indC = document.getElementById("indCheckin");
+      if (indC) indC.textContent = data.checkin || 0;
+      const indP = document.getElementById("indProntos");
+      if (indP) indP.textContent = data.prontos || 0;
     } catch (err) {
       console.error("Erro indicadores:", err);
     }

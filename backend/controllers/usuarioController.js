@@ -186,8 +186,32 @@ exports.login = async (req, res) => {
       }
     }
 
-    // Gerar JWT com empresaId e configurar cookie
-    const token = gerarTokenUsuario(usuarioEncontrado.toJSON());
+    // Se não temos empresaId a partir de usuario.empresas, tentar ler coluna usuarios.empresa_id (migração)
+    let empresaIdParaToken = _empresaId || null;
+    if (!empresaIdParaToken) {
+      try {
+        const rows = await sequelize.query(
+          "SELECT empresa_id FROM usuarios WHERE id = :id LIMIT 1",
+          {
+            replacements: { id: usuarioEncontrado.id },
+            type: QueryTypes.SELECT,
+          },
+        );
+        if (rows && rows.length > 0 && rows[0].empresa_id) {
+          empresaIdParaToken = Number(rows[0].empresa_id) || null;
+          console.log(
+            `[login] empresaId derivado de usuarios.empresa_id -> ${empresaIdParaToken}`,
+          );
+        }
+      } catch (e) {
+        // silencioso
+      }
+    }
+
+    // Gerar JWT com empresaId (se encontrado) e configurar cookie
+    const payloadUsuario = { ...usuarioEncontrado.toJSON() };
+    if (empresaIdParaToken) payloadUsuario.empresa_id = empresaIdParaToken;
+    const token = gerarTokenUsuario(payloadUsuario);
 
     // Registrar sessão ativa no banco
     const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
@@ -197,21 +221,33 @@ exports.login = async (req, res) => {
       req.ip ||
       "";
     const userAgent = req.headers["user-agent"] || "";
+    // Se derivamos um empresaId novo para o token, reavaliar limiteCheck
+    let limiteCheckToUse = limiteCheck;
+    if (empresaIdParaToken && empresaIdParaToken !== _empresaId) {
+      try {
+        limiteCheckToUse = await verificarLimiteAcessos(empresaIdParaToken);
+      } catch (e) {
+        console.warn(
+          "[login] falha ao recalcular verificarLimiteAcessos:",
+          e && e.message,
+        );
+      }
+    }
 
-    if (limiteCheck.empresaPainelId) {
+    if (limiteCheckToUse && limiteCheckToUse.empresaPainelId) {
       await registrarSessao(
         usuarioEncontrado.id,
-        limiteCheck.empresaPainelId,
+        limiteCheckToUse.empresaPainelId,
         tokenHash,
         typeof clientIp === "string" ? clientIp.split(",")[0].trim() : "",
         userAgent,
       );
       console.log(
-        `📝 Sessão registrada para usuário ${usuarioEncontrado.id} na empresa painel ${limiteCheck.empresaPainelId}`,
+        `📝 Sessão registrada para usuário ${usuarioEncontrado.id} na empresa painel ${limiteCheckToUse.empresaPainelId}`,
       );
     } else {
       console.log(
-        `[login] empresaPainelId ausente para empresaId=${_empresaId}; sessão NÃO registrada no DB`,
+        `[login] empresaPainelId ausente para empresaId=${_empresaId} (recalc:${empresaIdParaToken}); sessão NÃO registrada no DB`,
       );
     }
 

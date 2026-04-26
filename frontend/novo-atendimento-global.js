@@ -2934,9 +2934,10 @@ window.abrirCalendarioSidebar = function () {
   });
 };
 
-// Variáveis para o calendário widget
-let calendarioWidgetAtual = new Date();
-let dataSelecionadaWidget = null;
+// Variáveis para o calendário widget (definir de forma idempotente para evitar erro se o script for carregado duas vezes)
+window.calendarioWidgetAtual = window.calendarioWidgetAtual || new Date();
+var calendarioWidgetAtual = window.calendarioWidgetAtual;
+var dataSelecionadaWidget = null;
 
 // Função para fechar calendário sidebar
 window.fecharCalendarioSidebar = function () {
