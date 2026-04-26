@@ -836,6 +836,56 @@ async function criarCompleta(req, res) {
       );
     }
 
+    // Compatibilidade com frontend legado: setar cookies públicos para nome/id
+    try {
+      // cookies não-httpOnly para leitura pelo frontend
+      res.cookie("usuarioLogadoId", String(usuario.id), {
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+        path: "/",
+      });
+      res.cookie("usuarioLogadoNome", usuario.nome || "", {
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+        path: "/",
+      });
+    } catch (e) {
+      console.warn(
+        "[admin/empresas/completa] falha ao setar cookies legados:",
+        e && e.message,
+      );
+    }
+
+    // Registrar sessão ativa no DB para que o frontend detecte sessão 'ativa'
+    try {
+      const crypto = require("crypto");
+      const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+      const { registrarSessao } = require("../controllers/acessosController");
+      const clientIp =
+        req.headers["x-forwarded-for"] ||
+        req.connection?.remoteAddress ||
+        req.ip ||
+        "";
+      const ip =
+        typeof clientIp === "string" ? clientIp.split(",")[0].trim() : "";
+      const userAgent = req.headers["user-agent"] || "";
+
+      // empresaPainel é o registro criado no painel admin (usado para controle de acessos)
+      await registrarSessao(
+        usuario.id,
+        empresaPainel.id,
+        tokenHash,
+        ip,
+        userAgent,
+      );
+      console.log(
+        `[admin/empresas/completa] Sessão registrada usuario=${usuario.id} empresaPainel=${empresaPainel.id}`,
+      );
+    } catch (e) {
+      console.warn(
+        "[admin/empresas/completa] falha ao registrar sessão no DB:",
+        e && e.message,
+      );
+    }
+
     return res.status(201).json({
       message: "Empresa e usuário criados com sucesso!",
       empresaPainel,
@@ -885,11 +935,9 @@ async function impersonate(req, res) {
         (admin.sobrenome && String(admin.sobrenome).toLowerCase() === norm) ||
         String(admin.id) === norm;
       if (!matchesUser) {
-        return res
-          .status(403)
-          .json({
-            error: "Usuário administrador não confere com o admin logado",
-          });
+        return res.status(403).json({
+          error: "Usuário administrador não confere com o admin logado",
+        });
       }
     }
 
