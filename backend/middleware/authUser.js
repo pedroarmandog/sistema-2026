@@ -54,18 +54,27 @@ function extractEmpresaId(empresas) {
  */
 async function authUser(req, res, next) {
   // 1. Tentar JWT (novo fluxo)
-  const tokenFromCookie = req.cookies?.pethub_token;
+  // Tornar obrigatório por padrão; para compatibilidade, setar REQUIRE_AUTH_HEADER=0
+  const REQUIRE_HEADER = process.env.REQUIRE_AUTH_HEADER !== "0";
   const tokenFromHeader =
     req.headers &&
     req.headers.authorization &&
     req.headers.authorization.startsWith("Bearer ")
       ? req.headers.authorization.split(" ")[1]
       : null;
-  const token = tokenFromCookie || tokenFromHeader;
-  const tokenSource = tokenFromCookie
-    ? "cookie:pethub_token"
-    : tokenFromHeader
-      ? "header:Authorization"
+  const tokenFromCookie = req.cookies?.pethub_token || null;
+
+  if (REQUIRE_HEADER && !tokenFromHeader) {
+    return res
+      .status(401)
+      .json({ mensagem: "Token (Authorization Bearer) obrigatório" });
+  }
+
+  const token = tokenFromHeader || tokenFromCookie;
+  const tokenSource = tokenFromHeader
+    ? "header:Authorization"
+    : tokenFromCookie
+      ? "cookie:pethub_token"
       : null;
 
   if (token) {
@@ -78,82 +87,81 @@ async function authUser(req, res, next) {
         `[authUser] token decodificado: id=${decoded.id} empresaId=${decoded.empresaId} grupoUsuario=${decoded.grupoUsuario}`,
       );
 
-      // Tentar derivar empresaId quando não estiver presente no JWT
-      let empresaId = decoded.empresaId || null;
-      if (!empresaId && decoded.id) {
-        try {
-          const models = require("../models");
-          const { sequelize } = models;
-          const { QueryTypes } = require("sequelize");
-          const rows = await sequelize.query(
-            "SELECT empresa_id FROM usuarios WHERE id = :id LIMIT 1",
-            {
-              replacements: { id: decoded.id },
-              type: QueryTypes.SELECT,
-            },
-          );
-          if (rows && rows.length > 0 && rows[0].empresa_id) {
-            empresaId = Number(rows[0].empresa_id) || null;
-            console.log(
-              `[authUser] empresaId derivado de usuarios.empresa_id = ${empresaId}`,
-            );
-          }
-        } catch (e) {
-          // fallback silencioso
-        }
-
-        // último recurso: tentar extrair de usuario.empresas (JSON) do registro
-        if (!empresaId) {
-          try {
-            const { Usuario } = require("../models");
-            const usuarioRec = await Usuario.findByPk(decoded.id, {
-              attributes: ["empresas"],
-            });
-            if (
-              usuarioRec &&
-              Array.isArray(usuarioRec.empresas) &&
-              usuarioRec.empresas.length
-            ) {
-              empresaId = extractEmpresaId(usuarioRec.empresas);
-              console.log(
-                `[authUser] empresaId derivado de Usuario.empresas = ${empresaId}`,
-              );
-            }
-          } catch (e) {
-            // silencioso
-          }
-        }
-      }
-
-      // Verificar se empresa está bloqueada
-      if (await isEmpresaBloqueada(empresaId)) {
-        console.log(`[authUser] empresa ${empresaId} bloqueada`);
-        return res.status(403).json({
-          mensagem: "Sistema bloqueado. Entre em contato com o suporte.",
-          bloqueado: true,
-        });
-      }
-
-      req.user = {
-        id: decoded.id,
-        empresaId,
-        grupoUsuario: decoded.grupoUsuario,
-      };
-      // Atualizar última atividade da sessão (fire-and-forget)
+      // Buscar usuário no banco e validar ativo
       try {
-        const tokenHash = crypto
-          .createHash("sha256")
-          .update(token)
-          .digest("hex");
-        const {
-          atualizarAtividade,
-        } = require("../controllers/acessosController");
-        atualizarAtividade(tokenHash);
-      } catch (_) {}
-      return next();
+        const { Usuario } = require("../models");
+        const usuarioDb = await Usuario.findByPk(decoded.id, {
+          attributes: ["id", "ativo", "empresas", "empresa_id", "grupoUsuario"],
+        });
+        if (!usuarioDb || !usuarioDb.ativo) {
+          return res
+            .status(401)
+            .json({ mensagem: "Usuário inválido ou desativado" });
+        }
+
+        // Determinar empresaId: preferir o valor do token, depois coluna legada, depois JSON `empresas`
+        let empresaId = decoded.empresaId || null;
+        if (!empresaId && usuarioDb.empresa_id) {
+          empresaId = Number(usuarioDb.empresa_id) || null;
+          console.log(
+            `[authUser] empresaId derivado de usuarios.empresa_id = ${empresaId}`,
+          );
+        }
+        if (
+          !empresaId &&
+          Array.isArray(usuarioDb.empresas) &&
+          usuarioDb.empresas.length
+        ) {
+          empresaId = extractEmpresaId(usuarioDb.empresas);
+          console.log(
+            `[authUser] empresaId derivado de Usuario.empresas = ${empresaId}`,
+          );
+        }
+
+        // Verificar se empresa está bloqueada
+        if (await isEmpresaBloqueada(empresaId)) {
+          console.log(`[authUser] empresa ${empresaId} bloqueada`);
+          return res
+            .status(403)
+            .json({
+              mensagem: "Sistema bloqueado. Entre em contato com o suporte.",
+              bloqueado: true,
+            });
+        }
+
+        req.user = {
+          id: usuarioDb.id,
+          empresaId,
+          grupoUsuario: usuarioDb.grupoUsuario,
+        };
+
+        // Atualizar última atividade da sessão (fire-and-forget)
+        try {
+          const tokenHash = crypto
+            .createHash("sha256")
+            .update(token)
+            .digest("hex");
+          const {
+            atualizarAtividade,
+          } = require("../controllers/acessosController");
+          atualizarAtividade(tokenHash);
+        } catch (_) {}
+
+        return next();
+      } catch (e) {
+        console.log(
+          `[authUser] erro ao carregar usuario do DB: ${e && e.message}`,
+        );
+        return res
+          .status(401)
+          .json({ mensagem: "Erro na validação do usuário" });
+      }
     } catch (err) {
       console.log(`[authUser] falha ao verificar token: ${err && err.message}`);
-      // token inválido/expirado — continua para fallback
+      if (REQUIRE_HEADER) {
+        return res.status(401).json({ mensagem: "Token inválido ou expirado" });
+      }
+      // token inválido/expirado — continua para fallback quando header não for obrigatório
     }
   } else {
     console.log(

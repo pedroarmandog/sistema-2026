@@ -823,12 +823,18 @@ async function criarCompleta(req, res) {
 
     // Enviar cookie de sessão do aplicativo (`pethub_token`) para que o navegador possa usar
     try {
-      res.cookie("pethub_token", token, {
+      const cookieDomain = process.env.COOKIE_DOMAIN || null;
+      const cookieSecure = process.env.COOKIE_SECURE === "1";
+      const jwtCookieOptions = {
         httpOnly: true,
-        sameSite: "Lax",
+        sameSite: process.env.COOKIE_SAMESITE || "Lax",
         maxAge: 8 * 60 * 60 * 1000,
         path: "/",
-      });
+      };
+      if (cookieDomain) jwtCookieOptions.domain = cookieDomain;
+      if (cookieSecure) jwtCookieOptions.secure = true;
+
+      res.cookie("pethub_token", token, jwtCookieOptions);
     } catch (e) {
       console.warn(
         "[admin/empresas/completa] falha ao setar cookie pethub_token",
@@ -839,14 +845,17 @@ async function criarCompleta(req, res) {
     // Compatibilidade com frontend legado: setar cookies públicos para nome/id
     try {
       // cookies não-httpOnly para leitura pelo frontend
-      res.cookie("usuarioLogadoId", String(usuario.id), {
+      const cookieDomain = process.env.COOKIE_DOMAIN || null;
+      const cookieSecure = process.env.COOKIE_SECURE === "1";
+      const legacyOpts = {
         maxAge: 30 * 24 * 60 * 60 * 1000,
         path: "/",
-      });
-      res.cookie("usuarioLogadoNome", usuario.nome || "", {
-        maxAge: 30 * 24 * 60 * 60 * 1000,
-        path: "/",
-      });
+      };
+      if (cookieDomain) legacyOpts.domain = cookieDomain;
+      if (cookieSecure) legacyOpts.secure = true;
+
+      res.cookie("usuarioLogadoId", String(usuario.id), legacyOpts);
+      res.cookie("usuarioLogadoNome", usuario.nome || "", legacyOpts);
     } catch (e) {
       console.warn(
         "[admin/empresas/completa] falha ao setar cookies legados:",
@@ -907,8 +916,14 @@ async function criarCompleta(req, res) {
 // POST /api/admin/empresas/:id/impersonate — gerar token de impersonação
 async function impersonate(req, res) {
   try {
+    console.log(
+      `[admin/impersonate] solicitacao empresaPainelId=${req.params.id} admin=${req.adminId || "unknown"}`,
+    );
     const empresaPainel = await EmpresaPainel.findByPk(req.params.id);
     if (!empresaPainel) {
+      console.log(
+        `[admin/impersonate] empresaPainel id=${req.params.id} nao encontrada`,
+      );
       return res.status(404).json({ error: "Empresa não encontrada" });
     }
 
@@ -1010,8 +1025,13 @@ async function impersonate(req, res) {
       usuarioId: usuarioAlvo.id,
     });
 
+    // Retornar URL absoluta para evitar problemas de origem
+    const host = req.get("host");
+    const proto = req.protocol || "https";
+    const absoluteUrl = `${proto}://${host}/api/admin/impersonate/${impToken.token}`;
+
     return res.json({
-      impersonateUrl: `/api/admin/impersonate/${impToken.token}`,
+      impersonateUrl: absoluteUrl,
       empresa: empresaPainel.nome_fantasia,
     });
   } catch (err) {
@@ -1057,22 +1077,70 @@ async function impersonateRedirect(req, res) {
     const jwtToken = gerarTokenUsuario(usuario.toJSON());
 
     // Setar cookie e redirecionar para dashboard
-    res.cookie("pethub_token", jwtToken, {
+    const cookieDomain = process.env.COOKIE_DOMAIN || null;
+    const cookieSecure = process.env.COOKIE_SECURE === "1";
+    const jwtCookieOptions = {
       httpOnly: true,
-      sameSite: "Lax",
+      sameSite: process.env.COOKIE_SAMESITE || "Lax",
       maxAge: 8 * 60 * 60 * 1000,
       path: "/",
-    });
+    };
+    if (cookieDomain) jwtCookieOptions.domain = cookieDomain;
+    if (cookieSecure) jwtCookieOptions.secure = true;
+
+    res.cookie("pethub_token", jwtToken, jwtCookieOptions);
 
     // Setar também cookies legados para compatibilidade
-    res.cookie("usuarioLogadoId", String(usuario.id), {
+    const legacyOpts = {
       maxAge: 8 * 60 * 60 * 1000,
       path: "/",
-    });
-    res.cookie("usuarioLogadoNome", usuario.nome || "", {
-      maxAge: 8 * 60 * 60 * 1000,
-      path: "/",
-    });
+    };
+    if (cookieDomain) legacyOpts.domain = cookieDomain;
+    if (cookieSecure) legacyOpts.secure = true;
+
+    res.cookie("usuarioLogadoId", String(usuario.id), legacyOpts);
+    res.cookie("usuarioLogadoNome", usuario.nome || "", legacyOpts);
+
+    // Registrar sessão ativa no DB (para aparecer no painel de acessos)
+    try {
+      const crypto = require("crypto");
+      const tokenHash = crypto
+        .createHash("sha256")
+        .update(jwtToken)
+        .digest("hex");
+      const { registrarSessao } = require("../controllers/acessosController");
+      // Mapear empresaSistema (registro.empresa_id) -> empresaPainel.id via CNPJ
+      const empresaSistemaRec = await Empresa.findByPk(registro.empresa_id, {
+        attributes: ["cnpj"],
+      });
+      let empresaPainelRec = null;
+      if (empresaSistemaRec && empresaSistemaRec.cnpj) {
+        const cnpjLimpo = String(empresaSistemaRec.cnpj).replace(/\D/g, "");
+        empresaPainelRec = await EmpresaPainel.findOne({
+          where: { cnpj: cnpjLimpo },
+        });
+      }
+      const clientIp =
+        req.headers["x-forwarded-for"] ||
+        req.connection?.remoteAddress ||
+        req.ip ||
+        "";
+      const ip =
+        typeof clientIp === "string" ? clientIp.split(",")[0].trim() : "";
+      const userAgent = req.headers["user-agent"] || "";
+      await registrarSessao(
+        usuario.id,
+        empresaPainelRec ? empresaPainelRec.id : null,
+        tokenHash,
+        ip,
+        userAgent,
+      );
+    } catch (e) {
+      console.warn(
+        "[admin/impersonateRedirect] falha ao registrar sessão:",
+        e && e.message,
+      );
+    }
 
     return res.redirect("/dashboard.html");
   } catch (err) {

@@ -9,17 +9,53 @@ const CADASTRO_TOKEN =
   process.env.CADASTRO_TOKEN || "pethub-cadastro-admin-2026";
 
 // Middleware de autenticação para rotas do painel admin
-function authAdmin(req, res, next) {
+async function authAdmin(req, res, next) {
+  // Exigir envio do token via Authorization Bearer quando CONFIG ativada.
+  // Por compatibilidade, ainda aceitamos cookie `admin_token` quando
+  // REQUIRE_AUTH_HEADER !== "1".
+  // Tornar obrigatório por padrão; para manter compatibilidade, setar REQUIRE_AUTH_HEADER=0
+  const REQUIRE_HEADER = process.env.REQUIRE_AUTH_HEADER !== "0";
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  let token = null;
+  let tokenSource = null;
+
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    token = authHeader.split(" ")[1];
+    tokenSource = "header";
+  } else if (!REQUIRE_HEADER && req.cookies && req.cookies.admin_token) {
+    token = req.cookies.admin_token;
+    tokenSource = "cookie";
+  }
+
+  if (!token) {
     return res.status(401).json({ error: "Token não fornecido" });
   }
 
-  const token = authHeader.split(" ")[1];
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    req.adminId = decoded.id;
-    req.adminEmail = decoded.email;
+    // Verificar se o admin existe e está ativo no banco
+    try {
+      const { Admin } = require("../models");
+      const adminRec = await Admin.findByPk(decoded.id, {
+        attributes: ["id", "ativo", "email"],
+      });
+      if (!adminRec || !adminRec.ativo) {
+        return res.status(401).json({ error: "Admin inválido ou desativado" });
+      }
+      req.adminId = adminRec.id;
+      req.adminEmail = adminRec.email || decoded.email;
+    } catch (e) {
+      // Em caso de erro ao acessar DB, falhar a autenticação
+      console.error("[authAdmin] erro ao validar admin no DB:", e && e.message);
+      return res.status(401).json({ error: "Erro na validação do token" });
+    }
+
+    try {
+      console.log(
+        `[authAdmin] token validado via ${tokenSource || "header"} adminId=${req.adminId}`,
+      );
+    } catch (_) {}
+
     next();
   } catch (err) {
     return res.status(401).json({ error: "Token inválido ou expirado" });
