@@ -122,16 +122,36 @@ exports.getAgendamentos = async (req, res) => {
       whereCondition.empresa_id = req.user.empresaId;
     }
 
+    const limit = Math.min(parseInt(req.query.limit, 10) || 100, 1000);
+    const offset = parseInt(req.query.offset, 10) || 0;
     const agendamentos = await Agendamento.findAll({
+      attributes: [
+        "id",
+        "horario",
+        "servico",
+        "profissional",
+        "valor",
+        "status",
+        "observacoes",
+        "dataAgendamento",
+        "petId",
+      ],
       where: whereCondition,
       include: [
         {
           model: Pet,
-          attributes: ["nome", "tipo", "raca", "observacao"],
+          attributes: [
+            "id",
+            "nome",
+            "tipo",
+            "raca",
+            "observacao",
+            "cliente_id",
+          ],
           include: [
             {
               model: Cliente,
-              attributes: ["nome", "email", "telefone"],
+              attributes: ["id", "nome", "email", "telefone"],
             },
           ],
         },
@@ -140,6 +160,8 @@ exports.getAgendamentos = async (req, res) => {
         ["dataAgendamento", "ASC"],
         ["horario", "ASC"],
       ],
+      limit,
+      offset,
     });
 
     // Transformar os dados para o formato esperado pelo frontend

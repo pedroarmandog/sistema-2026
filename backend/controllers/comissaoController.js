@@ -31,14 +31,17 @@ exports.porPerfil = async (req, res) => {
       return res.status(401).json({ error: "Empresa não identificada" });
 
     const comissoes = await Comissao.findAll({
+      attributes: ["id", "perfilProduto", "perfilVendedor", "percentual"],
       where: { perfilProduto: perfil, empresa_id: empresaId },
       order: [["perfilVendedor", "ASC"]],
+      limit: 1000,
     });
 
     // Enriquecer com o ID do profissional cujo nome bate
     const profissionais = await Profissional.findAll({
       where: { empresa_id: empresaId },
       attributes: ["id", "nome", "perfilComissao"],
+      limit: 1000,
     });
 
     const result = comissoes.map((c) => {
@@ -108,11 +111,19 @@ exports.getAll = async (req, res) => {
       return res.status(401).json({ error: "Empresa não identificada" });
 
     const comissoes = await Comissao.findAll({
+      attributes: [
+        "id",
+        "perfilProduto",
+        "perfilVendedor",
+        "percentual",
+        "empresa_id",
+      ],
       where: { empresa_id: empresaId },
       order: [
         ["perfilProduto", "ASC"],
         ["perfilVendedor", "ASC"],
       ],
+      limit: 2000,
     });
     res.json(comissoes);
   } catch (error) {

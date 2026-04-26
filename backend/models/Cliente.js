@@ -22,8 +22,28 @@ const dbPort = process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306;
 // Reusar instância global se houver (proteção contra múltiplos requires)
 if (!global.__SEQUELIZE_SINGLETON__) {
   // logging customizado: registra queries e tempo de execução
+  // Simple query counter (metrics) - contar queries e logar por minuto
+  if (!global.__DB_METRICS__) {
+    global.__DB_METRICS__ = { qCount: 0 };
+    setInterval(() => {
+      try {
+        console.log(
+          `[DB METRICS] Queries no último minuto: ${global.__DB_METRICS__.qCount}`,
+        );
+      } catch (e) {}
+      try {
+        global.__DB_METRICS__.qCount = 0;
+      } catch (e) {}
+    }, 60 * 1000);
+  }
+
   const dbLogger = (sql, timing) => {
     try {
+      // incrementar contador de queries
+      try {
+        if (global.__DB_METRICS__) global.__DB_METRICS__.qCount++;
+      } catch (e) {}
+
       if (typeof timing === "number") {
         console.log(`[DB QUERY] [${timing}ms] ${sql}`);
       } else {
@@ -39,9 +59,9 @@ if (!global.__SEQUELIZE_SINGLETON__) {
     port: dbPort,
     dialect: "mysql",
     dialectModule: require("mysql2"),
-    // Pool obrigatório conforme pedido
+    // Pool configurado para produção seguro (reduzido)
     pool: {
-      max: 5,
+      max: 3,
       min: 0,
       acquire: 30000,
       idle: 10000,
@@ -51,7 +71,7 @@ if (!global.__SEQUELIZE_SINGLETON__) {
     logging: dbLogger,
   });
 
-  // Instrumentação simples para acompanhar conexões ativas
+  // Instrumentação simples para acompanhar conexões ativas (apenas logs)
   try {
     const mgr = sequelizeInstance.connectionManager;
     if (mgr && mgr.getConnection && mgr.releaseConnection) {
@@ -86,7 +106,7 @@ if (!global.__SEQUELIZE_SINGLETON__) {
     );
   }
 
-  // Guardar no global para reutilização segura
+  // Guardar no global para reutilização segura (singleton)
   global.__SEQUELIZE_SINGLETON__ = {
     sequelize: sequelizeInstance,
   };

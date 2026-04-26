@@ -11,9 +11,14 @@ router.get("/", async (req, res) => {
       const { Op } = require("sequelize");
       where = { descricao: { [Op.like]: `%${q}%` } };
     }
+    const limit = Math.min(parseInt(req.query.limit, 10) || 1000, 5000);
+    const offset = parseInt(req.query.offset, 10) || 0;
     const rows = await CategoriaFinanceira.findAll({
+      attributes: ["id", "descricao", "tipo", "ativo"],
       where,
       order: [["descricao", "ASC"]],
+      limit,
+      offset,
     });
     res.json(rows);
   } catch (e) {

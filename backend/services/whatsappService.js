@@ -568,8 +568,7 @@ async function inicializarCliente(empresaId, opts = {}) {
   // Use apenas para teste; idealmente exporte via variável de ambiente.
   const puppeteerOptions = {
     headless: "new",
-    executablePath:
-      "/root/.cache/puppeteer/chrome/linux-146.0.7680.153/chrome-linux64/chrome",
+    executablePath: "/usr/bin/chromium-browser",
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
@@ -1434,11 +1433,13 @@ async function reconectarSessoesAtivas() {
     // Buscar sessões de marketing que estavam CONECTADAS antes do restart
     // Só tenta reconectar se já tinha auth válida (evita gerar QR code headless sem ninguém ver)
     const sessoes = await WhatsappSession.findAll({
+      attributes: ["id", "empresaId", "status", "sessionData"],
       where: {
         [Op.or]: [{ nome: null }, { nome: "" }],
         empresaId: { [Op.gt]: 0 },
         status: "conectado",
       },
+      limit: 200,
     });
 
     if (sessoes.length === 0) {

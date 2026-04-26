@@ -8,6 +8,7 @@ const {
   sequelize,
 } = require("../models");
 const { Op, literal } = require("sequelize");
+const cache = require("../utils/simpleCache");
 
 function handleError(res, context, error) {
   console.error(context, error);
@@ -24,14 +25,26 @@ exports.produtosEstoqueBaixo = async (req, res) => {
     const condition = "(estoqueAtual = 0) OR (estoqueAtual < estoqueMinimo)";
     const whereClause = { [Op.and]: [literal(condition)] };
     if (empresaId) whereClause.empresa_id = empresaId;
+    const cacheKey = `dashboard:produtosEstoqueBaixo:${empresaId || "all"}`;
+    const cached = cache.get(cacheKey);
+    if (cached) return res.json(cached);
+
     const produtos = await Produto.findAll({
+      attributes: ["id", "nome", "estoqueAtual", "estoqueMinimo"],
       where: whereClause,
       order: [["estoqueAtual", "ASC"]],
       limit: 50,
     });
 
-    console.log(`Encontrados ${produtos.length} produtos com estoque baixo`);
-    res.json(produtos);
+    const result = produtos.map((p) => ({
+      id: p.id,
+      nome: p.nome,
+      estoqueAtual: p.estoqueAtual,
+      estoqueMinimo: p.estoqueMinimo,
+    }));
+    cache.set(cacheKey, result, 10); // cache 10s
+    console.log(`Encontrados ${result.length} produtos com estoque baixo`);
+    res.json(result);
   } catch (error) {
     return handleError(res, "Erro ao buscar produtos com estoque baixo", error);
   }
@@ -40,103 +53,97 @@ exports.produtosEstoqueBaixo = async (req, res) => {
 // Aniversariantes (Clientes e Pets) dos próximos 7 dias
 exports.aniversariantes = async (req, res) => {
   try {
+    const empresaId = req.user?.empresaId;
+    const cacheKey = `dashboard:aniversariantes:${empresaId || "all"}`;
+    const cached = cache.get(cacheKey);
+    if (cached) return res.json(cached);
+
     const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0); // normaliza para meia-noite para incluir aniversários de hoje
-    const proximos7Dias = new Date(hoje);
-    proximos7Dias.setDate(hoje.getDate() + 7);
+    hoje.setHours(0, 0, 0, 0);
 
-    // Buscar pets com data de nascimento definida
+    // montar lista de MM-DD para os próximos 7 dias
+    const dias = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(hoje);
+      d.setDate(hoje.getDate() + i);
+      const mm = ("0" + (d.getMonth() + 1)).slice(-2);
+      const dd = ("0" + d.getDate()).slice(-2);
+      dias.push(`${mm}-${dd}`);
+    }
+
+    // Buscar apenas pets cujas datas batem com os próximos 7 dias (evitar carregar todos)
     const pets = await Pet.findAll({
+      attributes: ["id", "nome", "data_nascimento", "cliente_id"],
       where: Object.assign(
-        { data_nascimento: { [Op.not]: null } },
-        req.user?.empresaId ? { empresa_id: req.user.empresaId } : {},
+        {
+          [Op.and]: [
+            { data_nascimento: { [Op.not]: null } },
+            sequelize.where(
+              sequelize.fn(
+                "DATE_FORMAT",
+                sequelize.col("data_nascimento"),
+                "%m-%d",
+              ),
+              { [Op.in]: dias },
+            ),
+          ],
+        },
+        empresaId ? { empresa_id: empresaId } : {},
       ),
     });
 
-    // Filtrar pets que fazem aniversário nos próximos 7 dias
-    // Usamos parse direto da string para evitar offset de fuso horário (UTC vs BRT)
-    const petsFiltrados = pets.filter((pet) => {
-      const dataPet = pet.data_nascimento || pet.dataNascimento;
-      if (!dataPet) return false;
-      const dateStr =
-        typeof dataPet === "string"
-          ? dataPet.split("T")[0]
-          : dataPet.toISOString().split("T")[0];
-      const [, mesStr, diaStr] = dateStr.split("-");
-      const mes = parseInt(mesStr, 10) - 1; // 0-indexed
-      const dia = parseInt(diaStr, 10);
-      const aniversarioEsteAno = new Date(hoje.getFullYear(), mes, dia);
-      const aniversarioProximoAno = new Date(hoje.getFullYear() + 1, mes, dia);
-      return (
-        (aniversarioEsteAno >= hoje && aniversarioEsteAno <= proximos7Dias) ||
-        (aniversarioProximoAno >= hoje &&
-          aniversarioProximoAno <= proximos7Dias)
-      );
-    });
-
-    // Carregar clientes correspondentes em lote para evitar include problemático
     const clienteIds = Array.from(
-      new Set(
-        petsFiltrados.map((p) => p.cliente_id || p.clienteId).filter(Boolean),
-      ),
+      new Set(pets.map((p) => p.cliente_id).filter(Boolean)),
     );
-    let clientesMap = new Map();
+    const clientesMap = new Map();
     if (clienteIds.length > 0) {
-      const clientes = await Cliente.findAll({ where: { id: clienteIds } });
+      const clientes = await Cliente.findAll({
+        attributes: ["id", "nome"],
+        where: { id: clienteIds },
+      });
       clientes.forEach((c) => clientesMap.set(c.id, c.nome));
     }
 
-    const petsAniversariantes = petsFiltrados.map((pet) => {
-      const dataPet = pet.data_nascimento || pet.dataNascimento;
-      return {
-        nome: pet.nome,
-        dataNascimento: dataPet,
-        clienteNome: clientesMap.get(pet.cliente_id || pet.clienteId) || null,
-      };
-    });
+    const petsAniversariantes = pets.map((pet) => ({
+      id: pet.id,
+      nome: pet.nome,
+      dataNascimento: pet.data_nascimento,
+      clienteNome: clientesMap.get(pet.cliente_id) || null,
+    }));
 
-    // Buscar clientes aniversariantes
+    // Buscar clientes aniversariantes (somente colunas necessárias)
     const clientes = await Cliente.findAll({
+      attributes: ["id", "nome", "data_nascimento"],
       where: Object.assign(
-        { data_nascimento: { [Op.not]: null } },
-        req.user?.empresaId ? { empresa_id: req.user.empresaId } : {},
+        {
+          [Op.and]: [
+            { data_nascimento: { [Op.not]: null } },
+            sequelize.where(
+              sequelize.fn(
+                "DATE_FORMAT",
+                sequelize.col("data_nascimento"),
+                "%m-%d",
+              ),
+              { [Op.in]: dias },
+            ),
+          ],
+        },
+        empresaId ? { empresa_id: empresaId } : {},
       ),
     });
 
-    // Filtrar clientes que fazem aniversário nos próximos 7 dias
-    // Usamos parse direto da string para evitar offset de fuso horário (UTC vs BRT)
-    const clientesAniversariantes = clientes
-      .filter((cliente) => {
-        if (!cliente.data_nascimento) return false;
-        const dataCli = cliente.data_nascimento;
-        const dateStr =
-          typeof dataCli === "string"
-            ? dataCli.split("T")[0]
-            : dataCli.toISOString().split("T")[0];
-        const [, mesStr, diaStr] = dateStr.split("-");
-        const mes = parseInt(mesStr, 10) - 1;
-        const dia = parseInt(diaStr, 10);
-        const aniversarioEsteAno = new Date(hoje.getFullYear(), mes, dia);
-        const aniversarioProximoAno = new Date(
-          hoje.getFullYear() + 1,
-          mes,
-          dia,
-        );
-        return (
-          (aniversarioEsteAno >= hoje && aniversarioEsteAno <= proximos7Dias) ||
-          (aniversarioProximoAno >= hoje &&
-            aniversarioProximoAno <= proximos7Dias)
-        );
-      })
-      .map((cliente) => ({
-        nome: cliente.nome,
-        dataNascimento: cliente.data_nascimento,
-      }));
+    const clientesAniversariantes = clientes.map((c) => ({
+      id: c.id,
+      nome: c.nome,
+      dataNascimento: c.data_nascimento,
+    }));
 
-    res.json({
+    const out = {
       pets: petsAniversariantes,
       clientes: clientesAniversariantes,
-    });
+    };
+    cache.set(cacheKey, out, 10);
+    res.json(out);
   } catch (error) {
     return handleError(res, "Erro ao buscar aniversariantes", error);
   }
@@ -148,52 +155,40 @@ exports.oportunidadesVenda = async (req, res) => {
     // Buscar vendas dos últimos 90 dias para analisar padrões
     const dataLimite = new Date();
     dataLimite.setDate(dataLimite.getDate() - 90);
+    const empresaId = req.user?.empresaId;
+    const cacheKey = `dashboard:oportunidadesVenda:${empresaId || "all"}`;
+    const cached = cache.get(cacheKey);
+    if (cached) return res.json(cached);
 
     const vendas = await Venda.findAll({
+      attributes: ["id", "clienteId", "itens", "data"],
       where: Object.assign(
         { data: { [Op.gte]: dataLimite }, status: { [Op.ne]: "cancelado" } },
-        req.user?.empresaId ? { empresa_id: req.user.empresaId } : {},
+        empresaId ? { empresa_id: empresaId } : {},
       ),
-      include: [
-        {
-          model: Cliente,
-          as: "Cliente",
-          attributes: ["id", "nome"],
-          required: false,
-        },
-      ],
       order: [["data", "DESC"]],
       limit: 100,
     });
 
-    // Analisar vendas e criar oportunidades
     const oportunidadesMap = new Map();
+    const clienteIds = new Set();
 
     vendas.forEach((venda) => {
-      if (!venda.clienteId || !venda.itens || !Array.isArray(venda.itens))
-        return;
-
+      if (venda.clienteId) clienteIds.add(venda.clienteId);
+      if (!venda.itens || !Array.isArray(venda.itens)) return;
       venda.itens.forEach((item) => {
         const key = `${venda.clienteId}-${item.nome || item.produto}`;
-
         if (!oportunidadesMap.has(key)) {
-          // Calcular dias desde a última compra
           const diasDesdeCompra = Math.floor(
             (new Date() - new Date(venda.data)) / (1000 * 60 * 60 * 24),
           );
-
-          // Considerar oportunidade se passou mais de 30 dias
           if (diasDesdeCompra >= 30) {
             oportunidadesMap.set(key, {
-              clienteNome:
-                venda.Cliente?.nome ||
-                venda.cliente ||
-                "Cliente não identificado",
+              clienteId: venda.clienteId,
               produtoNome:
                 item.nome ||
-                (typeof item.produto === "object" && item.produto !== null
-                  ? item.produto?.nome || item.produto?.descricao
-                  : item.produto) ||
+                (item.produto && item.produto.nome) ||
+                item.produto ||
                 "Produto",
               ultimaCompra: venda.data,
               quantidade: item.quantidade || 1,
@@ -204,11 +199,28 @@ exports.oportunidadesVenda = async (req, res) => {
       });
     });
 
-    // Converter Map para array e ordenar por dias desde compra (mais antigos primeiro)
+    // Buscar nomes dos clientes em lote
+    const clientesMap = new Map();
+    if (clienteIds.size > 0) {
+      const clientes = await Cliente.findAll({
+        attributes: ["id", "nome"],
+        where: { id: Array.from(clienteIds) },
+      });
+      clientes.forEach((c) => clientesMap.set(c.id, c.nome));
+    }
+
     const oportunidades = Array.from(oportunidadesMap.values())
+      .map((o) => ({
+        clienteNome: clientesMap.get(o.clienteId) || "Cliente não identificado",
+        produtoNome: o.produtoNome,
+        ultimaCompra: o.ultimaCompra,
+        quantidade: o.quantidade,
+        diasDesdeCompra: o.diasDesdeCompra,
+      }))
       .sort((a, b) => b.diasDesdeCompra - a.diasDesdeCompra)
       .slice(0, 20);
 
+    cache.set(cacheKey, oportunidades, 10);
     res.json(oportunidades);
   } catch (error) {
     return handleError(res, "Erro ao buscar oportunidades de venda", error);
@@ -218,28 +230,42 @@ exports.oportunidadesVenda = async (req, res) => {
 // Taxi Dog (agendamentos com serviço de transporte para hoje)
 exports.levaTraz = async (req, res) => {
   try {
+    const empresaId = req.user?.empresaId;
+    const cacheKey = `dashboard:levaTraz:${empresaId || "all"}`;
+    const cached = cache.get(cacheKey);
+    if (cached) return res.json(cached);
+
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
 
     const amanha = new Date(hoje);
     amanha.setDate(amanha.getDate() + 1);
 
-    // Buscar agendamentos do dia
+    // Buscar agendamentos do dia com atributos mínimos
     const agendamentos = await Agendamento.findAll({
+      attributes: [
+        "id",
+        "horario",
+        "status",
+        "observacoes",
+        "servicos",
+        "dataAgendamento",
+      ],
       where: Object.assign(
         { dataAgendamento: { [Op.gte]: hoje, [Op.lt]: amanha } },
-        req.user?.empresaId ? { empresa_id: req.user.empresaId } : {},
+        empresaId ? { empresa_id: empresaId } : {},
       ),
       include: [
         {
           model: Pet,
           as: "pet",
-          attributes: ["nome"],
+          attributes: ["id", "nome", "cliente_id"],
           include: [
             {
               model: Cliente,
               as: "cliente",
               attributes: [
+                "id",
                 "nome",
                 "endereco",
                 "numero",
@@ -331,19 +357,26 @@ exports.produtosVencimento = async (req, res) => {
       estoqueAtual: { [Op.gt]: 0 },
     };
     if (empresaId) whereVenc.empresa_id = empresaId;
-    const produtos = await Produto.findAll({
-      where: whereVenc,
-    });
-
-    // Filtrar e processar produtos com validade
+    // Processar em batches para evitar carregar toda a tabela na memória
+    const limitBatch = 2000;
+    let offset = 0;
     const hoje = new Date();
-    const produtosComValidade = produtos
-      .map((produto) => {
-        // Tentar parsear a validade se estiver em formato de data
+    const candidatos = [];
+    const maxCollect = 2000; // limite de segurança para não acumular milhões
+
+    while (true) {
+      const batch = await Produto.findAll({
+        where: whereVenc,
+        attributes: ["id", "nome", "validade", "estoqueAtual"],
+        order: [["id", "ASC"]],
+        limit: limitBatch,
+        offset,
+      });
+      if (!batch || batch.length === 0) break;
+
+      for (const produto of batch) {
         const validadeStr = produto.validade;
         let diasRestantes = null;
-
-        // Tentar diferentes formatos de data
         if (validadeStr && validadeStr.match(/^\d{4}-\d{2}-\d{2}/)) {
           const dataValidade = new Date(validadeStr);
           if (!isNaN(dataValidade.getTime())) {
@@ -352,18 +385,21 @@ exports.produtosVencimento = async (req, res) => {
             );
           }
         }
+        if (
+          diasRestantes !== null &&
+          diasRestantes <= 90 &&
+          diasRestantes >= 0
+        ) {
+          candidatos.push({ ...produto.toJSON(), diasRestantes });
+        }
+      }
 
-        return {
-          ...produto.toJSON(),
-          diasRestantes,
-        };
-      })
-      .filter(
-        (p) =>
-          p.diasRestantes !== null &&
-          p.diasRestantes <= 90 &&
-          p.diasRestantes >= 0,
-      )
+      offset += batch.length;
+      if (offset > 100000) break; // proteção adicional
+      if (candidatos.length >= maxCollect) break; // já temos muitos candidatos
+    }
+
+    const produtosComValidade = candidatos
       .sort((a, b) => a.diasRestantes - b.diasRestantes)
       .slice(0, 50);
 
@@ -467,9 +503,14 @@ exports.periodicos = async (req, res) => {
       ? { empresa_id: req.user.empresaId }
       : {};
 
-    // Buscar agendamentos concluídos que têm periódicos (vacinas, vermífugos, antiparasitários)
+    // Buscar agendamentos concluídos (limitado ao último ano) para evitar findAll massivo
+    const desde = new Date();
+    desde.setDate(desde.getDate() - 365);
     const agendamentos = await Agendamento.findAll({
-      where: Object.assign({ status: "concluido" }, whereEmpresa),
+      where: Object.assign(
+        { status: "concluido", dataAgendamento: { [Op.gte]: desde } },
+        whereEmpresa,
+      ),
       include: [
         {
           model: Pet,
@@ -584,17 +625,31 @@ exports.indicadoresAtendimento = async (req, res) => {
       req.user?.empresaId ? { empresa_id: req.user.empresaId } : {},
     );
 
-    const [agendados, checkin, prontos] = await Promise.all([
-      Agendamento.count({
-        where: Object.assign({}, whereBase, { status: "agendado" }),
-      }),
-      Agendamento.count({
-        where: Object.assign({}, whereBase, { status: "checkin" }),
-      }),
-      Agendamento.count({
-        where: Object.assign({}, whereBase, { status: "pronto" }),
-      }),
-    ]);
+    // Agregação em uma única query para reduzir número de queries
+    const table =
+      typeof Agendamento.getTableName === "function"
+        ? Agendamento.getTableName()
+        : "agendamentos";
+    const sql = `SELECT 
+      SUM(CASE WHEN status='agendado' THEN 1 ELSE 0 END) AS agendados,
+      SUM(CASE WHEN status='checkin' THEN 1 ELSE 0 END) AS checkin,
+      SUM(CASE WHEN status='pronto' THEN 1 ELSE 0 END) AS prontos
+      FROM ${table}
+      WHERE dataAgendamento >= :hoje AND dataAgendamento < :amanha ${req.user?.empresaId ? "AND empresa_id = :empresaId" : ""}`;
+
+    const replacements = {
+      hoje: hoje.toISOString().slice(0, 19).replace("T", " "),
+      amanha: amanha.toISOString().slice(0, 19).replace("T", " "),
+    };
+    if (req.user?.empresaId) replacements.empresaId = req.user.empresaId;
+
+    const [rows] = await sequelize.query(sql, {
+      replacements,
+      type: sequelize.QueryTypes.SELECT,
+    });
+    const agendados = Number(rows.agendados || 0);
+    const checkin = Number(rows.checkin || 0);
+    const prontos = Number(rows.prontos || 0);
 
     res.json({ agendados, checkin, prontos });
   } catch (error) {

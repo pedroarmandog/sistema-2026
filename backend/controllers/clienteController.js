@@ -137,6 +137,8 @@ exports.getAllClientes = async (req, res) => {
       whereClause.empresa_id = req.user.empresaId;
     }
 
+    const limit = Math.min(parseInt(req.query.limit, 10) || 100, 1000);
+    const offset = parseInt(req.query.offset, 10) || 0;
     const clientes = await Cliente.findAll({
       where: whereClause,
       attributes: [
@@ -153,12 +155,11 @@ exports.getAllClientes = async (req, res) => {
         "data_nascimento",
       ],
       order: [["createdAt", "DESC"]], // Ordenar por data de criação (mais recente primeiro)
+      limit,
+      offset,
     });
 
-    res.json({
-      success: true,
-      clientes: clientes,
-    });
+    res.json({ success: true, clientes: clientes });
   } catch (err) {
     console.error("Erro ao buscar clientes:", err);
     res.status(500).json({

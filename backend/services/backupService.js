@@ -141,14 +141,26 @@ async function realizarBackupEmpresa(empresaPainelId) {
     // Backup de cada tabela com empresa_id
     for (const entry of models) {
       try {
-        const rows = await entry.model.findAll({
-          where: { empresa_id: empresaSistemaId },
-          raw: true,
-        });
-        if (rows.length > 0) {
-          backupData.tabelas[entry.name] = rows;
+        // Buscar em batches para evitar fetch massivo em uma única query
+        const batchSize = 1000;
+        let offset = 0;
+        const allRows = [];
+        while (true) {
+          const rowsBatch = await entry.model.findAll({
+            where: { empresa_id: empresaSistemaId },
+            raw: true,
+            offset,
+            limit: batchSize,
+          });
+          if (!rowsBatch || rowsBatch.length === 0) break;
+          allRows.push(...rowsBatch);
+          offset += rowsBatch.length;
+          if (rowsBatch.length < batchSize) break;
+        }
+        if (allRows.length > 0) {
+          backupData.tabelas[entry.name] = allRows;
           tabelasSalvas++;
-          registrosTotais += rows.length;
+          registrosTotais += allRows.length;
         }
       } catch (e) {
         console.warn(
@@ -195,10 +207,12 @@ async function limparBackupsAntigos(empresaPainelId) {
   const dataLimite = limite.toISOString().split("T")[0];
 
   const antigos = await BackupEmpresa.findAll({
+    attributes: ["id", "caminho_arquivo", "data_referencia"],
     where: {
       empresa_painel_id: empresaPainelId,
       data_referencia: { [Op.lt]: dataLimite },
     },
+    limit: 5000,
   });
 
   for (const backup of antigos) {
@@ -228,7 +242,10 @@ async function limparBackupsAntigos(empresaPainelId) {
  */
 async function executarBackupGeral() {
   console.log("[backup] ═══ Iniciando backup diário de todas as empresas ═══");
-  const empresas = await EmpresaPainel.findAll();
+  const empresas = await EmpresaPainel.findAll({
+    attributes: ["id", "nome_fantasia"],
+    limit: 10000,
+  });
   let sucesso = 0;
   let erros = 0;
 
@@ -443,6 +460,7 @@ async function listarBackups(empresaPainelId) {
       "status",
       "createdAt",
     ],
+    limit: 1000,
   });
 }
 
@@ -453,12 +471,14 @@ async function listarBackupsGeral() {
   const empresas = await EmpresaPainel.findAll({
     attributes: ["id", "nome_fantasia", "cnpj", "status"],
     order: [["nome_fantasia", "ASC"]],
+    limit: 10000,
   });
 
   const result = [];
 
   for (const emp of empresas) {
-    const backups = await BackupEmpresa.findAll({
+    // Buscar somente os últimos backups (limitar para evitar transferência massiva em memória)
+    const lastBackups = await BackupEmpresa.findAll({
       where: { empresa_painel_id: emp.id },
       order: [["data_referencia", "DESC"]],
       attributes: [
@@ -470,6 +490,12 @@ async function listarBackupsGeral() {
         "status",
         "createdAt",
       ],
+      limit: 10,
+    });
+
+    // Obter contagem total separadamente (mais eficiente que buscar tudo)
+    const totalBackups = await BackupEmpresa.count({
+      where: { empresa_painel_id: emp.id },
     });
 
     result.push({
@@ -479,9 +505,10 @@ async function listarBackupsGeral() {
         cnpj: emp.cnpj,
         status: emp.status,
       },
-      backups: backups.map((b) => b.toJSON()),
-      ultimo_backup: backups.length > 0 ? backups[0].data_referencia : null,
-      total_backups: backups.length,
+      backups: lastBackups.map((b) => b.toJSON()),
+      ultimo_backup:
+        lastBackups.length > 0 ? lastBackups[0].data_referencia : null,
+      total_backups: totalBackups,
     });
   }
 
@@ -497,7 +524,10 @@ async function listarBackupsGeral() {
 async function verificarEExecutarBackupSeNecessario() {
   try {
     const hoje = new Date().toISOString().split("T")[0];
-    const empresas = await EmpresaPainel.findAll();
+    const empresas = await EmpresaPainel.findAll({
+      attributes: ["id"],
+      limit: 10000,
+    });
 
     if (empresas.length === 0) return;
 

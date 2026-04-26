@@ -6,9 +6,23 @@ exports.listarCaixas = async (req, res) => {
   try {
     const where = {};
     if (req.user?.empresaId) where.empresa_id = req.user.empresaId;
+    const limit = Math.min(parseInt(req.query.limit, 10) || 100, 1000);
+    const offset = parseInt(req.query.offset, 10) || 0;
     const caixas = await Caixa.findAll({
+      attributes: [
+        "id",
+        "numero",
+        "aberto",
+        "dataAbertura",
+        "usuario",
+        "saldoInicial",
+        "saldoFinal",
+        "empresa_id",
+      ],
       where,
       order: [["dataAbertura", "DESC"]],
+      limit,
+      offset,
     });
     res.json(caixas);
   } catch (error) {

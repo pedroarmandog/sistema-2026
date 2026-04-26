@@ -30,6 +30,7 @@ const listarAcessos = async (req, res) => {
     const empresas = await EmpresaPainel.findAll({
       attributes: ["id", "nome_fantasia", "cnpj", "status", "limite_acessos"],
       order: [["nome_fantasia", "ASC"]],
+      limit: 1000,
     });
 
     // Contar sessões ativas por empresa
@@ -89,6 +90,7 @@ const detalhesAcessos = async (req, res) => {
         "ultima_atividade",
       ],
       order: [["data_login", "DESC"]],
+      limit: 1000,
     });
 
     // Buscar nomes dos usuários
@@ -99,6 +101,7 @@ const detalhesAcessos = async (req, res) => {
       usuarios = await Usuario.findAll({
         where: { id: { [Op.in]: usuarioIds } },
         attributes: ["id", "nome", "usuario"],
+        limit: Math.max(1000, usuarioIds.length || 1000),
       });
     }
     const usrMap = {};
@@ -236,6 +239,7 @@ async function verificarLimiteAcessos(empresaId) {
       where: { empresa_id: empresaPainel.id, ativo: true },
       attributes: ["id", "token_hash", "data_login", "ultima_atividade"],
       order: [["ultima_atividade", "ASC"]], // derrubar as menos recentemente ativas
+      limit: 2000,
     });
 
     const totalAtivas = sessoesAtivas.length;

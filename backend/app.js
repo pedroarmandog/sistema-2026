@@ -1407,10 +1407,14 @@ function startServer() {
 
         // ── Buscar configs ativas por empresa ──
         const msgsPet = await MensagemAutomatica.findAll({
+          attributes: ["id", "empresaId", "configuracaoEnvio", "tipo", "ativo"],
           where: { tipo: "aniversario_pet", ativo: true },
+          limit: 2000,
         });
         const msgsTutor = await MensagemAutomatica.findAll({
+          attributes: ["id", "empresaId", "configuracaoEnvio", "tipo", "ativo"],
           where: { tipo: "aniversario_tutor", ativo: true },
+          limit: 2000,
         });
 
         const configsPet = new Map();
@@ -1442,6 +1446,7 @@ function startServer() {
         // ── Aniversário de PETS ──
         if (allDiasPet.size > 0) {
           const pets = await Pet.findAll({
+            attributes: ["id", "nome", "data_nascimento", "cliente_id"],
             where: { data_nascimento: { [Op.not]: null } },
             include: [
               {
@@ -1450,6 +1455,7 @@ function startServer() {
                 attributes: ["id", "nome", "telefone", "empresa_id"],
               },
             ],
+            limit: 5000,
           });
 
           for (const pet of pets) {
@@ -1488,7 +1494,15 @@ function startServer() {
         // ── Aniversário de TUTORES ──
         if (allDiasTutor.size > 0) {
           const clientes = await Cliente.findAll({
+            attributes: [
+              "id",
+              "nome",
+              "telefone",
+              "data_nascimento",
+              "empresa_id",
+            ],
             where: { data_nascimento: { [Op.not]: null } },
+            limit: 5000,
           });
 
           for (const cliente of clientes) {
@@ -1555,7 +1569,9 @@ function startServer() {
 
         // Buscar todas as empresas que têm vacinas_vencendo ativo
         const mensagensAtivas = await MensagemAutomatica.findAll({
+          attributes: ["id", "empresaId", "configuracaoEnvio", "tipo", "ativo"],
           where: { tipo: "vacinas_vencendo", ativo: true },
+          limit: 2000,
         });
         if (mensagensAtivas.length === 0) {
           console.log(
@@ -1576,21 +1592,33 @@ function startServer() {
         const hoje = new Date();
 
         // Buscar todas as periodicidades para calcular data de renovação
-        const periodicidades = await Periodicidade.findAll();
+        const periodicidades = await Periodicidade.findAll({
+          attributes: ["id", "descricao", "dias"],
+          limit: 500,
+        });
         const periodicidadesMap = new Map(
           periodicidades.map((p) => [p.descricao.trim().toLowerCase(), p]),
         );
 
         // Buscar agendamentos concluídos que têm vacina/vermifugo/antiparasitário
         const agendamentos = await Agendamento.findAll({
+          attributes: ["id", "servicos", "dataAgendamento", "status", "petId"],
           where: { status: "concluido" },
           include: [
             {
               model: Pet,
               as: "pet",
-              include: [{ model: Cliente, as: "cliente" }],
+              attributes: ["id", "nome", "data_nascimento", "cliente_id"],
+              include: [
+                {
+                  model: Cliente,
+                  as: "cliente",
+                  attributes: ["id", "nome", "telefone", "empresa_id"],
+                },
+              ],
             },
           ],
+          limit: 5000,
         });
 
         let notificados = 0;

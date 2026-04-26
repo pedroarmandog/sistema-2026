@@ -59,7 +59,9 @@ exports.login = async (req, res) => {
           // Encontrar usuário ativo vinculado especificamente a esta empresa (campo `empresas`)
           const usuariosAtivos = await Usuario.findAll({
             where: { ativo: true },
+            attributes: ["id", "nome", "usuario", "empresas", "senha", "ativo"],
             order: [["id", "ASC"]],
+            limit: 2000,
           });
           usuarioEncontrado = usuariosAtivos.find((u) => {
             const arr = Array.isArray(u.empresas) ? u.empresas : [];

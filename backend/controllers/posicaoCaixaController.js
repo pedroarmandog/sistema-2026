@@ -117,11 +117,23 @@ exports.listarHoje = async (req, res) => {
 
     const movimentos = [];
 
+    const limitFetch = 5000;
+
     // 1) Movimentos manuais registrados em PagamentoCaixa
     const manuais = await PagamentoCaixa.findAll({
+      attributes: [
+        "id",
+        "cliente_nome",
+        "pet_nome",
+        "servico",
+        "forma_pagamento",
+        "valor",
+        "data_movimentacao",
+      ],
       where: { data_movimentacao: { [Op.between]: [inicioDia, fimDia] } },
       order: [["data_movimentacao", "DESC"]],
       raw: true,
+      limit: limitFetch,
     });
     manuais.forEach((m) => {
       const forma = normalizeForma(m.forma_pagamento);
@@ -139,6 +151,15 @@ exports.listarHoje = async (req, res) => {
 
     // 2) Agendamentos finalizados (buscamos primeiro para evitar duplicar vendas geradas por agendamento)
     const agendados = await Agendamento.findAll({
+      attributes: [
+        "id",
+        "dataAgendamento",
+        "totalPago",
+        "pagamentos",
+        "petId",
+        "servico",
+        "status",
+      ],
       where: {
         dataAgendamento: { [Op.between]: [inicioDia, fimDia] },
         status: "concluido",
@@ -149,12 +170,22 @@ exports.listarHoje = async (req, res) => {
       },
       order: [["dataAgendamento", "DESC"]],
       raw: true,
+      limit: limitFetch,
     });
 
     const agendamentoIds = new Set((agendados || []).map((a) => Number(a.id)));
 
     // 3) Vendas realizadas em nova-venda (todas com totalPago > 0 ou pagamentos)
     const vendas = await Venda.findAll({
+      attributes: [
+        "id",
+        "data",
+        "totalPago",
+        "pagamentos",
+        "totais",
+        "cliente",
+        "agendamentoId",
+      ],
       where: {
         data: { [Op.between]: [inicioDia, fimDia] },
         [Op.or]: [
@@ -164,6 +195,7 @@ exports.listarHoje = async (req, res) => {
       },
       order: [["data", "DESC"]],
       raw: true,
+      limit: limitFetch,
     });
 
     for (const v of vendas) {
@@ -337,7 +369,17 @@ exports.resumoCaixa = async (req, res) => {
     });
 
     // 2) Agendamentos e Vendas - evitar duplicatas quando uma venda foi criada a partir de um agendamento
+    const limitFetch = 5000;
     const agendados = await Agendamento.findAll({
+      attributes: [
+        "id",
+        "dataAgendamento",
+        "totalPago",
+        "pagamentos",
+        "petId",
+        "servico",
+        "status",
+      ],
       where: {
         dataAgendamento: { [Op.between]: [inicioDia, fimDia] },
         status: "concluido",
@@ -347,10 +389,20 @@ exports.resumoCaixa = async (req, res) => {
         ],
       },
       raw: true,
+      limit: limitFetch,
     });
     const agendamentoIds = new Set((agendados || []).map((a) => Number(a.id)));
 
     const vendas = await Venda.findAll({
+      attributes: [
+        "id",
+        "data",
+        "totalPago",
+        "pagamentos",
+        "totais",
+        "cliente",
+        "agendamentoId",
+      ],
       where: {
         data: { [Op.between]: [inicioDia, fimDia] },
         [Op.or]: [
@@ -359,6 +411,7 @@ exports.resumoCaixa = async (req, res) => {
         ],
       },
       raw: true,
+      limit: limitFetch,
     });
 
     vendas.forEach((v) => {

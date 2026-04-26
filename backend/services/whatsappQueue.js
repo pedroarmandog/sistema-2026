@@ -16,6 +16,8 @@ const whatsappService = require("./whatsappService");
 const MAX_TENTATIVAS = 3;
 let cronJob = null;
 let processando = false;
+const BATCH_SIZE = 10; // buscar 10 mensagens por vez
+let queueBuffer = [];
 
 /**
  * Inicia o agendador de mensagens.
@@ -70,22 +72,27 @@ async function processarFila() {
     },
   ).catch(() => {});
 
-  // Buscar envios pendentes com dataAgendada <= agora
-  const pendentes = await EnvioAgendado.findAll({
-    where: {
-      status: "pendente",
-      dataAgendada: { [Op.lte]: agora },
-      tentativas: { [Op.lt]: MAX_TENTATIVAS },
-    },
-    order: [["dataAgendada", "ASC"]],
-    limit: 20, // processar no máximo 20 por ciclo
-  });
+  // Buscar em lote apenas quando o buffer estiver vazio
+  let pendentes = [];
+  if (queueBuffer.length === 0) {
+    const fetched = await EnvioAgendado.findAll({
+      where: {
+        status: "pendente",
+        dataAgendada: { [Op.lte]: agora },
+        tentativas: { [Op.lt]: MAX_TENTATIVAS },
+      },
+      order: [["dataAgendada", "ASC"]],
+      limit: BATCH_SIZE,
+    });
+    if (!fetched || fetched.length === 0) return;
+    queueBuffer = fetched;
+  }
 
+  // Processar o lote atual (até BATCH_SIZE) sem consultar o DB novamente
+  pendentes = queueBuffer.splice(0, BATCH_SIZE);
   if (pendentes.length === 0) return;
 
-  console.log(
-    `[Queue] ${pendentes.length} envio(s) pendente(s) para processar`,
-  );
+  console.log(`[Queue] Processando lote de ${pendentes.length} envio(s)`);
 
   // Tentar reconexão uma única vez por empresa (não por envio)
   const empresasVerificadas = new Set();
@@ -100,8 +107,7 @@ async function processarFila() {
       `[Queue] Iniciando processamento do envio #${envio.id} (empresa ${empId})`,
     );
     await processarEnvio(envio, LogEnvio);
-    // Delay mínimo entre envios para evitar bursts que abram muitas conexões
-    // (2 segundos por envio; ajustar se necessário para 3-5s)
+    // Delay mínimo entre envios para evitar bursts
     await new Promise((r) => setTimeout(r, 2000));
   }
 }

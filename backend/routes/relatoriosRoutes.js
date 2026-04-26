@@ -101,87 +101,107 @@ async function gerarDadosFaturamento(filters = {}, req) {
   if (!empresaObj || !empresaObj.id) return [];
   where.empresa_id = empresaObj.id;
 
-  const vendas = await Venda.findAll({ where });
-
-  // Agregação robusta: identificar produto por id, código ou nome e somar quantidades/valores
+  // Processar vendas em batches para evitar findAll massivo
   const mapa = new Map();
-  for (const v of vendas) {
-    let itens = [];
-    try {
-      itens = Array.isArray(v.itens) ? v.itens : JSON.parse(v.itens || "[]");
-    } catch (e) {
-      itens = v.itens || [];
-    }
-    for (const it of itens) {
-      const prodObj = it.produto || {};
-      const prodId =
-        prodObj && (prodObj.id || prodObj._id)
-          ? String(prodObj.id || prodObj._id)
-          : it.produtoId
-            ? String(it.produtoId)
-            : it.id
-              ? String(it.id)
-              : null;
-      const codigo =
-        it.codigo || (prodObj && (prodObj.codigo || prodObj.code)) || "";
-      const nome =
-        (prodObj && (prodObj.nome || prodObj.produto)) ||
-        it.nome ||
-        it.descricao ||
-        "";
-
-      const key = prodId
-        ? `id:${prodId}`
-        : codigo
-          ? `code:${codigo}`
-          : `name:${String(nome || "")
-              .trim()
-              .toLowerCase()}`;
-
-      const entry = mapa.get(key) || {
-        produtoId: prodId || null,
-        codigo: codigo || "",
-        nome: nome || "",
-        sample: prodObj || it,
-        qtd_venda: 0,
-        qtd_vendida: 0,
-        total_venda: 0,
-      };
-
-      const qtd = Number(it.quantidade || it.qtd || it.qtd_venda || 1) || 0;
-      const qtdVendida =
-        Number(it.quantidade_vendida || it.qtd_vendida || qtd) || qtd;
-      entry.qtd_venda += qtd;
-      entry.qtd_vendida += qtdVendida;
-
-      // preço: tentar converter formatos com vírgula / símbolos
-      let precoRaw =
-        it.preco ||
-        it.preco_venda ||
-        it.precoVenda ||
-        it.valor ||
-        it.valorUnitario ||
-        it.totalUnitario ||
-        0;
-      let preco = 0;
+  const batchSize = 1000;
+  let offset = 0;
+  while (true) {
+    const vendasBatch = await Venda.findAll({
+      where,
+      raw: true,
+      limit: batchSize,
+      offset,
+    });
+    if (!vendasBatch || vendasBatch.length === 0) break;
+    for (const v of vendasBatch) {
+      let itens = [];
       try {
-        preco =
-          Number(
-            String(precoRaw || 0)
-              .replace(/[^0-9\-,\.]/g, "")
-              .replace(",", "."),
-          ) || 0;
-      } catch (pe) {
-        preco = Number(precoRaw) || 0;
+        itens = Array.isArray(v.itens) ? v.itens : JSON.parse(v.itens || "[]");
+      } catch (e) {
+        itens = v.itens || [];
       }
-      entry.total_venda += preco * qtd;
-      mapa.set(key, entry);
+      for (const it of itens) {
+        const prodObj = it.produto || {};
+        const prodId =
+          prodObj && (prodObj.id || prodObj._id)
+            ? String(prodObj.id || prodObj._id)
+            : it.produtoId
+              ? String(it.produtoId)
+              : it.id
+                ? String(it.id)
+                : null;
+        const codigo =
+          it.codigo || (prodObj && (prodObj.codigo || prodObj.code)) || "";
+        const nome =
+          (prodObj && (prodObj.nome || prodObj.produto)) ||
+          it.nome ||
+          it.descricao ||
+          "";
+
+        const key = prodId
+          ? `id:${prodId}`
+          : codigo
+            ? `code:${codigo}`
+            : `name:${String(nome || "")
+                .trim()
+                .toLowerCase()}`;
+
+        const entry = mapa.get(key) || {
+          produtoId: prodId || null,
+          codigo: codigo || "",
+          nome: nome || "",
+          sample: prodObj || it,
+          qtd_venda: 0,
+          qtd_vendida: 0,
+          total_venda: 0,
+        };
+
+        const qtd = Number(it.quantidade || it.qtd || it.qtd_venda || 1) || 0;
+        const qtdVendida =
+          Number(it.quantidade_vendida || it.qtd_vendida || qtd) || qtd;
+        entry.qtd_venda += qtd;
+        entry.qtd_vendida += qtdVendida;
+
+        // preço: tentar converter formatos com vírgula / símbolos
+        let precoRaw =
+          it.preco ||
+          it.preco_venda ||
+          it.precoVenda ||
+          it.valor ||
+          it.valorUnitario ||
+          it.totalUnitario ||
+          0;
+        let preco = 0;
+        try {
+          preco =
+            Number(
+              String(precoRaw || 0)
+                .replace(/[^0-9\-,\.]/g, "")
+                .replace(",", "."),
+            ) || 0;
+        } catch (pe) {
+          preco = Number(precoRaw) || 0;
+        }
+        entry.total_venda += preco * qtd;
+        mapa.set(key, entry);
+      }
     }
+    offset += vendasBatch.length;
+    if (vendasBatch.length < batchSize) break;
   }
 
   // buscar produtos para obter custo unitário (indexar por id/codigo/nome)
   const produtosDB = await Produto.findAll({
     where: { empresa_id: empresaObj.id },
+    attributes: [
+      "id",
+      "codigo",
+      "nome",
+      "custoBase",
+      "preco",
+      "tipo",
+      "perfilComissao",
+    ],
   });
   const normalizeStr = (s) =>
     String(s || "")
@@ -1514,7 +1534,22 @@ router.post("/comissao", async (req, res) => {
       where.id = parseInt(numeroVenda, 10) || 0;
     }
 
-    let vendas = await Venda.findAll({ where });
+    // Processar vendas em batches para evitar carga excessiva na memória
+    const vendas = [];
+    const batchSizeV = 1000;
+    let offsetV = 0;
+    while (true) {
+      const batch = await Venda.findAll({
+        where,
+        raw: true,
+        limit: batchSizeV,
+        offset: offsetV,
+      });
+      if (!batch || batch.length === 0) break;
+      vendas.push(...batch);
+      offsetV += batch.length;
+      if (batch.length < batchSizeV) break;
+    }
 
     // ---- buscar comissões cadastradas no banco ----
     const { Comissao, Cliente, Produto, Profissional } = require("../models");
@@ -2256,72 +2291,85 @@ router.post("/comissao/recalcular", async (req, res) => {
       mapaProfissionalId[p.id] = p.nome;
     });
 
-    // --- busca vendas no período ---
-    const vendas = await Venda.findAll({
-      where: {
-        empresa_id: empresaId,
-        data: { [Op.between]: [dataInicio, dataFim] },
-      },
-    });
-
+    // --- busca e processa vendas no período em batches para evitar findAll massivo ---
+    const batchSize = 500;
+    let offset = 0;
     let vendasAtualizadas = 0;
     let itensAtualizados = 0;
+    let vendasAnalisadas = 0;
 
-    for (const venda of vendas) {
-      let alterado = false;
-      const itens = Array.isArray(venda.itens) ? [...venda.itens] : [];
+    while (true) {
+      const vendasBatch = await Venda.findAll({
+        where: {
+          empresa_id: empresaId,
+          data: { [Op.between]: [dataInicio, dataFim] },
+        },
+        order: [["id", "ASC"]],
+        limit: batchSize,
+        offset,
+      });
+      if (!vendasBatch || vendasBatch.length === 0) break;
 
-      // Corrigir profissional vazio
-      const profissionalAtual = (venda.profissional || "").trim();
-      if (!profissionalAtual && venda.profissionalId) {
-        const nomeProfissional = mapaProfissionalId[venda.profissionalId];
-        if (nomeProfissional) {
-          venda.profissional = nomeProfissional;
+      for (const venda of vendasBatch) {
+        vendasAnalisadas++;
+        let alterado = false;
+        const itens = Array.isArray(venda.itens) ? [...venda.itens] : [];
+
+        // Corrigir profissional vazio
+        const profissionalAtual = (venda.profissional || "").trim();
+        if (!profissionalAtual && venda.profissionalId) {
+          const nomeProfissional = mapaProfissionalId[venda.profissionalId];
+          if (nomeProfissional) {
+            venda.profissional = nomeProfissional;
+            alterado = true;
+          }
+        }
+
+        // Atualizar perfilComissao em cada item
+        const itensAtualizadosArr = itens.map((item) => {
+          const prod = item.produto || {};
+          const prodId = String(prod.id || item.produtoId || "");
+          const prodNome = (prod.nome || item.descricao || item.nome || "")
+            .toLowerCase()
+            .trim();
+
+          // já tem perfilComissao? pular
+          const perfilAtual = (
+            prod.perfilComissao ||
+            item.perfilComissao ||
+            ""
+          ).trim();
+          if (perfilAtual) return item;
+
+          // buscar produto: primeiro por id, depois por nome
+          let produtoDB = prodId ? mapaProdutoById[prodId] : null;
+          if (!produtoDB && prodNome) produtoDB = mapaProdutoByNome[prodNome];
+
+          if (!produtoDB || !produtoDB.perfilComissao) return item;
+
+          // stampar perfilComissao no item
+          itensAtualizados++;
           alterado = true;
+          return {
+            ...item,
+            produto: { ...prod, perfilComissao: produtoDB.perfilComissao },
+            perfilComissao: produtoDB.perfilComissao,
+          };
+        });
+
+        if (alterado) {
+          await venda.update({ itens: itensAtualizadosArr });
+          vendasAtualizadas++;
         }
       }
 
-      // Atualizar perfilComissao em cada item
-      const itensAtualizadosArr = itens.map((item) => {
-        const prod = item.produto || {};
-        const prodId = String(prod.id || item.produtoId || "");
-        const prodNome = (prod.nome || item.descricao || item.nome || "")
-          .toLowerCase()
-          .trim();
-
-        // já tem perfilComissao? pular
-        const perfilAtual = (
-          prod.perfilComissao ||
-          item.perfilComissao ||
-          ""
-        ).trim();
-        if (perfilAtual) return item;
-
-        // buscar produto: primeiro por id, depois por nome
-        let produtoDB = prodId ? mapaProdutoById[prodId] : null;
-        if (!produtoDB && prodNome) produtoDB = mapaProdutoByNome[prodNome];
-
-        if (!produtoDB || !produtoDB.perfilComissao) return item;
-
-        // stampar perfilComissao no item
-        itensAtualizados++;
-        alterado = true;
-        return {
-          ...item,
-          produto: { ...prod, perfilComissao: produtoDB.perfilComissao },
-          perfilComissao: produtoDB.perfilComissao,
-        };
-      });
-
-      if (alterado) {
-        await venda.update({ itens: itensAtualizadosArr });
-        vendasAtualizadas++;
-      }
+      offset += vendasBatch.length;
+      if (vendasBatch.length < batchSize) break;
     }
 
     res.json({
       ok: true,
-      vendasAnalisadas: vendas.length,
+      vendasAnalisadas,
       vendasAtualizadas,
       itensAtualizados,
       mensagem: `${itensAtualizados} item(ns) atualizado(s) em ${vendasAtualizadas} venda(s).`,

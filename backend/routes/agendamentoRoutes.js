@@ -80,16 +80,37 @@ router.get("/", async (req, res) => {
     }
     // Se incluirCancelados=true e sem status[], retorna tudo (inclusive cancelados)
 
+    const limit = Math.min(parseInt(req.query.limit, 10) || 100, 1000);
+    const offset = parseInt(req.query.offset, 10) || 0;
     const agendamentos = await Agendamento.findAll({
+      attributes: [
+        "id",
+        "horario",
+        "servico",
+        "profissional",
+        "valor",
+        "status",
+        "dataAgendamento",
+        "petId",
+      ],
       where: whereClause,
       include: [
         {
           model: Pet,
           as: "pet",
+          attributes: [
+            "id",
+            "nome",
+            "tipo",
+            "raca",
+            "observacao",
+            "cliente_id",
+          ],
           include: [
             {
               model: Cliente,
               as: "cliente",
+              attributes: ["id", "nome", "telefone"],
             },
           ],
           where: petCliente
@@ -105,6 +126,8 @@ router.get("/", async (req, res) => {
         ["dataAgendamento", "ASC"],
         ["horario", "ASC"],
       ],
+      limit,
+      offset,
     });
 
     // Formatando os dados para o frontend (usar aliases corretos em minúsculas)

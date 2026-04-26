@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const crypto = require("crypto");
 const usuarioController = require("../controllers/usuarioController");
+const rateLimit = require("../middleware/rateLimit");
 const { authUser, JWT_SECRET } = require("../middleware/authUser");
 const jwt = require("jsonwebtoken");
 const {
@@ -12,8 +13,8 @@ const {
   verificarLimiteAcessos,
 } = require("../controllers/acessosController");
 
-// Rota de login
-router.post("/login", usuarioController.login);
+// Rota de login (throttle para reduzir tentativas múltiplas que geram queries)
+router.post("/login", rateLimit(3000), usuarioController.login);
 
 // Rota para verificar se a sessão ainda está ativa (polling do frontend)
 // Importante: NÃO recriar sessões aqui — sessões devem ser criadas apenas no login.

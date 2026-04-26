@@ -27,9 +27,23 @@ exports.listarVendas = async (req, res) => {
       };
     }
 
+    const limit = Math.min(parseInt(req.query.limit, 10) || 100, 1000);
+    const offset = parseInt(req.query.offset, 10) || 0;
     const vendas = await Venda.findAll({
+      attributes: [
+        "id",
+        "data",
+        "totalPago",
+        "total",
+        "cliente",
+        "caixaId",
+        "status",
+        "empresa_id",
+      ],
       where,
       order: [["data", "DESC"]],
+      limit,
+      offset,
     });
 
     res.json({ vendas });

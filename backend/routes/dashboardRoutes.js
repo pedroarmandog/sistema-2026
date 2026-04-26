@@ -2,9 +2,12 @@ const express = require("express");
 const router = express.Router();
 const dashboardController = require("../controllers/dashboardController");
 const { authUser } = require("../middleware/authUser");
+const rateLimit = require("../middleware/rateLimit");
 
 // Todas as rotas do dashboard requerem autenticação
 router.use(authUser);
+// Throttle leve por usuário para evitar múltiplas chamadas rápidas do dashboard
+router.use(rateLimit(2000));
 
 // Rota para produtos com estoque baixo
 router.get("/produtos-estoque-baixo", dashboardController.produtosEstoqueBaixo);
