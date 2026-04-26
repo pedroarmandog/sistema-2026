@@ -175,6 +175,11 @@ exports.listarEmpresas = async (req, res) => {
 // Buscar empresa por ID
 exports.buscarEmpresa = async (req, res) => {
   try {
+    try {
+      console.log(
+        `[buscarEmpresa] req.user=${JSON.stringify(req.user)} requested=${req.params.id}`,
+      );
+    } catch (e) {}
     const empresa = await Empresa.findByPk(req.params.id);
     if (!empresa) {
       return res.status(404).json({ erro: "Empresa não encontrada" });

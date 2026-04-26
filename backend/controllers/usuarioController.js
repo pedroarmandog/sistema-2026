@@ -1,5 +1,5 @@
 const { Usuario, Empresa, sequelize } = require("../models");
-const { Op } = require("sequelize");
+const { Op, QueryTypes } = require("sequelize");
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const {
@@ -285,6 +285,24 @@ exports.buscarUsuario = async (req, res) => {
     // Remover senha antes de retornar
     const usuarioData = usuario.toJSON();
     delete usuarioData.senha;
+
+    // Fallback: se Usuario.empresas estiver vazio, tentar ler coluna usuarios.empresa_id
+    try {
+      if (!usuarioData.empresas || usuarioData.empresas.length === 0) {
+        const rows = await sequelize.query(
+          "SELECT empresa_id FROM usuarios WHERE id = :id LIMIT 1",
+          { replacements: { id: usuario.id }, type: QueryTypes.SELECT },
+        );
+        if (rows && rows.length > 0 && rows[0].empresa_id) {
+          usuarioData.empresas = [{ id: Number(rows[0].empresa_id) }];
+          console.log(
+            `[buscarUsuario] preenchendo usuario.empresas a partir de usuarios.empresa_id -> ${rows[0].empresa_id}`,
+          );
+        }
+      }
+    } catch (e) {
+      // silencioso - não falhar a resposta por causa desse fallback
+    }
 
     // Normalizar campo `empresas` garantindo formato consistente
     // Resultado final: usuarioData.empresas = [{ id, nomeFantasia?, razaoSocial?, ... }, ...]

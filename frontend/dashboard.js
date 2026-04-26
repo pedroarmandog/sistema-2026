@@ -1822,6 +1822,52 @@ function escapeHtml(text) {
             "carregarUsuarioLogado: empresaId indefinido em usuario.empresas[0]",
             empresaObj,
           );
+          // Fallback: tentar obter empresa via endpoint protegido /api/empresas/whoami
+          try {
+            const respWho = await fetch(API_BASE + "/api/empresas/whoami", {
+              credentials: "include",
+            });
+            if (respWho.ok) {
+              const who = await respWho.json().catch(() => null);
+              const empresaIdFromReq = who?.reqUser?.empresaId || null;
+              const empresaFromUsuarioDb = who?.usuarioDb?.empresas
+                ? who.usuarioDb.empresas[0]
+                : null;
+              let fallbackId = null;
+              if (empresaIdFromReq) fallbackId = empresaIdFromReq;
+              else if (empresaFromUsuarioDb) {
+                if (typeof empresaFromUsuarioDb === "number")
+                  fallbackId = empresaFromUsuarioDb;
+                else if (typeof empresaFromUsuarioDb === "string")
+                  fallbackId = parseInt(empresaFromUsuarioDb, 10) || null;
+                else if (
+                  typeof empresaFromUsuarioDb === "object" &&
+                  empresaFromUsuarioDb !== null
+                ) {
+                  fallbackId =
+                    empresaFromUsuarioDb.id ||
+                    empresaFromUsuarioDb.ID ||
+                    empresaFromUsuarioDb.companyId ||
+                    null;
+                }
+              }
+              if (fallbackId) {
+                const respEmp = await fetch(
+                  API_BASE + "/api/empresas/" + fallbackId,
+                  {
+                    credentials: "include",
+                  },
+                );
+                if (respEmp.ok) {
+                  const empresa = await respEmp.json();
+                  nomeEmpresa =
+                    empresa.nomeFantasia || empresa.razaoSocial || nomeEmpresa;
+                }
+              }
+            }
+          } catch (e) {
+            // silencioso
+          }
         } else {
           const responseEmpresa = await fetch(
             API_BASE + "/api/empresas/" + empresaId,
