@@ -144,17 +144,10 @@ async function authUser(req, res, next) {
           empresaId,
           grupoUsuario: usuario.grupoUsuario,
         };
-        // Renovar o JWT para que próximas requisições usem o fluxo novo
-        const novoToken = gerarTokenUsuario(usuario.toJSON());
+        // NÃO renovar JWT aqui — gerar token deve acontecer apenas no login
         console.log(
-          `[authUser] renovando pethub_token para usuario ${usuario.id}`,
+          `[authUser] fallback usuarioLegado encontrado (sem renovação do JWT) usuario=${usuario.id}`,
         );
-        res.cookie("pethub_token", novoToken, {
-          httpOnly: true,
-          sameSite: "Lax",
-          maxAge: 8 * 60 * 60 * 1000,
-          path: "/",
-        });
         return next();
       }
     } catch (e) {

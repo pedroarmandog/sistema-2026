@@ -16,69 +16,39 @@ const {
 router.post("/login", usuarioController.login);
 
 // Rota para verificar se a sessão ainda está ativa (polling do frontend)
+// Importante: NÃO recriar sessões aqui — sessões devem ser criadas apenas no login.
 router.get("/sessao-ativa", async (req, res) => {
   const token =
     req.cookies?.pethub_token ||
     (req.headers.authorization?.startsWith("Bearer ")
       ? req.headers.authorization.split(" ")[1]
       : null);
+
   if (!token) {
     return res.json({ ativa: false, motivo: "sem_token" });
   }
+
   const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
 
-  let ativa = await verificarSessaoAtiva(tokenHash);
-
-  // Se não existe sessão no banco, tentar recriar a sessão se o JWT ainda for válido
-  if (!ativa) {
-    try {
-      const decoded = jwt.verify(token, JWT_SECRET);
-      console.log(
-        `[sessao-ativa] token válido para usuario=${decoded.id} empresaId=${decoded.empresaId}`,
-      );
-
-      // Recuperar empresaPainelId e, se possível, registrar sessão
-      const limiteCheck = await verificarLimiteAcessos(decoded.empresaId);
-      if (limiteCheck && limiteCheck.empresaPainelId) {
-        const clientIp =
-          req.headers["x-forwarded-for"] ||
-          req.connection?.remoteAddress ||
-          req.ip ||
-          "";
-        const userAgent = req.headers["user-agent"] || "";
-        await registrarSessao(
-          decoded.id,
-          limiteCheck.empresaPainelId,
-          tokenHash,
-          typeof clientIp === "string" ? clientIp.split(",")[0].trim() : "",
-          userAgent,
-        );
-        // Marcar como ativa após criar
-        ativa = await verificarSessaoAtiva(tokenHash);
-        if (ativa) {
-          try {
-            await atualizarAtividade(tokenHash);
-          } catch (e) {}
-        }
-      } else {
-        console.log(
-          `[sessao-ativa] não encontrou empresaPainelId para empresaId=${decoded.empresaId}`,
-        );
-      }
-    } catch (e) {
-      // token inválido/expirado — não recriar
-      console.log(`[sessao-ativa] jwt.verify falhou: ${e && e.message}`);
+  try {
+    const ativa = await verificarSessaoAtiva(tokenHash);
+    if (ativa) {
+      // Atualizar última atividade para manter sessão viva
+      try {
+        await atualizarAtividade(tokenHash);
+      } catch (e) {}
+      return res.json({ ativa: true, motivo: null });
     }
-  } else {
-    // Renovar última atividade para manter a sessão viva enquanto o dashboard está aberto
-    try {
-      await atualizarAtividade(tokenHash);
-    } catch (e) {
-      // silencioso
-    }
+
+    // Se não encontrou sessão, NÃO recriar automaticamente aqui.
+    console.log(
+      `[sessao-ativa] sessão não encontrada no banco para tokenHash=${tokenHash}`,
+    );
+    return res.json({ ativa: false, motivo: "sessao_encerrada" });
+  } catch (e) {
+    console.error("[sessao-ativa] Erro ao verificar sessão:", e && e.message);
+    return res.json({ ativa: false, motivo: "erro" });
   }
-
-  res.json({ ativa, motivo: ativa ? null : "sessao_encerrada" });
 });
 
 // Rota de logout — limpa o cookie JWT e encerra sessão ativa

@@ -271,7 +271,11 @@ async function verificarSessaoAtiva(tokenHash) {
     const sessao = await SessaoAtiva.findOne({
       where: { token_hash: tokenHash, ativo: true },
     });
-    return !!sessao;
+    const ativa = !!sessao;
+    console.log(
+      `[acessos] verificarSessaoAtiva token=${tokenHash?.substring(0, 10)} ativa=${ativa}`,
+    );
+    return ativa;
   } catch (e) {
     return true; // em caso de erro, não desconectar
   }
@@ -293,6 +297,9 @@ async function registrarSessao(
       where: { token_hash: tokenHash },
     });
     if (existente) {
+      console.log(
+        `[acessos] atualizando sessão existente token=${tokenHash.substring(0, 10)} usuario=${usuarioId} empresa=${empresaPainelId}`,
+      );
       await existente.update({
         usuario_id: usuarioId,
         empresa_id: empresaPainelId || existente.empresa_id,
@@ -303,10 +310,16 @@ async function registrarSessao(
         ultima_atividade: new Date(),
         ativo: true,
       });
+      console.log(
+        `[acessos] sessão atualizada token=${tokenHash.substring(0, 10)} id=${existente.id}`,
+      );
       return;
     }
 
-    await SessaoAtiva.create({
+    console.log(
+      `[acessos] criando nova sessão token=${tokenHash.substring(0, 10)} usuario=${usuarioId} empresa=${empresaPainelId} ip=${ip}`,
+    );
+    const nova = await SessaoAtiva.create({
       usuario_id: usuarioId,
       empresa_id: empresaPainelId,
       token_hash: tokenHash,
@@ -316,6 +329,7 @@ async function registrarSessao(
       ultima_atividade: new Date(),
       ativo: true,
     });
+    console.log(`[acessos] nova sessão criada id=${nova.id}`);
   } catch (e) {
     console.warn("[acessos] Erro ao registrar sessão:", e && e.message);
   }
@@ -326,9 +340,15 @@ async function registrarSessao(
  */
 async function encerrarSessaoPorToken(tokenHash) {
   try {
-    await SessaoAtiva.update(
+    console.log(
+      `[acessos] encerrando sessão token=${tokenHash?.substring(0, 10)}`,
+    );
+    const [count] = await SessaoAtiva.update(
       { ativo: false },
       { where: { token_hash: tokenHash, ativo: true } },
+    );
+    console.log(
+      `[acessos] encerradas ${count || 0} sessão(ões) para token=${tokenHash?.substring(0, 10)}`,
     );
   } catch (e) {
     console.warn("[acessos] Erro ao encerrar sessão:", e && e.message);
