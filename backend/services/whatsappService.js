@@ -563,19 +563,19 @@ async function inicializarCliente(empresaId, opts = {}) {
 
   const headfulExtraArgs = ["--start-maximized", "--window-size=1280,800"];
 
-  const puppeteerHeadless = headless ? "new" : false;
+  // FORÇAR caminho explícito do Chrome/Chromium (solicitado pelo usuário):
+  // Atenção: este caminho é específico para ambientes Linux com Puppeteer cache.
+  // Use apenas para teste; idealmente exporte via variável de ambiente.
   const puppeteerOptions = {
-    headless: puppeteerHeadless,
+    headless: "new",
     executablePath:
-      executablePath ||
-      process.env.PUPPETEER_EXECUTABLE_PATH ||
-      process.env.CHROME_PATH ||
-      undefined,
-    handleSIGINT: false,
-    handleSIGTERM: false,
-    handleSIGHUP: false,
-    args: baseArgs.concat(headless ? [] : headfulExtraArgs),
-    defaultViewport: headless ? { width: 1280, height: 800 } : null,
+      "/root/.cache/puppeteer/chrome/linux-146.0.7680.153/chrome-linux64/chrome",
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+    ],
   };
 
   // Nota: não definimos `userDataDir` quando usamos `LocalAuth`, pois
