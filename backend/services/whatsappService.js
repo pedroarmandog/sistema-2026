@@ -295,6 +295,13 @@ async function inicializarCliente(empresaId, opts = {}) {
 
   // Garantir diretório de sessões
   fs.mkdirSync(SESSION_DIR, { recursive: true });
+  try {
+    fs.chmodSync(SESSION_DIR, 0o700);
+  } catch (e) {
+    console.warn(
+      `[WhatsApp][${chave}] Aviso: falha ao ajustar permissões em ${SESSION_DIR}: ${e && e.message}`,
+    );
+  }
 
   // Remover SingletonLock de Chrome zumbi (se existir) para evitar erro "browser is already running"
   const possibleSessionDirs = [
@@ -321,6 +328,28 @@ async function inicializarCliente(empresaId, opts = {}) {
     process.env.PUPPETEER_EXECUTABLE_PATH || process.env.CHROME_PATH || null;
   let launcherPath = null;
   let puppeteerPath = null;
+  // Permite forçar uso do Chromium baixado pelo puppeteer (não recomendado em produção)
+  const ALLOW_PUPPETEER_CACHE =
+    process.env.ALLOW_PUPPETEER_CACHE === "1" ||
+    String(process.env.ALLOW_PUPPETEER_CACHE || "").toLowerCase() === "true";
+  // Se a variável de ambiente aponta para o cache do puppeteer, ignorar por padrão
+  try {
+    if (
+      envPath &&
+      !ALLOW_PUPPETEER_CACHE &&
+      (envPath.includes(`${path.sep}.cache${path.sep}puppeteer`) ||
+        envPath.includes(".cache/puppeteer"))
+    ) {
+      console.warn(
+        `[WhatsApp][${chave}] Variável de ambiente aponta para Chromium em cache (${envPath}). Ignorando por segurança. Defina ALLOW_PUPPETEER_CACHE=1 para forçar seu uso.`,
+      );
+      try {
+        delete process.env.CHROME_PATH;
+        delete process.env.PUPPETEER_EXECUTABLE_PATH;
+      } catch (_) {}
+      envPath = null;
+    }
+  } catch (_) {}
   try {
     // 1) CHROME_PATH — validar existência e permissão de execução
     if (envPath) {
@@ -403,9 +432,27 @@ async function inicializarCliente(empresaId, opts = {}) {
           puppeteerPath = p.executablePath();
           try {
             if (puppeteerPath) {
-              fs.accessSync(puppeteerPath, fs.constants.X_OK);
-              executablePath = puppeteerPath;
-              selectedFrom = "puppeteer";
+              // Evitar, por padrão, usar o Chromium baixado em ~/.cache/puppeteer
+              const home = process.env.HOME || process.env.USERPROFILE || "";
+              const isCachePath =
+                puppeteerPath.includes(
+                  `${path.sep}.cache${path.sep}puppeteer`,
+                ) ||
+                puppeteerPath.includes(".cache/puppeteer") ||
+                (home &&
+                  puppeteerPath.includes(
+                    path.join(home, ".cache", "puppeteer"),
+                  ));
+              if (isCachePath && !ALLOW_PUPPETEER_CACHE) {
+                console.warn(
+                  `[WhatsApp][${chave}] puppeteer.executablePath() aponta para cache (${puppeteerPath}) — ignorando por padrão. Defina ALLOW_PUPPETEER_CACHE=1 para forçar uso.`,
+                );
+                puppeteerPath = null;
+              } else {
+                fs.accessSync(puppeteerPath, fs.constants.X_OK);
+                executablePath = puppeteerPath;
+                selectedFrom = "puppeteer";
+              }
             }
           } catch (_) {
             puppeteerPath = null;
@@ -512,14 +559,13 @@ async function inicializarCliente(empresaId, opts = {}) {
     "--disable-setuid-sandbox",
     "--disable-dev-shm-usage",
     "--disable-gpu",
-    "--no-first-run",
-    "--no-zygote",
   ];
 
   const headfulExtraArgs = ["--start-maximized", "--window-size=1280,800"];
 
+  const puppeteerHeadless = headless ? "new" : false;
   const puppeteerOptions = {
-    headless: headless,
+    headless: puppeteerHeadless,
     executablePath:
       executablePath ||
       process.env.PUPPETEER_EXECUTABLE_PATH ||
@@ -541,6 +587,11 @@ async function inicializarCliente(empresaId, opts = {}) {
     `[WhatsApp][${chave}] puppeteerOptions: ${util.inspect(puppeteerOptions, {
       depth: 2,
     })}`,
+  );
+
+  // Log mais explícito do binário decidido
+  console.log(
+    `[WhatsApp][${chave}] Usando Chrome executável: ${puppeteerOptions.executablePath || "(nenhum)"} (fonte: ${selectedFrom || "(nenhum)"})`,
   );
 
   // Requerir whatsapp-web.js APÓS garantir CHROME_PATH/executablePath
@@ -573,6 +624,13 @@ async function inicializarCliente(empresaId, opts = {}) {
   const localAuthPath = path.join(SESSION_DIR, `empresa_${chave}`);
   try {
     fs.mkdirSync(localAuthPath, { recursive: true });
+    try {
+      fs.chmodSync(localAuthPath, 0o700);
+    } catch (e) {
+      console.warn(
+        `[WhatsApp][${chave}] Aviso: falha ao ajustar permissões em ${localAuthPath}: ${e && e.message}`,
+      );
+    }
   } catch (e) {}
 
   // Criar o cliente WhatsApp com as opções do Puppeteer e LocalAuth isolados
@@ -935,6 +993,14 @@ async function inicializarCliente(empresaId, opts = {}) {
       }
 
       // Fallback padrão: marcar erro e notificar frontend
+      if (!executablePath) {
+        console.error(
+          `[WhatsApp][${chave}] Nenhum Chrome/Chromium utilizável detectado.`,
+        );
+        console.error(
+          `[WhatsApp][${chave}] Soluções: 1) Instale google-chrome-stable ou chromium no servidor (ex: sudo apt-get install -y google-chrome-stable). 2) Defina CHROME_PATH ou PUPPETEER_EXECUTABLE_PATH apontando para o binário. 3) Se desejar auto-instalação, defina AUTO_INSTALL_CHROME=1 e execute o processo como root (apenas se confiar no script).`,
+        );
+      }
       console.error(`[WhatsApp][empresa:${chave}] Erro ao inicializar:`, msg);
       estado.status = "erro";
       emitirSSE(chave, "erro", { mensagem: msg });
