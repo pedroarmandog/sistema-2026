@@ -54,8 +54,9 @@ function extractEmpresaId(empresas) {
  */
 async function authUser(req, res, next) {
   // 1. Tentar JWT (novo fluxo)
-  // Tornar obrigatório por padrão; para compatibilidade, setar REQUIRE_AUTH_HEADER=0
-  const REQUIRE_HEADER = process.env.REQUIRE_AUTH_HEADER !== "0";
+  // Por compatibilidade com o frontend, o header não é obrigatório por padrão.
+  // Para forçar header, setar REQUIRE_AUTH_HEADER=1 no .env
+  const REQUIRE_HEADER = process.env.REQUIRE_AUTH_HEADER === "1";
   const tokenFromHeader =
     req.headers &&
     req.headers.authorization &&
@@ -121,12 +122,10 @@ async function authUser(req, res, next) {
         // Verificar se empresa está bloqueada
         if (await isEmpresaBloqueada(empresaId)) {
           console.log(`[authUser] empresa ${empresaId} bloqueada`);
-          return res
-            .status(403)
-            .json({
-              mensagem: "Sistema bloqueado. Entre em contato com o suporte.",
-              bloqueado: true,
-            });
+          return res.status(403).json({
+            mensagem: "Sistema bloqueado. Entre em contato com o suporte.",
+            bloqueado: true,
+          });
         }
 
         req.user = {
