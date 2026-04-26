@@ -96,7 +96,13 @@ async function processarFila() {
       empresasVerificadas.add(empId);
       await tentarReconectar(empId);
     }
+    console.log(
+      `[Queue] Iniciando processamento do envio #${envio.id} (empresa ${empId})`,
+    );
     await processarEnvio(envio, LogEnvio);
+    // Delay mínimo entre envios para evitar bursts que abram muitas conexões
+    // (2 segundos por envio; ajustar se necessário para 3-5s)
+    await new Promise((r) => setTimeout(r, 2000));
   }
 }
 
