@@ -1017,6 +1017,42 @@ async function inicializarCliente(empresaId, opts = {}) {
                 `[WhatsApp][${chave}] Falha ao executar instalador automático: ${e && e.message}`,
               );
             }
+            // Se o instalador via apt não funcionou (shared hosting), tentar baixar
+            // o Chromium via npx puppeteer installer como fallback (se disponível).
+            try {
+              console.log(
+                `[WhatsApp][${chave}] Tentando fallback: 'npx puppeteer@latest install chrome'...`,
+              );
+              const npxRes = spawnSync(
+                "npx",
+                ["puppeteer@latest", "install", "chrome"],
+                { stdio: "inherit", timeout: 0 },
+              );
+              if (npxRes && npxRes.status === 0) {
+                console.log(
+                  `[WhatsApp][${chave}] Fallback npx install chrome concluído com sucesso. Recriar cliente...`,
+                );
+                try {
+                  await client.destroy();
+                } catch (_) {}
+                clientsMap.delete(chave);
+                try {
+                  return await inicializarCliente(empresaId);
+                } catch (e) {
+                  console.error(
+                    `[WhatsApp][${chave}] Falha ao re-inicializar após npx install: ${e && e.message}`,
+                  );
+                }
+              } else {
+                console.warn(
+                  `[WhatsApp][${chave}] Fallback npx install chrome falhou (status: ${npxRes && npxRes.status})`,
+                );
+              }
+            } catch (e) {
+              console.warn(
+                `[WhatsApp][${chave}] Falha ao executar fallback npx install: ${e && e.message}`,
+              );
+            }
           }
         }
       }
