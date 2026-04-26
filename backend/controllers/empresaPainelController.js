@@ -270,11 +270,9 @@ async function excluir(req, res) {
     const { usuario, senha } = req.body || {};
     if (!senha) {
       await t.rollback();
-      return res
-        .status(400)
-        .json({
-          error: "Senha do admin é obrigatória para confirmar exclusão",
-        });
+      return res.status(400).json({
+        error: "Senha do admin é obrigatória para confirmar exclusão",
+      });
     }
 
     const admin = await Admin.findByPk(req.adminId, { transaction: t });
@@ -293,11 +291,9 @@ async function excluir(req, res) {
         String(admin.id) === norm;
       if (!matchesUser) {
         await t.rollback();
-        return res
-          .status(403)
-          .json({
-            error: "Usuário administrador não confere com o admin logado",
-          });
+        return res.status(403).json({
+          error: "Usuário administrador não confere com o admin logado",
+        });
       }
     }
 
@@ -797,8 +793,31 @@ async function criarCompleta(req, res) {
       { transaction: t },
     );
 
+    // Garantir que o JWT inclua explicitamente a empresa criada (compatibilidade)
+    const usuarioPayload = usuario.toJSON();
+    usuarioPayload.empresa_id = usuarioPayload.empresa_id || empresaSistema.id;
+
+    // Atualizar coluna legada `usuarios.empresa_id` quando presente (compatibilidade)
+    try {
+      await sequelize.query(
+        "UPDATE usuarios SET empresa_id = :empresaId WHERE id = :userId",
+        {
+          replacements: { empresaId: empresaSistema.id, userId: usuario.id },
+          transaction: t,
+        },
+      );
+      console.log(
+        `[admin/empresas/completa] Atualizado usuarios.empresa_id usuario=${usuario.id} -> empresa=${empresaSistema.id}`,
+      );
+    } catch (e) {
+      console.warn(
+        "[admin/empresas/completa] Falha ao atualizar usuarios.empresa_id:",
+        e && e.message,
+      );
+    }
+
     // Gerar token do usuário criado para facilitar teste/login imediato
-    const token = gerarTokenUsuario(usuario.toJSON());
+    const token = gerarTokenUsuario(usuarioPayload);
 
     await t.commit();
 
@@ -849,9 +868,7 @@ async function impersonate(req, res) {
 
     const { usuario, senha } = req.body || {};
     if (!senha) {
-      return res
-        .status(400)
-        .json({ error: "Senha do admin é obrigatória" });
+      return res.status(400).json({ error: "Senha do admin é obrigatória" });
     }
 
     const admin = await Admin.findByPk(req.adminId);
@@ -870,7 +887,9 @@ async function impersonate(req, res) {
       if (!matchesUser) {
         return res
           .status(403)
-          .json({ error: "Usuário administrador não confere com o admin logado" });
+          .json({
+            error: "Usuário administrador não confere com o admin logado",
+          });
       }
     }
 
@@ -880,7 +899,9 @@ async function impersonate(req, res) {
     }
 
     // Encontrar a empresa do sistema pelo CNPJ
-    const cnpj = empresaPainel.cnpj ? empresaPainel.cnpj.replace(/\D/g, "") : null;
+    const cnpj = empresaPainel.cnpj
+      ? empresaPainel.cnpj.replace(/\D/g, "")
+      : null;
     if (!cnpj) {
       return res.status(400).json({ error: "Empresa sem CNPJ vinculado" });
     }
