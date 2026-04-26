@@ -43,8 +43,8 @@ exports.setUltimaChavePix = async (req, res) => {
     res.status(500).json({ erro: "Erro ao atualizar última chave Pix" });
   }
 };
-const { Empresa, Usuario } = require("../models");
-const { Op } = require("sequelize");
+const { Empresa, Usuario, sequelize } = require("../models");
+const { Op, QueryTypes } = require("sequelize");
 const fs = require("fs");
 const path = require("path");
 
@@ -120,10 +120,34 @@ exports.listarEmpresas = async (req, res) => {
         if (empresaId) {
           where.id = empresaId;
         } else {
-          console.log(
-            "[empresaController.listarEmpresas] usuário sem empresas vinculadas — retornando []",
-          );
-          return res.json([]);
+          // Tentar ler coluna `empresa_id` diretamente do banco (migração gradual)
+          let usuarioEmpresaId = null;
+          try {
+            const rows = await sequelize.query(
+              "SELECT empresa_id FROM usuarios WHERE id = :id LIMIT 1",
+              { replacements: { id: req.user.id }, type: QueryTypes.SELECT },
+            );
+            if (rows && rows.length > 0 && rows[0].empresa_id) {
+              usuarioEmpresaId = Number(rows[0].empresa_id) || null;
+            }
+          } catch (e) {
+            console.warn(
+              "[empresaController.listarEmpresas] erro ao buscar usuarios.empresa_id:",
+              e && e.message,
+            );
+          }
+
+          if (usuarioEmpresaId) {
+            where.id = usuarioEmpresaId;
+            console.log(
+              `[empresaController.listarEmpresas] usando Usuario.empresa_id -> ${usuarioEmpresaId}`,
+            );
+          } else {
+            console.log(
+              "[empresaController.listarEmpresas] usuário sem empresas vinculadas — retornando []",
+            );
+            return res.json([]);
+          }
         }
       } else {
         // isMaster && sem empresas vinculadas -> retornar todas (comportamento existente)

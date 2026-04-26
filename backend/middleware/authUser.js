@@ -77,17 +77,66 @@ async function authUser(req, res, next) {
       console.log(
         `[authUser] token decodificado: id=${decoded.id} empresaId=${decoded.empresaId} grupoUsuario=${decoded.grupoUsuario}`,
       );
+
+      // Tentar derivar empresaId quando não estiver presente no JWT
+      let empresaId = decoded.empresaId || null;
+      if (!empresaId && decoded.id) {
+        try {
+          const models = require("../models");
+          const { sequelize } = models;
+          const { QueryTypes } = require("sequelize");
+          const rows = await sequelize.query(
+            "SELECT empresa_id FROM usuarios WHERE id = :id LIMIT 1",
+            {
+              replacements: { id: decoded.id },
+              type: QueryTypes.SELECT,
+            },
+          );
+          if (rows && rows.length > 0 && rows[0].empresa_id) {
+            empresaId = Number(rows[0].empresa_id) || null;
+            console.log(
+              `[authUser] empresaId derivado de usuarios.empresa_id = ${empresaId}`,
+            );
+          }
+        } catch (e) {
+          // fallback silencioso
+        }
+
+        // último recurso: tentar extrair de usuario.empresas (JSON) do registro
+        if (!empresaId) {
+          try {
+            const { Usuario } = require("../models");
+            const usuarioRec = await Usuario.findByPk(decoded.id, {
+              attributes: ["empresas"],
+            });
+            if (
+              usuarioRec &&
+              Array.isArray(usuarioRec.empresas) &&
+              usuarioRec.empresas.length
+            ) {
+              empresaId = extractEmpresaId(usuarioRec.empresas);
+              console.log(
+                `[authUser] empresaId derivado de Usuario.empresas = ${empresaId}`,
+              );
+            }
+          } catch (e) {
+            // silencioso
+          }
+        }
+      }
+
       // Verificar se empresa está bloqueada
-      if (await isEmpresaBloqueada(decoded.empresaId)) {
-        console.log(`[authUser] empresa ${decoded.empresaId} bloqueada`);
+      if (await isEmpresaBloqueada(empresaId)) {
+        console.log(`[authUser] empresa ${empresaId} bloqueada`);
         return res.status(403).json({
           mensagem: "Sistema bloqueado. Entre em contato com o suporte.",
           bloqueado: true,
         });
       }
+
       req.user = {
         id: decoded.id,
-        empresaId: decoded.empresaId,
+        empresaId,
         grupoUsuario: decoded.grupoUsuario,
       };
       // Atualizar última atividade da sessão (fire-and-forget)
@@ -167,9 +216,16 @@ async function authUser(req, res, next) {
  * Gera um JWT para o usuário autenticado.
  */
 function gerarTokenUsuario(usuario) {
-  const empresaId = extractEmpresaId(
-    Array.isArray(usuario.empresas) ? usuario.empresas : [],
-  );
+  // Preferir campo `empresa_id` quando disponível (compatibilidade com migração)
+  let empresaId = null;
+  if (usuario && (usuario.empresa_id || usuario.empresaId)) {
+    empresaId = Number(usuario.empresa_id || usuario.empresaId) || null;
+  }
+  if (!empresaId) {
+    empresaId = extractEmpresaId(
+      Array.isArray(usuario.empresas) ? usuario.empresas : [],
+    );
+  }
 
   return jwt.sign(
     {

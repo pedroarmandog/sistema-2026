@@ -209,6 +209,10 @@ exports.login = async (req, res) => {
       console.log(
         `📝 Sessão registrada para usuário ${usuarioEncontrado.id} na empresa painel ${limiteCheck.empresaPainelId}`,
       );
+    } else {
+      console.log(
+        `[login] empresaPainelId ausente para empresaId=${_empresaId}; sessão NÃO registrada no DB`,
+      );
     }
 
     // Cookie HttpOnly (seguro) — enviado automaticamente pelo navegador

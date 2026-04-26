@@ -77,6 +77,33 @@ document.addEventListener("DOMContentLoaded", function () {
             console.warn(
               `⚠️ Sessão inativa detectada (${falhasConsecutivas}/${LIMITE_FALHAS}) motivo=${data.motivo}`,
             );
+
+            // Tentar reativar a sessão UMA VEZ antes de redirecionar.
+            if (falhasConsecutivas === 1) {
+              try {
+                const resp2 = await fetch("/api/usuarios/start-session", {
+                  method: "POST",
+                  credentials: "include",
+                });
+                if (resp2.ok) {
+                  const sdata = await resp2.json().catch(() => null);
+                  if (sdata && sdata.ativa) {
+                    console.log(
+                      "[checarSessao] start-session reativou a sessão",
+                    );
+                    falhasConsecutivas = 0;
+                    sessaoVerificando = false;
+                    return;
+                  }
+                }
+              } catch (e) {
+                console.warn(
+                  "[checarSessao] falha ao chamar start-session:",
+                  e,
+                );
+              }
+            }
+
             if (falhasConsecutivas >= LIMITE_FALHAS) {
               console.warn(
                 "⚠️ Sessão encerrada remotamente — redirecionando...",

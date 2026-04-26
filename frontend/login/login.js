@@ -159,6 +159,17 @@ document
       setCookie("usuarioLogadoId", resultado.id, 30);
       setCookie("usuarioLogadoNome", resultado.nome, 30);
 
+      // Tentar registrar sessão explicitamente no backend (uma vez)
+      try {
+        await fetch("/api/usuarios/start-session", {
+          method: "POST",
+          credentials: "include",
+        });
+        console.log("[login] start-session chamado com sucesso");
+      } catch (e) {
+        console.warn("[login] falha ao chamar start-session:", e);
+      }
+
       // Redirecionar para o dashboard (caminho público servido pelo backend)
       window.location.href = "/dashboard.html";
     } catch (error) {
