@@ -568,7 +568,7 @@ async function inicializarCliente(empresaId, opts = {}) {
   // Use apenas para teste; idealmente exporte via variável de ambiente.
   const puppeteerOptions = {
     headless: "new",
-    executablePath: "/usr/bin/chromium",
+    executablePath: "/usr/bin/chromium-browser",
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
