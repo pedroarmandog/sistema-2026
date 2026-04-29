@@ -410,7 +410,6 @@ async function inicializarCliente(empresaId, opts = {}) {
       const systemCandidates = [
         "/usr/bin/google-chrome",
         "/usr/bin/google-chrome-stable",
-        "/usr/bin/chromium-browser",
         "/usr/bin/chromium",
         "/snap/bin/chromium",
       ];
@@ -570,7 +569,6 @@ async function inicializarCliente(empresaId, opts = {}) {
   // Use apenas para teste; idealmente exporte via variável de ambiente.
   const puppeteerOptions = {
     headless: "new",
-    executablePath: "/usr/bin/chromium-browser",
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
@@ -664,14 +662,18 @@ async function inicializarCliente(empresaId, opts = {}) {
     }
   } catch (e) {}
 
-  // Criar o cliente WhatsApp com as opções do Puppeteer e LocalAuth isolados
   const client = new Client({
-    authStrategy: new LocalAuth({
-      // dataPath aponta para a pasta dedicada da instância (não usamos clientId)
-      dataPath: localAuthPath,
-    }),
-    puppeteer: puppeteerOptions,
-  });
+  authStrategy: new LocalAuth({
+    dataPath: localAuthPath,
+  }),
+  puppeteer: {
+    headless: true,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+    ],
+  },
+});
 
   // Estado local do cliente
   const estado = {
