@@ -1,8 +1,11 @@
+process.env.PUPPETEER_CACHE_DIR = "/home/u779602851/domains/pethubflow.com.br/.cache/puppeteer";
+
 /* @ts-nocheck */
 // @ts-nocheck
 require("dotenv").config({
   path: require("path").resolve(__dirname, "../.env"),
 });
+
 
 
 const express = require("express");
