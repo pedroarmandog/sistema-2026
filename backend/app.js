@@ -3,6 +3,8 @@
 require("dotenv").config({
   path: require("path").resolve(__dirname, "../.env"),
 });
+
+process.env.PUPPETEER_EXECUTABLE_PATH = "/usr/bin/chromium";
 // Garantir CHROME_PATH antes de carregar módulos que podem usar Puppeteer
 try {
   if (!process.env.CHROME_PATH) {

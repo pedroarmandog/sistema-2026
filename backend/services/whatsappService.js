@@ -10,6 +10,8 @@
 
 // Não forçar variáveis de ambiente aqui — respeitar o que o ambiente fornece
 
+process.env.PUPPETEER_EXECUTABLE_PATH = "/usr/bin/chromium";
+
 const QRCode = require("qrcode");
 const path = require("path");
 const fs = require("fs");
