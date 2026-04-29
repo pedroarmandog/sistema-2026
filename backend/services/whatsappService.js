@@ -10,7 +10,12 @@
 
 // Não forçar variáveis de ambiente aqui — respeitar o que o ambiente fornece
 
-process.env.PUPPETEER_EXECUTABLE_PATH = "/usr/bin/chromium";
+// Não sobrescrever se já definido pela configuração global (app.js / ambiente)
+if (!process.env.PUPPETEER_EXECUTABLE_PATH && !process.env.CHROME_PATH) {
+  try {
+    process.env.PUPPETEER_EXECUTABLE_PATH = "/usr/bin/chromium";
+  } catch (_) {}
+}
 
 const QRCode = require("qrcode");
 const path = require("path");
@@ -663,17 +668,14 @@ async function inicializarCliente(empresaId, opts = {}) {
   } catch (e) {}
 
   const client = new Client({
-  authStrategy: new LocalAuth({
-    dataPath: localAuthPath,
-  }),
-  puppeteer: {
-    headless: true,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-    ],
-  },
-});
+    authStrategy: new LocalAuth({
+      dataPath: localAuthPath,
+    }),
+    puppeteer: {
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    },
+  });
 
   // Estado local do cliente
   const estado = {
