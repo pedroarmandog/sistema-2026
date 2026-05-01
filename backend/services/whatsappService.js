@@ -325,17 +325,17 @@ async function inicializarCliente(empresaId, opts = {}) {
     } catch (_) {}
   }
 
-  const systemChrome = '/usr/bin/google-chrome-stable';
-  const executablePath =
-  process.env.PUPPETEER_EXECUTABLE_PATH ||
-  process.env.CHROME_PATH ||
-  systemChrome;
+    const puppeteer = require('puppeteer');
 
-  const browser = await puppeteer.launch({
-  executablePath,
-  args: ['--no-sandbox', '--disable-setuid-sandbox'],
-});
+    const executablePath =
+      process.env.PUPPETEER_EXECUTABLE_PATH ||
+      process.env.CHROME_PATH ||
+      '/usr/bin/chromium';
 
+    const browser = await puppeteer.launch({
+      executablePath,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
 
   // Verificação final: testar se o binário realmente pode ser executado (ex: --version)
   try {
