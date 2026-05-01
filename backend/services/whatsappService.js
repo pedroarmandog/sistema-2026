@@ -333,9 +333,17 @@ async function inicializarCliente(empresaId, opts = {}) {
       '/usr/bin/google-chrome';
 
     const browser = await puppeteer.launch({
-      executablePath,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
+    executablePath,
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--no-zygote',
+      '--single-process'
+  ]
+});
 
   // Verificação final: testar se o binário realmente pode ser executado (ex: --version)
   try {
