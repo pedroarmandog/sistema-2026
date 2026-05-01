@@ -84,18 +84,35 @@ form.addEventListener("submit", async (e) => {
 // - Limpa a lista atual no HTML
 // - Cria um <li> para cada cliente retornado e adiciona ao elemento 'lista'
 async function listarClientes() {
-  const res = await fetch("/api/clientes");
-  const clientes = await res.json();
+  try {
+    const res = await fetch("/api/clientes");
+    const body = await res.json().catch(() => null);
+    console.log("[listarClientes] status=", res.status, "body=", body);
 
-  // Limpa a lista antes de adicionar novamente
-  lista.innerHTML = "";
+    let clientes = null;
+    if (Array.isArray(body)) clientes = body;
+    else if (body && Array.isArray(body.clientes)) clientes = body.clientes;
+    else if (body && Array.isArray(body.data)) clientes = body.data;
+    else {
+      console.warn(
+        "[listarClientes] resposta inesperada ao listar clientes",
+        body,
+      );
+      clientes = [];
+    }
 
-  // Para cada cliente, cria um item de lista e mostra nome + emai
-  clientes.forEach((c) => {
-    const li = document.createElement("li");
-    li.textContent = `${c.nome} - ${c.email}`;
-    lista.appendChild(li);
-  });
+    // Limpa a lista antes de adicionar novamente
+    lista.innerHTML = "";
+
+    // Para cada cliente, cria um item de lista e mostra nome + email
+    clientes.forEach((c) => {
+      const li = document.createElement("li");
+      li.textContent = `${c.nome} - ${c.email}`;
+      lista.appendChild(li);
+    });
+  } catch (e) {
+    console.error("[listarClientes] erro ao listar clientes:", e);
+  }
 }
 
 // 🐶 EVENTO 2: Quando o formulário de pet for enviado...
