@@ -429,6 +429,12 @@ async function inicializarCliente(empresaId, opts = {}) {
       }
     } catch (_) {}
   }
+  // Preparar variável de caminho do executável do Chrome/Chromium
+  let executablePath =
+    process.env.PUPPETEER_EXECUTABLE_PATH ||
+    process.env.CHROME_PATH ||
+    undefined;
+
   // Verificação final: testar se o binário realmente pode ser executado (ex: --version)
   try {
     if (executablePath) {
