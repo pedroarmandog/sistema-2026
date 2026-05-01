@@ -5,6 +5,14 @@ const JWT_SECRET =
   process.env.JWT_USER_SECRET || "pethub_user_secret_2026_!@#$%";
 const JWT_EXPIRES_IN = "8h";
 
+// Cache simples em memória para usuários e status de empresa
+const USER_CACHE = new Map(); // key: userId -> { user, expiresAt }
+const USER_CACHE_TTL = Number(process.env.USER_CACHE_TTL_MS) || 60 * 1000; // 60s default
+
+const EMPRESA_BLOCKED_CACHE = new Map(); // key: empresaId -> { blocked, expiresAt }
+const EMPRESA_CACHE_TTL =
+  Number(process.env.EMPRESA_CACHE_TTL_MS) || 5 * 60 * 1000; // 5min default
+
 /**
  * Verifica se a empresa do usuário está BLOQUEADA na tabela empresas_painel.
  * Retorna true se bloqueada, false caso contrário.
@@ -72,69 +80,79 @@ async function authUser(req, res, next) {
   }
 
   const token = tokenFromHeader || tokenFromCookie;
-  const tokenSource = tokenFromHeader
-    ? "header:Authorization"
-    : tokenFromCookie
-      ? "cookie:pethub_token"
-      : null;
 
   if (token) {
-    console.log(
-      `[authUser] token encontrado via ${tokenSource} (len=${String(token).length})`,
-    );
     try {
       const decoded = jwt.verify(token, JWT_SECRET);
-      console.log(
-        `[authUser] token decodificado: id=${decoded.id} empresaId=${decoded.empresaId} grupoUsuario=${decoded.grupoUsuario}`,
-      );
 
-      // Buscar usuário no banco e validar ativo
-      try {
-        const { Usuario } = require("../models");
-        const usuarioDb = await Usuario.findByPk(decoded.id, {
-          attributes: ["id", "ativo", "empresas", "empresa_id", "grupoUsuario"],
-        });
-        if (!usuarioDb || !usuarioDb.ativo) {
-          return res
-            .status(401)
-            .json({ mensagem: "Usuário inválido ou desativado" });
+      const userId = decoded && decoded.id ? Number(decoded.id) : null;
+      if (!userId) {
+        if (REQUIRE_HEADER)
+          return res.status(401).json({ mensagem: "Token inválido" });
+        // continuar para fallback
+      } else {
+        const now = Date.now();
+        // Checar cache de usuário
+        const cached = USER_CACHE.get(userId);
+        if (cached && cached.expiresAt > now) {
+          req.user = cached.user;
+          // Atualizar atividade em background
+          try {
+            const tokenHash = crypto
+              .createHash("sha256")
+              .update(token)
+              .digest("hex");
+            const {
+              atualizarAtividade,
+            } = require("../controllers/acessosController");
+            atualizarAtividade(tokenHash);
+          } catch (_) {}
+          return next();
         }
 
-        // Determinar empresaId: preferir o valor do token, depois coluna legada, depois JSON `empresas`
-        let empresaId = decoded.empresaId || null;
-        if (!empresaId && usuarioDb.empresa_id) {
-          empresaId = Number(usuarioDb.empresa_id) || null;
-          console.log(
-            `[authUser] empresaId derivado de usuarios.empresa_id = ${empresaId}`,
-          );
-        }
-        if (
-          !empresaId &&
-          Array.isArray(usuarioDb.empresas) &&
-          usuarioDb.empresas.length
-        ) {
-          empresaId = extractEmpresaId(usuarioDb.empresas);
-          console.log(
-            `[authUser] empresaId derivado de Usuario.empresas = ${empresaId}`,
-          );
-        }
-
-        // Verificar se empresa está bloqueada
-        if (await isEmpresaBloqueada(empresaId)) {
-          console.log(`[authUser] empresa ${empresaId} bloqueada`);
-          return res.status(403).json({
-            mensagem: "Sistema bloqueado. Entre em contato com o suporte.",
-            bloqueado: true,
-          });
-        }
-
-        req.user = {
-          id: usuarioDb.id,
-          empresaId,
-          grupoUsuario: usuarioDb.grupoUsuario,
+        // Construir usuário baseado no token (fluxo rápido, sem DB)
+        const userFromToken = {
+          id: userId,
+          empresaId: decoded.empresaId || null,
+          grupoUsuario: decoded.grupoUsuario || null,
         };
 
-        // Atualizar última atividade da sessão (fire-and-forget)
+        // Verificação crítica: empresa bloqueada (usar cache para reduzir queries)
+        const empresaId = userFromToken.empresaId;
+        if (empresaId) {
+          const eb = EMPRESA_BLOCKED_CACHE.get(String(empresaId));
+          if (eb && eb.expiresAt > now) {
+            if (eb.blocked) {
+              return res
+                .status(403)
+                .json({ mensagem: "Sistema bloqueado.", bloqueado: true });
+            }
+          } else {
+            try {
+              const blocked = await isEmpresaBloqueada(empresaId);
+              EMPRESA_BLOCKED_CACHE.set(String(empresaId), {
+                blocked,
+                expiresAt: now + EMPRESA_CACHE_TTL,
+              });
+              if (blocked)
+                return res
+                  .status(403)
+                  .json({ mensagem: "Sistema bloqueado.", bloqueado: true });
+            } catch (e) {
+              // Em caso de erro ao verificar bloqueio, logar e permitir (evitar negar serviço por falha de DB)
+              console.warn(
+                `[authUser] falha ao verificar bloqueio da empresa ${empresaId}: ${e && e.message}`,
+              );
+            }
+          }
+        }
+
+        // Cachear resultado e seguir
+        USER_CACHE.set(userId, {
+          user: userFromToken,
+          expiresAt: now + USER_CACHE_TTL,
+        });
+        req.user = userFromToken;
         try {
           const tokenHash = crypto
             .createHash("sha256")
@@ -145,51 +163,34 @@ async function authUser(req, res, next) {
           } = require("../controllers/acessosController");
           atualizarAtividade(tokenHash);
         } catch (_) {}
-
         return next();
-      } catch (e) {
-        console.log(
-          `[authUser] erro ao carregar usuario do DB: ${e && e.message}`,
-        );
-        return res
-          .status(401)
-          .json({ mensagem: "Erro na validação do usuário" });
       }
     } catch (err) {
-      console.log(`[authUser] falha ao verificar token: ${err && err.message}`);
       if (REQUIRE_HEADER) {
         return res.status(401).json({ mensagem: "Token inválido ou expirado" });
       }
       // token inválido/expirado — continua para fallback quando header não for obrigatório
     }
-  } else {
-    console.log(
-      "[authUser] nenhum token JWT encontrado, tentando fallback usuarioLogadoId",
-    );
   }
 
   // 2. Fallback: cookie legado usuarioLogadoId (sessão anterior ao JWT)
   const usuarioLegadoId = req.cookies?.usuarioLogadoId;
   if (usuarioLegadoId) {
-    console.log(
-      `[authUser] cookie usuarioLogadoId presente: ${usuarioLegadoId}`,
-    );
+    // cookie legado presente; proceder com busca direta (cache pode ser aplicado)
     try {
       const { Usuario } = require("../models");
       const usuario = await Usuario.findByPk(parseInt(usuarioLegadoId), {
         attributes: ["id", "grupoUsuario", "empresas", "ativo"],
       });
       if (usuario && usuario.ativo) {
-        console.log(
-          `[authUser] encontrado usuario legado: id=${usuario.id} grupo=${usuario.grupoUsuario} empresas=${JSON.stringify(usuario.empresas)}`,
-        );
+        // usuario legado encontrado
         const empresas = Array.isArray(usuario.empresas)
           ? usuario.empresas
           : [];
         const empresaId = extractEmpresaId(empresas);
         // Verificar se empresa está bloqueada
         if (await isEmpresaBloqueada(empresaId)) {
-          console.log(`[authUser] empresa ${empresaId} bloqueada (fallback)`);
+          console.warn(`[authUser] empresa ${empresaId} bloqueada (fallback)`);
           return res.status(403).json({
             mensagem: "Sistema bloqueado. Entre em contato com o suporte.",
             bloqueado: true,
@@ -201,19 +202,17 @@ async function authUser(req, res, next) {
           grupoUsuario: usuario.grupoUsuario,
         };
         // NÃO renovar JWT aqui — gerar token deve acontecer apenas no login
-        console.log(
-          `[authUser] fallback usuarioLegado encontrado (sem renovação do JWT) usuario=${usuario.id}`,
-        );
+        // sucesso
         return next();
       }
     } catch (e) {
-      console.log(
+      console.warn(
         `[authUser] fallback usuarioLegado falhou: ${e && e.message}`,
       );
       // fallback falhou, retornar 401
     }
   } else {
-    console.log("[authUser] cookie usuarioLogadoId ausente");
+    // cookie legado ausente
   }
 
   return res.status(401).json({ mensagem: "Não autenticado. Faça login." });

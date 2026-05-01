@@ -3,7 +3,7 @@
 // contiver um binário do Chrome/Chromium executável; caso contrário
 // não definimos a variável para evitar que o Puppeteer tente usar
 // um cache vazio/íntil (comportamento observado em hospedagem compartilhada).
-console.log('CHROME USADO:', process.env.PUPPETEER_EXECUTABLE_PATH);
+console.log("CHROME USADO:", process.env.PUPPETEER_EXECUTABLE_PATH);
 (function configurePuppeteer() {
   const requestedCacheDir =
     "/home/u779602851/domains/pethubflow.com.br/.cache/puppeteer";
@@ -204,11 +204,16 @@ app.use(
   }),
 ); // servir arquivos estáticos do frontend
 
-// Middleware de logging para debug
-app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
-  next();
-});
+// Middleware de logging para debug (ativo apenas em desenvolvimento ou quando explicitado)
+const ENABLE_REQUEST_LOG =
+  process.env.ENABLE_REQUEST_LOG === "1" ||
+  process.env.NODE_ENV !== "production";
+if (ENABLE_REQUEST_LOG) {
+  app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    next();
+  });
+}
 
 // Middleware: criar contexto por requisição para instrumentação de queries
 app.use((req, res, next) => {

@@ -512,46 +512,30 @@ const DashboardApp = {
   },
 
   async refreshAll() {
-    // Proteção contra execuções concorrentes global
-    if (isRefreshing) {
-      console.debug(
-        "[DashboardApp] refreshAll já em execução — ignorando chamada concorrente",
-      );
-      return;
-    }
-    isRefreshing = true;
-    try {
-      await this.loadStats();
-      await delay(300);
+  if (isRefreshing) return;
 
-      await this.loadIndicadores();
-      await delay(300);
+  isRefreshing = true;
 
-      await this.loadPeriodicos();
-      await delay(300);
+  try {
+    const res = await fetch('/api/dashboard/full');
+    const data = await res.json();
 
-      await this.loadContasAPagar();
-      await delay(300);
+    this.renderStats(data.stats);
+    this.renderIndicadores(data.indicadores);
+    this.renderPeriodicos(data.periodicos);
+    this.renderContasAPagar(data.contasAPagar);
+    this.renderEstoqueBaixo(data.estoqueBaixo);
+    this.renderAniversariantes(data.aniversariantes);
+    this.renderOportunidades(data.oportunidades);
+    this.renderTaxiDog(data.taxiDog);
+    this.renderValidade(data.validade);
 
-      await this.loadEstoqueBaixo();
-      await delay(300);
-
-      await this.loadAniversariantes();
-      await delay(300);
-
-      await this.loadOportunidades();
-      await delay(300);
-
-      await this.loadTaxiDog();
-      await delay(300);
-
-      await this.loadValidade();
-    } catch (err) {
-      console.error("Erro no refreshAll:", err);
-    } finally {
-      isRefreshing = false;
-    }
-  },
+  } catch (err) {
+    console.error("Erro no refreshAll:", err);
+  } finally {
+    isRefreshing = false;
+  }
+},
 
   async apiFetch(endpoint, options = {}, retries = 2) {
     // Monitorar requisições em voo para debug

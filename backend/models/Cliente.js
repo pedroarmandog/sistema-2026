@@ -19,163 +19,155 @@ const dbPort = process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306;
 // - Adiciona logging de queries e instrumentação básica de conexões.
 // ------------------------------------------------------------
 
-// Reusar instância global se houver (proteção contra múltiplos requires)
-if (!global.__SEQUELIZE_SINGLETON__) {
-  // logging customizado: registra queries e tempo de execução
-  // Simple query counter (metrics) - contar queries e logar por minuto
+if (process.env.NODE_ENV !== "production") {
   if (!global.__DB_METRICS__) {
     global.__DB_METRICS__ = { qCount: 0 };
+
     setInterval(() => {
-      try {
-        console.log(
-          `[DB METRICS] Queries no último minuto: ${global.__DB_METRICS__.qCount}`,
-        );
-      } catch (e) {}
-      try {
-        global.__DB_METRICS__.qCount = 0;
-      } catch (e) {}
-    }, 60 * 1000);
+      console.log(
+        `[DB METRICS] Queries no último minuto: ${global.__DB_METRICS__.qCount}`,
+      );
+      global.__DB_METRICS__.qCount = 0;
+    }, 60000);
   }
+}
 
-  const dbLogger = (sql, timing) => {
+const dbLogger = (sql, timing) => {
+  try {
+    // incrementar contador de queries
     try {
-      // incrementar contador de queries
-      try {
-        if (global.__DB_METRICS__) global.__DB_METRICS__.qCount++;
-      } catch (e) {}
+      if (global.__DB_METRICS__) global.__DB_METRICS__.qCount++;
+    } catch (e) {}
 
-      // Tentar obter contexto da requisição (se disponível)
-      let rid = "-";
-      let rpath = "-";
-      try {
-        const requestContext = require("../services/requestContext");
-        const store = requestContext.getStore
-          ? requestContext.getStore()
-          : null;
-        if (store) {
-          rid = store.requestId || rid;
-          rpath = store.path || rpath;
-        }
-      } catch (e) {}
-
-      // Extrair caller útil da stack (filtrar node_modules/sequelize)
-      let caller = "";
-      try {
-        const st = new Error().stack || "";
-        const lines = st.split("\n").slice(3);
-        for (const l of lines) {
-          if (
-            !l.includes("node_modules") &&
-            !l.includes("(internal") &&
-            !l.includes("sequelize")
-          ) {
-            caller = l.trim();
-            break;
-          }
-        }
-      } catch (e) {}
-
-      if (typeof timing === "number") {
-        console.log(
-          `[DB QUERY] [${timing}ms] rid=${rid} path=${rpath} caller=${caller} ${sql}`,
-        );
-      } else {
-        console.log(
-          `[DB QUERY] rid=${rid} path=${rpath} caller=${caller} ${sql}`,
-        );
+    // Tentar obter contexto da requisição (se disponível)
+    let rid = "-";
+    let rpath = "-";
+    try {
+      const requestContext = require("../services/requestContext");
+      const store = requestContext.getStore ? requestContext.getStore() : null;
+      if (store) {
+        rid = store.requestId || rid;
+        rpath = store.path || rpath;
       }
-    } catch (e) {
-      console.log("[DB QUERY] (log falhou)");
-    }
-  };
+    } catch (e) {}
 
-  const sequelizeInstance = new Sequelize(dbName, dbUser, dbPassword, {
+    // Extrair caller útil da stack (filtrar node_modules/sequelize)
+    let caller = "";
+    try {
+      const st = new Error().stack || "";
+      const lines = st.split("\n").slice(3);
+      for (const l of lines) {
+        if (
+          !l.includes("node_modules") &&
+          !l.includes("(internal") &&
+          !l.includes("sequelize")
+        ) {
+          caller = l.trim();
+          break;
+        }
+      }
+    } catch (e) {}
+
+    if (typeof timing === "number") {
+      console.log(
+        `[DB QUERY] [${timing}ms] rid=${rid} path=${rpath} caller=${caller} ${sql}`,
+      );
+    } else {
+      console.log(
+        `[DB QUERY] rid=${rid} path=${rpath} caller=${caller} ${sql}`,
+      );
+    }
+  } catch (e) {
+    console.log("[DB QUERY] (log falhou)");
+  }
+};
+
+if (!global.__SEQUELIZE__) {
+  global.__SEQUELIZE__ = new Sequelize(dbName, dbUser, dbPassword, {
     host: dbHost,
     port: dbPort,
     dialect: "mysql",
     dialectModule: require("mysql2"),
-    // Pool otimizado para reduzir conexões simultâneas
     pool: {
-      max: 3,
+      max: Number(process.env.SEQUELIZE_POOL_MAX) || 5,
       min: 0,
-      acquire: 20000,
-      idle: 5000,
+      acquire: Number(process.env.SEQUELIZE_POOL_ACQUIRE_MS) || 30000,
+      idle: Number(process.env.SEQUELIZE_POOL_IDLE_MS) || 10000,
     },
-    // Ativar benchmark apenas em desenvolvimento para ajudar no profiling
     benchmark: process.env.NODE_ENV !== "production",
-    // Desabilitar logging pesado em produção
     logging: process.env.NODE_ENV === "production" ? false : dbLogger,
   });
 
-  // Instrumentação simples para acompanhar conexões ativas (apenas logs)
-  try {
-    const mgr = sequelizeInstance.connectionManager;
-    if (mgr && mgr.getConnection && mgr.releaseConnection) {
-      let _activeConnections = 0;
-      const origGet = mgr.getConnection.bind(mgr);
-      const origRelease = mgr.releaseConnection.bind(mgr);
-      const seenThreads = new Set();
-
-      mgr.getConnection = async function (options) {
-        const conn = await origGet(options);
-        _activeConnections++;
-        // tentar extrair threadId/connection id do objeto retornado (mysql2)
-        let tid = "-";
-        try {
-          tid =
-            conn.threadId ||
-            conn.connection?.threadId ||
-            conn._client?.threadId ||
-            tid;
-        } catch (e) {}
-
-        // Logar quando um novo threadId aparecer (nova conexão física)
-        try {
-          if (tid !== "-" && !seenThreads.has(String(tid))) {
-            seenThreads.add(String(tid));
-            console.log(
-              `[DB] NEW physical connection created. threadId=${tid}`,
-            );
-          }
-        } catch (e) {}
-
-        console.log(
-          `[DB] connection acquired. Active connections: ${_activeConnections} threadId=${tid}`,
-        );
-        return conn;
-      };
-
-      mgr.releaseConnection = async function (connection) {
-        let tid = "-";
-        try {
-          tid =
-            connection?.threadId ||
-            connection?.connection?.threadId ||
-            connection?._client?.threadId ||
-            tid;
-        } catch (e) {}
-        try {
-          await origRelease(connection);
-        } finally {
-          _activeConnections = Math.max(0, _activeConnections - 1);
-          console.log(
-            `[DB] connection released. Active connections: ${_activeConnections} threadId=${tid}`,
-          );
-        }
-      };
-    }
-  } catch (e) {
-    console.warn(
-      "[DB] Falha ao instrumentar connectionManager:",
-      e && e.message,
-    );
-  }
-
-  // Guardar no global para reutilização segura (singleton)
-  global.__SEQUELIZE_SINGLETON__ = {
-    sequelize: sequelizeInstance,
-  };
+  console.log("✅ Sequelize criado (singleton)");
 }
+
+const sequelizeInstance = global.__SEQUELIZE__;
+
+module.exports = sequelizeInstance;
+
+// Instrumentação simples para acompanhar conexões ativas (apenas logs)
+try {
+  const mgr = sequelizeInstance.connectionManager;
+  if (mgr && mgr.getConnection && mgr.releaseConnection) {
+    let _activeConnections = 0;
+    const origGet = mgr.getConnection.bind(mgr);
+    const origRelease = mgr.releaseConnection.bind(mgr);
+    const seenThreads = new Set();
+
+    mgr.getConnection = async function (options) {
+      const conn = await origGet(options);
+      _activeConnections++;
+      // tentar extrair threadId/connection id do objeto retornado (mysql2)
+      let tid = "-";
+      try {
+        tid =
+          conn.threadId ||
+          conn.connection?.threadId ||
+          conn._client?.threadId ||
+          tid;
+      } catch (e) {}
+
+      // Logar quando um novo threadId aparecer (nova conexão física)
+      try {
+        if (tid !== "-" && !seenThreads.has(String(tid))) {
+          seenThreads.add(String(tid));
+          console.log(`[DB] NEW physical connection created. threadId=${tid}`);
+        }
+      } catch (e) {}
+
+      console.log(
+        `[DB] connection acquired. Active connections: ${_activeConnections} threadId=${tid}`,
+      );
+      return conn;
+    };
+
+    mgr.releaseConnection = async function (connection) {
+      let tid = "-";
+      try {
+        tid =
+          connection?.threadId ||
+          connection?.connection?.threadId ||
+          connection?._client?.threadId ||
+          tid;
+      } catch (e) {}
+      try {
+        await origRelease(connection);
+      } finally {
+        _activeConnections = Math.max(0, _activeConnections - 1);
+        console.log(
+          `[DB] connection released. Active connections: ${_activeConnections} threadId=${tid}`,
+        );
+      }
+    };
+  }
+} catch (e) {
+  console.warn("[DB] Falha ao instrumentar connectionManager:", e && e.message);
+}
+
+// Guardar no global para reutilização segura (singleton)
+global.__SEQUELIZE_SINGLETON__ = {
+  sequelize: sequelizeInstance,
+};
 
 const sequelize = global.__SEQUELIZE_SINGLETON__.sequelize;
 
