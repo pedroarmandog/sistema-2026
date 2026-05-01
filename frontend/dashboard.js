@@ -512,24 +512,42 @@ const DashboardApp = {
   },
 
   async refreshAll() {
-  if (isRefreshing) return;
+  // Proteção contra execuções concorrentes global
+  if (isRefreshing) {
+    console.debug(
+      "[DashboardApp] refreshAll já em execução — ignorando chamada concorrente"
+    );
+    return;
+  }
 
   isRefreshing = true;
 
   try {
-    const res = await fetch('/api/dashboard/full');
-    const data = await res.json();
+    await this.loadStats();
+    await delay(300);
 
-    this.renderStats(data.stats);
-    this.renderIndicadores(data.indicadores);
-    this.renderPeriodicos(data.periodicos);
-    this.renderContasAPagar(data.contasAPagar);
-    this.renderEstoqueBaixo(data.estoqueBaixo);
-    this.renderAniversariantes(data.aniversariantes);
-    this.renderOportunidades(data.oportunidades);
-    this.renderTaxiDog(data.taxiDog);
-    this.renderValidade(data.validade);
+    await this.loadIndicadores();
+    await delay(300);
 
+    await this.loadPeriodicos();
+    await delay(300);
+
+    await this.loadContasAPagar();
+    await delay(300);
+
+    await this.loadEstoqueBaixo();
+    await delay(300);
+
+    await this.loadAniversariantes();
+    await delay(300);
+
+    await this.loadOportunidades();
+    await delay(300);
+
+    await this.loadTaxiDog();
+    await delay(300);
+
+    await this.loadValidade();
   } catch (err) {
     console.error("Erro no refreshAll:", err);
   } finally {
