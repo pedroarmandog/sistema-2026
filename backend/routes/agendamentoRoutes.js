@@ -101,7 +101,6 @@ router.get("/", async (req, res) => {
           attributes: [
             "id",
             "nome",
-            "tipo",
             "raca",
             "observacao",
             "cliente_id",
