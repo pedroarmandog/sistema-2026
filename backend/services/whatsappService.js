@@ -330,7 +330,7 @@ async function inicializarCliente(empresaId, opts = {}) {
     const executablePath =
       process.env.PUPPETEER_EXECUTABLE_PATH ||
       process.env.CHROME_PATH ||
-      '/usr/bin/chromium';
+      '/usr/bin/google-chrome';
 
     const browser = await puppeteer.launch({
       executablePath,
