@@ -125,6 +125,96 @@ const MAX_DELAY_MS = 10000;
 // Diretório para armazenar sessões locais (LocalAuth)
 const SESSION_DIR = path.join(__dirname, "../../tmp/whatsapp-sessions");
 
+// Helpers para controle de instâncias e conflitos de userDataDir
+function localAuthPathForEmpresa(empresaId) {
+  const chave = String(empresaId);
+  if (chave.startsWith("disp_")) {
+    const id = chave.replace(/^disp_/, "");
+    return path.join(SESSION_DIR, `empresa_disp_${id}`);
+  }
+  return path.join(SESSION_DIR, `empresa_${chave}`);
+}
+
+function getPidsUsingDir(dir) {
+  try {
+    if (!dir) return [];
+    if (process.platform === "win32") {
+      const cmd = `Get-WmiObject Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine -like '*${dir.replace(/'/g, "''")}*' } | Select-Object -ExpandProperty ProcessId`;
+      const res = spawnSync("powershell", ["-NoProfile", "-Command", cmd], {
+        encoding: "utf8",
+        timeout: 3000,
+      });
+      const out = res.stdout || "";
+      return out
+        .split(/\r?\n/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((n) => Number(n))
+        .filter(Boolean);
+    } else {
+      const res = spawnSync(
+        "sh",
+        [
+          "-c",
+          `ps ax -o pid,command | grep -F "${dir}" | grep -v grep | awk '{print $1}'`,
+        ],
+        {
+          encoding: "utf8",
+          timeout: 3000,
+        },
+      );
+      const out = res.stdout || "";
+      return out
+        .split(/\r?\n/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((n) => Number(n))
+        .filter(Boolean);
+    }
+  } catch (e) {
+    return [];
+  }
+}
+
+function killPids(pids) {
+  for (const pid of pids) {
+    try {
+      if (process.platform === "win32") {
+        spawnSync("taskkill", ["/PID", String(pid), "/F", "/T"], {
+          stdio: "ignore",
+        });
+      } else {
+        spawnSync("sh", ["-c", `kill -9 ${pid} || true`], { stdio: "ignore" });
+      }
+      console.log(`[WhatsApp] Tentativa de matar PID ${pid}`);
+    } catch (e) {
+      console.warn(`[WhatsApp] Falha ao matar PID ${pid}: ${e && e.message}`);
+    }
+  }
+}
+
+function removeSingletonLock(dir) {
+  try {
+    const lockFile = path.join(dir, "SingletonLock");
+    if (fs.existsSync(lockFile)) {
+      fs.unlinkSync(lockFile);
+      console.log(`[WhatsApp] Removido SingletonLock em ${lockFile}`);
+    }
+  } catch (e) {}
+}
+
+function getBrowserPid(browser) {
+  try {
+    if (!browser) return null;
+    if (typeof browser.process === "function") {
+      const proc = browser.process();
+      if (proc && proc.pid) return proc.pid;
+    }
+    if (browser.process && browser.process.pid) return browser.process.pid;
+  } catch (e) {}
+  return null;
+}
+
 // (fragment removido — validação será feita no fluxo de inicialização do cliente)
 
 /**
@@ -132,15 +222,24 @@ const SESSION_DIR = path.join(__dirname, "../../tmp/whatsapp-sessions");
  */
 function getSessionDirForEmpresa(empresaId) {
   const chave = String(empresaId);
-  const candidates = [
-    path.join(SESSION_DIR, `empresa_${chave}`),
-    path.join(SESSION_DIR, `session-empresa_${chave}`),
-    path.join(SESSION_DIR, `empresa-${chave}`),
-  ];
-  return (
-    candidates.find((d) => fs.existsSync(d)) ||
-    path.join(SESSION_DIR, `empresa_${chave}`)
-  );
+  const candidates = [];
+  if (chave.startsWith("disp_")) {
+    const id = chave.replace(/^disp_/, "");
+    candidates.push(path.join(SESSION_DIR, `empresa_disp_${id}`));
+  }
+  candidates.push(path.join(SESSION_DIR, `empresa_${chave}`));
+  candidates.push(path.join(SESSION_DIR, `session-empresa_${chave}`));
+  candidates.push(path.join(SESSION_DIR, `empresa-${chave}`));
+
+  const found = candidates.find((d) => fs.existsSync(d));
+  if (found) return found;
+
+  // Fallback: devolver caminho padrão baseado no tipo (disp_ ou não)
+  if (chave.startsWith("disp_")) {
+    const id = chave.replace(/^disp_/, "");
+    return path.join(SESSION_DIR, `empresa_disp_${id}`);
+  }
+  return path.join(SESSION_DIR, `empresa_${chave}`);
 }
 
 /**
@@ -256,6 +355,9 @@ async function inicializarCliente(empresaId, opts = {}) {
   if (clientsMap.has(chave)) {
     const existente = clientsMap.get(chave);
     if (existente.status === "conectado") {
+      console.log(
+        `[WhatsApp][${chave}] Reutilizando cliente existente (status: conectado)`,
+      );
       return { status: "ja_conectado" };
     }
     // Se já existe cliente aguardando QR, por padrão retornamos.
@@ -265,6 +367,9 @@ async function inicializarCliente(empresaId, opts = {}) {
       const wantsHeadful =
         opts && typeof opts.headless !== "undefined" && opts.headless === false;
       if (!wantsHeadful) {
+        console.log(
+          `[WhatsApp][${chave}] Reutilizando cliente existente (status: aguardando_qr)`,
+        );
         return { status: "aguardando_qr" };
       }
       console.log(
@@ -324,29 +429,6 @@ async function inicializarCliente(empresaId, opts = {}) {
       }
     } catch (_) {}
   }
-
-    const puppeteer = require('puppeteer');
-
-    const executablePath =
-      process.env.PUPPETEER_EXECUTABLE_PATH ||
-      process.env.CHROME_PATH ||
-      '/usr/bin/google-chrome';
-
-    console.log('Chrome usado:', executablePath);
-
-    const browser = await puppeteer.launch({
-      executablePath,
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--no-zygote',
-        '--single-process'
-      ]
-    });
-
   // Verificação final: testar se o binário realmente pode ser executado (ex: --version)
   try {
     if (executablePath) {
@@ -373,8 +455,6 @@ async function inicializarCliente(empresaId, opts = {}) {
       }
     }
   } catch (_) {}
-
- 
 
   // Forçar fallback para /usr/bin/google-chrome se nenhum executável válido foi encontrado
   if (!executablePath) {
@@ -456,8 +536,8 @@ async function inicializarCliente(empresaId, opts = {}) {
 
   // Log mais explícito do binário decidido
   console.log(
-  `[WhatsApp][${chave}] Usando Chrome executável: ${puppeteerOptions.executablePath || "(nenhum)"}`
-);
+    `[WhatsApp][${chave}] Usando Chrome executável: ${puppeteerOptions.executablePath || "(nenhum)"}`,
+  );
 
   // Ajustar puppeteerOptions com o executável detectado (se houver) e
   // sincronizar headless/args com as variáveis calculadas acima.
@@ -516,7 +596,37 @@ async function inicializarCliente(empresaId, opts = {}) {
 
   // Criar pasta de sessão específica para o LocalAuth (evita usar a
   // mesma raiz para várias instâncias que poderiam conflitar)
-  const localAuthPath = path.join(SESSION_DIR, `empresa_${chave}`);
+  const localAuthPath = localAuthPathForEmpresa(chave);
+
+  // Se existir processo usando este userDataDir, tentar resolver antes de iniciar
+  try {
+    const pids = getPidsUsingDir(localAuthPath);
+    if (pids && pids.length > 0) {
+      const existing = clientsMap.get(chave);
+      if (
+        existing &&
+        existing.browserPid &&
+        pids.includes(existing.browserPid)
+      ) {
+        console.log(
+          `[WhatsApp][${chave}] Reutilizando instância em memória (PID ${existing.browserPid}) — não abrindo novo browser.`,
+        );
+        return { status: existing.status || "ja_conectado" };
+      }
+      console.warn(
+        `[WhatsApp][${chave}] Conflito detectado: processos usando ${localAuthPath}: ${pids.join(", ")}. Tentando encerrar.`,
+      );
+      killPids(pids);
+      // aguardar o SO liberar locks
+      await new Promise((r) => setTimeout(r, 1000));
+      removeSingletonLock(localAuthPath);
+    }
+  } catch (e) {
+    console.warn(
+      `[WhatsApp][${chave}] Falha ao verificar processos existentes: ${e && e.message}`,
+    );
+  }
+
   try {
     fs.mkdirSync(localAuthPath, { recursive: true });
     try {
@@ -547,6 +657,9 @@ async function inicializarCliente(empresaId, opts = {}) {
   };
 
   clientsMap.set(chave, estado);
+  console.log(
+    `[WhatsApp][${chave}] Instância registrada em memória. localAuthPath=${localAuthPath}`,
+  );
 
   // Evento: QR Code gerado
   client.on("qr", async (qr) => {
@@ -635,6 +748,18 @@ async function inicializarCliente(empresaId, opts = {}) {
     estado.qrBase64 = null;
     retryCount.delete(chave); // Reset retry counter on success
 
+    // Armazenar PID do browser para detecção de instâncias ativas
+    try {
+      const browser = client.pupBrowser;
+      const pid = getBrowserPid(browser);
+      if (pid) {
+        estado.browserPid = pid;
+        console.log(
+          `[WhatsApp][${chave}] Browser PID=${pid} armazenado para instância`,
+        );
+      }
+    } catch (e) {}
+
     try {
       const info = client.info;
       const numero = info && info.wid ? info.wid.user : null;
@@ -708,6 +833,16 @@ async function inicializarCliente(empresaId, opts = {}) {
     estado.qrBase64 = null;
     estado.numero = null;
 
+    // Tentar encerrar browser explicitamente
+    try {
+      const browser = estado.client && estado.client.pupBrowser;
+      if (browser && typeof browser.close === "function") {
+        await browser.close().catch(() => {});
+      } else if (estado.browserPid) {
+        killPids([estado.browserPid]);
+      }
+    } catch (e) {}
+
     await atualizarStatusNoBanco(chave, "desconectado", null);
     emitirSSE(chave, "desconectado", { motivo: reason });
     await registrarLog(
@@ -719,6 +854,7 @@ async function inicializarCliente(empresaId, opts = {}) {
     );
 
     clientsMap.delete(chave);
+    console.log(`[WhatsApp][${chave}] Instância removida após desconexão.`);
   });
 
   // Inicializar cliente (abre o browser)
@@ -735,6 +871,59 @@ async function inicializarCliente(empresaId, opts = {}) {
     .catch(async (err) => {
       const msg = err && err.message ? err.message : String(err);
       console.error(`[WhatsApp][empresa:${chave}] initialize() catch: ${msg}`);
+
+      // Tratamento específico: conflito de userDataDir / SingletonLock
+      if (
+        msg.includes("The browser is already running") ||
+        msg.toLowerCase().includes("user data directory") ||
+        msg.toLowerCase().includes("userdatadir") ||
+        msg.toLowerCase().includes("singletonlock") ||
+        msg.toLowerCase().includes("already running for userdatadir")
+      ) {
+        console.warn(
+          `[WhatsApp][${chave}] Conflito de userDataDir detectado durante initialize(): ${msg}`,
+        );
+        try {
+          const sessDir = localAuthPathForEmpresa(chave);
+          const pids = getPidsUsingDir(sessDir);
+          if (pids && pids.length > 0) {
+            console.warn(
+              `[WhatsApp][${chave}] Processos detectados usando ${sessDir}: ${pids.join(", ")}. Tentando encerrar.`,
+            );
+            killPids(pids);
+            await new Promise((r) => setTimeout(r, 1000));
+          }
+          removeSingletonLock(sessDir);
+        } catch (e) {
+          console.warn(
+            `[WhatsApp][${chave}] Falha ao tentar resolver conflito de userDataDir: ${e && e.message}`,
+          );
+        }
+
+        try {
+          await client.destroy();
+        } catch (_) {}
+        clientsMap.delete(chave);
+
+        // Tentar reinicializar com limite de tentativas para evitar loop
+        try {
+          const udKey = `${chave}_ud`;
+          const attempts = initRetries.get(udKey) || 0;
+          const MAX_UD_RETRIES = 1;
+          if (attempts >= MAX_UD_RETRIES) {
+            console.error(
+              `[WhatsApp][${chave}] Máximo de tentativas para resolver userDataDir atingido (${MAX_UD_RETRIES}).`,
+            );
+          } else {
+            initRetries.set(udKey, attempts + 1);
+            return await inicializarCliente(empresaId);
+          }
+        } catch (e) {
+          console.error(
+            `[WhatsApp][${chave}] Falha ao re-inicializar após resolver userDataDir: ${e && e.message}`,
+          );
+        }
+      }
 
       // Erros normais de navegação/frames — apenas logar e retornar
       if (
@@ -986,6 +1175,11 @@ function limparSessaoDoDisco(empresaId) {
   const chave = String(empresaId);
   const candidates = [
     path.join(SESSION_DIR, `session-empresa_${chave}`),
+    // suportar instâncias de disparador (disp_)
+    path.join(
+      SESSION_DIR,
+      `empresa_disp_${chave.startsWith("disp_") ? chave.replace(/^disp_/, "") : chave}`,
+    ),
     path.join(SESSION_DIR, `empresa_${chave}`),
     path.join(SESSION_DIR, `empresa-${chave}`),
   ];
@@ -1018,9 +1212,20 @@ async function limparSessao(empresaId) {
   const estado = clientsMap.get(chave);
   if (estado) {
     try {
+      // Tentar fechar o browser explicitamente
+      try {
+        const browser = estado.client && estado.client.pupBrowser;
+        if (browser && typeof browser.close === "function") {
+          await browser.close().catch(() => {});
+        } else if (estado.browserPid) {
+          killPids([estado.browserPid]);
+        }
+      } catch (_) {}
+
       await estado.client.destroy();
     } catch (_) {}
     clientsMap.delete(chave);
+    console.log(`[WhatsApp][${chave}] Instância fechada e removida da memória`);
   }
 
   // 2. Remover arquivos de sessão do disco
@@ -1049,6 +1254,14 @@ async function desconectar(empresaId) {
 
   try {
     await estado.client.logout();
+    try {
+      const browser = estado.client && estado.client.pupBrowser;
+      if (browser && typeof browser.close === "function") {
+        await browser.close().catch(() => {});
+      } else if (estado.browserPid) {
+        killPids([estado.browserPid]);
+      }
+    } catch (_) {}
     await estado.client.destroy();
   } catch (_) {}
 
@@ -1393,6 +1606,10 @@ async function reconectarSessoesAtivas() {
         path.join(SESSION_DIR, `empresa_${chave}`),
         path.join(SESSION_DIR, `session-empresa_${chave}`),
         path.join(SESSION_DIR, `empresa-${chave}`),
+        path.join(
+          SESSION_DIR,
+          `empresa_disp_${chave.startsWith("disp_") ? chave.replace(/^disp_/, "") : chave}`,
+        ),
       ];
 
       const sessDir = candidateDirs.find((d) => fs.existsSync(d));
