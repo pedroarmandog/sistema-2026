@@ -149,9 +149,9 @@ try {
   const rateLimit = require("./middleware/rateLimit");
   app.use(
     "/api/",
-    rateLimit({ windowMs: 60 * 1000, max: 60 }), // 60 requests per minute per IP/user
+    rateLimit({ windowMs: 60 * 1000, max: 300 }), // 300 requests per minute per IP/user
   );
-  console.log("✅ Rate limiter global aplicado em /api/ (60req/min)");
+  console.log("✅ Rate limiter global aplicado em /api/ (300req/min)");
 } catch (e) {
   console.warn(
     "⚠️ Não foi possível aplicar rate limiter global:",
@@ -174,10 +174,22 @@ app.use((req, res, next) => {
   const filePath = path.join(__dirname, "../frontend", req.path);
   fs.readFile(filePath, "utf8", (err, html) => {
     if (err) return next(); // arquivo não encontrado, deixa express.static ou 404 tratar
-    const tag =
-      '<script src="/components/system-modal.js" data-system-modal="1"></script>';
+    const tagsToInject = [];
     if (!html.includes("system-modal.js")) {
-      html = html.replace(/<head([^>]*)>/i, `<head$1>\n${tag}`);
+      tagsToInject.push(
+        '<script src="/components/system-modal.js" data-system-modal="1"></script>',
+      );
+    }
+    if (!html.includes("fetch-ratelimiter.js")) {
+      tagsToInject.push(
+        '<script src="/components/fetch-ratelimiter.js" data-fetch-ratelimiter="1"></script>',
+      );
+    }
+    if (tagsToInject.length > 0) {
+      html = html.replace(
+        /<head([^>]*)>/i,
+        `<head$1>\n${tagsToInject.join("\n")}`,
+      );
     }
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");

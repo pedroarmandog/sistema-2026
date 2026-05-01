@@ -35,10 +35,18 @@
 // Interceptor global de fetch: garante que cookies JWT sejam enviados em todas as requisições
 // para a mesma origem (same-origin). Necessário para isolamento multi-tenant.
 (function patchFetchCredentials() {
+  // If a fetch rate-limiter is installed (injected earlier), skip this simple patch
+  if (window.__fetchRateLimiterInstalled) {
+    console.debug(
+      "[patchFetchCredentials] fetch-ratelimiter present — skipping credentials patch",
+    );
+    return;
+  }
+
   const _fetch = window.fetch.bind(window);
   window.fetch = function (input, init = {}) {
     // Só adiciona credentials se não foi explicitamente definido
-    if (!init.credentials) {
+    if (!init || !init.credentials) {
       init = { ...init, credentials: "include" };
     }
     return _fetch(input, init);

@@ -76,10 +76,30 @@ module.exports = function rateLimit(windowMsOrOptions = {}) {
             `[rateLimit] 429 — route=${route} key=${who} count=${pruned.length} max=${max} windowMs=${windowMs}`,
           );
         } catch (e) {}
+        // Informative headers for monitoring/clients
+        try {
+          res.setHeader("X-RateLimit-Limit", String(max));
+          res.setHeader("X-RateLimit-Remaining", String(0));
+          const resetSec =
+            Math.ceil((pruned[0] + windowMs - now) / 1000) ||
+            Math.ceil(windowMs / 1000);
+          res.setHeader("X-RateLimit-Reset", String(resetSec));
+        } catch (e) {}
         return res
           .status(429)
           .json({ error: "Too many requests. Try again later." });
       }
+
+      // Set headers to help observability in normal responses
+      try {
+        const remaining = Math.max(0, max - pruned.length);
+        const resetSec =
+          Math.ceil(((pruned[0] || now) + windowMs - now) / 1000) ||
+          Math.ceil(windowMs / 1000);
+        res.setHeader("X-RateLimit-Limit", String(max));
+        res.setHeader("X-RateLimit-Remaining", String(remaining));
+        res.setHeader("X-RateLimit-Reset", String(resetSec));
+      } catch (e) {}
 
       return next();
     } catch (e) {
