@@ -13,7 +13,7 @@
 // Não sobrescrever se já definido pela configuração global (app.js / ambiente)
 if (!process.env.PUPPETEER_EXECUTABLE_PATH && !process.env.CHROME_PATH) {
   try {
-    process.env.PUPPETEER_EXECUTABLE_PATH = "/usr/bin/chromium";
+    process.env.PUPPETEER_EXECUTABLE_PATH = "/usr/bin/google-chrome";
   } catch (_) {}
 }
 

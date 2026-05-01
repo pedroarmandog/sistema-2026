@@ -3,6 +3,7 @@
 // contiver um binário do Chrome/Chromium executável; caso contrário
 // não definimos a variável para evitar que o Puppeteer tente usar
 // um cache vazio/íntil (comportamento observado em hospedagem compartilhada).
+console.log('CHROME USADO:', process.env.PUPPETEER_EXECUTABLE_PATH);
 (function configurePuppeteer() {
   const requestedCacheDir =
     "/home/u779602851/domains/pethubflow.com.br/.cache/puppeteer";
