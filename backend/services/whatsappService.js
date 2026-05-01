@@ -360,7 +360,6 @@ async function inicializarCliente(empresaId, opts = {}) {
             `[WhatsApp][${chave}] Falha no teste do binário ${executablePath}: ${check.error ? check.error.message : check.stderr || check.stdout}`,
           );
           executablePath = undefined;
-          selectedFrom = null;
         } else {
           console.log(
             `[WhatsApp][${chave}] Exec test ok: ${check.stdout || check.stderr}`,
@@ -371,7 +370,6 @@ async function inicializarCliente(empresaId, opts = {}) {
           `[WhatsApp][${chave}] Erro ao testar executável ${executablePath}: ${err && err.message}`,
         );
         executablePath = undefined;
-        selectedFrom = null;
       }
     }
   } catch (_) {}
@@ -390,7 +388,6 @@ async function inicializarCliente(empresaId, opts = {}) {
           });
           if (!checkFallback.error && checkFallback.status === 0) {
             executablePath = fallback;
-            selectedFrom = "forced-google-chrome";
             console.log(
               `[WhatsApp][${chave}] Forçando fallback executablePath -> ${fallback}`,
             );
@@ -459,8 +456,8 @@ async function inicializarCliente(empresaId, opts = {}) {
 
   // Log mais explícito do binário decidido
   console.log(
-    `[WhatsApp][${chave}] Usando Chrome executável: ${puppeteerOptions.executablePath || "(nenhum)"} (fonte: ${selectedFrom || "(nenhum)"})`,
-  );
+  `[WhatsApp][${chave}] Usando Chrome executável: ${puppeteerOptions.executablePath || "(nenhum)"}`
+);
 
   // Ajustar puppeteerOptions com o executável detectado (se houver) e
   // sincronizar headless/args com as variáveis calculadas acima.
