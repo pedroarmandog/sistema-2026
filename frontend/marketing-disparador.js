@@ -7,7 +7,7 @@
   "use strict";
 
   // URL do backend na VPS — lê de api-config.js ou usa o valor padrão
-  var VPS_URL = window.VPS_URL || "http://72.60.244.46:3000";
+  var VPS_URL = window.VPS_URL || "https://api.pethubflow.com.br";
 
   // ── Helpers ──
   function $(sel) {

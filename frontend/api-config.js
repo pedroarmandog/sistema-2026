@@ -4,8 +4,8 @@
  */
 
 // URL da VPS onde o backend Node.js está rodando.
-// Altere somente este valor se o IP/porta da VPS mudar.
-const VPS_URL = "http://72.60.244.46:3000";
+// Altere somente este valor se o domínio/IP da VPS mudar.
+const VPS_URL = "https://api.pethubflow.com.br";
 
 // Prefer a variável global `__API_BASE__` (pode ser definida pelo backend),
 // senão usar a URL da VPS.

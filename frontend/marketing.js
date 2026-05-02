@@ -11,7 +11,7 @@ console.log("[Marketing] Módulo carregado");
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // CONFIGURAÇÕES
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const VPS_URL = window.VPS_URL || "http://72.60.244.46:3000";
+const VPS_URL = window.VPS_URL || "https://api.pethubflow.com.br";
 const API = VPS_URL + "/api/marketing";
 
 // Obter empresaId do usuário logado (cookie → API → empresas[0])
