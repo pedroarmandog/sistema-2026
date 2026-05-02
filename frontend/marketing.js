@@ -18,7 +18,10 @@ const API = VPS_URL + "/api/marketing";
 function resolveImgPath(p) {
   if (!p) return "";
   if (p.startsWith("http")) return p;
-  return VPS_URL + p.replace(/\\/g, "/");
+  // Caminho completo: /uploads/marketing/arquivo.png
+  if (p.startsWith("/")) return VPS_URL + p.replace(/\\/g, "/");
+  // Apenas nome do arquivo (registros antigos): msg_123.png
+  return VPS_URL + "/uploads/marketing/" + p;
 }
 
 // Obter empresaId do usuário logado (cookie → API → empresas[0])
