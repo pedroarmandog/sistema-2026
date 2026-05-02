@@ -273,6 +273,7 @@ router.post("/manual", async (req, res) => {
             centroResultado: mapped.centroResultado || null,
             categoriaFinanceira: mapped.categoriaFinanceira || null,
             situacao: mapped.situacao || "pendente",
+            empresa_id: (req.user && req.user.empresaId) || null,
           });
 
           const saved =

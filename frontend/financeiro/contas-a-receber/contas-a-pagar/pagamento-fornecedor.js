@@ -524,7 +524,25 @@ function renderizarTabela() {
   const isHistorico = tabAtiva === "historico";
   tbody.innerHTML = dados
     .map((doc) => {
-      const saldo = Number(doc.valorTotal || doc.totalProdutos || 0);
+      // Parsear pagamentos (pode vir como string JSON do Sequelize raw)
+      let pags = doc.pagamentos;
+      if (typeof pags === "string") {
+        try {
+          pags = JSON.parse(pags);
+        } catch (e) {
+          pags = [];
+        }
+      }
+      if (!Array.isArray(pags)) pags = [];
+
+      let saldo = Number(doc.valorTotal || doc.totalProdutos || 0);
+      // Fallback: quando valorTotal=0, reconstruir a partir dos pagamentos (documentos zerados por bug antigo)
+      if (saldo === 0 && pags.length > 0) {
+        saldo = pags.reduce(
+          (sum, p) => sum + Number(p.valor || p.amount || 0),
+          0,
+        );
+      }
       const venc = doc.dataEntrada || doc.dataEmissao || "";
       return `<tr class="${vencClass(venc)}">
       <td>${isHistorico ? "" : `<input type="checkbox" class="checkbox-documento" data-id="${doc.id}">`}</td>
@@ -1288,9 +1306,163 @@ async function excluirDocumentos() {
 }
 
 function abrirOpcoesDocumento(id) {
-  documentosSelecionados = [String(id)];
-  atualizarBannerTotais();
-  abrirModalPagamento();
+  // Remove qualquer dropdown anterior
+  const prev = document.getElementById("__opcoesDropdown");
+  if (prev) prev.remove();
+
+  const btn = document.querySelector(
+    `.btn-opcoes-doc[onclick="abrirOpcoesDocumento('${id}')"]`,
+  );
+  const doc = [...todosDocumentos, ...todosHistorico].find(
+    (d) => String(d.id) === String(id),
+  );
+  const isHistorico = doc && (doc.situacao || "").toLowerCase() === "pago";
+
+  const dd = document.createElement("div");
+  dd.id = "__opcoesDropdown";
+  dd.style.cssText =
+    "position:fixed;background:#fff;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.15);z-index:99999;min-width:150px;overflow:hidden;";
+
+  const opcoes = [];
+  if (!isHistorico) {
+    opcoes.push({
+      label: "Pagar",
+      icon: "fa-check-circle",
+      color: "#2e7d32",
+      fn: () => {
+        dd.remove();
+        documentosSelecionados = [String(id)];
+        atualizarBannerTotais();
+        abrirModalPagamento();
+      },
+    });
+    opcoes.push({
+      label: "Editar valor",
+      icon: "fa-edit",
+      color: "#1976d2",
+      fn: () => {
+        dd.remove();
+        abrirModalEditarDocumento(id);
+      },
+    });
+  }
+  opcoes.push({
+    label: "Excluir",
+    icon: "fa-trash",
+    color: "#d32f2f",
+    fn: () => {
+      dd.remove();
+      documentosSelecionados = [String(id)];
+      excluirDocumentos();
+    },
+  });
+
+  opcoes.forEach((op) => {
+    const item = document.createElement("button");
+    item.style.cssText =
+      "display:flex;align-items:center;gap:9px;width:100%;padding:10px 16px;border:none;background:#fff;cursor:pointer;font-size:13px;text-align:left;transition:background 0.15s;";
+    item.innerHTML = `<i class="fas ${op.icon}" style="color:${op.color};width:16px;"></i> ${op.label}`;
+    item.onmouseenter = () => (item.style.background = "#f5f5f5");
+    item.onmouseleave = () => (item.style.background = "#fff");
+    item.onclick = op.fn;
+    dd.appendChild(item);
+  });
+
+  document.body.appendChild(dd);
+
+  // Posicionar próximo ao botão
+  if (btn) {
+    const rect = btn.getBoundingClientRect();
+    dd.style.top = rect.bottom + 4 + window.scrollY + "px";
+    dd.style.left = rect.right - 160 + window.scrollX + "px";
+  }
+
+  // Fechar ao clicar fora
+  const fechar = (e) => {
+    if (!dd.contains(e.target)) {
+      dd.remove();
+      document.removeEventListener("click", fechar, true);
+    }
+  };
+  setTimeout(() => document.addEventListener("click", fechar, true), 0);
+}
+
+function abrirModalEditarDocumento(id) {
+  const doc = [...todosDocumentos, ...todosHistorico].find(
+    (d) => String(d.id) === String(id),
+  );
+  if (!doc) return;
+
+  const overlay = document.createElement("div");
+  overlay.style.cssText =
+    "position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99998;";
+  const modal = document.createElement("div");
+  modal.style.cssText =
+    "position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:12px;padding:28px 24px;width:360px;max-width:95vw;z-index:99999;box-shadow:0 8px 32px rgba(0,0,0,0.2);";
+  modal.innerHTML = `
+    <h3 style="margin:0 0 18px;font-size:16px;color:#1a1a2e;">Editar Documento</h3>
+    <div style="margin-bottom:14px;">
+      <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:5px;">FORNECEDOR</label>
+      <input id="__editForn" value="${doc.fornecedor || ""}" style="width:100%;padding:10px 12px;border:2px solid #e0e0e0;border-radius:8px;font-size:14px;box-sizing:border-box;">
+    </div>
+    <div style="margin-bottom:14px;">
+      <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:5px;">VALOR TOTAL (R$) *</label>
+      <input id="__editValor" type="number" min="0.01" step="0.01" value="${parseFloat(doc.valorTotal || 0).toFixed(2)}" style="width:100%;padding:10px 12px;border:2px solid #e0e0e0;border-radius:8px;font-size:14px;box-sizing:border-box;">
+    </div>
+    <div style="margin-bottom:20px;">
+      <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:5px;">VENCIMENTO</label>
+      <input id="__editVenc" type="date" value="${doc.dataEntrada || doc.dataEmissao || ""}" style="width:100%;padding:10px 12px;border:2px solid #e0e0e0;border-radius:8px;font-size:14px;box-sizing:border-box;">
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button id="__editCanc" style="padding:10px 18px;border:2px solid #ccc;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;color:#555;">Cancelar</button>
+      <button id="__editSalv" style="padding:10px 18px;border:none;border-radius:8px;background:#1976d2;color:#fff;cursor:pointer;font-size:13px;font-weight:600;"><i class="fas fa-save"></i> Salvar</button>
+    </div>`;
+
+  document.body.appendChild(overlay);
+  document.body.appendChild(modal);
+
+  modal.querySelector("#__editCanc").onclick = () => {
+    modal.remove();
+    overlay.remove();
+  };
+  overlay.onclick = () => {
+    modal.remove();
+    overlay.remove();
+  };
+
+  modal.querySelector("#__editSalv").onclick = async function () {
+    const novoValor = parseFloat(modal.querySelector("#__editValor").value);
+    const novoForn = modal.querySelector("#__editForn").value.trim();
+    const novoVenc = modal.querySelector("#__editVenc").value;
+    if (!novoValor || novoValor <= 0) {
+      alert("Informe um valor válido.");
+      return;
+    }
+    this.disabled = true;
+    this.textContent = "Salvando...";
+    try {
+      const r = await fetch("/api/entrada/manual/" + id, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          valorTotal: novoValor,
+          fornecedor: novoForn || undefined,
+          dataEntrada: novoVenc || undefined,
+        }),
+      });
+      if (!r.ok) throw new Error("status " + r.status);
+      modal.remove();
+      overlay.remove();
+      await carregarDocumentos();
+      atualizarBannerTotais();
+      mostrarToastPF("Documento atualizado.");
+    } catch (e) {
+      alert("Erro ao salvar: " + e.message);
+      this.disabled = false;
+      this.innerHTML = '<i class="fas fa-save"></i> Salvar';
+    }
+  };
 }
 
 // ---------- TABS ----------
