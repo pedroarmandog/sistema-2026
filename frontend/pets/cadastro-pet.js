@@ -172,7 +172,9 @@ async function carregarClientes() {
     const API_BASE =
       (window.__API_BASE__ && window.__API_BASE__.toString()) ||
       window.location.origin;
-    const response = await fetch(`${API_BASE}/api/clientes`);
+    const response = await fetch(`${API_BASE}/api/clientes`, {
+      credentials: "include",
+    });
     if (!response.ok) {
       throw new Error(`Erro HTTP: ${response.status}`);
     }
@@ -463,6 +465,7 @@ async function salvarPet() {
         window.location.origin;
       response = await fetch(`${API_BASE}/api/pets/${editingPetId}`, {
         method: "PUT",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       });
@@ -472,6 +475,7 @@ async function salvarPet() {
         window.location.origin;
       response = await fetch(`${API_BASE}/api/pets`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       });
@@ -479,7 +483,10 @@ async function salvarPet() {
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.message || `Erro HTTP: ${response.status}`);
+      const detalhe = errorData.error ? ` (${errorData.error})` : "";
+      throw new Error(
+        (errorData.message || `Erro HTTP: ${response.status}`) + detalhe,
+      );
     }
 
     const resultado = await response.json();
