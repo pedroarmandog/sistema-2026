@@ -1459,6 +1459,21 @@ function startServer() {
       );
     }
 
+    // Auto-reconectar sessões WhatsApp ativas após 30s (evita impacto no startup)
+    setTimeout(async () => {
+      try {
+        const {
+          reconectarSessoesAtivas,
+        } = require("./services/whatsappService");
+        await reconectarSessoesAtivas();
+      } catch (err) {
+        console.warn(
+          "⚠️ Erro ao reconectar sessões WhatsApp no startup:",
+          err.message,
+        );
+      }
+    }, 30000);
+
     // Cron: verificação de vencimentos do painel admin (mover para 09:00)
     try {
       const cron = require("node-cron");
@@ -1923,8 +1938,6 @@ function startServer() {
         err.message,
       );
     }
-
-    // Not reconecting WhatsApp sessions at startup anymore to avoid heavy startup work
 
     // Atualização opcional de template do vacinas_vencendo no startup.
     // Para evitar UPDATE automático no startup (conta como query), só executar se

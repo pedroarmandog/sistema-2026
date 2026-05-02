@@ -12,7 +12,6 @@
 
 const cron = require("node-cron");
 const whatsappService = require("./whatsappService");
-const executionLock = require("./executionLock");
 
 const MAX_TENTATIVAS = 3;
 let cronJob = null;
@@ -20,8 +19,6 @@ let processando = false;
 const BATCH_SIZE = 10; // buscar 10 mensagens por vez
 let queueBuffer = [];
 let lastRunAt = 0;
-// Mínimo de 1 minuto entre execuções para evitar excesso de queries
-const MIN_INTERVAL_MS = 60 * 1000; // mínimo 60s entre ciclos
 
 /**
  * Inicia o agendador de mensagens.
@@ -39,27 +36,15 @@ function iniciarAgendador() {
       console.log("[Queue] Ciclo anterior ainda em andamento, pulando...");
       return;
     }
-
-    // Use o lock global para evitar sobreposição com backups/crons
-    const res = await executionLock.withLock(
-      "whatsappQueue",
-      async () => {
-        processando = true;
-        try {
-          await processarFila();
-        } finally {
-          processando = false;
-        }
-      },
-      { minIntervalMs: MIN_INTERVAL_MS },
-    );
-
-    if (res && res.skipped) {
-      console.log(`[Queue] Ciclo ignorado: ${res.reason}`);
-      return;
+    processando = true;
+    try {
+      await processarFila();
+    } catch (err) {
+      console.error("[Queue] Erro no processamento da fila:", err.message);
+    } finally {
+      processando = false;
+      lastRunAt = Date.now();
     }
-
-    lastRunAt = Date.now();
   });
 
   console.log(
@@ -77,15 +62,6 @@ async function processarFila() {
   const agora = new Date();
   // contador estimado de queries desta execução
   const queriesThisRun = { count: 0 };
-  // Se já houver muitas queries no último minuto, pular execução para evitar sobrecarga
-  try {
-    if (global.__DB_METRICS__ && global.__DB_METRICS__.qCount > 20) {
-      console.warn(
-        `[Queue] Execução pulada: alta taxa de queries no último minuto (${global.__DB_METRICS__.qCount}).`,
-      );
-      return;
-    }
-  } catch (_) {}
 
   // Recuperar envios presos em "enviando" há mais de 5 minutos
   const cincoMinAtras = new Date(agora.getTime() - 5 * 60 * 1000);
@@ -185,19 +161,15 @@ async function tentarReconectar(empresaId) {
       console.log(
         `[Queue] Tentando reconectar empresa ${empresaId} automaticamente...`,
       );
-      const r = await whatsappService.inicializarCliente(empresaId);
-      if (
-        r.status === "inicializando" ||
-        r.status === "autenticado" ||
-        r.status === "ja_conectado"
-      ) {
-        let tentativas = 0;
-        while (tentativas < 30) {
-          await new Promise((res) => setTimeout(res, 2000));
-          if (whatsappService.isConectado(empresaId)) break;
-          tentativas++;
-        }
-      }
+      // Dispara reconexão em background — não bloqueia o ciclo da fila.
+      // As mensagens pendentes serão processadas no próximo ciclo (5 min),
+      // quando a reconexão já terá concluído.
+      whatsappService.inicializarCliente(empresaId).catch((e) => {
+        console.warn(
+          `[Queue] Falha ao reconectar empresa ${empresaId}:`,
+          e.message,
+        );
+      });
     }
   } catch (e) {
     console.warn(
@@ -411,24 +383,18 @@ async function agendarEnvio(params) {
     // Tentar processar imediatamente (respeitando o lock global)
     if (envio.dataAgendada <= new Date()) {
       setImmediate(async () => {
+        if (processando) return; // ciclo já em andamento
+        processando = true;
         try {
-          const res = await executionLock.withLock(
-            "whatsappQueue",
-            async () => {
-              await processarFila();
-            },
-            { minIntervalMs: MIN_INTERVAL_MS },
-          );
-          if (res && res.skipped) {
-            console.log(
-              `[Queue] Agendamento imediato ignorado (lock/interval): ${res.reason}`,
-            );
-          }
+          await processarFila();
         } catch (e) {
           console.warn(
             `[Queue] Falha no disparo imediato #${envio.id}:`,
             e.message,
           );
+        } finally {
+          processando = false;
+          lastRunAt = Date.now();
         }
       });
     }
