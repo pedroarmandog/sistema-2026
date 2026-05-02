@@ -1139,6 +1139,39 @@ function abrirModalPagamento() {
   modal.querySelector("#pfCancelar").addEventListener("click", fecharModal);
   overlay.addEventListener("click", fecharModal);
 
+  // Mapa explícito: forma → ID do input de valor (evita selecionar Parcelas por engano)
+  const formaValorInputId = {
+    dinheiro: "pfValDinheiro",
+    debito: "pfValDebito",
+    credito: "pfValCredito",
+    pix: "pfValPix",
+    transferencia: "pfValTr",
+    boleto: "pfValBoleto",
+  };
+
+  // Lê valor do campo correto conforme forma selecionada
+  function lerValorForma(forma) {
+    const id = formaValorInputId[forma];
+    if (!id) return 0;
+    return parseFloat(document.getElementById(id)?.value) || 0;
+  }
+
+  // Tenta adicionar o pagamento em andamento; retorna true se bem-sucedido
+  function tentarAdicionarPagamento() {
+    if (!formaSelecionada) return false;
+    const valor = lerValorForma(formaSelecionada);
+    if (!valor || valor <= 0) return false;
+    const parcelas =
+      formaSelecionada === "credito"
+        ? parseInt(document.getElementById("pfParcCredito")?.value) || 1
+        : null;
+    pagEfetuados.push({ forma: formaSelecionada, valor, parcelas });
+    totalPago += valor;
+    atualizarTotaisModal();
+    renderListaModal();
+    return true;
+  }
+
   modal.querySelectorAll(".pf-forma").forEach((btn) => {
     btn.addEventListener("click", function () {
       modal.querySelectorAll(".pf-forma").forEach((b) => {
@@ -1156,11 +1189,14 @@ function abrirModalPagamento() {
       if (campoEl) {
         campoEl.style.display = "block";
         const restante = Math.max(0, total - totalPago);
-        // Usar seletor específico para evitar preencher o campo Parcelas (credito)
-        const inputValor = campoEl.querySelector('input[id^="pfVal"]');
-        if (inputValor) inputValor.value = restante.toFixed(2);
-        // Garantir que Parcelas fique em 1
-        const inputParc = campoEl.querySelector("#pfParcCredito");
+        // Preencher somente o campo Valor usando o mapa explícito
+        const valorId = formaValorInputId[formaSelecionada];
+        if (valorId) {
+          const inputValor = document.getElementById(valorId);
+          if (inputValor) inputValor.value = restante.toFixed(2);
+        }
+        // Sempre resetar Parcelas para 1
+        const inputParc = document.getElementById("pfParcCredito");
         if (inputParc) inputParc.value = "1";
       }
     });
@@ -1171,10 +1207,7 @@ function abrirModalPagamento() {
       alert("Selecione uma forma de pagamento.");
       return;
     }
-    const campoEl = document.getElementById(`pf-c-${formaSelecionada}`);
-    // Usar seletor específico para pegar o campo Valor e não o campo Parcelas
-    const inputN = campoEl ? campoEl.querySelector('input[id^="pfVal"]') : null;
-    const valor = inputN ? parseFloat(inputN.value) : 0;
+    const valor = lerValorForma(formaSelecionada);
     if (!valor || valor <= 0) {
       alert("Informe um valor válido.");
       return;
@@ -1192,8 +1225,12 @@ function abrirModalPagamento() {
   modal
     .querySelector("#pfFinalizar")
     .addEventListener("click", async function () {
+      // Auto-adicionar pagamento em andamento se forma selecionada e valor preenchido
+      if (formaSelecionada && !pagEfetuados.length) {
+        tentarAdicionarPagamento();
+      }
       if (!pagEfetuados.length) {
-        alert("Adicione ao menos uma forma de pagamento.");
+        alert("Selecione uma forma de pagamento e informe o valor.");
         return;
       }
       this.disabled = true;
