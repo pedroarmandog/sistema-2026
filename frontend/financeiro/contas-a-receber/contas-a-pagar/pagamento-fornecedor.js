@@ -315,114 +315,81 @@ function closeDropdown() {
   if (dropdown) dropdown.classList.remove("open");
 }
 
-// Configurar submenu lateral para Caixa
+// Configurar submenu lateral para Caixa (pode não existir em todas as páginas)
 function configurarSubmenuLateralCaixa() {
-  console.log("🔍 Iniciando configuração do submenu lateral Caixa...");
-
   const caixaSubmenuItem = document.getElementById("caixaSubmenuItem");
   const caixaLateralSubmenu = document.getElementById("caixaLateralSubmenu");
   const submenuItemWithLateral = document.querySelector(
     ".submenu-item-with-lateral",
   );
 
-  console.log("🔍 Elementos encontrados:");
-  console.log("- caixaSubmenuItem:", caixaSubmenuItem);
-  console.log("- caixaLateralSubmenu:", caixaLateralSubmenu);
-  console.log("- submenuItemWithLateral:", submenuItemWithLateral);
+  // Elementos opcionais — silenciar se não existirem nesta página
+  if (!caixaSubmenuItem || !caixaLateralSubmenu || !submenuItemWithLateral)
+    return;
 
-  if (caixaSubmenuItem && caixaLateralSubmenu && submenuItemWithLateral) {
-    console.log("✅ Configurando submenu lateral do Caixa...");
+  let isSubmenuVisible = false;
 
-    let isSubmenuVisible = false;
+  // Função para mostrar submenu
+  const showSubmenu = () => {
+    console.log("📤 Mostrando submenu lateral");
+    caixaLateralSubmenu.style.opacity = "1";
+    caixaLateralSubmenu.style.visibility = "visible";
+    caixaLateralSubmenu.style.transform = "translateX(0)";
+    isSubmenuVisible = true;
+  };
 
-    // Função para mostrar submenu
-    const showSubmenu = () => {
-      console.log("📤 Mostrando submenu lateral");
-      caixaLateralSubmenu.style.opacity = "1";
-      caixaLateralSubmenu.style.visibility = "visible";
-      caixaLateralSubmenu.style.transform = "translateX(0)";
-      isSubmenuVisible = true;
-    };
+  // Função para esconder submenu
+  const hideSubmenu = () => {
+    console.log("📥 Escondendo submenu lateral");
+    caixaLateralSubmenu.style.opacity = "0";
+    caixaLateralSubmenu.style.visibility = "hidden";
+    caixaLateralSubmenu.style.transform = "translateX(-10px)";
+    isSubmenuVisible = false;
+  };
 
-    // Função para esconder submenu
-    const hideSubmenu = () => {
-      console.log("📥 Escondendo submenu lateral");
-      caixaLateralSubmenu.style.opacity = "0";
-      caixaLateralSubmenu.style.visibility = "hidden";
-      caixaLateralSubmenu.style.transform = "translateX(-10px)";
-      isSubmenuVisible = false;
-    };
+  // Configurar hover no container principal
+  submenuItemWithLateral.addEventListener("mouseenter", function () {
+    console.log("🎯 Mouse entrou no container do Caixa");
+    showSubmenu();
+  });
 
-    // Configurar hover no container principal
-    submenuItemWithLateral.addEventListener("mouseenter", function () {
-      console.log("🎯 Mouse entrou no container do Caixa");
-      showSubmenu();
-    });
+  submenuItemWithLateral.addEventListener("mouseleave", function () {
+    console.log("🎯 Mouse saiu do container do Caixa");
+    setTimeout(hideSubmenu, 100);
+  });
 
-    submenuItemWithLateral.addEventListener("mouseleave", function () {
-      console.log("🎯 Mouse saiu do container do Caixa");
-      setTimeout(hideSubmenu, 100);
-    });
+  // Configurar hover no submenu lateral
+  caixaLateralSubmenu.addEventListener("mouseenter", function () {
+    console.log("🎯 Mouse entrou no submenu lateral");
+    showSubmenu();
+  });
 
-    // Configurar hover no submenu lateral
-    caixaLateralSubmenu.addEventListener("mouseenter", function () {
-      console.log("🎯 Mouse entrou no submenu lateral");
-      showSubmenu();
-    });
+  caixaLateralSubmenu.addEventListener("mouseleave", function () {
+    console.log("🎯 Mouse saiu do submenu lateral");
+    hideSubmenu();
+  });
 
-    caixaLateralSubmenu.addEventListener("mouseleave", function () {
-      console.log("🎯 Mouse saiu do submenu lateral");
+  // Adicionar event listeners para os itens do submenu lateral
+  const lateralItems = caixaLateralSubmenu.querySelectorAll(
+    ".lateral-submenu-item",
+  );
+  console.log(`🔍 Encontrados ${lateralItems.length} itens no submenu lateral`);
+
+  lateralItems.forEach((item) => {
+    item.addEventListener("click", function (e) {
+      e.preventDefault();
+      const texto = this.textContent.trim();
+      switch (texto) {
+        case "Abertura/Fechamento":
+          break;
+        case "Suprimento/Sangria":
+          break;
+        case "Rel. Demonstrativo de caixa":
+          break;
+      }
       hideSubmenu();
     });
-
-    // Adicionar event listeners para os itens do submenu lateral
-    const lateralItems = caixaLateralSubmenu.querySelectorAll(
-      ".lateral-submenu-item",
-    );
-    console.log(
-      `🔍 Encontrados ${lateralItems.length} itens no submenu lateral`,
-    );
-
-    lateralItems.forEach((item, index) => {
-      item.addEventListener("click", function (e) {
-        e.preventDefault();
-        const texto = this.textContent.trim();
-        console.log(`🚀 Clique em: ${texto}`);
-
-        // Aqui você pode adicionar navegação específica para cada item
-        switch (texto) {
-          case "Abertura/Fechamento":
-            alert("Navegando para Abertura/Fechamento de Caixa");
-            // window.location.href = '/caixa/abertura-fechamento.html';
-            break;
-          case "Suprimento/Sangria":
-            alert("Navegando para Suprimento/Sangria");
-            // window.location.href = '/caixa/suprimento-sangria.html';
-            break;
-          case "Rel. Demonstrativo de caixa":
-            alert("Navegando para Relatório Demonstrativo de Caixa");
-            // window.location.href = '/caixa/relatorio-demonstrativo.html';
-            break;
-        }
-
-        hideSubmenu();
-      });
-
-      console.log(
-        `✅ Configurado evento click para item ${index + 1}: ${item.textContent.trim()}`,
-      );
-    });
-
-    console.log("✅ Submenu lateral do Caixa configurado com sucesso!");
-  } else {
-    console.error("❌ Elementos do submenu lateral Caixa não encontrados");
-    console.log(
-      "- Verifique se os IDs caixaSubmenuItem e caixaLateralSubmenu existem no HTML",
-    );
-    console.log(
-      "- Verifique se a classe .submenu-item-with-lateral existe no HTML",
-    );
-  }
+  });
 }
 
 // Adicionar configuração do submenu lateral ao DOMContentLoaded
@@ -1028,43 +995,43 @@ function abrirModalPagamento() {
         <h3 style="margin:0;font-size:17px;color:#1a1a2e;">Pagamento ao Fornecedor</h3>
         <p style="margin:3px 0 0;font-size:12px;color:#666;">${fNomes}</p>
       </div>
-      <button id="pfFechar" style="background:none;border:none;font-size:24px;cursor:pointer;color:#aaa;line-height:1;">×</button>
+      <button class="pf-fechar-btn" style="background:none;border:none;font-size:24px;cursor:pointer;color:#aaa;line-height:1;">×</button>
     </div>
     <div style="padding:18px 26px 22px;max-height:72vh;overflow-y:auto;">
       <div style="background:#f0f4ff;border-radius:10px;padding:14px 18px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
-        <div><div style="font-size:11px;color:#666;margin-bottom:2px;">Total</div><div id="pfTotal" style="font-size:24px;font-weight:700;color:#1976d2;">${total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div></div>
-        <div><div style="font-size:11px;color:#666;margin-bottom:2px;">Total Pago</div><div id="pfPago" style="font-size:17px;font-weight:600;color:#2e7d32;">R$ 0,00</div></div>
-        <div><div style="font-size:11px;color:#666;margin-bottom:2px;">Falta</div><div id="pfFalta" style="font-size:17px;font-weight:600;color:#d32f2f;">${total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div></div>
+        <div><div style="font-size:11px;color:#666;margin-bottom:2px;">Total</div><div style="font-size:24px;font-weight:700;color:#1976d2;">${total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div></div>
+        <div><div style="font-size:11px;color:#666;margin-bottom:2px;">Total Pago</div><div data-pf-pago style="font-size:17px;font-weight:600;color:#2e7d32;">R$ 0,00</div></div>
+        <div><div style="font-size:11px;color:#666;margin-bottom:2px;">Falta</div><div data-pf-falta style="font-size:17px;font-weight:600;color:#d32f2f;">${total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div></div>
       </div>
 
       <h4 style="font-size:14px;margin-bottom:12px;color:#333;">Forma de Pagamento *</h4>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-bottom:16px;">
-        <button class="pf-forma" data-forma="dinheiro" style="padding:10px 6px;border:2px solid #e0e0e0;border-radius:8px;background:#fff;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;transition:all 0.2s;"><i class="fas fa-money-bill-wave" style="font-size:18px;color:#2e7d32;"></i><span style="font-size:11px;font-weight:600;color:#333;">Dinheiro</span></button>
-        <button class="pf-forma" data-forma="debito"   style="padding:10px 6px;border:2px solid #e0e0e0;border-radius:8px;background:#fff;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;transition:all 0.2s;"><i class="fas fa-credit-card"   style="font-size:18px;color:#6f42c1;"></i><span style="font-size:11px;font-weight:600;color:#333;">Débito</span></button>
-        <button class="pf-forma" data-forma="credito"  style="padding:10px 6px;border:2px solid #e0e0e0;border-radius:8px;background:#fff;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;transition:all 0.2s;"><i class="fas fa-credit-card"   style="font-size:18px;color:#1976d2;"></i><span style="font-size:11px;font-weight:600;color:#333;">Crédito</span></button>
-        <button class="pf-forma" data-forma="pix"      style="padding:10px 6px;border:2px solid #e0e0e0;border-radius:8px;background:#fff;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;transition:all 0.2s;"><i class="fab fa-pix"           style="font-size:18px;color:#00c4a3;"></i><span style="font-size:11px;font-weight:600;color:#333;">Pix</span></button>
-        <button class="pf-forma" data-forma="transferencia" style="padding:10px 6px;border:2px solid #e0e0e0;border-radius:8px;background:#fff;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;transition:all 0.2s;"><i class="fas fa-exchange-alt" style="font-size:18px;color:#fd7e14;"></i><span style="font-size:11px;font-weight:600;color:#333;">Transferência</span></button>
-        <button class="pf-forma" data-forma="boleto"   style="padding:10px 6px;border:2px solid #e0e0e0;border-radius:8px;background:#fff;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;transition:all 0.2s;"><i class="fas fa-barcode"       style="font-size:18px;color:#6c757d;"></i><span style="font-size:11px;font-weight:600;color:#333;">Boleto</span></button>
+        <button class="pf-forma" data-forma="dinheiro" style="padding:10px 6px;border:2px solid #e0e0e0;border-radius:8px;background:#fff;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;transition:all 0.2s;"><i class="fas fa-money-bill-wave" style="font-size:18px;color:#2e7d32;pointer-events:none;"></i><span style="font-size:11px;font-weight:600;color:#333;pointer-events:none;">Dinheiro</span></button>
+        <button class="pf-forma" data-forma="debito"   style="padding:10px 6px;border:2px solid #e0e0e0;border-radius:8px;background:#fff;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;transition:all 0.2s;"><i class="fas fa-credit-card"   style="font-size:18px;color:#6f42c1;pointer-events:none;"></i><span style="font-size:11px;font-weight:600;color:#333;pointer-events:none;">Débito</span></button>
+        <button class="pf-forma" data-forma="credito"  style="padding:10px 6px;border:2px solid #e0e0e0;border-radius:8px;background:#fff;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;transition:all 0.2s;"><i class="fas fa-credit-card"   style="font-size:18px;color:#1976d2;pointer-events:none;"></i><span style="font-size:11px;font-weight:600;color:#333;pointer-events:none;">Crédito</span></button>
+        <button class="pf-forma" data-forma="pix"      style="padding:10px 6px;border:2px solid #e0e0e0;border-radius:8px;background:#fff;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;transition:all 0.2s;"><i class="fab fa-pix"           style="font-size:18px;color:#00c4a3;pointer-events:none;"></i><span style="font-size:11px;font-weight:600;color:#333;pointer-events:none;">Pix</span></button>
+        <button class="pf-forma" data-forma="transferencia" style="padding:10px 6px;border:2px solid #e0e0e0;border-radius:8px;background:#fff;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;transition:all 0.2s;"><i class="fas fa-exchange-alt" style="font-size:18px;color:#fd7e14;pointer-events:none;"></i><span style="font-size:11px;font-weight:600;color:#333;pointer-events:none;">Transferência</span></button>
+        <button class="pf-forma" data-forma="boleto"   style="padding:10px 6px;border:2px solid #e0e0e0;border-radius:8px;background:#fff;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;transition:all 0.2s;"><i class="fas fa-barcode"       style="font-size:18px;color:#6c757d;pointer-events:none;"></i><span style="font-size:11px;font-weight:600;color:#333;pointer-events:none;">Boleto</span></button>
       </div>
 
       <div id="pfCampos" style="display:none;background:#f8f9fa;padding:14px;border-radius:8px;margin-bottom:14px;">
-        <div id="pf-c-dinheiro"      class="pf-c" style="display:none;"><label style="font-size:13px;font-weight:600;">Valor *</label><input type="number" id="pfValDinheiro"  step="0.01" min="0" style="width:100%;margin-top:5px;padding:10px;border:2px solid #ddd;border-radius:7px;font-size:15px;outline:none;"></div>
-        <div id="pf-c-debito"        class="pf-c" style="display:none;"><div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;"><div><label style="font-size:13px;font-weight:600;">Operadora</label><input type="text" id="pfOpDebito" style="width:100%;margin-top:5px;padding:10px;border:2px solid #ddd;border-radius:7px;font-size:14px;outline:none;"></div><div><label style="font-size:13px;font-weight:600;">Valor *</label><input type="number" id="pfValDebito" step="0.01" min="0" style="width:100%;margin-top:5px;padding:10px;border:2px solid #ddd;border-radius:7px;font-size:14px;outline:none;"></div></div></div>
-        <div id="pf-c-credito"       class="pf-c" style="display:none;"><div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;"><div><label style="font-size:13px;font-weight:600;">Operadora</label><input type="text" id="pfOpCredito" style="width:100%;margin-top:5px;padding:10px;border:2px solid #ddd;border-radius:7px;font-size:14px;outline:none;"></div><div><label style="font-size:13px;font-weight:600;">Parcelas</label><input type="number" id="pfParcCredito" value="1" min="1" style="width:100%;margin-top:5px;padding:10px;border:2px solid #ddd;border-radius:7px;font-size:14px;outline:none;"></div><div><label style="font-size:13px;font-weight:600;">Valor *</label><input type="number" id="pfValCredito" step="0.01" min="0" style="width:100%;margin-top:5px;padding:10px;border:2px solid #ddd;border-radius:7px;font-size:14px;outline:none;"></div></div></div>
-        <div id="pf-c-pix"           class="pf-c" style="display:none;"><div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;"><div><label style="font-size:13px;font-weight:600;">Chave PIX</label><input type="text" id="pfChavePix" style="width:100%;margin-top:5px;padding:10px;border:2px solid #ddd;border-radius:7px;font-size:14px;outline:none;"></div><div><label style="font-size:13px;font-weight:600;">Valor *</label><input type="number" id="pfValPix" step="0.01" min="0" style="width:100%;margin-top:5px;padding:10px;border:2px solid #ddd;border-radius:7px;font-size:15px;outline:none;"></div></div></div>
-        <div id="pf-c-transferencia" class="pf-c" style="display:none;"><div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;"><div><label style="font-size:13px;font-weight:600;">Banco/Conta</label><input type="text" id="pfBancoTr" style="width:100%;margin-top:5px;padding:10px;border:2px solid #ddd;border-radius:7px;font-size:14px;outline:none;"></div><div><label style="font-size:13px;font-weight:600;">Valor *</label><input type="number" id="pfValTr" step="0.01" min="0" style="width:100%;margin-top:5px;padding:10px;border:2px solid #ddd;border-radius:7px;font-size:15px;outline:none;"></div></div></div>
-        <div id="pf-c-boleto"        class="pf-c" style="display:none;"><div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;"><div><label style="font-size:13px;font-weight:600;">Código de Barras</label><input type="text" id="pfCodBoleto" style="width:100%;margin-top:5px;padding:10px;border:2px solid #ddd;border-radius:7px;font-size:14px;outline:none;"></div><div><label style="font-size:13px;font-weight:600;">Valor *</label><input type="number" id="pfValBoleto" step="0.01" min="0" style="width:100%;margin-top:5px;padding:10px;border:2px solid #ddd;border-radius:7px;font-size:15px;outline:none;"></div></div></div>
-        <button id="pfAdicionar" style="margin-top:12px;padding:9px 22px;border:none;border-radius:7px;background:#2e7d32;color:#fff;font-weight:600;cursor:pointer;font-size:13px;"><i class="fas fa-plus"></i> Adicionar</button>
+        <div data-pf-c="dinheiro"      class="pf-c" style="display:none;"><label style="font-size:13px;font-weight:600;">Valor *</label><input type="number" class="pf-valor-input" step="0.01" min="0" style="width:100%;margin-top:5px;padding:10px;border:2px solid #ddd;border-radius:7px;font-size:15px;outline:none;"></div>
+        <div data-pf-c="debito"        class="pf-c" style="display:none;"><div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;"><div><label style="font-size:13px;font-weight:600;">Operadora</label><input type="text" style="width:100%;margin-top:5px;padding:10px;border:2px solid #ddd;border-radius:7px;font-size:14px;outline:none;"></div><div><label style="font-size:13px;font-weight:600;">Valor *</label><input type="number" class="pf-valor-input" step="0.01" min="0" style="width:100%;margin-top:5px;padding:10px;border:2px solid #ddd;border-radius:7px;font-size:14px;outline:none;"></div></div></div>
+        <div data-pf-c="credito"       class="pf-c" style="display:none;"><div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;"><div><label style="font-size:13px;font-weight:600;">Operadora</label><input type="text" style="width:100%;margin-top:5px;padding:10px;border:2px solid #ddd;border-radius:7px;font-size:14px;outline:none;"></div><div><label style="font-size:13px;font-weight:600;">Parcelas</label><input type="number" class="pf-parcelas-input" value="1" min="1" style="width:100%;margin-top:5px;padding:10px;border:2px solid #ddd;border-radius:7px;font-size:14px;outline:none;"></div><div><label style="font-size:13px;font-weight:600;">Valor *</label><input type="number" class="pf-valor-input" step="0.01" min="0" style="width:100%;margin-top:5px;padding:10px;border:2px solid #ddd;border-radius:7px;font-size:14px;outline:none;"></div></div></div>
+        <div data-pf-c="pix"           class="pf-c" style="display:none;"><div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;"><div><label style="font-size:13px;font-weight:600;">Chave PIX</label><input type="text" style="width:100%;margin-top:5px;padding:10px;border:2px solid #ddd;border-radius:7px;font-size:14px;outline:none;"></div><div><label style="font-size:13px;font-weight:600;">Valor *</label><input type="number" class="pf-valor-input" step="0.01" min="0" style="width:100%;margin-top:5px;padding:10px;border:2px solid #ddd;border-radius:7px;font-size:15px;outline:none;"></div></div></div>
+        <div data-pf-c="transferencia" class="pf-c" style="display:none;"><div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;"><div><label style="font-size:13px;font-weight:600;">Banco/Conta</label><input type="text" style="width:100%;margin-top:5px;padding:10px;border:2px solid #ddd;border-radius:7px;font-size:14px;outline:none;"></div><div><label style="font-size:13px;font-weight:600;">Valor *</label><input type="number" class="pf-valor-input" step="0.01" min="0" style="width:100%;margin-top:5px;padding:10px;border:2px solid #ddd;border-radius:7px;font-size:15px;outline:none;"></div></div></div>
+        <div data-pf-c="boleto"        class="pf-c" style="display:none;"><div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;"><div><label style="font-size:13px;font-weight:600;">Código de Barras</label><input type="text" style="width:100%;margin-top:5px;padding:10px;border:2px solid #ddd;border-radius:7px;font-size:14px;outline:none;"></div><div><label style="font-size:13px;font-weight:600;">Valor *</label><input type="number" class="pf-valor-input" step="0.01" min="0" style="width:100%;margin-top:5px;padding:10px;border:2px solid #ddd;border-radius:7px;font-size:15px;outline:none;"></div></div></div>
+        <button class="pf-adicionar-btn" style="margin-top:12px;padding:9px 22px;border:none;border-radius:7px;background:#2e7d32;color:#fff;font-weight:600;cursor:pointer;font-size:13px;"><i class="fas fa-plus"></i> Adicionar</button>
       </div>
 
-      <div id="pfLista" style="display:none;margin-bottom:12px;">
+      <div class="pf-lista-wrap" style="display:none;margin-bottom:12px;">
         <h4 style="font-size:13px;margin-bottom:6px;color:#333;">Pagamentos adicionados</h4>
-        <div id="pfListaItems" style="background:#fff;padding:8px;border:1px solid #e9ecef;border-radius:7px;max-height:110px;overflow:auto;"></div>
+        <div class="pf-lista-items" style="background:#fff;padding:8px;border:1px solid #e9ecef;border-radius:7px;max-height:110px;overflow:auto;"></div>
       </div>
 
       <div style="display:flex;gap:10px;justify-content:flex-end;padding-top:14px;border-top:1px solid #eee;">
-        <button id="pfCancelar" style="padding:10px 22px;border:2px solid #9e9e9e;border-radius:7px;cursor:pointer;font-weight:600;background:#fff;color:#555;">Cancelar</button>
-        <button id="pfFinalizar" style="padding:10px 22px;border:none;border-radius:7px;cursor:pointer;font-weight:600;background:#2e7d32;color:#fff;"><i class="fas fa-check"></i> Finalizar Pagamento</button>
+        <button class="pf-cancelar-btn" style="padding:10px 22px;border:2px solid #9e9e9e;border-radius:7px;cursor:pointer;font-weight:600;background:#fff;color:#555;">Cancelar</button>
+        <button class="pf-finalizar-btn" style="padding:10px 22px;border:none;border-radius:7px;cursor:pointer;font-weight:600;background:#2e7d32;color:#fff;"><i class="fas fa-check"></i> Finalizar Pagamento</button>
       </div>
     </div>
   `;
@@ -1080,7 +1047,10 @@ function abrirModalPagamento() {
     }, 60);
   });
 
+  // Estado do modal — referências diretas a elementos DOM (sem getElementById)
   let formaSelecionada = null;
+  let inputValorAtivo = null; // referência direta ao input de valor da forma ativa
+  let inputParcelasAtivo = null; // referência direta ao input de parcelas (só crédito)
   let totalPago = 0;
   let pagEfetuados = [];
 
@@ -1097,18 +1067,19 @@ function abrirModalPagamento() {
 
   function atualizarTotaisModal() {
     const falta = Math.max(0, total - totalPago);
-    modal.querySelector("#pfPago").textContent =
-      `R$ ${totalPago.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
-    const pfFaltaEl = modal.querySelector("#pfFalta");
-    if (pfFaltaEl) {
-      pfFaltaEl.textContent = `R$ ${falta.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
-      pfFaltaEl.style.color = falta <= 0 ? "#2e7d32" : "#d32f2f";
+    const elPago = modal.querySelector("[data-pf-pago]");
+    const elFalta = modal.querySelector("[data-pf-falta]");
+    if (elPago)
+      elPago.textContent = `R$ ${totalPago.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+    if (elFalta) {
+      elFalta.textContent = `R$ ${falta.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+      elFalta.style.color = falta <= 0 ? "#2e7d32" : "#d32f2f";
     }
   }
 
   function renderListaModal() {
-    const lista = modal.querySelector("#pfLista");
-    const cont = modal.querySelector("#pfListaItems");
+    const lista = modal.querySelector(".pf-lista-wrap");
+    const cont = modal.querySelector(".pf-lista-items");
     if (!lista || !cont) return;
     if (!pagEfetuados.length) {
       lista.style.display = "none";
@@ -1136,100 +1107,97 @@ function abrirModalPagamento() {
     renderListaModal();
   };
 
-  modal.querySelector("#pfFechar").addEventListener("click", fecharModal);
-  modal.querySelector("#pfCancelar").addEventListener("click", fecharModal);
+  modal
+    .querySelector(".pf-cancelar-btn")
+    .addEventListener("click", fecharModal);
+  modal.querySelector(".pf-fechar-btn").addEventListener("click", fecharModal);
   overlay.addEventListener("click", fecharModal);
 
-  // Mapa explícito: forma → ID do input de valor (evita selecionar Parcelas por engano)
-  const formaValorInputId = {
-    dinheiro: "pfValDinheiro",
-    debito: "pfValDebito",
-    credito: "pfValCredito",
-    pix: "pfValPix",
-    transferencia: "pfValTr",
-    boleto: "pfValBoleto",
-  };
+  // Selecionar forma de pagamento
+  modal.querySelectorAll(".pf-forma").forEach((btn) => {
+    btn.addEventListener("click", function () {
+      // Encontrar o botão correto mesmo se o clique vier de ícone/span filho
+      const btnEl = this.closest(".pf-forma") || this;
+      const forma = btnEl.dataset.forma;
+      if (!forma) return;
 
-  // Lê valor do campo correto usando escopo do modal (evita getElementById achar modal antigo ainda no DOM)
-  function lerValorForma(forma) {
-    const id = formaValorInputId[forma];
-    if (!id) return 0;
-    return parseFloat(modal.querySelector("#" + id)?.value) || 0;
-  }
+      // Destacar botão selecionado
+      modal.querySelectorAll(".pf-forma").forEach((b) => {
+        b.style.borderColor = "#e0e0e0";
+        b.style.background = "#fff";
+      });
+      btnEl.style.borderColor = "#1976d2";
+      btnEl.style.background = "#e3f2fd";
 
-  // Tenta adicionar o pagamento em andamento; retorna true se bem-sucedido
-  function tentarAdicionarPagamento() {
-    if (!formaSelecionada) return false;
-    const valor = lerValorForma(formaSelecionada);
-    if (!valor || valor <= 0) return false;
-    const parcelas =
-      formaSelecionada === "credito"
-        ? parseInt(modal.querySelector("#pfParcCredito")?.value) || 1
-        : null;
+      formaSelecionada = forma;
+
+      // Mostrar campos da forma selecionada
+      modal
+        .querySelectorAll(".pf-c")
+        .forEach((c) => (c.style.display = "none"));
+      modal.querySelector("#pfCampos").style.display = "block";
+      const campoEl = modal.querySelector(`[data-pf-c="${forma}"]`);
+      if (campoEl) {
+        campoEl.style.display = "block";
+        // Guardar referência direta aos inputs
+        inputValorAtivo = campoEl.querySelector(".pf-valor-input");
+        inputParcelasAtivo = campoEl.querySelector(".pf-parcelas-input");
+        // Preencher valor restante e resetar parcelas
+        const restante = Math.max(0, total - totalPago);
+        if (inputValorAtivo) inputValorAtivo.value = restante.toFixed(2);
+        if (inputParcelasAtivo) inputParcelasAtivo.value = "1";
+        // Focar no campo de valor
+        if (inputValorAtivo) setTimeout(() => inputValorAtivo.focus(), 50);
+      }
+      console.log(
+        `[PF] Forma selecionada: ${forma} | inputValorAtivo:`,
+        inputValorAtivo,
+      );
+    });
+  });
+
+  // Adicionar pagamento à lista
+  function adicionarPagamento() {
+    if (!formaSelecionada) {
+      alert("Selecione uma forma de pagamento.");
+      return false;
+    }
+    if (!inputValorAtivo) {
+      alert("Erro interno: campo de valor não encontrado.");
+      return false;
+    }
+    const valor = parseFloat(inputValorAtivo.value);
+    if (!valor || valor <= 0) {
+      alert("Informe um valor válido.");
+      inputValorAtivo.focus();
+      return false;
+    }
+    const parcelas = inputParcelasAtivo
+      ? parseInt(inputParcelasAtivo.value) || 1
+      : null;
     pagEfetuados.push({ forma: formaSelecionada, valor, parcelas });
     totalPago += valor;
+    console.log(
+      `[PF] Pagamento adicionado: ${formaSelecionada} R$${valor} | total pagamentos:`,
+      pagEfetuados,
+    );
     atualizarTotaisModal();
     renderListaModal();
     return true;
   }
 
-  modal.querySelectorAll(".pf-forma").forEach((btn) => {
-    btn.addEventListener("click", function () {
-      modal.querySelectorAll(".pf-forma").forEach((b) => {
-        b.style.borderColor = "#e0e0e0";
-        b.style.background = "#fff";
-      });
-      this.style.borderColor = "#1976d2";
-      this.style.background = "#e3f2fd";
-      formaSelecionada = this.dataset.forma;
-      modal
-        .querySelectorAll(".pf-c")
-        .forEach((c) => (c.style.display = "none"));
-      modal.querySelector("#pfCampos").style.display = "block";
-      const campoEl = modal.querySelector(`#pf-c-${formaSelecionada}`);
-      if (campoEl) {
-        campoEl.style.display = "block";
-        const restante = Math.max(0, total - totalPago);
-        // Preencher somente o campo Valor usando escopo do modal
-        const valorId = formaValorInputId[formaSelecionada];
-        if (valorId) {
-          const inputValor = modal.querySelector("#" + valorId);
-          if (inputValor) inputValor.value = restante.toFixed(2);
-        }
-        // Sempre resetar Parcelas para 1
-        const inputParc = modal.querySelector("#pfParcCredito");
-        if (inputParc) inputParc.value = "1";
-      }
-    });
-  });
-
-  modal.querySelector("#pfAdicionar").addEventListener("click", function () {
-    if (!formaSelecionada) {
-      alert("Selecione uma forma de pagamento.");
-      return;
-    }
-    const valor = lerValorForma(formaSelecionada);
-    if (!valor || valor <= 0) {
-      alert("Informe um valor válido.");
-      return;
-    }
-    const parcelas =
-      formaSelecionada === "credito"
-        ? parseInt(modal.querySelector("#pfParcCredito")?.value) || 1
-        : null;
-    pagEfetuados.push({ forma: formaSelecionada, valor, parcelas });
-    totalPago += valor;
-    atualizarTotaisModal();
-    renderListaModal();
-  });
+  modal
+    .querySelector(".pf-adicionar-btn")
+    .addEventListener("click", adicionarPagamento);
 
   modal
-    .querySelector("#pfFinalizar")
+    .querySelector(".pf-finalizar-btn")
     .addEventListener("click", async function () {
-      // Auto-adicionar pagamento em andamento se forma selecionada e valor preenchido
-      if (formaSelecionada && !pagEfetuados.length) {
-        tentarAdicionarPagamento();
+      // Auto-adicionar se forma selecionada e nenhum pagamento ainda adicionado
+      if (formaSelecionada && inputValorAtivo && pagEfetuados.length === 0) {
+        adicionarPagamento();
       }
+      console.log(`[PF] Finalizar clicado | pagEfetuados:`, pagEfetuados);
       if (!pagEfetuados.length) {
         alert("Selecione uma forma de pagamento e informe o valor.");
         return;
