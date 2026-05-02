@@ -6,6 +6,9 @@
 (function () {
   "use strict";
 
+  // URL do backend na VPS — lê de api-config.js ou usa o valor padrão
+  var VPS_URL = window.VPS_URL || "http://72.60.244.46:3000";
+
   // ── Helpers ──
   function $(sel) {
     return document.querySelector(sel);
@@ -50,7 +53,7 @@
 
   async function carregarConfigDoBanco() {
     try {
-      var res = await fetch("/api/disparador/config");
+      var res = await fetch(VPS_URL + "/api/disparador/config");
       if (res.ok) {
         var cfg = await res.json();
         if (cfgIntervalo) cfgIntervalo.value = cfg.intervalo ?? 10;
@@ -70,7 +73,7 @@
       limite: Number((cfgLimite && cfgLimite.value) || 0),
       delayRand: Number((cfgDelayRand && cfgDelayRand.value) || 0),
     };
-    fetch("/api/disparador/config", {
+    fetch(VPS_URL + "/api/disparador/config", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(cfg),
@@ -164,7 +167,7 @@
       appendLog("Enviando lista para o servidor...");
 
       try {
-        var res = await fetch("/api/disparador/campanhas", {
+        var res = await fetch(VPS_URL + "/api/disparador/campanhas", {
           method: "POST",
           body: form,
         });
@@ -312,7 +315,7 @@
       }
 
       try {
-        var res = await fetch("/api/instancias", {
+        var res = await fetch(VPS_URL + "/api/instancias", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ nome: nome }),
@@ -363,7 +366,7 @@
   async function fetchInstancias() {
     if (!instanciasList) return;
     try {
-      var res = await fetch("/api/instancias");
+      var res = await fetch(VPS_URL + "/api/instancias");
       if (!res.ok) return;
       var list = await res.json();
       instanciasList.innerHTML = "";
@@ -426,9 +429,12 @@
           // Usar /reset ao conectar para limpar sessão corrompida
           var endpoint = act === "connect" ? "reset" : act;
           try {
-            var r = await fetch("/api/instancias/" + id + "/" + endpoint, {
-              method: "POST",
-            });
+            var r = await fetch(
+              VPS_URL + "/api/instancias/" + id + "/" + endpoint,
+              {
+                method: "POST",
+              },
+            );
             if (!r.ok) {
               appendLog("Erro ao " + act);
               return;
@@ -459,9 +465,12 @@
           )
             return;
           try {
-            var r = await fetch("/api/instancias/" + this.dataset.instId, {
-              method: "DELETE",
-            });
+            var r = await fetch(
+              VPS_URL + "/api/instancias/" + this.dataset.instId,
+              {
+                method: "DELETE",
+              },
+            );
             if (!r.ok) {
               appendLog("Erro ao excluir");
               return;
@@ -491,7 +500,7 @@
     // Prefixo "disp_" para isolar do sistema principal de marketing
     var chaveWpp = "disp_" + instanciaId;
     qrEventSource = new EventSource(
-      "/api/marketing/whatsapp/eventos?empresaId=" + chaveWpp,
+      VPS_URL + "/api/marketing/whatsapp/eventos?empresaId=" + chaveWpp,
     );
 
     qrEventSource.onmessage = function (event) {
@@ -631,7 +640,7 @@
             form.append("imagem", fileAnexo.files[0]);
           }
 
-          var resCreate = await fetch("/api/disparador/campanhas", {
+          var resCreate = await fetch(VPS_URL + "/api/disparador/campanhas", {
             method: "POST",
             body: form,
           });
@@ -664,11 +673,14 @@
       appendLog("Iniciando disparo (instância #" + instanciaId + ")...");
 
       try {
-        var res = await fetch("/api/disparador/start/" + lastCampanhaId, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ instanciaId: instanciaId }),
-        });
+        var res = await fetch(
+          VPS_URL + "/api/disparador/start/" + lastCampanhaId,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ instanciaId: instanciaId }),
+          },
+        );
         if (!res.ok) {
           var d = await res.json();
           appendLog("Erro: " + (d.error || ""));
@@ -689,9 +701,12 @@
       if (!lastCampanhaId) return;
       appendLog("Pausando campanha...");
       try {
-        var res = await fetch("/api/disparador/pause/" + lastCampanhaId, {
-          method: "POST",
-        });
+        var res = await fetch(
+          VPS_URL + "/api/disparador/pause/" + lastCampanhaId,
+          {
+            method: "POST",
+          },
+        );
         if (!res.ok) appendLog("Erro ao pausar");
         else appendLog("⏸ Campanha pausada.");
         closeCampaignStream();
@@ -708,11 +723,14 @@
       var instanciaId = await escolherInstancia();
       appendLog("Continuando campanha...");
       try {
-        var res = await fetch("/api/disparador/continue/" + lastCampanhaId, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ instanciaId: instanciaId }),
-        });
+        var res = await fetch(
+          VPS_URL + "/api/disparador/continue/" + lastCampanhaId,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ instanciaId: instanciaId }),
+          },
+        );
         if (!res.ok) appendLog("Erro ao continuar");
         else appendLog("▶ Campanha retomada.");
         startCampaignStream(lastCampanhaId);
@@ -727,7 +745,7 @@
   // ── Escolher instância (popup simples) ──
   async function escolherInstancia() {
     try {
-      var res = await fetch("/api/instancias");
+      var res = await fetch(VPS_URL + "/api/instancias");
       if (!res.ok) return null;
       var list = await res.json();
 
@@ -782,7 +800,9 @@
   async function refreshContatos() {
     if (!lastCampanhaId || !tblBody) return;
     try {
-      var res = await fetch("/api/disparador/contacts/" + lastCampanhaId);
+      var res = await fetch(
+        VPS_URL + "/api/disparador/contacts/" + lastCampanhaId,
+      );
       var list = await res.json();
       tblBody.innerHTML = "";
       for (var i = 0; i < list.length; i++) {
@@ -819,7 +839,7 @@
     if (!campId) return;
     try {
       campaignEventSource = new EventSource(
-        "/api/disparador/eventos/" + campId,
+        VPS_URL + "/api/disparador/eventos/" + campId,
       );
       campaignEventSource.onmessage = function (e) {
         try {

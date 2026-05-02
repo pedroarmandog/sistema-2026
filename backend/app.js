@@ -129,7 +129,8 @@ app.use(
         origin.includes("localhost") ||
         origin.includes("127.0.0.1") ||
         origin.includes("ngrok") ||
-        origin.includes("ngrok-free.app")
+        origin.includes("ngrok-free.app") ||
+        origin.includes("pethubflow.com.br")
       ) {
         return callback(null, true);
       }

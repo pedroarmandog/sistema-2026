@@ -2,8 +2,16 @@
  * Configuração centralizada da URL da API
  * Altere apenas aqui para mudar o endereço do backend em todo o frontend.
  */
+
+// URL da VPS onde o backend Node.js está rodando.
+// Altere somente este valor se o IP/porta da VPS mudar.
+const VPS_URL = "http://72.60.244.46:3000";
+
 // Prefer a variável global `__API_BASE__` (pode ser definida pelo backend),
-// senão usar a origem atual (domínio + porta). Não hardcodear IP/porta.
+// senão usar a URL da VPS.
 const API_URL =
-  (window.__API_BASE__ && window.__API_BASE__.toString()) ||
-  window.location.origin;
+  (window.__API_BASE__ && window.__API_BASE__.toString()) || VPS_URL;
+
+// Expõe globalmente para que outros scripts possam usar.
+window.VPS_URL = VPS_URL;
+window.API_URL = API_URL;

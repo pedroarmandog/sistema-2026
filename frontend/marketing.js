@@ -8,11 +8,11 @@
 
 console.log("[Marketing] Módulo carregado");
 
-
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // CONFIGURAÇÕES
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const API = "/api/marketing";
+const VPS_URL = window.VPS_URL || "http://72.60.244.46:3000";
+const API = VPS_URL + "/api/marketing";
 
 // Obter empresaId do usuário logado (cookie → API → empresas[0])
 let EMPRESA_ID = 1; // fallback
@@ -28,7 +28,7 @@ let _empresaIdPromise = (async function detectarEmpresaId() {
       }
     }
     if (!usuarioId) return;
-    const r = await fetch("/api/usuarios/" + usuarioId);
+    const r = await fetch(VPS_URL + "/api/usuarios/" + usuarioId);
     if (!r.ok) return;
     const u = await r.json();
     if (!u?.empresas?.length) return;
