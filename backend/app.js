@@ -122,23 +122,40 @@ console.log("✅ Modelos e associações carregados");
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Permitir requisições sem origin (ex: same-origin, curl, mobile)
+      // Permitir requisições sem origin (ex: same-origin, curl, mobile, Postman)
       if (!origin) return callback(null, true);
-      // Permitir localhost e ngrok
+      const allowed = [
+        "https://pethubflow.com.br",
+        "https://www.pethubflow.com.br",
+      ];
       if (
+        allowed.includes(origin) ||
         origin.includes("localhost") ||
         origin.includes("127.0.0.1") ||
         origin.includes("ngrok") ||
-        origin.includes("ngrok-free.app") ||
-        origin.includes("pethubflow.com.br")
+        origin.includes("ngrok-free.app")
       ) {
         return callback(null, true);
       }
-      callback(null, true); // liberar para testes — restringir em produção
+      // Bloquear origens desconhecidas em produção
+      return callback(
+        new Error("CORS: origin não permitida: " + origin),
+        false,
+      );
     },
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+      "Cache-Control",
+    ],
     credentials: true,
+    optionsSuccessStatus: 204,
   }),
 );
+// O app.use(cors(...)) acima já responde automaticamente aos preflights OPTIONS.
+
 app.use(bodyParser.json({ limit: "10mb" })); // aumentar limite para aceitar logos grandes
 app.use(bodyParser.urlencoded({ limit: "10mb", extended: true }));
 app.use(cookieParser());
@@ -217,16 +234,13 @@ app.use(
   }),
 ); // servir arquivos estáticos do frontend
 
-// Middleware de logging para debug (ativo apenas em desenvolvimento ou quando explicitado)
-const ENABLE_REQUEST_LOG =
-  process.env.ENABLE_REQUEST_LOG === "1" ||
-  process.env.NODE_ENV !== "production";
-if (ENABLE_REQUEST_LOG) {
-  app.use((req, res, next) => {
-    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
-    next();
-  });
-}
+// Middleware de logging para debug de requisições (sempre ativo)
+app.use((req, res, next) => {
+  console.log(
+    `[REQ] ${req.method} ${req.url} — origin: ${req.headers.origin || "sem-origin"}`,
+  );
+  next();
+});
 
 // Middleware: criar contexto por requisição para instrumentação de queries
 app.use((req, res, next) => {
