@@ -1830,10 +1830,21 @@ async function gerarPDFFaturamento(filtros) {
       filtros.dataFim,
     );
 
-    const vendas = await ApiClient.getVendas();
+    // Converter dd/mm/yyyy → yyyy-mm-dd para enviar ao backend
+    function toISODate(ddmmyyyy) {
+      if (!ddmmyyyy) return null;
+      const p = ddmmyyyy.split("/");
+      if (p.length === 3) return `${p[2]}-${p[1]}-${p[0]}`;
+      return ddmmyyyy;
+    }
+
+    const vendas = await ApiClient.getVendas(
+      toISODate(filtros.dataInicio),
+      toISODate(filtros.dataFim),
+    );
     console.log("📦 Total de vendas encontradas:", vendas.length);
 
-    // Filtrar vendas pelo período selecionado
+    // Filtrar vendas pelo período selecionado (segurança adicional no frontend)
     const dataInicioObj = parseDataRel(filtros.dataInicio);
     const dataFimObj = parseDataRel(filtros.dataFim);
     dataFimObj.setHours(23, 59, 59, 999); // Incluir todo o dia final

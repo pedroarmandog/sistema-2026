@@ -297,8 +297,12 @@ class ApiClient {
   // VENDAS
   // ========================================
 
-  static async getVendas() {
-    const data = await this.request("/vendas");
+  static async getVendas(dataInicio, dataFim) {
+    let url = "/vendas?limit=5000";
+    if (dataInicio && dataFim) {
+      url += `&dataInicio=${dataInicio}&dataFim=${dataFim}`;
+    }
+    const data = await this.request(url);
     // API pode retornar um array diretamente ou um objeto { vendas: [...] }
     if (Array.isArray(data)) return data;
     if (data && Array.isArray(data.vendas)) return data.vendas;
