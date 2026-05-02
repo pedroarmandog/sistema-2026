@@ -123,10 +123,10 @@ exports.listarHoje = async (req, res) => {
     const limitFetch = 5000;
 
     // 1) Movimentos manuais registrados em PagamentoCaixa
+    // Nota: tabela movimentacoes_caixa não tem empresa_id; já é isolada por autenticação
     const whereManual = {
       data_movimentacao: { [Op.between]: [inicioDia, fimDia] },
     };
-    if (empresaId) whereManual.empresa_id = empresaId;
     const manuais = await PagamentoCaixa.findAll({
       attributes: [
         "id",
@@ -361,10 +361,10 @@ exports.resumoCaixa = async (req, res) => {
     const resumo = { dinheiro: 0, pix: 0, cartao: 0, outro: 0, total_geral: 0 };
 
     // 1) PagamentoCaixa
+    // Nota: tabela movimentacoes_caixa não tem empresa_id
     const whereManualR = {
       data_movimentacao: { [Op.between]: [inicioDia, fimDia] },
     };
-    if (empresaId) whereManualR.empresa_id = empresaId;
     const totaisManuais = await PagamentoCaixa.findAll({
       attributes: ["forma_pagamento", [fn("SUM", col("valor")), "total"]],
       where: whereManualR,
