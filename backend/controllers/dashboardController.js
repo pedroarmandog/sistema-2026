@@ -650,8 +650,11 @@ exports.contasAPagarHoje = async (req, res) => {
     const hoje = new Date();
     const dataHoje = hoje.toISOString().split("T")[0];
 
-    const whereEmpresa = req.user?.empresaId
-      ? { empresa_id: req.user.empresaId }
+    const empresaId = req.user?.empresaId;
+
+    // Inclui registros da empresa atual E registros antigos sem empresa_id (retrocompatibilidade)
+    const whereEmpresa = empresaId
+      ? { [Op.or]: [{ empresa_id: empresaId }, { empresa_id: null }] }
       : {};
 
     const entradas = await Entrada.findAll({

@@ -542,10 +542,17 @@ app.post("/api/entrada/manual", authUser, async (req, res) => {
 app.get("/api/entrada/manual", authUser, async (req, res) => {
   try {
     const models = require("./models");
+    const { Op } = require("sequelize");
     const Entrada = models && models.Entrada ? models.Entrada : null;
     if (Entrada && typeof Entrada.findAll === "function") {
       const where = {};
-      if (req.user?.empresaId) where.empresa_id = req.user.empresaId;
+      if (req.user?.empresaId) {
+        // Inclui registros da empresa atual E registros antigos sem empresa_id
+        where[Op.or] = [
+          { empresa_id: req.user.empresaId },
+          { empresa_id: null },
+        ];
+      }
       const rows = await Entrada.findAll({
         where,
         order: [["createdAt", "DESC"]],
