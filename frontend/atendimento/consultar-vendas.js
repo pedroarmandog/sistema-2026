@@ -462,9 +462,36 @@ function inicializarConsultarVendas() {
           parseFloat(v.totalPago) || parseFloat((v.totais || {}).final) || 0,
         observacoes: v.observacoes || "",
         situacao: mapearStatus(v.status),
-        pagamentos: v.pagamentos || [],
-        itens: v.itens || [],
-        totais: v.totais || {},
+        pagamentos:
+          (typeof v.pagamentos === "string"
+            ? (function (s) {
+                try {
+                  return JSON.parse(s);
+                } catch (e) {
+                  return [];
+                }
+              })(v.pagamentos)
+            : v.pagamentos) || [],
+        itens:
+          (typeof v.itens === "string"
+            ? (function (s) {
+                try {
+                  return JSON.parse(s);
+                } catch (e) {
+                  return [];
+                }
+              })(v.itens)
+            : v.itens) || [],
+        totais:
+          (typeof v.totais === "string"
+            ? (function (s) {
+                try {
+                  return JSON.parse(s);
+                } catch (e) {
+                  return {};
+                }
+              })(v.totais)
+            : v.totais) || {},
       }));
       filtrarVendas();
     } catch (err) {
