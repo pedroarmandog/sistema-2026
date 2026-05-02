@@ -432,9 +432,16 @@ router.get("/manual", async (req, res) => {
   try {
     const modelsPath = path.join(__dirname, "..", "..", "..", "models");
     const models = require(modelsPath);
+    const { Op } = require("sequelize");
     const Entrada = models && models.Entrada ? models.Entrada : null;
     if (Entrada && typeof Entrada.findAll === "function") {
+      const where = {};
+      const empresaId = req.user && req.user.empresaId;
+      if (empresaId) {
+        where[Op.or] = [{ empresa_id: empresaId }, { empresa_id: null }];
+      }
       const rows = await Entrada.findAll({
+        where,
         order: [["createdAt", "DESC"]],
         limit: 200,
       });
@@ -465,7 +472,17 @@ router.put("/manual/:id", async (req, res) => {
     mapped.observacao = mapped.observacao || mapped.observacoes || null;
     mapped.situacao = mapped.situacao || mapped.status || "pendente";
     mapped.dataEmissao = mapped.dataEmissao || mapped.data || null;
-    mapped.valorTotal = mapped.valorTotal || mapped.valor || mapped.total || 0;
+    // Só atualizar valorTotal se vier explicitamente no body — não sobrescrever com 0
+    if (
+      body.valorTotal !== undefined ||
+      body.valor !== undefined ||
+      body.total !== undefined
+    ) {
+      mapped.valorTotal =
+        mapped.valorTotal || mapped.valor || mapped.total || 0;
+    } else {
+      delete mapped.valorTotal;
+    }
 
     if (Entrada && typeof Entrada.findByPk === "function") {
       let existing = await Entrada.findByPk(id);

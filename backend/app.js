@@ -289,7 +289,7 @@ app.use("/api/instancias", instanciaRoutes);
 // entrada-mercadoria (compiled router)
 try {
   const entradaRouter = require("./entrada-mercadoria/dist/routes/entradaRouter");
-  app.use("/api/entrada", entradaRouter);
+  app.use("/api/entrada", authUser, entradaRouter);
   console.log("Mounted entrada-mercadoria from dist");
 } catch (err) {
   console.warn(
