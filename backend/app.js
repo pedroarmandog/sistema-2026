@@ -390,7 +390,7 @@ try {
 // mesmo quando o módulo `entrada-mercadoria` compilado não expõe esse route.
 
 // POST: criar entrada manual com DB e processar itens no estoque
-app.post("/api/entrada/manual", async (req, res) => {
+app.post("/api/entrada/manual", authUser, async (req, res) => {
   const payload = req.body || {};
   try {
     const { Entrada, Produto, HistoricoEstoque } = require("./models");
@@ -399,6 +399,10 @@ app.post("/api/entrada/manual", async (req, res) => {
     }
 
     const mapped = Object.assign({}, payload);
+    // Auto-assign empresa_id from authenticated user if not provided
+    if (req.user?.empresaId && !mapped.empresa_id) {
+      mapped.empresa_id = req.user.empresaId;
+    }
     mapped.categoriaFinanceira =
       mapped.categoriaFinanceira || mapped.tipoEntrada || mapped.tipo || null;
     mapped.observacao = mapped.observacao || mapped.observacoes || null;
@@ -535,12 +539,15 @@ app.post("/api/entrada/manual", async (req, res) => {
   }
 });
 
-app.get("/api/entrada/manual", async (req, res) => {
+app.get("/api/entrada/manual", authUser, async (req, res) => {
   try {
     const models = require("./models");
     const Entrada = models && models.Entrada ? models.Entrada : null;
     if (Entrada && typeof Entrada.findAll === "function") {
+      const where = {};
+      if (req.user?.empresaId) where.empresa_id = req.user.empresaId;
       const rows = await Entrada.findAll({
+        where,
         order: [["createdAt", "DESC"]],
         limit: 500,
       });
@@ -586,7 +593,7 @@ app.get("/api/entrada/manual/:id", async (req, res) => {
 });
 
 // PUT: atualizar ou criar entrada manual (compatibilidade para o frontend)
-app.put("/api/entrada/manual/:id", async (req, res) => {
+app.put("/api/entrada/manual/:id", authUser, async (req, res) => {
   const id = req.params.id;
   const body = req.body || {};
   try {
@@ -595,7 +602,12 @@ app.put("/api/entrada/manual/:id", async (req, res) => {
     if (Entrada && typeof Entrada.findByPk === "function") {
       const existing = await Entrada.findByPk(id);
       if (existing) {
-        await existing.update(body);
+        // Auto-assign empresa_id if not set and user has one
+        const update = Object.assign({}, body);
+        if (req.user?.empresaId && !existing.empresa_id && !update.empresa_id) {
+          update.empresa_id = req.user.empresaId;
+        }
+        await existing.update(update);
         return res.json(existing.toJSON());
       }
       const created = await Entrada.create(Object.assign({}, body, { id }));

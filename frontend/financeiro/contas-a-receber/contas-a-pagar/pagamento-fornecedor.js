@@ -412,7 +412,7 @@ let documentosSelecionados = [];
 // ---------- LOAD DATA ----------
 async function carregarDocumentos() {
   try {
-    const res = await fetch("/api/entrada/manual");
+    const res = await fetch("/api/entrada/manual", { credentials: "include" });
     if (!res.ok) throw new Error("status " + res.status);
     let data = await res.json();
     if (!Array.isArray(data)) {
@@ -909,6 +909,7 @@ function abrirModalNovoDoc() {
   async function salvarDoc(payload) {
     const res = await fetch("/api/entrada/manual", {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
@@ -1209,6 +1210,7 @@ function abrirModalPagamento() {
         ids.map((id) =>
           fetch("/api/entrada/manual/" + id, {
             method: "PUT",
+            credentials: "include",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               situacao: "pago",
@@ -1273,7 +1275,10 @@ async function excluirDocumentos() {
   if (!confirmed) return;
   await Promise.all(
     documentosSelecionados.map((id) =>
-      fetch("/api/entrada/manual/" + id, { method: "DELETE" }).catch((e) => e),
+      fetch("/api/entrada/manual/" + id, {
+        method: "DELETE",
+        credentials: "include",
+      }).catch((e) => e),
     ),
   );
   documentosSelecionados = [];
