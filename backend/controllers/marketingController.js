@@ -342,7 +342,7 @@ exports.atualizarMensagem = async (req, res) => {
 
     // Se teve upload de imagem
     const imagemPath = req.file
-      ? path.join("/uploads/marketing", req.file.filename)
+      ? `/uploads/marketing/${req.file.filename}`
       : mensagem.imagemPath;
 
     await mensagem.update({ conteudo, titulo, imagemPath });
@@ -431,7 +431,10 @@ exports.uploadImagem = async (req, res) => {
     const imagemPath = `/uploads/marketing/${req.file.filename}`;
     await mensagem.update({ imagemPath });
 
-    return res.json({ sucesso: true, imagemPath });
+    return res.json({
+      sucesso: true,
+      imagemPath: `/uploads/marketing/${req.file.filename}`,
+    });
   } catch (err) {
     return res.status(500).json({ erro: err.message });
   }

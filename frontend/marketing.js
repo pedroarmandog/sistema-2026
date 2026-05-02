@@ -14,6 +14,13 @@ console.log("[Marketing] Módulo carregado");
 const VPS_URL = window.VPS_URL || "https://api.pethubflow.com.br";
 const API = VPS_URL + "/api/marketing";
 
+// Converte caminho relativo de imagem para URL absoluta da VPS
+function resolveImgPath(p) {
+  if (!p) return "";
+  if (p.startsWith("http")) return p;
+  return VPS_URL + p.replace(/\\/g, "/");
+}
+
 // Obter empresaId do usuário logado (cookie → API → empresas[0])
 let EMPRESA_ID = 1; // fallback
 let _empresaIdPromise = (async function detectarEmpresaId() {
@@ -626,7 +633,7 @@ function renderCardAtiva(m) {
                 <i class="fas fa-clock" style="margin-right:4px;"></i> ${configLabel}
             </div>
         </div>
-        ${m.imagemPath ? `<div style="margin-top:6px;"><img src="${escHtml(m.imagemPath)}" alt="img" style="height:48px;border-radius:4px;border:1px solid #e5e7eb;"></div>` : ""}
+        ${m.imagemPath ? `<div style="margin-top:6px;"><img src="${resolveImgPath(m.imagemPath)}" alt="img" style="height:48px;border-radius:4px;border:1px solid #e5e7eb;"></div>` : ""}
         <div class="card-actions">
             <button class="btn-editar" onclick="abrirModalEditar(${m.id})">
                 <i class="fas fa-edit"></i> Editar
@@ -669,7 +676,9 @@ async function abrirModalEditar(id) {
   // Imagem existente
   if (msg.imagemPath) {
     document.getElementById("modalMsgImagemPreview").style.display = "block";
-    document.getElementById("modalMsgImagemImg").src = msg.imagemPath;
+    document.getElementById("modalMsgImagemImg").src = resolveImgPath(
+      msg.imagemPath,
+    );
     document.getElementById("modalMsgImagemNome").textContent = "";
   } else {
     document.getElementById("modalMsgImagemPreview").style.display = "none";
