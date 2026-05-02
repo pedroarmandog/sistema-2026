@@ -1695,7 +1695,7 @@ async function fetchPetsForClient(clientId, cell) {
 
 // Sistema de debounce para evitar múltiplas chamadas
 let refreshTimeout = null;
-let isRefreshing = false;
+let isRefreshingClientes = false;
 
 function forceRefreshClients(reason = "unknown") {
   console.log(`🔄 Forçando refresh dos clientes (motivo: ${reason})`);
@@ -1704,13 +1704,13 @@ function forceRefreshClients(reason = "unknown") {
     clearTimeout(refreshTimeout);
   }
 
-  if (isRefreshing) {
+  if (isRefreshingClientes) {
     console.log("🔄 Refresh já em andamento, aguardando...");
     return;
   }
 
   refreshTimeout = setTimeout(async () => {
-    isRefreshing = true;
+    isRefreshingClientes = true;
     try {
       console.log("🔄 Executando refresh FORÇADO...");
       await loadClients(true); // Passar true para forçar
@@ -1718,7 +1718,7 @@ function forceRefreshClients(reason = "unknown") {
     } catch (error) {
       console.error("❌ Erro no refresh:", error);
     } finally {
-      isRefreshing = false;
+      isRefreshingClientes = false;
     }
   }, 300);
 }
