@@ -2,6 +2,10 @@
 const express = require("express");
 const router = express.Router();
 const posicaoCaixaController = require("../controllers/posicaoCaixaController");
+const { authUser } = require("../middleware/authUser");
+
+// Aplicar auth em todas as rotas
+router.use(authUser);
 
 // POST   / — registrar pagamento
 router.post("/", posicaoCaixaController.registrarPagamento);

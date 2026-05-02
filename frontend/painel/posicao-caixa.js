@@ -451,7 +451,7 @@ document.addEventListener("DOMContentLoaded", function () {
 // ─── Carregar resumo do caixa (totais por forma de pagamento) ───
 async function carregarResumo() {
   try {
-    const resp = await fetch(API_BASE + "/resumo");
+    const resp = await fetch(API_BASE + "/resumo", { credentials: "include" });
     if (!resp.ok) throw new Error("Erro ao buscar resumo");
     const resumo = await resp.json();
 
@@ -475,7 +475,7 @@ async function carregarResumo() {
 // ─── Carregar movimentações do dia ───
 async function carregarMovimentacoes() {
   try {
-    const resp = await fetch(API_BASE + "/hoje");
+    const resp = await fetch(API_BASE + "/hoje", { credentials: "include" });
     if (!resp.ok) throw new Error("Erro ao buscar movimentações");
     const movs = await resp.json();
 

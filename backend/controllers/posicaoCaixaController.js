@@ -96,7 +96,10 @@ exports.registrarPagamento = async (req, res) => {
 // ──────────────────────────────────────────────────────
 exports.listarHoje = async (req, res) => {
   try {
-    // Início e fim do dia atual
+    // empresa_id obrigatório para isolar dados multi-tenant
+    const empresaId = req.user && req.user.empresaId;
+
+    // Início e fim do dia atual (fuso do servidor)
     const hoje = new Date();
     const inicioDia = new Date(
       hoje.getFullYear(),
@@ -120,6 +123,10 @@ exports.listarHoje = async (req, res) => {
     const limitFetch = 5000;
 
     // 1) Movimentos manuais registrados em PagamentoCaixa
+    const whereManual = {
+      data_movimentacao: { [Op.between]: [inicioDia, fimDia] },
+    };
+    if (empresaId) whereManual.empresa_id = empresaId;
     const manuais = await PagamentoCaixa.findAll({
       attributes: [
         "id",
@@ -130,7 +137,7 @@ exports.listarHoje = async (req, res) => {
         "valor",
         "data_movimentacao",
       ],
-      where: { data_movimentacao: { [Op.between]: [inicioDia, fimDia] } },
+      where: whereManual,
       order: [["data_movimentacao", "DESC"]],
       raw: true,
       limit: limitFetch,
@@ -149,7 +156,13 @@ exports.listarHoje = async (req, res) => {
       });
     });
 
-    // 2) Agendamentos finalizados (buscamos primeiro para evitar duplicar vendas geradas por agendamento)
+    // 2) Agendamentos finalizados
+    const whereAgend = {
+      dataAgendamento: { [Op.between]: [inicioDia, fimDia] },
+      status: "concluido",
+      totalPago: { [Op.gt]: 0 },
+    };
+    if (empresaId) whereAgend.empresa_id = empresaId;
     const agendados = await Agendamento.findAll({
       attributes: [
         "id",
@@ -160,14 +173,7 @@ exports.listarHoje = async (req, res) => {
         "servico",
         "status",
       ],
-      where: {
-        dataAgendamento: { [Op.between]: [inicioDia, fimDia] },
-        status: "concluido",
-        [Op.or]: [
-          { totalPago: { [Op.gt]: 0 } },
-          where(literal("JSON_LENGTH(pagamentos)"), ">", 0),
-        ],
-      },
+      where: whereAgend,
       order: [["dataAgendamento", "DESC"]],
       raw: true,
       limit: limitFetch,
@@ -175,7 +181,12 @@ exports.listarHoje = async (req, res) => {
 
     const agendamentoIds = new Set((agendados || []).map((a) => Number(a.id)));
 
-    // 3) Vendas realizadas em nova-venda (todas com totalPago > 0 ou pagamentos)
+    // 3) Vendas realizadas em nova-venda (todas com totalPago > 0)
+    const whereVenda = {
+      data: { [Op.between]: [inicioDia, fimDia] },
+      totalPago: { [Op.gt]: 0 },
+    };
+    if (empresaId) whereVenda.empresa_id = empresaId;
     const vendas = await Venda.findAll({
       attributes: [
         "id",
@@ -184,15 +195,8 @@ exports.listarHoje = async (req, res) => {
         "pagamentos",
         "totais",
         "cliente",
-        "agendamentoId",
       ],
-      where: {
-        data: { [Op.between]: [inicioDia, fimDia] },
-        [Op.or]: [
-          { totalPago: { [Op.gt]: 0 } },
-          where(literal("JSON_LENGTH(pagamentos)"), ">", 0),
-        ],
-      },
+      where: whereVenda,
       order: [["data", "DESC"]],
       raw: true,
       limit: limitFetch,
@@ -333,6 +337,8 @@ exports.listarHoje = async (req, res) => {
 // ──────────────────────────────────────────────────────────────
 exports.resumoCaixa = async (req, res) => {
   try {
+    const empresaId = req.user && req.user.empresaId;
+
     const hoje = new Date();
     const inicioDia = new Date(
       hoje.getFullYear(),
@@ -355,9 +361,13 @@ exports.resumoCaixa = async (req, res) => {
     const resumo = { dinheiro: 0, pix: 0, cartao: 0, outro: 0, total_geral: 0 };
 
     // 1) PagamentoCaixa
+    const whereManualR = {
+      data_movimentacao: { [Op.between]: [inicioDia, fimDia] },
+    };
+    if (empresaId) whereManualR.empresa_id = empresaId;
     const totaisManuais = await PagamentoCaixa.findAll({
       attributes: ["forma_pagamento", [fn("SUM", col("valor")), "total"]],
-      where: { data_movimentacao: { [Op.between]: [inicioDia, fimDia] } },
+      where: whereManualR,
       group: ["forma_pagamento"],
       raw: true,
     });
@@ -370,6 +380,12 @@ exports.resumoCaixa = async (req, res) => {
 
     // 2) Agendamentos e Vendas - evitar duplicatas quando uma venda foi criada a partir de um agendamento
     const limitFetch = 5000;
+    const whereAgendR = {
+      dataAgendamento: { [Op.between]: [inicioDia, fimDia] },
+      status: "concluido",
+      totalPago: { [Op.gt]: 0 },
+    };
+    if (empresaId) whereAgendR.empresa_id = empresaId;
     const agendados = await Agendamento.findAll({
       attributes: [
         "id",
@@ -380,19 +396,17 @@ exports.resumoCaixa = async (req, res) => {
         "servico",
         "status",
       ],
-      where: {
-        dataAgendamento: { [Op.between]: [inicioDia, fimDia] },
-        status: "concluido",
-        [Op.or]: [
-          { totalPago: { [Op.gt]: 0 } },
-          where(literal("JSON_LENGTH(pagamentos)"), ">", 0),
-        ],
-      },
+      where: whereAgendR,
       raw: true,
       limit: limitFetch,
     });
     const agendamentoIds = new Set((agendados || []).map((a) => Number(a.id)));
 
+    const whereVendaR = {
+      data: { [Op.between]: [inicioDia, fimDia] },
+      totalPago: { [Op.gt]: 0 },
+    };
+    if (empresaId) whereVendaR.empresa_id = empresaId;
     const vendas = await Venda.findAll({
       attributes: [
         "id",
@@ -401,15 +415,8 @@ exports.resumoCaixa = async (req, res) => {
         "pagamentos",
         "totais",
         "cliente",
-        "agendamentoId",
       ],
-      where: {
-        data: { [Op.between]: [inicioDia, fimDia] },
-        [Op.or]: [
-          { totalPago: { [Op.gt]: 0 } },
-          where(literal("JSON_LENGTH(pagamentos)"), ">", 0),
-        ],
-      },
+      where: whereVendaR,
       raw: true,
       limit: limitFetch,
     });
