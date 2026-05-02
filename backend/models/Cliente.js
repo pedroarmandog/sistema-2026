@@ -213,6 +213,7 @@ const Cliente = sequelize.define(
     imagem_perfil: { type: DataTypes.STRING },
   },
   {
+    tableName: "clientes",
     // Definir índices de forma controlada
     indexes: [
       {

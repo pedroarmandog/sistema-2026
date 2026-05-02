@@ -158,6 +158,14 @@ exports.createPet = async (req, res) => {
       });
     }
 
+    // Erro de FK (cliente_id inválido)
+    if (error.name === "SequelizeForeignKeyConstraintError") {
+      return res.status(400).json({
+        success: false,
+        message: "Cliente inválido ou não encontrado no banco de dados",
+      });
+    }
+
     // Retornar mensagem de erro para facilitar debug em ambiente de desenvolvimento
     res.status(500).json({
       success: false,
