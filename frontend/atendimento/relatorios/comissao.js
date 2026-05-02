@@ -638,20 +638,30 @@ async function visualizarRelatorio() {
     // 1. Buscar dados
     const respDados = await fetch(`/api/relatorios/comissao`, {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(filtros),
     });
     if (!respDados.ok) {
       const err = await respDados.json().catch(() => ({}));
-      throw new Error(err.message || `HTTP ${respDados.status}`);
+      throw new Error(err.error || err.message || `HTTP ${respDados.status}`);
     }
     const dados = await respDados.json();
     _dadosRelatorio = dados;
     _filtrosRelatorio = filtros;
 
+    if (!dados.linhas || dados.linhas.length === 0) {
+      mostrarNotificacao(
+        "Nenhuma comissão encontrada no período selecionado.",
+        "warning",
+      );
+      return;
+    }
+
     // 2. Gerar PDF
     const respPdf = await fetch(`/api/relatorios/comissao/pdf`, {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         linhas: dados.linhas,

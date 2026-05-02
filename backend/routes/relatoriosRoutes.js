@@ -1546,6 +1546,24 @@ router.post("/comissao", async (req, res) => {
         offset: offsetV,
       });
       if (!batch || batch.length === 0) break;
+      // raw:true retorna campos JSON como string — fazer parse aqui
+      batch.forEach((v) => {
+        if (typeof v.itens === "string") {
+          try {
+            v.itens = JSON.parse(v.itens);
+          } catch {
+            v.itens = [];
+          }
+        }
+        if (!Array.isArray(v.itens)) v.itens = [];
+        if (typeof v.totais === "string") {
+          try {
+            v.totais = JSON.parse(v.totais);
+          } catch {
+            v.totais = {};
+          }
+        }
+      });
       vendas.push(...batch);
       offsetV += batch.length;
       if (batch.length < batchSizeV) break;
