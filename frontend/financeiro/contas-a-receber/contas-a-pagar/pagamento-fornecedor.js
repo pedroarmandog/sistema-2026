@@ -1097,17 +1097,18 @@ function abrirModalPagamento() {
 
   function atualizarTotaisModal() {
     const falta = Math.max(0, total - totalPago);
-    document.getElementById("pfPago").textContent =
+    modal.querySelector("#pfPago").textContent =
       `R$ ${totalPago.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
-    document.getElementById("pfFalta").textContent =
-      `R$ ${falta.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
-    document.getElementById("pfFalta").style.color =
-      falta <= 0 ? "#2e7d32" : "#d32f2f";
+    const pfFaltaEl = modal.querySelector("#pfFalta");
+    if (pfFaltaEl) {
+      pfFaltaEl.textContent = `R$ ${falta.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+      pfFaltaEl.style.color = falta <= 0 ? "#2e7d32" : "#d32f2f";
+    }
   }
 
   function renderListaModal() {
-    const lista = document.getElementById("pfLista");
-    const cont = document.getElementById("pfListaItems");
+    const lista = modal.querySelector("#pfLista");
+    const cont = modal.querySelector("#pfListaItems");
     if (!lista || !cont) return;
     if (!pagEfetuados.length) {
       lista.style.display = "none";
@@ -1149,11 +1150,11 @@ function abrirModalPagamento() {
     boleto: "pfValBoleto",
   };
 
-  // Lê valor do campo correto conforme forma selecionada
+  // Lê valor do campo correto usando escopo do modal (evita getElementById achar modal antigo ainda no DOM)
   function lerValorForma(forma) {
     const id = formaValorInputId[forma];
     if (!id) return 0;
-    return parseFloat(document.getElementById(id)?.value) || 0;
+    return parseFloat(modal.querySelector("#" + id)?.value) || 0;
   }
 
   // Tenta adicionar o pagamento em andamento; retorna true se bem-sucedido
@@ -1163,7 +1164,7 @@ function abrirModalPagamento() {
     if (!valor || valor <= 0) return false;
     const parcelas =
       formaSelecionada === "credito"
-        ? parseInt(document.getElementById("pfParcCredito")?.value) || 1
+        ? parseInt(modal.querySelector("#pfParcCredito")?.value) || 1
         : null;
     pagEfetuados.push({ forma: formaSelecionada, valor, parcelas });
     totalPago += valor;
@@ -1184,19 +1185,19 @@ function abrirModalPagamento() {
       modal
         .querySelectorAll(".pf-c")
         .forEach((c) => (c.style.display = "none"));
-      document.getElementById("pfCampos").style.display = "block";
-      const campoEl = document.getElementById(`pf-c-${formaSelecionada}`);
+      modal.querySelector("#pfCampos").style.display = "block";
+      const campoEl = modal.querySelector(`#pf-c-${formaSelecionada}`);
       if (campoEl) {
         campoEl.style.display = "block";
         const restante = Math.max(0, total - totalPago);
-        // Preencher somente o campo Valor usando o mapa explícito
+        // Preencher somente o campo Valor usando escopo do modal
         const valorId = formaValorInputId[formaSelecionada];
         if (valorId) {
-          const inputValor = document.getElementById(valorId);
+          const inputValor = modal.querySelector("#" + valorId);
           if (inputValor) inputValor.value = restante.toFixed(2);
         }
         // Sempre resetar Parcelas para 1
-        const inputParc = document.getElementById("pfParcCredito");
+        const inputParc = modal.querySelector("#pfParcCredito");
         if (inputParc) inputParc.value = "1";
       }
     });
@@ -1214,7 +1215,7 @@ function abrirModalPagamento() {
     }
     const parcelas =
       formaSelecionada === "credito"
-        ? parseInt(document.getElementById("pfParcCredito")?.value) || 1
+        ? parseInt(modal.querySelector("#pfParcCredito")?.value) || 1
         : null;
     pagEfetuados.push({ forma: formaSelecionada, valor, parcelas });
     totalPago += valor;
