@@ -1156,8 +1156,12 @@ function abrirModalPagamento() {
       if (campoEl) {
         campoEl.style.display = "block";
         const restante = Math.max(0, total - totalPago);
-        const inputN = campoEl.querySelector('input[type="number"]');
-        if (inputN) inputN.value = restante.toFixed(2);
+        // Usar seletor específico para evitar preencher o campo Parcelas (credito)
+        const inputValor = campoEl.querySelector('input[id^="pfVal"]');
+        if (inputValor) inputValor.value = restante.toFixed(2);
+        // Garantir que Parcelas fique em 1
+        const inputParc = campoEl.querySelector("#pfParcCredito");
+        if (inputParc) inputParc.value = "1";
       }
     });
   });
@@ -1168,9 +1172,8 @@ function abrirModalPagamento() {
       return;
     }
     const campoEl = document.getElementById(`pf-c-${formaSelecionada}`);
-    const inputN = campoEl
-      ? campoEl.querySelector('input[type="number"]')
-      : null;
+    // Usar seletor específico para pegar o campo Valor e não o campo Parcelas
+    const inputN = campoEl ? campoEl.querySelector('input[id^="pfVal"]') : null;
     const valor = inputN ? parseFloat(inputN.value) : 0;
     if (!valor || valor <= 0) {
       alert("Informe um valor válido.");
