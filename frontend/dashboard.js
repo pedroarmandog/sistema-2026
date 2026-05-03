@@ -2406,7 +2406,8 @@ function escapeHtml(text) {
   window.confirmLogout = async function () {
     // Encerrar sessão no backend
     try {
-      await fetch("/api/usuarios/logout", {
+      const _base = window.VPS_URL || window.API_URL || "";
+      await fetch(_base + "/api/usuarios/logout", {
         method: "POST",
         credentials: "include",
       });

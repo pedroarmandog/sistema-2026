@@ -2,22 +2,22 @@
 // USER PROFILE DROPDOWN - COMPONENTE GLOBAL
 // ==========================================
 
-(function() {
-    'use strict';
-    
-    console.log('🔧 User Profile Dropdown: Script carregado');
-    
-    // Evitar múltiplas inicializações
-    if (window.__userProfileDropdownInitialized) {
-        console.log('⚠️ User Profile Dropdown: Já inicializado');
-        return;
-    }
-    window.__userProfileDropdownInitialized = true;
+(function () {
+  "use strict";
 
-    // Injetar CSS do dropdown
-    const style = document.createElement('style');
-    style.id = 'user-profile-dropdown-styles';
-    style.textContent = `
+  console.log("🔧 User Profile Dropdown: Script carregado");
+
+  // Evitar múltiplas inicializações
+  if (window.__userProfileDropdownInitialized) {
+    console.log("⚠️ User Profile Dropdown: Já inicializado");
+    return;
+  }
+  window.__userProfileDropdownInitialized = true;
+
+  // Injetar CSS do dropdown
+  const style = document.createElement("style");
+  style.id = "user-profile-dropdown-styles";
+  style.textContent = `
         .user-menu {
             position: relative;
             cursor: pointer;
@@ -274,11 +274,11 @@
             }
         }
     `;
-    document.head.appendChild(style);
+  document.head.appendChild(style);
 
-    // Criar HTML do dropdown
-    function createDropdownHTML() {
-        return `
+  // Criar HTML do dropdown
+  function createDropdownHTML() {
+    return `
             <div class="user-profile-dropdown" id="userProfileDropdown">
                 <div class="user-profile-header">
                     <div class="user-profile-avatar">
@@ -329,82 +329,88 @@
                 </div>
             </div>
         `;
-    }
+  }
 
-    // Inicializar dropdown
-    function initUserProfileDropdown() {
-        console.log('🚀 User Profile Dropdown: Inicializando...');
-        
-        // Encontrar todos os elementos .user-menu
-        const userMenus = document.querySelectorAll('.user-menu');
-        console.log(`📊 User Profile Dropdown: Encontrados ${userMenus.length} elementos .user-menu`);
-        
-        userMenus.forEach((userMenu, index) => {
-            console.log(`🎯 Processando user-menu ${index + 1}...`);
-            
-            // Verificar se já foi inicializado
-            if (userMenu.hasAttribute('data-dropdown-initialized')) {
-                console.log(`⏭️ User-menu ${index + 1} já inicializado`);
-                return;
-            }
-            userMenu.setAttribute('data-dropdown-initialized', 'true');
+  // Inicializar dropdown
+  function initUserProfileDropdown() {
+    console.log("🚀 User Profile Dropdown: Inicializando...");
 
-            // Adicionar dropdown HTML
-            userMenu.insertAdjacentHTML('beforeend', createDropdownHTML());
-            console.log(`✅ Dropdown HTML adicionado ao user-menu ${index + 1}`);
-            
-            const dropdown = userMenu.querySelector('.user-profile-dropdown');
-            console.log(`🔍 Dropdown encontrado:`, !!dropdown);
-            
-            // Toggle dropdown ao clicar no user-menu
-            userMenu.addEventListener('click', function(e) {
-                console.log('👆 Clique no user-menu detectado!');
-                e.stopPropagation();
-                
-                // Fechar outros dropdowns abertos
-                document.querySelectorAll('.user-profile-dropdown.active').forEach(d => {
-                    if (d !== dropdown) d.classList.remove('active');
-                });
-                
-                const isActive = dropdown.classList.toggle('active');
-                console.log(`🎬 Dropdown ${isActive ? 'ABERTO' : 'FECHADO'}`);
-            });
+    // Encontrar todos os elementos .user-menu
+    const userMenus = document.querySelectorAll(".user-menu");
+    console.log(
+      `📊 User Profile Dropdown: Encontrados ${userMenus.length} elementos .user-menu`,
+    );
 
-            // Ações do dropdown
-            dropdown.addEventListener('click', function(e) {
-                const item = e.target.closest('.user-profile-item');
-                if (!item) return;
+    userMenus.forEach((userMenu, index) => {
+      console.log(`🎯 Processando user-menu ${index + 1}...`);
 
-                e.preventDefault();
-                e.stopPropagation();
+      // Verificar se já foi inicializado
+      if (userMenu.hasAttribute("data-dropdown-initialized")) {
+        console.log(`⏭️ User-menu ${index + 1} já inicializado`);
+        return;
+      }
+      userMenu.setAttribute("data-dropdown-initialized", "true");
 
-                const action = item.getAttribute('data-action');
-                handleDropdownAction(action);
-                
-                // Fechar dropdown após ação
-                dropdown.classList.remove('active');
-            });
-        });
+      // Adicionar dropdown HTML
+      userMenu.insertAdjacentHTML("beforeend", createDropdownHTML());
+      console.log(`✅ Dropdown HTML adicionado ao user-menu ${index + 1}`);
 
-        // Fechar dropdown ao clicar fora
-        document.addEventListener('click', function(e) {
-            if (!e.target.closest('.user-menu')) {
-                document.querySelectorAll('.user-profile-dropdown.active').forEach(d => {
-                    d.classList.remove('active');
-                });
-            }
-        });
-    }
+      const dropdown = userMenu.querySelector(".user-profile-dropdown");
+      console.log(`🔍 Dropdown encontrado:`, !!dropdown);
 
-    // Função para mostrar modal de logout
-    function showLogoutModal() {
-        // Criar modal se não existir
-        let modal = document.getElementById('logoutModal');
-        if (!modal) {
-            modal = document.createElement('div');
-            modal.id = 'logoutModal';
-            modal.className = 'logout-modal-overlay';
-            modal.innerHTML = `
+      // Toggle dropdown ao clicar no user-menu
+      userMenu.addEventListener("click", function (e) {
+        console.log("👆 Clique no user-menu detectado!");
+        e.stopPropagation();
+
+        // Fechar outros dropdowns abertos
+        document
+          .querySelectorAll(".user-profile-dropdown.active")
+          .forEach((d) => {
+            if (d !== dropdown) d.classList.remove("active");
+          });
+
+        const isActive = dropdown.classList.toggle("active");
+        console.log(`🎬 Dropdown ${isActive ? "ABERTO" : "FECHADO"}`);
+      });
+
+      // Ações do dropdown
+      dropdown.addEventListener("click", function (e) {
+        const item = e.target.closest(".user-profile-item");
+        if (!item) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const action = item.getAttribute("data-action");
+        handleDropdownAction(action);
+
+        // Fechar dropdown após ação
+        dropdown.classList.remove("active");
+      });
+    });
+
+    // Fechar dropdown ao clicar fora
+    document.addEventListener("click", function (e) {
+      if (!e.target.closest(".user-menu")) {
+        document
+          .querySelectorAll(".user-profile-dropdown.active")
+          .forEach((d) => {
+            d.classList.remove("active");
+          });
+      }
+    });
+  }
+
+  // Função para mostrar modal de logout
+  function showLogoutModal() {
+    // Criar modal se não existir
+    let modal = document.getElementById("logoutModal");
+    if (!modal) {
+      modal = document.createElement("div");
+      modal.id = "logoutModal";
+      modal.className = "logout-modal-overlay";
+      modal.innerHTML = `
                 <div class="logout-modal">
                     <div class="logout-modal-header">
                         <div class="logout-modal-icon">
@@ -425,82 +431,95 @@
                     </div>
                 </div>
             `;
-            document.body.appendChild(modal);
+      document.body.appendChild(modal);
 
-            // Fechar ao clicar no overlay
-            modal.addEventListener('click', function(e) {
-                if (e.target === modal) {
-                    closeLogoutModal();
-                }
-            });
-
-            // Fechar com ESC
-            document.addEventListener('keydown', function(e) {
-                if (e.key === 'Escape' && modal.classList.contains('active')) {
-                    closeLogoutModal();
-                }
-            });
+      // Fechar ao clicar no overlay
+      modal.addEventListener("click", function (e) {
+        if (e.target === modal) {
+          closeLogoutModal();
         }
+      });
 
-        // Mostrar modal
-        modal.classList.add('active');
+      // Fechar com ESC
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape" && modal.classList.contains("active")) {
+          closeLogoutModal();
+        }
+      });
     }
 
-    // Funções globais para os botões do modal
-    window.closeLogoutModal = function() {
-        const modal = document.getElementById('logoutModal');
-        if (modal) {
-            modal.classList.remove('active');
-        }
-    };
+    // Mostrar modal
+    modal.classList.add("active");
+  }
 
-    window.confirmLogout = function() {
-        // Redirecionar para página de login (caminho correto no servidor express)
-        window.location.href = '/login/login.html';
-    };
-
-    // Manipular ações do dropdown
-    function handleDropdownAction(action) {
-        switch(action) {
-            case 'switch-company':
-                console.log('Acessar outra empresa');
-                alert('Funcionalidade "Acessar outra empresa" em desenvolvimento');
-                break;
-            
-            case 'my-profile':
-                console.log('Meu perfil');
-                alert('Funcionalidade "Meu perfil" em desenvolvimento');
-                break;
-            
-            case 'billing':
-                console.log('Cobrança');
-                alert('Funcionalidade "Cobrança" em desenvolvimento');
-                break;
-            
-            case 'about':
-                console.log('Sobre');
-                alert('Sistema PetHub - Versão 1.0.0');
-                break;
-            
-            case 'logout':
-                console.log('Sair');
-                showLogoutModal();
-                break;
-        }
+  // Funções globais para os botões do modal
+  window.closeLogoutModal = function () {
+    const modal = document.getElementById("logoutModal");
+    if (modal) {
+      modal.classList.remove("active");
     }
+  };
 
-    // Inicializar quando o DOM estiver pronto
-    if (document.readyState === 'loading') {
-        console.log('⏳ Aguardando DOMContentLoaded...');
-        document.addEventListener('DOMContentLoaded', initUserProfileDropdown);
-    } else {
-        console.log('✅ DOM já carregado, inicializando imediatamente...');
-        initUserProfileDropdown();
+  window.confirmLogout = async function () {
+    // Encerrar sessão no backend antes de redirecionar
+    try {
+      const _base = window.VPS_URL || window.API_URL || "";
+      await fetch(_base + "/api/usuarios/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch (e) {
+      // Ignorar erro de rede — prosseguir com logout local
     }
+    // Limpar cookies de sessão
+    document.cookie =
+      "usuarioLogadoId=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/";
+    document.cookie =
+      "usuarioLogadoNome=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/";
+    window.location.href = "/login/login.html";
+  };
 
-    // Reinicializar após AJAX/mudanças dinâmicas (opcional)
-    window.reinitUserProfileDropdown = initUserProfileDropdown;
-    
-    console.log('✅ User Profile Dropdown: Script configurado com sucesso');
+  // Manipular ações do dropdown
+  function handleDropdownAction(action) {
+    switch (action) {
+      case "switch-company":
+        console.log("Acessar outra empresa");
+        alert('Funcionalidade "Acessar outra empresa" em desenvolvimento');
+        break;
 
+      case "my-profile":
+        console.log("Meu perfil");
+        alert('Funcionalidade "Meu perfil" em desenvolvimento');
+        break;
+
+      case "billing":
+        console.log("Cobrança");
+        alert('Funcionalidade "Cobrança" em desenvolvimento');
+        break;
+
+      case "about":
+        console.log("Sobre");
+        alert("Sistema PetHub - Versão 1.0.0");
+        break;
+
+      case "logout":
+        console.log("Sair");
+        showLogoutModal();
+        break;
+    }
+  }
+
+  // Inicializar quando o DOM estiver pronto
+  if (document.readyState === "loading") {
+    console.log("⏳ Aguardando DOMContentLoaded...");
+    document.addEventListener("DOMContentLoaded", initUserProfileDropdown);
+  } else {
+    console.log("✅ DOM já carregado, inicializando imediatamente...");
+    initUserProfileDropdown();
+  }
+
+  // Reinicializar após AJAX/mudanças dinâmicas (opcional)
+  window.reinitUserProfileDropdown = initUserProfileDropdown;
+
+  console.log("✅ User Profile Dropdown: Script configurado com sucesso");
 })();
