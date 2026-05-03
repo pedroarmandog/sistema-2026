@@ -285,8 +285,10 @@
       </div>
     </div>
 
+    <script src="/api-config.js"></script>
     <script>
-      const API = window.location.origin + "/api/admin";
+      // Usar VPS_URL centralizado (definido por api-config.js); fallback para origin
+      const API = (window.VPS_URL || window.location.origin) + "/api/admin";
 
       // Toggle senha
       document

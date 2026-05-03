@@ -7,7 +7,7 @@ const {
   AdminImpersonationToken,
   sequelize,
 } = require("../models");
-const { Op } = require("sequelize");
+const { Op, QueryTypes } = require("sequelize");
 const { gerarTokenUsuario } = require("../middleware/authUser");
 
 // GET /api/admin/empresas — listar todas
@@ -304,11 +304,29 @@ async function excluir(req, res) {
     }
 
     // Encontrar empresa do sistema correspondente pelo CNPJ (quando aplicável)
-    const cnpj = empresaPainel.cnpj;
-    const empresaSistema = cnpj
-      ? await Empresa.findOne({ where: { cnpj }, transaction: t })
-      : null;
+    // Busca defensiva: tenta com CNPJ limpo (apenas dígitos) e também com o valor original
+    // para cobrir casos em que a tabela `empresas` armazenou o CNPJ formatado.
+    const cnpj = empresaPainel.cnpj || "";
+    const cnpjLimpo = cnpj.replace(/\D/g, "");
+    console.log(
+      `[admin/empresas/excluir] buscando Empresa pelo cnpj: '${cnpjLimpo}' (original: '${cnpj}')`,
+    );
+    let empresaSistema = null;
+    if (cnpjLimpo) {
+      // Tentar primeiro com o CNPJ limpo; se não achar, tentar com o valor original
+      empresaSistema =
+        (await Empresa.findOne({
+          where: { cnpj: cnpjLimpo },
+          transaction: t,
+        })) ||
+        (cnpj !== cnpjLimpo
+          ? await Empresa.findOne({ where: { cnpj }, transaction: t })
+          : null);
+    }
     const empresaSistemaId = empresaSistema ? empresaSistema.id : null;
+    console.log(
+      `[admin/empresas/excluir] empresaSistema encontrada: ${empresaSistemaId ? `id=${empresaSistemaId}` : "NÃO ENCONTRADA"}`,
+    );
 
     // Carregar todos os modelos que possuem campo empresa_id e apagar linhas
     const allModels = require("../models");
@@ -403,15 +421,44 @@ async function excluir(req, res) {
     }
 
     // Apagar empresa do sistema (quando encontrada)
+    // Envolver em try-catch: se houver constraint de FK residual, não deve impedir
+    // a remoção do registro do painel (objetivo principal do admin).
     if (empresaSistemaId) {
-      await Empresa.destroy({
-        where: { id: empresaSistemaId },
-        transaction: t,
-      });
+      try {
+        // Também remover usuários com empresa_id legada (coluna não presente no modelo Sequelize)
+        try {
+          await sequelize.query(
+            "UPDATE usuarios SET empresa_id = NULL WHERE empresa_id = :empId",
+            { replacements: { empId: empresaSistemaId }, transaction: t },
+          );
+        } catch (legacyErr) {
+          console.warn(
+            "[admin/empresas/excluir] falha ao limpar usuarios.empresa_id legado:",
+            legacyErr && legacyErr.message,
+          );
+        }
+        await Empresa.destroy({
+          where: { id: empresaSistemaId },
+          transaction: t,
+        });
+        console.log(
+          `[admin/empresas/excluir] Empresa id=${empresaSistemaId} removida.`,
+        );
+      } catch (e) {
+        // FK residual ou outro erro: logar mas não abortar — o registro do painel
+        // ainda será removido e a transação continuará.
+        console.warn(
+          `[admin/empresas/excluir] não foi possível remover Empresa id=${empresaSistemaId} (FK ou outro erro — verifique relações pendentes):`,
+          e && e.message,
+        );
+      }
     }
 
     // Apagar registro do painel
     await empresaPainel.destroy({ transaction: t });
+    console.log(
+      `[admin/empresas/excluir] EmpresaPainel id=${empresaPainel.id} removida.`,
+    );
 
     await t.commit();
 
@@ -1012,7 +1059,49 @@ async function impersonate(req, res) {
       }
     }
 
+    // Fallback: buscar usuário via coluna legada `empresa_id` (usuários criados antes
+    // da migração para o campo JSON `empresas`). Cobre o cenário de "usuário não encontrado".
     if (!usuarioAlvo) {
+      try {
+        const legacyRows = await sequelize.query(
+          `SELECT id, nome, grupoUsuario FROM usuarios
+           WHERE empresa_id = :empId AND ativo = 1
+           ORDER BY id ASC LIMIT 10`,
+          {
+            replacements: { empId: empresaSistema.id },
+            type: QueryTypes.SELECT,
+          },
+        );
+        if (legacyRows && legacyRows.length > 0) {
+          usuarioAlvo = legacyRows[0]; // qualquer usuário ativo da empresa
+          // Preferir usuário com maior nível de permissão
+          for (const row of legacyRows) {
+            const grupo = String(row.grupoUsuario || "").toLowerCase();
+            if (
+              grupo.includes("admin") ||
+              grupo.includes("acesso total") ||
+              grupo.includes("master")
+            ) {
+              usuarioAlvo = row;
+              break;
+            }
+          }
+          console.log(
+            `[admin/impersonate] usuário encontrado via coluna legada empresa_id=${empresaSistema.id}: id=${usuarioAlvo.id}`,
+          );
+        }
+      } catch (legacyErr) {
+        console.warn(
+          "[admin/impersonate] falha ao buscar usuário legado via empresa_id:",
+          legacyErr && legacyErr.message,
+        );
+      }
+    }
+
+    if (!usuarioAlvo) {
+      console.warn(
+        `[admin/impersonate] nenhum usuário ativo encontrado para empresaSistema.id=${empresaSistema.id}`,
+      );
       return res
         .status(404)
         .json({ error: "Nenhum usuário ativo encontrado para esta empresa" });
@@ -1102,13 +1191,19 @@ async function impersonateRedirect(req, res) {
     res.cookie("usuarioLogadoNome", usuario.nome || "", legacyOpts);
 
     // Registrar sessão ativa no DB (para aparecer no painel de acessos)
+    // IMPORTANTE: aplicar limite de sessões simultâneas, igual ao fluxo normal de login.
+    // Sem isso, a impersonação bypassaria o controle de sessões do cliente.
     try {
       const crypto = require("crypto");
       const tokenHash = crypto
         .createHash("sha256")
         .update(jwtToken)
         .digest("hex");
-      const { registrarSessao } = require("../controllers/acessosController");
+      const {
+        registrarSessao,
+        verificarLimiteAcessos,
+      } = require("../controllers/acessosController");
+
       // Mapear empresaSistema (registro.empresa_id) -> empresaPainel.id via CNPJ
       const empresaSistemaRec = await Empresa.findByPk(registro.empresa_id, {
         attributes: ["cnpj"],
@@ -1120,6 +1215,27 @@ async function impersonateRedirect(req, res) {
           where: { cnpj: cnpjLimpo },
         });
       }
+
+      // Verificar limite de sessões e derrubar as mais antigas se necessário
+      if (empresaPainelRec) {
+        const limiteCheck = await verificarLimiteAcessos(registro.empresa_id);
+        if (
+          limiteCheck.sessoesDerrubar &&
+          limiteCheck.sessoesDerrubar.length > 0
+        ) {
+          const { SessaoAtiva } = require("../models");
+          console.log(
+            `[admin/impersonateRedirect] derrubando ${limiteCheck.sessoesDerrubar.length} sessão(ões) antiga(s) para empresa ${empresaPainelRec.id}`,
+          );
+          for (const sessao of limiteCheck.sessoesDerrubar) {
+            await SessaoAtiva.update(
+              { ativo: false },
+              { where: { id: sessao.id, ativo: true } },
+            );
+          }
+        }
+      }
+
       const clientIp =
         req.headers["x-forwarded-for"] ||
         req.connection?.remoteAddress ||

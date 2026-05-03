@@ -2,7 +2,10 @@
 // ADMIN DASHBOARD JS - PetHub
 // ═══════════════════════════════════════
 
-const API = window.location.origin + "/api/admin";
+// Usar sempre a URL da VPS (api-config.js define window.VPS_URL).
+// Fallback para window.location.origin garante compatibilidade quando o painel
+// é acessado diretamente pela mesma origem que o backend.
+const API = (window.VPS_URL || window.location.origin) + "/api/admin";
 let empresaSelecionada = null;
 
 // ── Cookies ─────────────────────────
