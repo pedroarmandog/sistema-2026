@@ -80,7 +80,8 @@ async function realizarLogin(usuario, senha) {
   try {
     console.log("Enviando requisição de login:", { usuario, senha: "***" });
 
-    const response = await fetch("/api/usuarios/login", {
+    const _base = window.VPS_URL || window.API_URL || "";
+    const response = await fetch(_base + "/api/usuarios/login", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -161,7 +162,8 @@ document
 
       // Tentar registrar sessão explicitamente no backend (uma vez)
       try {
-        await fetch("/api/usuarios/start-session", {
+        const _base = window.VPS_URL || window.API_URL || "";
+        await fetch(_base + "/api/usuarios/start-session", {
           method: "POST",
           credentials: "include",
         });

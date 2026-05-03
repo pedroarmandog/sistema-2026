@@ -75,8 +75,9 @@ document.addEventListener("DOMContentLoaded", function () {
     async function checarSessao() {
       if (sessaoVerificando) return;
       sessaoVerificando = true;
+      const _apiBase = window.VPS_URL || window.API_URL || "";
       try {
-        const resp = await fetch("/api/usuarios/sessao-ativa", {
+        const resp = await fetch(_apiBase + "/api/usuarios/sessao-ativa", {
           credentials: "include",
         });
         if (resp.ok) {
@@ -90,10 +91,13 @@ document.addEventListener("DOMContentLoaded", function () {
             // Tentar reativar a sessão UMA VEZ antes de redirecionar.
             if (falhasConsecutivas === 1) {
               try {
-                const resp2 = await fetch("/api/usuarios/start-session", {
-                  method: "POST",
-                  credentials: "include",
-                });
+                const resp2 = await fetch(
+                  _apiBase + "/api/usuarios/start-session",
+                  {
+                    method: "POST",
+                    credentials: "include",
+                  },
+                );
                 if (resp2.ok) {
                   const sdata = await resp2.json().catch(() => null);
                   if (sdata && sdata.ativa) {
