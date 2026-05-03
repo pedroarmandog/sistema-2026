@@ -350,6 +350,9 @@ async function registrarSessao(
   userAgent,
 ) {
   try {
+    // Salvar ID da sessão atual para NUNCA removê-la no enforcement
+    let minhaSessaoId = null;
+
     // Evitar duplicatas: se já existir uma sessão com o mesmo token, apenas atualizar
     const existente = await SessaoAtiva.findOne({
       where: { token_hash: tokenHash },
@@ -368,8 +371,9 @@ async function registrarSessao(
         ultima_atividade: new Date(),
         ativo: true,
       });
+      minhaSessaoId = existente.id;
       console.log(
-        `[acessos] sessão atualizada token=${tokenHash.substring(0, 10)} id=${existente.id}`,
+        `[acessos] sessão atualizada token=${tokenHash.substring(0, 10)} id=${minhaSessaoId}`,
       );
     } else {
       console.log(
@@ -385,34 +389,42 @@ async function registrarSessao(
         ultima_atividade: new Date(),
         ativo: true,
       });
-      console.log(`[acessos] nova sessão criada id=${nova.id}`);
+      minhaSessaoId = nova.id;
+      console.log(`[acessos] nova sessão criada id=${minhaSessaoId}`);
     }
 
-    // Enforçar limite DEPOIS de registrar — a sessão recém-criada/atualizada tem
-    // ultima_atividade = agora, portanto é a mais recente e nunca será derrubada.
-    // Isso elimina race conditions do fluxo antigo (verificar-antes-de-registrar).
-    if (empresaPainelId) {
+    // Enforçar limite DEPOIS de registrar.
+    // IMPORTANTE: excluir a sessão atual (minhaSessaoId) da busca — ela JAMAIS pode ser removida.
+    // Isso resolve o race condition onde o middleware atualiza ultima_atividade de sessões antigas
+    // durante o login, tornando-as "mais recentes" que a nova sessão.
+    if (empresaPainelId && minhaSessaoId) {
       try {
         const empresaPainelRec = await EmpresaPainel.findByPk(empresaPainelId, {
           attributes: ["id", "limite_acessos"],
         });
         if (empresaPainelRec && empresaPainelRec.limite_acessos) {
           const limite = empresaPainelRec.limite_acessos;
-          const todasAtivas = await SessaoAtiva.findAll({
-            where: { empresa_id: empresaPainelId, ativo: true },
+          // Buscar OUTRAS sessões ativas (excluindo a atual)
+          const outrasAtivas = await SessaoAtiva.findAll({
+            where: {
+              empresa_id: empresaPainelId,
+              ativo: true,
+              id: { [Op.ne]: minhaSessaoId }, // nunca remover a sessão atual
+            },
             attributes: ["id", "ultima_atividade"],
             order: [["ultima_atividade", "ASC"]], // mais antigas primeiro
             limit: 2000,
           });
-          if (todasAtivas.length > limite) {
-            const excesso = todasAtivas.length - limite;
-            const idsRemover = todasAtivas.slice(0, excesso).map((s) => s.id);
+          // Se as outras sessões já atingem ou excedem o limite, remover as mais antigas
+          if (outrasAtivas.length >= limite) {
+            const excesso = outrasAtivas.length - limite + 1;
+            const idsRemover = outrasAtivas.slice(0, excesso).map((s) => s.id);
             await SessaoAtiva.update(
               { ativo: false },
               { where: { id: { [Op.in]: idsRemover } } },
             );
             console.log(
-              `[acessos] limite=${limite} enforçado: ${idsRemover.length} sessão(ões) antiga(s) derrubada(s) para empresa_painel=${empresaPainelId}`,
+              `[acessos] limite=${limite} enforçado: ${idsRemover.length} sessão(ões) antiga(s) derrubada(s) para empresa_painel=${empresaPainelId} (sessão atual id=${minhaSessaoId} preservada)`,
             );
           }
         }

@@ -68,9 +68,9 @@ document.addEventListener("DOMContentLoaded", function () {
   // ===============================================
   (function iniciarMonitorSessao() {
     let sessaoVerificando = false;
-    const INTERVALO_CHECK = 15000; // 15 segundos
+    const INTERVALO_CHECK = 8000; // 8 segundos
     let falhasConsecutivas = 0;
-    const LIMITE_FALHAS = 2; // requer 2 detecções consecutivas antes de redirecionar
+    const LIMITE_FALHAS = 1; // redirecionar na primeira detecção confirmada
 
     async function checarSessao() {
       if (sessaoVerificando) return;
@@ -121,7 +121,7 @@ document.addEventListener("DOMContentLoaded", function () {
               console.warn(
                 "⚠️ Sessão encerrada remotamente — redirecionando...",
               );
-              window.location.href = "/painel-admin/sistema-bloqueado.html";
+              window.location.href = "/sessao-expirada.html";
               return;
             }
           } else {
@@ -141,8 +141,8 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     }
 
-    // Primeira verificação após 5 segundos, depois a cada 15s
-    setTimeout(checarSessao, 5000);
+    // Primeira verificação após 3 segundos, depois a cada 8s
+    setTimeout(checarSessao, 3000);
     setInterval(checarSessao, INTERVALO_CHECK);
   })();
 
