@@ -255,21 +255,37 @@ async function verificarLimiteAcessos(empresaId) {
     await limparSessoesExpiradas();
 
     // Buscar empresa no painel via CNPJ
-    const { Empresa } = require("../models");
+    const { Empresa, Op: OpModel } = require("../models");
     const empresa = await Empresa.findByPk(empresaId, {
       attributes: ["cnpj"],
     });
-    if (!empresa || !empresa.cnpj) {
-      return { permitido: true, ativas: 0, limite: 999, sessoesDerrubar: [] };
+
+    let empresaPainel = null;
+
+    if (empresa && empresa.cnpj) {
+      const cnpjLimpo = empresa.cnpj.replace(/\D/g, "");
+      // Tenta CNPJ limpo, depois original, depois LIKE — cobre variações de formatação
+      empresaPainel =
+        (await EmpresaPainel.findOne({
+          where: { cnpj: cnpjLimpo },
+          attributes: ["id", "limite_acessos"],
+        })) ||
+        (cnpjLimpo !== empresa.cnpj
+          ? await EmpresaPainel.findOne({
+              where: { cnpj: empresa.cnpj },
+              attributes: ["id", "limite_acessos"],
+            })
+          : null) ||
+        (await EmpresaPainel.findOne({
+          where: { cnpj: { [Op.like]: `%${cnpjLimpo}%` } },
+          attributes: ["id", "limite_acessos"],
+        }));
     }
 
-    const cnpjLimpo = empresa.cnpj.replace(/\D/g, "");
-    const empresaPainel = await EmpresaPainel.findOne({
-      where: { cnpj: cnpjLimpo },
-      attributes: ["id", "limite_acessos"],
-    });
-
     if (!empresaPainel) {
+      console.log(
+        `[acessos] verificarLimiteAcessos: EmpresaPainel não encontrada para empresaId=${empresaId} cnpj='${empresa?.cnpj || "?"}'`,
+      );
       return { permitido: true, ativas: 0, limite: 999, sessoesDerrubar: [] };
     }
 
@@ -325,6 +341,8 @@ async function verificarSessaoAtiva(tokenHash) {
 
 /**
  * Registra uma nova sessão ativa (chamado após login bem-sucedido)
+ * Fluxo seguro: cria/atualiza a sessão PRIMEIRO, depois derruba as excedentes.
+ * Isso elimina a condição de corrida do modelo antigo (verificar → terminar → registrar).
  */
 async function registrarSessao(
   usuarioId,
@@ -355,23 +373,58 @@ async function registrarSessao(
       console.log(
         `[acessos] sessão atualizada token=${tokenHash.substring(0, 10)} id=${existente.id}`,
       );
-      return;
+    } else {
+      console.log(
+        `[acessos] criando nova sessão token=${tokenHash.substring(0, 10)} usuario=${usuarioId} empresa=${empresaPainelId} ip=${ip}`,
+      );
+      const nova = await SessaoAtiva.create({
+        usuario_id: usuarioId,
+        empresa_id: empresaPainelId,
+        token_hash: tokenHash,
+        ip_address: ip || null,
+        user_agent: userAgent ? userAgent.substring(0, 500) : null,
+        data_login: new Date(),
+        ultima_atividade: new Date(),
+        ativo: true,
+      });
+      console.log(`[acessos] nova sessão criada id=${nova.id}`);
     }
 
-    console.log(
-      `[acessos] criando nova sessão token=${tokenHash.substring(0, 10)} usuario=${usuarioId} empresa=${empresaPainelId} ip=${ip}`,
-    );
-    const nova = await SessaoAtiva.create({
-      usuario_id: usuarioId,
-      empresa_id: empresaPainelId,
-      token_hash: tokenHash,
-      ip_address: ip || null,
-      user_agent: userAgent ? userAgent.substring(0, 500) : null,
-      data_login: new Date(),
-      ultima_atividade: new Date(),
-      ativo: true,
-    });
-    console.log(`[acessos] nova sessão criada id=${nova.id}`);
+    // Enforçar limite DEPOIS de registrar — a sessão recém-criada/atualizada tem
+    // ultima_atividade = agora, portanto é a mais recente e nunca será derrubada.
+    // Isso elimina race conditions do fluxo antigo (verificar-antes-de-registrar).
+    if (empresaPainelId) {
+      try {
+        const empresaPainelRec = await EmpresaPainel.findByPk(empresaPainelId, {
+          attributes: ["id", "limite_acessos"],
+        });
+        if (empresaPainelRec && empresaPainelRec.limite_acessos) {
+          const limite = empresaPainelRec.limite_acessos;
+          const todasAtivas = await SessaoAtiva.findAll({
+            where: { empresa_id: empresaPainelId, ativo: true },
+            attributes: ["id", "ultima_atividade"],
+            order: [["ultima_atividade", "ASC"]], // mais antigas primeiro
+            limit: 2000,
+          });
+          if (todasAtivas.length > limite) {
+            const excesso = todasAtivas.length - limite;
+            const idsRemover = todasAtivas.slice(0, excesso).map((s) => s.id);
+            await SessaoAtiva.update(
+              { ativo: false },
+              { where: { id: { [Op.in]: idsRemover } } },
+            );
+            console.log(
+              `[acessos] limite=${limite} enforçado: ${idsRemover.length} sessão(ões) antiga(s) derrubada(s) para empresa_painel=${empresaPainelId}`,
+            );
+          }
+        }
+      } catch (limiteErr) {
+        console.warn(
+          "[acessos] falha ao enforçar limite após registrar sessão:",
+          limiteErr && limiteErr.message,
+        );
+      }
+    }
   } catch (e) {
     console.warn("[acessos] Erro ao registrar sessão:", e && e.message);
   }
