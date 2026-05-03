@@ -1008,7 +1008,7 @@ async function impersonate(req, res) {
       return res.status(401).json({ error: "Senha inválida" });
     }
 
-    // Encontrar a empresa do sistema pelo CNPJ
+    // Encontrar a empresa do sistema pelo CNPJ — tenta múltiplos formatos
     const cnpj = empresaPainel.cnpj
       ? empresaPainel.cnpj.replace(/\D/g, "")
       : null;
@@ -1016,65 +1016,77 @@ async function impersonate(req, res) {
       return res.status(400).json({ error: "Empresa sem CNPJ vinculado" });
     }
 
-    const empresaSistema = await Empresa.findOne({ where: { cnpj } });
-    if (!empresaSistema) {
-      return res
-        .status(404)
-        .json({ error: "Empresa não encontrada no sistema" });
+    // Busca 1: CNPJ limpo (somente dígitos)
+    let empresaSistema = await Empresa.findOne({ where: { cnpj } });
+    // Busca 2: valor original do painel (pode estar formatado 00.000.000/0001-00)
+    if (!empresaSistema && empresaPainel.cnpj !== cnpj) {
+      empresaSistema = await Empresa.findOne({
+        where: { cnpj: empresaPainel.cnpj },
+      });
     }
+    // Busca 3: LIKE — cobre qualquer outra variação de pontuação
+    if (!empresaSistema) {
+      empresaSistema = await Empresa.findOne({
+        where: { cnpj: { [Op.like]: `%${cnpj}%` } },
+      });
+    }
+    console.log(
+      `[admin/impersonate] empresaSistema: ${empresaSistema ? `id=${empresaSistema.id}` : "NÃO ENCONTRADA pelo CNPJ='${cnpj}'"}`,
+    );
+
+    let empresaSistemaId = empresaSistema ? empresaSistema.id : null;
 
     // Buscar um usuário vinculado a essa empresa para gerar o token
-    const usuarios = await Usuario.findAll({
-      where: { ativo: true },
-      attributes: ["id", "nome", "empresas", "grupoUsuario"],
-    });
-
-    // Filtrar usuários vinculados a essa empresa
     let usuarioAlvo = null;
-    for (const u of usuarios) {
-      const emps = Array.isArray(u.empresas) ? u.empresas : [];
-      for (const e of emps) {
-        const eId =
-          typeof e === "number"
-            ? e
-            : typeof e === "string"
-              ? parseInt(e, 10)
-              : e && e.id
-                ? parseInt(e.id, 10)
-                : null;
-        if (eId === empresaSistema.id) {
-          // Preferir usuário com acesso total ou admin
-          if (!usuarioAlvo) {
-            usuarioAlvo = u;
-          }
-          const grupo = String(u.grupoUsuario || "").toLowerCase();
-          if (
-            grupo.includes("admin") ||
-            grupo.includes("acesso total") ||
-            grupo.includes("master")
-          ) {
-            usuarioAlvo = u;
+
+    if (empresaSistemaId) {
+      // Busca via campo JSON `empresas`
+      const usuarios = await Usuario.findAll({
+        where: { ativo: true },
+        attributes: ["id", "nome", "empresas", "grupoUsuario"],
+      });
+      for (const u of usuarios) {
+        const emps = Array.isArray(u.empresas) ? u.empresas : [];
+        for (const e of emps) {
+          const eId =
+            typeof e === "number"
+              ? e
+              : typeof e === "string"
+                ? parseInt(e, 10)
+                : e && e.id
+                  ? parseInt(e.id, 10)
+                  : null;
+          if (eId === empresaSistemaId) {
+            if (!usuarioAlvo) {
+              usuarioAlvo = u;
+            }
+            const grupo = String(u.grupoUsuario || "").toLowerCase();
+            if (
+              grupo.includes("admin") ||
+              grupo.includes("acesso total") ||
+              grupo.includes("master")
+            ) {
+              usuarioAlvo = u;
+            }
           }
         }
       }
     }
 
-    // Fallback: buscar usuário via coluna legada `empresa_id` (usuários criados antes
-    // da migração para o campo JSON `empresas`). Cobre o cenário de "usuário não encontrado".
-    if (!usuarioAlvo) {
+    // Fallback A: coluna legada `empresa_id` na tabela usuarios
+    if (!usuarioAlvo && empresaSistemaId) {
       try {
         const legacyRows = await sequelize.query(
           `SELECT id, nome, grupoUsuario FROM usuarios
            WHERE empresa_id = :empId AND ativo = 1
            ORDER BY id ASC LIMIT 10`,
           {
-            replacements: { empId: empresaSistema.id },
+            replacements: { empId: empresaSistemaId },
             type: QueryTypes.SELECT,
           },
         );
         if (legacyRows && legacyRows.length > 0) {
-          usuarioAlvo = legacyRows[0]; // qualquer usuário ativo da empresa
-          // Preferir usuário com maior nível de permissão
+          usuarioAlvo = legacyRows[0];
           for (const row of legacyRows) {
             const grupo = String(row.grupoUsuario || "").toLowerCase();
             if (
@@ -1087,24 +1099,109 @@ async function impersonate(req, res) {
             }
           }
           console.log(
-            `[admin/impersonate] usuário encontrado via coluna legada empresa_id=${empresaSistema.id}: id=${usuarioAlvo.id}`,
+            `[admin/impersonate] usuário via empresa_id legado=${empresaSistemaId}: id=${usuarioAlvo.id}`,
           );
         }
       } catch (legacyErr) {
         console.warn(
-          "[admin/impersonate] falha ao buscar usuário legado via empresa_id:",
+          "[admin/impersonate] falha ao buscar usuário legado:",
           legacyErr && legacyErr.message,
+        );
+      }
+    }
+
+    // Fallback B: se o CNPJ não casou com nenhuma `empresas`, buscar usuário diretamente
+    // via sessões ativas vinculadas a este empresaPainel.id.
+    // Isto cobre empresas cadastradas apenas no painel (sem registro em `empresas`).
+    if (!usuarioAlvo) {
+      try {
+        const { SessaoAtiva } = require("../models");
+        const sessaoRows = await sequelize.query(
+          `SELECT u.id, u.nome, u.grupoUsuario, u.empresas, u.empresa_id AS empresa_id_legado
+           FROM sessoes_ativas s
+           INNER JOIN usuarios u ON u.id = s.usuario_id
+           WHERE s.empresa_id = :painelId AND u.ativo = 1
+           ORDER BY s.ultima_atividade DESC
+           LIMIT 10`,
+          {
+            replacements: { painelId: empresaPainel.id },
+            type: QueryTypes.SELECT,
+          },
+        );
+        if (sessaoRows && sessaoRows.length > 0) {
+          usuarioAlvo = sessaoRows[0];
+          for (const row of sessaoRows) {
+            const grupo = String(row.grupoUsuario || "").toLowerCase();
+            if (
+              grupo.includes("admin") ||
+              grupo.includes("acesso total") ||
+              grupo.includes("master")
+            ) {
+              usuarioAlvo = row;
+              break;
+            }
+          }
+          console.log(
+            `[admin/impersonate] usuário encontrado via sessões ativas (empresa_painel=${empresaPainel.id}): id=${usuarioAlvo.id}`,
+          );
+        }
+      } catch (sessaoErr) {
+        console.warn(
+          "[admin/impersonate] falha ao buscar usuário via sessões:",
+          sessaoErr && sessaoErr.message,
         );
       }
     }
 
     if (!usuarioAlvo) {
       console.warn(
-        `[admin/impersonate] nenhum usuário ativo encontrado para empresaSistema.id=${empresaSistema.id}`,
+        `[admin/impersonate] nenhum usuário encontrado para empresaPainel.id=${empresaPainel.id}`,
       );
-      return res
-        .status(404)
-        .json({ error: "Nenhum usuário ativo encontrado para esta empresa" });
+      return res.status(404).json({
+        error:
+          "Nenhum usuário ativo encontrado para esta empresa. Verifique se há usuários cadastrados.",
+      });
+    }
+
+    // Se não temos empresaSistemaId, tentar derivar do próprio usuário encontrado
+    if (!empresaSistemaId) {
+      const emps = Array.isArray(usuarioAlvo.empresas)
+        ? usuarioAlvo.empresas
+        : typeof usuarioAlvo.empresas === "string"
+          ? (() => {
+              try {
+                return JSON.parse(usuarioAlvo.empresas);
+              } catch (e) {
+                return [];
+              }
+            })()
+          : [];
+      if (emps.length > 0) {
+        const e = emps[0];
+        empresaSistemaId =
+          typeof e === "number"
+            ? e
+            : typeof e === "string"
+              ? parseInt(e, 10) || null
+              : e && e.id
+                ? parseInt(e.id, 10) || null
+                : null;
+      }
+      // Tentar coluna legada
+      if (!empresaSistemaId && usuarioAlvo.empresa_id_legado) {
+        empresaSistemaId = Number(usuarioAlvo.empresa_id_legado) || null;
+      }
+      console.log(
+        `[admin/impersonate] empresaSistemaId derivado do usuário ${usuarioAlvo.id}: ${empresaSistemaId}`,
+      );
+    }
+
+    // Sem empresaSistemaId não é possível gerar o token (campo NOT NULL no banco)
+    if (!empresaSistemaId) {
+      return res.status(422).json({
+        error:
+          "Não foi possível identificar a empresa vinculada a este usuário. Vincule o usuário a uma empresa e tente novamente.",
+      });
     }
 
     // Gerar token de impersonação (salvo no banco, uso único, expira em 60s)

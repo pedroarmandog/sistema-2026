@@ -138,7 +138,8 @@ const detalhesAcessos = async (req, res) => {
 };
 
 /**
- * Atualizar limite de acessos de uma empresa
+ * Atualizar limite de acessos de uma empresa.
+ * Ao reduzir o limite, encerra imediatamente as sessões excedentes (mais antigas).
  */
 const atualizarLimite = async (req, res) => {
   try {
@@ -153,12 +154,49 @@ const atualizarLimite = async (req, res) => {
       return res.status(404).json({ error: "Empresa não encontrada" });
     }
 
-    empresa.limite_acessos = parseInt(limite_acessos);
+    const novoLimite = parseInt(limite_acessos);
+    empresa.limite_acessos = novoLimite;
     await empresa.save();
+
+    // Encerrar sessões excedentes imediatamente ao reduzir o limite
+    let sessoesEncerradas = 0;
+    try {
+      // Limpar expiradas antes de contar
+      await limparSessoesExpiradas();
+
+      const sessoesAtivas = await SessaoAtiva.findAll({
+        where: { empresa_id: empresa.id, ativo: true },
+        attributes: ["id"],
+        order: [["ultima_atividade", "ASC"]], // derruba as menos recentes primeiro
+        limit: 2000,
+      });
+
+      if (sessoesAtivas.length > novoLimite) {
+        const quantasRemover = sessoesAtivas.length - novoLimite;
+        const idsRemover = sessoesAtivas
+          .slice(0, quantasRemover)
+          .map((s) => s.id);
+
+        await SessaoAtiva.update(
+          { ativo: false },
+          { where: { id: { [Op.in]: idsRemover } } },
+        );
+        sessoesEncerradas = idsRemover.length;
+        console.log(
+          `[acessos/limite] empresa=${empresa.id} novo_limite=${novoLimite} encerradas=${sessoesEncerradas} sessões excedentes`,
+        );
+      }
+    } catch (e) {
+      console.warn(
+        "[acessos/limite] falha ao encerrar sessões excedentes:",
+        e && e.message,
+      );
+    }
 
     res.json({
       message: "Limite atualizado com sucesso",
       limite_acessos: empresa.limite_acessos,
+      sessoes_encerradas: sessoesEncerradas,
     });
   } catch (error) {
     console.error("Erro ao atualizar limite:", error);
