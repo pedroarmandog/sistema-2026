@@ -117,7 +117,7 @@ document.addEventListener("DOMContentLoaded", function () {
               console.warn(
                 "⚠️ Sessão encerrada remotamente — redirecionando...",
               );
-              window.location.href = "/sessao-expirada.html";
+              window.location.href = "/painel-admin/sistema-bloqueado.html";
               return;
             }
           } else {
@@ -512,48 +512,48 @@ const DashboardApp = {
   },
 
   async refreshAll() {
-  // Proteção contra execuções concorrentes global
-  if (isRefreshing) {
-    console.debug(
-      "[DashboardApp] refreshAll já em execução — ignorando chamada concorrente"
-    );
-    return;
-  }
+    // Proteção contra execuções concorrentes global
+    if (isRefreshing) {
+      console.debug(
+        "[DashboardApp] refreshAll já em execução — ignorando chamada concorrente",
+      );
+      return;
+    }
 
-  isRefreshing = true;
+    isRefreshing = true;
 
-  try {
-    await this.loadStats();
-    await delay(300);
+    try {
+      await this.loadStats();
+      await delay(300);
 
-    await this.loadIndicadores();
-    await delay(300);
+      await this.loadIndicadores();
+      await delay(300);
 
-    await this.loadPeriodicos();
-    await delay(300);
+      await this.loadPeriodicos();
+      await delay(300);
 
-    await this.loadContasAPagar();
-    await delay(300);
+      await this.loadContasAPagar();
+      await delay(300);
 
-    await this.loadEstoqueBaixo();
-    await delay(300);
+      await this.loadEstoqueBaixo();
+      await delay(300);
 
-    await this.loadAniversariantes();
-    await delay(300);
+      await this.loadAniversariantes();
+      await delay(300);
 
-    await this.loadOportunidades();
-    await delay(300);
+      await this.loadOportunidades();
+      await delay(300);
 
-    await this.loadTaxiDog();
-    await delay(300);
+      await this.loadTaxiDog();
+      await delay(300);
 
-    await this.loadValidade();
-  } catch (err) {
-    console.error("Erro no refreshAll:", err);
-  } finally {
-    isRefreshing = false;
-  }
-},
+      await this.loadValidade();
+    } catch (err) {
+      console.error("Erro no refreshAll:", err);
+    } finally {
+      isRefreshing = false;
+    }
+  },
 
   async apiFetch(endpoint, options = {}, retries = 2) {
     // Monitorar requisições em voo para debug

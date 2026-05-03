@@ -264,22 +264,20 @@ async function verificarLimiteAcessos(empresaId) {
 
     if (empresa && empresa.cnpj) {
       const cnpjLimpo = empresa.cnpj.replace(/\D/g, "");
-      // Tenta CNPJ limpo, depois original, depois LIKE — cobre variações de formatação
-      empresaPainel =
-        (await EmpresaPainel.findOne({
-          where: { cnpj: cnpjLimpo },
-          attributes: ["id", "limite_acessos"],
-        })) ||
-        (cnpjLimpo !== empresa.cnpj
-          ? await EmpresaPainel.findOne({
-              where: { cnpj: empresa.cnpj },
-              attributes: ["id", "limite_acessos"],
-            })
-          : null) ||
-        (await EmpresaPainel.findOne({
-          where: { cnpj: { [Op.like]: `%${cnpjLimpo}%` } },
-          attributes: ["id", "limite_acessos"],
-        }));
+      // SQL nativo que limpa pontuação dos dois lados para garantir o match
+      // independente do formato armazenado (com ou sem pontuação)
+      const rows = await sequelize.query(
+        `SELECT id, limite_acessos FROM empresas_painel
+         WHERE REPLACE(REPLACE(REPLACE(REPLACE(cnpj,'.',''),'/',''),'-',''),' ','') = :cnpjLimpo
+         LIMIT 1`,
+        {
+          replacements: { cnpjLimpo },
+          type: sequelize.constructor.QueryTypes.SELECT,
+        },
+      );
+      if (rows && rows.length > 0) {
+        empresaPainel = rows[0];
+      }
     }
 
     if (!empresaPainel) {

@@ -37,22 +37,37 @@ router.get("/sessao-ativa", async (req, res) => {
   const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
 
   try {
-    const ativa = await verificarSessaoAtiva(tokenHash);
-    if (ativa) {
-      // Atualizar última atividade para manter sessão viva
-      try {
-        await atualizarAtividade(tokenHash);
-      } catch (e) {}
-      return res.json({ ativa: true, motivo: null });
+    const { SessaoAtiva } = require("../models");
+
+    // Buscar registro no banco independente do status
+    const registroNoDb = await SessaoAtiva.findOne({
+      where: { token_hash: tokenHash },
+      attributes: ["id", "ativo"],
+    });
+
+    if (registroNoDb) {
+      if (registroNoDb.ativo) {
+        // Sessão ativa — atualizar atividade
+        try {
+          await atualizarAtividade(tokenHash);
+        } catch (e) {}
+        return res.json({ ativa: true, motivo: null });
+      } else {
+        // Sessão EXPLICITAMENTE encerrada (ativo=false) — não manter o usuário logado
+        console.log(
+          `[sessao-ativa] token encontrado com ativo=false — sessão encerrada pelo admin`,
+        );
+        return res.json({ ativa: false, motivo: "sessao_encerrada" });
+      }
     }
-    // Se não encontrou sessão no DB, verificar se o JWT ainda é válido.
+
+    // Nenhum registro no DB — sessão nunca foi registrada (empresa sem painel, etc.)
+    // Nesse caso, verificar se o JWT ainda é válido e permitir acesso
     try {
       const decoded = jwt.verify(token, JWT_SECRET);
       console.log(
-        `[sessao-ativa] token JWT válido para usuario=${decoded.id} (sem sessão DB)`,
+        `[sessao-ativa] token JWT válido para usuario=${decoded.id} (sem registro DB — permitindo)`,
       );
-      // Não recriar sessão automaticamente aqui — sinalizar que o JWT é válido
-      // O frontend pode chamar /api/usuarios/start-session explicitamente quando desejar.
       return res.json({ ativa: true, motivo: "jwt_valid_no_db" });
     } catch (e) {
       console.log(`[sessao-ativa] jwt.verify falhou: ${e && e.message}`);
@@ -83,19 +98,34 @@ router.post("/start-session", async (req, res) => {
     const decoded = jwt.verify(token, JWT_SECRET);
     console.log(`[start-session] token válido para usuario=${decoded.id}`);
 
-    // Se a sessão já existe, apenas atualizar atividade
-    const existe = await verificarSessaoAtiva(tokenHash);
-    if (existe) {
-      try {
-        await atualizarAtividade(tokenHash);
-      } catch (e) {}
-      return res.json({
-        ativa: true,
-        created: false,
-        motivo: "already_active",
-      });
+    // Verificar o registro no banco antes de qualquer ação
+    const { SessaoAtiva: SessaoAtivaModel } = require("../models");
+    const registroDb = await SessaoAtivaModel.findOne({
+      where: { token_hash: tokenHash },
+      attributes: ["id", "ativo"],
+    });
+
+    if (registroDb) {
+      if (registroDb.ativo) {
+        // Sessão ativa — apenas atualizar atividade
+        try {
+          await atualizarAtividade(tokenHash);
+        } catch (e) {}
+        return res.json({
+          ativa: true,
+          created: false,
+          motivo: "already_active",
+        });
+      } else {
+        // Sessão ENCERRADA pelo admin — NÃO recriar. Forçar logout.
+        console.log(
+          `[start-session] sessão token=${tokenHash.substring(0, 10)} está ativo=false — não recriar`,
+        );
+        return res.json({ ativa: false, motivo: "sessao_encerrada" });
+      }
     }
 
+    // Nenhum registro no banco — sessão ainda não foi criada (ex: primeiro acesso após deploy)
     // Tentar criar sessão no DB se houver empresaPainelId disponível
     const limiteCheck = await verificarLimiteAcessos(decoded.empresaId);
     if (!limiteCheck || !limiteCheck.empresaPainelId) {

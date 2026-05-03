@@ -1302,15 +1302,22 @@ async function impersonateRedirect(req, res) {
       } = require("../controllers/acessosController");
 
       // Mapear empresaSistema (registro.empresa_id) -> empresaPainel.id via CNPJ
+      // Usa SQL nativo que limpa pontuação dos dois lados para garantir o match
       const empresaSistemaRec = await Empresa.findByPk(registro.empresa_id, {
         attributes: ["cnpj"],
       });
       let empresaPainelRec = null;
       if (empresaSistemaRec && empresaSistemaRec.cnpj) {
         const cnpjLimpo = String(empresaSistemaRec.cnpj).replace(/\D/g, "");
-        empresaPainelRec = await EmpresaPainel.findOne({
-          where: { cnpj: cnpjLimpo },
-        });
+        const rows = await sequelize.query(
+          `SELECT id, limite_acessos FROM empresas_painel
+           WHERE REPLACE(REPLACE(REPLACE(REPLACE(cnpj,'.',''),'/',''),'-',''),' ','') = :cnpjLimpo
+           LIMIT 1`,
+          { replacements: { cnpjLimpo }, type: QueryTypes.SELECT },
+        );
+        if (rows && rows.length > 0) {
+          empresaPainelRec = rows[0];
+        }
       }
 
       // Verificar limite de sessões e derrubar as mais antigas se necessário
