@@ -41,8 +41,17 @@ async function isEmpresaBloqueada(empresaId) {
  * Aceita dois formatos:
  *   - Array de números:  [3]
  *   - Array de objetos:  [{ id: "1", nome: "..." }]  (formato legado)
+ *   - String JSON:       "[3]" ou "[{\"id\":\"1\"}]"  (caso Sequelize não auto-parse)
  */
 function extractEmpresaId(empresas) {
+  // Tolerância: se vier como string JSON, tentar parsear
+  if (typeof empresas === "string") {
+    try {
+      empresas = JSON.parse(empresas);
+    } catch (e) {
+      return null;
+    }
+  }
   if (!Array.isArray(empresas) || empresas.length === 0) return null;
   const first = empresas[0];
   if (typeof first === "number") return first;

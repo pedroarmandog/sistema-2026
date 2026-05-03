@@ -6,6 +6,22 @@ const rateLimit = require("../middleware/rateLimit");
 
 // Todas as rotas do dashboard requerem autenticação
 router.use(authUser);
+
+// Bloqueio de segurança: impede vazamento de dados entre empresas.
+// Se empresaId for null no JWT o usuário veria dados de TODAS as empresas.
+router.use((req, res, next) => {
+  if (!req.user || !req.user.empresaId) {
+    console.warn(
+      `[dashboard] acesso negado — empresaId ausente (usuario=${req.user?.id}). Refaça o login.`,
+    );
+    return res.status(403).json({
+      erro: "Empresa não identificada. Faça login novamente.",
+      code: "EMPRESA_NAO_IDENTIFICADA",
+    });
+  }
+  next();
+});
+
 // NOTE: removido rateLimit global do dashboard para evitar 429 quando o frontend faz múltiplas chamadas paralelas.
 // Aplicar rate limiting apenas em rotas críticas (ex: login) ou em endpoints específicos quando necessário.
 
