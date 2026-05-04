@@ -155,8 +155,9 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     }
 
-    // Primeira verificação imediata (sem delay), depois a cada 8s
-    checarSessao();
+    // Primeira verificação após 1.5s (evita race condition pós-login), depois a cada 8s.
+    // O check de cookie no topo do arquivo já protege o botão "voltar" do navegador.
+    setTimeout(checarSessao, 1500);
     setInterval(checarSessao, INTERVALO_CHECK);
   })();
 
