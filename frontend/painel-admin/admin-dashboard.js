@@ -1293,6 +1293,7 @@ async function abrirModalAcessos(empresaId) {
 
     atualizarModalAcessos(data);
     document.getElementById("modalAcessos").classList.add("show");
+    _iniciarPollingAcessos(empresaId); // atualiza sessões automaticamente a cada 8s
   } catch (err) {
     showNotification("Erro ao carregar detalhes de acessos", "error");
   }
@@ -1489,7 +1490,45 @@ document
 // Fechar modal acessos
 document.getElementById("modalAcessosClose").addEventListener("click", () => {
   document.getElementById("modalAcessos").classList.remove("show");
+  _pararPollingAcessos();
 });
 document.getElementById("modalAcessos").addEventListener("click", (e) => {
-  if (e.target === e.currentTarget) e.currentTarget.classList.remove("show");
+  if (e.target === e.currentTarget) {
+    e.currentTarget.classList.remove("show");
+    _pararPollingAcessos();
+  }
 });
+
+// ── Polling automático do modal de acessos ──────────────────────────────────
+// Recarrega os dados das sessões a cada 8s enquanto o modal estiver aberto.
+// Isso garante que o admin veja sessões desaparecendo em tempo real após logout.
+let _acessosPollingTimer = null;
+
+function _iniciarPollingAcessos(empresaId) {
+  _pararPollingAcessos(); // garantir que não há timer duplicado
+  _acessosPollingTimer = setInterval(async () => {
+    const modal = document.getElementById("modalAcessos");
+    if (!modal || !modal.classList.contains("show")) {
+      _pararPollingAcessos();
+      return;
+    }
+    try {
+      const resp = await fetch(`${API}/acessos/${empresaId}`, {
+        headers: authHeaders(),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        acessosEmpresaSelecionada = data;
+        acessosLimiteTemp = data.empresa.limite_acessos;
+        atualizarModalAcessos(data);
+      }
+    } catch (_) {}
+  }, 8000);
+}
+
+function _pararPollingAcessos() {
+  if (_acessosPollingTimer) {
+    clearInterval(_acessosPollingTimer);
+    _acessosPollingTimer = null;
+  }
+}

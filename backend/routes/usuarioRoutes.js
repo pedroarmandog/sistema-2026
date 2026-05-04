@@ -237,18 +237,41 @@ router.post("/start-session", authUser, async (req, res) => {
   }
 });
 
-// Rota de logout — limpa o cookie JWT e encerra sessão ativa
+// Rota de logout — limpa o cookie JWT e encerra TODAS as sessões do usuário
 router.post("/logout", async (req, res) => {
-  // Encerrar sessão ativa no banco
   const token =
     req.cookies?.pethub_token ||
     (req.headers.authorization?.startsWith("Bearer ")
       ? req.headers.authorization.split(" ")[1]
       : null);
+
   if (token) {
-    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
-    await encerrarSessaoPorToken(tokenHash);
+    const { SessaoAtiva } = require("../models");
+
+    // Decodificar o JWT (sem verificar assinatura — é logout, não auth)
+    // para obter o usuarioId e fechar TODAS as sessões dele de uma vez.
+    let userId = null;
+    try {
+      const decoded = jwt.decode(token);
+      if (decoded && decoded.id) userId = Number(decoded.id);
+    } catch (_) {}
+
+    if (userId) {
+      // Encerra TODAS as sessões ativas do usuário (independente do token)
+      const [qtd] = await SessaoAtiva.update(
+        { ativo: false },
+        { where: { usuario_id: userId, ativo: true } },
+      ).catch(() => [0]);
+      console.log(
+        `[logout] usuario=${userId} — ${qtd} sessão(ões) encerrada(s)`,
+      );
+    } else {
+      // Fallback: fechar apenas pelo token_hash atual
+      const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+      await encerrarSessaoPorToken(tokenHash);
+    }
   }
+
   res.clearCookie("pethub_token", { path: "/" });
   res.json({ mensagem: "Logout realizado com sucesso" });
 });
