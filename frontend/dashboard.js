@@ -3,6 +3,20 @@
    DASHBOARD JS - PET CRIA
    ======================================== */
 
+// Verificação SÍNCRONA imediata: se o cookie de sessão não existir, redireciona
+// antes de qualquer renderização. Evita que o botão "voltar" do navegador
+// mostre o dashboard após logout (conteúdo cacheado).
+(function () {
+  function _hasCookie(name) {
+    return document.cookie.split(";").some(function (c) {
+      return c.trim().indexOf(name + "=") === 0;
+    });
+  }
+  if (!_hasCookie("usuarioLogadoId")) {
+    window.location.replace("/login/login.html");
+  }
+})();
+
 console.log("🚀 Dashboard.js carregado - versão debug");
 console.log("📅 Timestamp:", new Date().toISOString());
 console.log("🌐 Location:", window.location.href);
@@ -141,8 +155,8 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     }
 
-    // Primeira verificação após 3 segundos, depois a cada 8s
-    setTimeout(checarSessao, 3000);
+    // Primeira verificação imediata (sem delay), depois a cada 8s
+    checarSessao();
     setInterval(checarSessao, INTERVALO_CHECK);
   })();
 

@@ -298,10 +298,12 @@ async function verificarLimiteAcessos(empresaId) {
     });
 
     const totalAtivas = sessoesAtivas.length;
-    // Se já está no limite ou acima, precisamos derrubar as mais antigas para abrir 1 vaga
+    // Só pré-derrubar se JÁ estiver ACIMA do limite (não apenas no limite).
+    // O caso de estar exatamente no limite (totalAtivas == limite) é tratado
+    // pelo enforcement em registrarSessao após criar a nova sessão.
     let sessoesDerrubar = [];
-    if (totalAtivas >= empresaPainel.limite_acessos) {
-      const quantasDerrubar = totalAtivas - empresaPainel.limite_acessos + 1;
+    if (totalAtivas > empresaPainel.limite_acessos) {
+      const quantasDerrubar = totalAtivas - empresaPainel.limite_acessos;
       sessoesDerrubar = sessoesAtivas.slice(0, quantasDerrubar).map((s) => ({
         id: s.id,
         token_hash: s.token_hash,
