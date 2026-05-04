@@ -189,13 +189,29 @@ document
     }
   });
 
-// Verificar se já está logado ao carregar a página
-window.addEventListener("DOMContentLoaded", function () {
+// Ao carregar a tela de login: encerrar qualquer sessão ativa no backend.
+// Isso garante que sessões sejam removidas imediatamente quando o usuário
+// chega na tela de login (seja via logout, fechar aba ou navegar direto).
+window.addEventListener("DOMContentLoaded", async function () {
   const usuarioLogadoId = getCookie("usuarioLogadoId");
 
+  // Se havia um usuário logado, limpar a sessão no backend antes de qualquer coisa
   if (usuarioLogadoId) {
-    // Já está logado, redirecionar para o dashboard
-    window.location.href = "/dashboard.html";
+    try {
+      const _base = window.VPS_URL || window.API_URL || "";
+      await fetch(_base + "/api/usuarios/logout", {
+        method: "POST",
+        credentials: "include",
+        keepalive: true,
+      });
+    } catch (e) {
+      // silencioso — prosseguir mesmo se a chamada falhar
+    }
+    // Limpar cookies locais
+    document.cookie =
+      "usuarioLogadoId=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/";
+    document.cookie =
+      "usuarioLogadoNome=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/";
   }
 });
 

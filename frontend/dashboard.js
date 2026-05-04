@@ -2410,14 +2410,32 @@ function escapeHtml(text) {
       await fetch(_base + "/api/usuarios/logout", {
         method: "POST",
         credentials: "include",
+        keepalive: true,
       });
     } catch (e) {
       // Ignorar erro — prosseguir com logout local
     }
+    // Remover listener do beforeunload para não disparar logout duplo
+    window.removeEventListener("beforeunload", _logoutBeforeUnload);
     deleteCookie("usuarioLogadoId");
     deleteCookie("usuarioLogadoNome");
     window.location.href = "/login/login.html";
   };
+
+  // Segurança extra: encerrar sessão se o usuário fechar a aba/navegar
+  // sem clicar em "Sair". keepalive=true permite que o request termine
+  // mesmo após o unload da página.
+  function _logoutBeforeUnload() {
+    try {
+      const _base = window.VPS_URL || window.API_URL || "";
+      fetch(_base + "/api/usuarios/logout", {
+        method: "POST",
+        credentials: "include",
+        keepalive: true,
+      });
+    } catch (e) {}
+  }
+  window.addEventListener("beforeunload", _logoutBeforeUnload);
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", initUserProfileDropdown);

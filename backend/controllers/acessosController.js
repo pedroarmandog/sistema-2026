@@ -1,8 +1,11 @@
 const { EmpresaPainel, SessaoAtiva, sequelize } = require("../models");
 const { Op } = require("sequelize");
 
-// Tempo máximo de inatividade para considerar sessão expirada (30 minutos)
-const SESSAO_TIMEOUT_MS = 30 * 60 * 1000;
+// Tempo máximo de inatividade para considerar sessão expirada (3 minutos).
+// O polling do frontend chama sessao-ativa a cada 8s quando logado,
+// mantendo ultima_atividade atualizada. Quando o usuário sai/desloga,
+// o polling para e a sessão expira em até 3 minutos automaticamente.
+const SESSAO_TIMEOUT_MS = 3 * 60 * 1000;
 
 /**
  * Limpa sessões expiradas (sem atividade há mais de 30 min)
