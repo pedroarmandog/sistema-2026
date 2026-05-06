@@ -133,9 +133,7 @@ async function authUser(req, res, next) {
             if (u) {
               resolvedEmpresaId =
                 (u.empresa_id ? Number(u.empresa_id) : null) ||
-                extractEmpresaId(
-                  Array.isArray(u.empresas) ? u.empresas : [],
-                );
+                extractEmpresaId(Array.isArray(u.empresas) ? u.empresas : []);
             }
           } catch (dbErr) {
             console.warn(

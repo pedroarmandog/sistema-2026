@@ -99,7 +99,9 @@ document.addEventListener("DOMContentLoaded", function () {
           if (data.ativa === false) {
             // Erros de DB/rede não devem desconectar o usuário — apenas falhas confirmadas
             if (data.motivo === "db_error" || data.motivo === "erro") {
-              console.warn(`[checarSessao] erro transitório de DB — ignorando (motivo=${data.motivo})`);
+              console.warn(
+                `[checarSessao] erro transitório de DB — ignorando (motivo=${data.motivo})`,
+              );
               sessaoVerificando = false;
               return;
             }
