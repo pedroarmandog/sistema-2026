@@ -84,7 +84,7 @@ document.addEventListener("DOMContentLoaded", function () {
     let sessaoVerificando = false;
     const INTERVALO_CHECK = 8000; // 8 segundos
     let falhasConsecutivas = 0;
-    const LIMITE_FALHAS = 1; // redirecionar na primeira detecção confirmada
+    const LIMITE_FALHAS = 3; // redirecionar apenas após 3 falhas consecutivas (~24s)
 
     async function checarSessao() {
       if (sessaoVerificando) return;

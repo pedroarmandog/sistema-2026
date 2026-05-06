@@ -1,25 +1,19 @@
 const { EmpresaPainel, SessaoAtiva, sequelize } = require("../models");
 const { Op } = require("sequelize");
 
-// Tempo máximo de inatividade para considerar sessão expirada (3 minutos).
-// O polling do frontend chama sessao-ativa a cada 8s quando logado,
-// mantendo ultima_atividade atualizada. Quando o usuário sai/desloga,
-// o polling para e a sessão expira em até 3 minutos automaticamente.
-const SESSAO_TIMEOUT_MS = 3 * 60 * 1000;
+// Tempo máximo de inatividade (em minutos) para considerar sessão expirada.
+// 30 minutos: seguro para uso normal e tolerante a falhas transitórias de DB.
+const SESSAO_TIMEOUT_MINUTES = 30;
+const SESSAO_TIMEOUT_MS = SESSAO_TIMEOUT_MINUTES * 60 * 1000; // mantido para compatibilidade
 
 /**
- * Limpa sessões expiradas (sem atividade há mais de 30 min)
+ * Limpa sessões expiradas usando NOW() do MySQL (timezone-safe)
  */
 async function limparSessoesExpiradas() {
-  const limite = new Date(Date.now() - SESSAO_TIMEOUT_MS);
-  await SessaoAtiva.update(
-    { ativo: false },
-    {
-      where: {
-        ativo: true,
-        ultima_atividade: { [Op.lt]: limite },
-      },
-    },
+  // Usar NOW() do próprio MySQL evita problemas de timezone entre Node.js e DB
+  await sequelize.query(
+    `UPDATE sessoes_ativas SET ativo = 0, updatedAt = NOW()
+     WHERE ativo = 1 AND ultima_atividade < (NOW() - INTERVAL ${SESSAO_TIMEOUT_MINUTES} MINUTE)`,
   );
 }
 

@@ -212,14 +212,16 @@ async function authUser(req, res, next) {
     try {
       const { Usuario } = require("../models");
       const usuario = await Usuario.findByPk(parseInt(usuarioLegadoId), {
-        attributes: ["id", "grupoUsuario", "empresas", "ativo"],
+        attributes: ["id", "grupoUsuario", "empresas", "empresa_id", "ativo"],
       });
       if (usuario && usuario.ativo) {
         // usuario legado encontrado
         const empresas = Array.isArray(usuario.empresas)
           ? usuario.empresas
           : [];
-        const empresaId = extractEmpresaId(empresas);
+        const empresaId =
+          (usuario.empresa_id ? Number(usuario.empresa_id) : null) ||
+          extractEmpresaId(empresas);
         // Verificar se empresa está bloqueada
         if (await isEmpresaBloqueada(empresaId)) {
           console.warn(`[authUser] empresa ${empresaId} bloqueada (fallback)`);
