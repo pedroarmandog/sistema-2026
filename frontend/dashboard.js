@@ -97,6 +97,13 @@ document.addEventListener("DOMContentLoaded", function () {
         if (resp.ok) {
           const data = await resp.json();
           if (data.ativa === false) {
+            // Erros de DB/rede não devem desconectar o usuário — apenas falhas confirmadas
+            if (data.motivo === "db_error" || data.motivo === "erro") {
+              console.warn(`[checarSessao] erro transitório de DB — ignorando (motivo=${data.motivo})`);
+              sessaoVerificando = false;
+              return;
+            }
+
             falhasConsecutivas++;
             console.warn(
               `⚠️ Sessão inativa detectada (${falhasConsecutivas}/${LIMITE_FALHAS}) motivo=${data.motivo}`,

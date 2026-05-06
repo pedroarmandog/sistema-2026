@@ -119,10 +119,35 @@ async function authUser(req, res, next) {
           return next();
         }
 
-        // Construir usuário baseado no token (fluxo rápido, sem DB)
+        // Construir usuário baseado no token
+        let resolvedEmpresaId = decoded.empresaId || null;
+
+        // Se empresaId ausente no JWT (token antigo ou usuário sem empresa no array),
+        // buscar direto no DB uma vez — resultado é cacheado por 60s
+        if (!resolvedEmpresaId) {
+          try {
+            const { Usuario } = require("../models");
+            const u = await Usuario.findByPk(userId, {
+              attributes: ["empresas", "empresa_id"],
+            });
+            if (u) {
+              resolvedEmpresaId =
+                (u.empresa_id ? Number(u.empresa_id) : null) ||
+                extractEmpresaId(
+                  Array.isArray(u.empresas) ? u.empresas : [],
+                );
+            }
+          } catch (dbErr) {
+            console.warn(
+              `[authUser] falha ao buscar empresaId do usuario=${userId}:`,
+              dbErr && dbErr.message,
+            );
+          }
+        }
+
         const userFromToken = {
           id: userId,
-          empresaId: decoded.empresaId || null,
+          empresaId: resolvedEmpresaId,
           grupoUsuario: decoded.grupoUsuario || null,
         };
 

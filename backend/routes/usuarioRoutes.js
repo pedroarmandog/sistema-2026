@@ -75,7 +75,8 @@ router.get("/sessao-ativa", async (req, res) => {
     }
   } catch (e) {
     console.error("[sessao-ativa] Erro ao verificar sessão:", e && e.message);
-    return res.json({ ativa: false, motivo: "erro" });
+    // Falhar ABERTO: em erro de DB, assumir sessão válida para não desconectar o usuário
+    return res.json({ ativa: true, motivo: "db_error" });
   }
 });
 
