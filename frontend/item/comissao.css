@@ -429,8 +429,9 @@ body {
 }
 
 .tabs-container .tab-btn.active {
-    color: #FF6B35;
+    color: #e65100;
     border-bottom-color: #FF6B35;
+    background: rgba(255, 107, 53, 0.10);
 }
 
 /* Tab Content */

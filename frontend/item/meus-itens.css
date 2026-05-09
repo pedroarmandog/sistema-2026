@@ -1191,8 +1191,9 @@ body {
 }
 
 .tab-btn.active {
-    color: #4CAF50;
+    color: #2e7d32;
     border-bottom-color: #4CAF50;
+    background: rgba(76, 175, 80, 0.12);
 }
 
 /* Grid de produtos */
