@@ -343,10 +343,13 @@ exports.atualizarMensagem = async (req, res) => {
     // Se teve upload de nova imagem → usar a nova
     // Se veio flag removerImagem=true → limpar (null)
     // Caso contrário → manter a imagem existente
-    const removerImg = req.body.removerImagem === "true" || req.body.removerImagem === true;
+    const removerImg =
+      req.body.removerImagem === "true" || req.body.removerImagem === true;
     const imagemPath = req.file
       ? `/uploads/marketing/${req.file.filename}`
-      : removerImg ? null : mensagem.imagemPath;
+      : removerImg
+        ? null
+        : mensagem.imagemPath;
 
     await mensagem.update({ conteudo, titulo, imagemPath });
 

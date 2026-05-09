@@ -684,7 +684,9 @@ async function abrirModalEditar(id) {
   if (msg.imagemPath) {
     document.getElementById("modalMsgImagemPreview").style.display = "block";
     document.getElementById("imgSemImagem").style.display = "none";
-    document.getElementById("modalMsgImagemImg").src = resolveImgPath(msg.imagemPath);
+    document.getElementById("modalMsgImagemImg").src = resolveImgPath(
+      msg.imagemPath,
+    );
     document.getElementById("modalMsgImagemNome").textContent = "Imagem atual";
   } else {
     document.getElementById("modalMsgImagemPreview").style.display = "none";
@@ -714,7 +716,8 @@ function previewImagem(input) {
   if (input.files && input.files[0]) {
     _imagemArquivo = input.files[0];
     _removerImagem = false;
-    document.getElementById("modalMsgImagemNome").textContent = _imagemArquivo.name;
+    document.getElementById("modalMsgImagemNome").textContent =
+      _imagemArquivo.name;
 
     const reader = new FileReader();
     reader.onload = (e) => {
