@@ -494,7 +494,9 @@ function handleTabChange(activeTab) {
 // DASHBOARD APP - Integração completa com APIs
 // ========================================
 const DashboardApp = {
-  API_BASE: "/api",
+  // Usar VPS_URL quando definido (acesso via domínio separado, ex: Hostinger);
+  // caso contrário same-origin (acesso direto ao backend via IP ou porta)
+  API_BASE: (window.VPS_URL || "") + "/api",
   _aniversariantesData: null,
   _currentAniversarianteTab: "pets",
 

@@ -208,17 +208,23 @@ async function authUser(req, res, next) {
   // 2. Fallback: cookie legado usuarioLogadoId (sessão anterior ao JWT)
   const usuarioLegadoId = req.cookies?.usuarioLogadoId;
   if (usuarioLegadoId) {
-    // cookie legado presente; proceder com busca direta (cache pode ser aplicado)
+    // cookie legado presente; proceder com busca direta
     try {
-      const { Usuario } = require("../models");
-      const usuario = await Usuario.findByPk(parseInt(usuarioLegadoId), {
-        attributes: ["id", "grupoUsuario", "empresas", "empresa_id", "ativo"],
-      });
+      const { sequelize: seq } = require("../models");
+      const { QueryTypes } = require("sequelize");
+      // Query raw: inclui empresa_id que não está no modelo Sequelize de Usuário
+      const rows = await seq.query(
+        "SELECT id, grupoUsuario, empresas, empresa_id, ativo FROM usuarios WHERE id = :id LIMIT 1",
+        { replacements: { id: parseInt(usuarioLegadoId) }, type: QueryTypes.SELECT },
+      );
+      const usuario = rows && rows[0];
       if (usuario && usuario.ativo) {
-        // usuario legado encontrado
-        const empresas = Array.isArray(usuario.empresas)
-          ? usuario.empresas
-          : [];
+        let empresas = [];
+        try {
+          empresas = typeof usuario.empresas === "string"
+            ? JSON.parse(usuario.empresas)
+            : (Array.isArray(usuario.empresas) ? usuario.empresas : []);
+        } catch (_) {}
         const empresaId =
           (usuario.empresa_id ? Number(usuario.empresa_id) : null) ||
           extractEmpresaId(empresas);
@@ -235,8 +241,6 @@ async function authUser(req, res, next) {
           empresaId,
           grupoUsuario: usuario.grupoUsuario,
         };
-        // NÃO renovar JWT aqui — gerar token deve acontecer apenas no login
-        // sucesso
         return next();
       }
     } catch (e) {
