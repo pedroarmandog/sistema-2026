@@ -1,5 +1,10 @@
 const { Sequelize } = require("../backend/node_modules/sequelize");
-const seq = new Sequelize("petshop", "root", "@Pedropro14", {
+require('dotenv').config();
+const seq = new Sequelize(
+  process.env.LOCAL_DB_NAME || "petshop",
+  process.env.LOCAL_DB_USER || "root",
+  process.env.LOCAL_DB_PASSWORD,
+  {
   host: "localhost",
   dialect: "mysql",
   logging: false,

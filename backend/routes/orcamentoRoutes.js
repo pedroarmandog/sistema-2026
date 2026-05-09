@@ -51,7 +51,7 @@ router.get("/:id/comprovante", async (req, res) => {
     try {
       // Buscar empresa do usuário logado via cookie JWT
       const jwt = require("jsonwebtoken");
-      const JWT_SECRET = process.env.JWT_USER_SECRET || "pethub_user_secret_2026_!@#$%";
+      const JWT_SECRET = process.env.JWT_USER_SECRET;
       let empresaId = null;
       try {
         const cookieHeader = req.headers.cookie || "";

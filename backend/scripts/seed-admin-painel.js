@@ -1,4 +1,4 @@
-// Seed para criar admin padrão (pedro / @Pedropro14)
+// Seed para criar admin inicial — senha via variável ADMIN_SEED_PASSWORD
 const { Admin } = require("../models");
 
 async function criarAdminInicial() {
@@ -12,7 +12,7 @@ async function criarAdminInicial() {
         nome: "Pedro",
         sobrenome: "Admin",
         email: "pedro@pethub.com",
-        senha: "@Pedropro14", // será hasheado pelo hook beforeCreate
+        senha: process.env.ADMIN_SEED_PASSWORD, // será hasheado pelo hook beforeCreate
         cpf: "00000000000",
         telefone: "00000000000",
         ativo: true,

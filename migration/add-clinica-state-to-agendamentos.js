@@ -1,11 +1,12 @@
 const mysql = require('mysql2/promise');
 
 async function addClinicaStateColumn() {
+    require('dotenv').config();
     const connection = await mysql.createConnection({
-        host: 'localhost',
-        user: 'root',
-        password: '@Pedropro14',
-        database: 'petshop'
+        host: process.env.LOCAL_DB_HOST || 'localhost',
+        user: process.env.LOCAL_DB_USER || 'root',
+        password: process.env.LOCAL_DB_PASSWORD,
+        database: process.env.LOCAL_DB_NAME || 'petshop'
     });
 
     try {

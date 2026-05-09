@@ -5,10 +5,9 @@ require("dotenv").config({
 const { Sequelize, DataTypes } = require("sequelize");
 
 // Carregar configuração de conexão do ambiente (fallbacks mantidos)
-const dbName = process.env.DB_NAME || process.env.DATABASE_NAME || "petshop";
-const dbUser = process.env.DB_USER || process.env.DATABASE_USER || "pethub";
-const dbPassword =
-  process.env.DB_PASSWORD || process.env.DATABASE_PASSWORD || "PetHub@123";
+const dbName = process.env.DB_NAME || process.env.DATABASE_NAME;
+const dbUser = process.env.DB_USER || process.env.DATABASE_USER;
+const dbPassword = process.env.DB_PASSWORD || process.env.DATABASE_PASSWORD;
 const dbHost = process.env.DB_HOST || process.env.DATABASE_HOST || "localhost";
 const dbPort = process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306;
 

@@ -1,12 +1,18 @@
 // migrate.js
 const { Sequelize } = require('sequelize');
 
-// Banco LOCAL
-const localDB = new Sequelize('petshop', 'root', '@Pedropro14', {
-  host: 'localhost',
-  dialect: 'mysql',
-  logging: false,
-});
+// Banco LOCAL — carregar credenciais do .env
+require('dotenv').config();
+const localDB = new Sequelize(
+  process.env.LOCAL_DB_NAME || 'petshop',
+  process.env.LOCAL_DB_USER || 'root',
+  process.env.LOCAL_DB_PASSWORD,
+  {
+    host: process.env.LOCAL_DB_HOST || 'localhost',
+    dialect: 'mysql',
+    logging: false,
+  }
+);
 
 // Banco REMOTO Clever Cloud
 const remoteDB = new Sequelize('DB_NAME', 'DB_USER', 'DB_PASSWORD', {

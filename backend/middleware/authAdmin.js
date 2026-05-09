@@ -1,12 +1,12 @@
 const jwt = require("jsonwebtoken");
 
-// Chave secreta para JWT — em produção usar variável de ambiente
-const JWT_SECRET = process.env.JWT_SECRET || "pethub_admin_secret_2026_!@#$%";
+// Chave secreta para JWT — obrigatoriamente via variável de ambiente
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) throw new Error("JWT_SECRET não definido nas variáveis de ambiente");
 const JWT_EXPIRES_IN = "24h";
 
-// Token fixo para acesso à página de cadastro de admin
-const CADASTRO_TOKEN =
-  process.env.CADASTRO_TOKEN || "pethub-cadastro-admin-2026";
+// Token para acesso à página de cadastro de admin
+const CADASTRO_TOKEN = process.env.CADASTRO_TOKEN;
 
 // Middleware de autenticação para rotas do painel admin
 async function authAdmin(req, res, next) {
