@@ -61,6 +61,7 @@ let _mensagens = []; // array de MensagemAutomatica vinda da API
 let _sseSource = null; // EventSource para atualizaÃ§Ãµes em tempo real
 let _modalMsgAtualId = null; // ID da mensagem sendo editada/ativada
 let _imagemArquivo = null; // Arquivo de imagem selecionado no modal
+let _removerImagem = false; // Flag para remover imagem existente ao salvar
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // INICIALIZAÃ‡ÃƒO
@@ -676,15 +677,18 @@ async function abrirModalEditar(id) {
   const iconeEl = document.getElementById("modalMsgIcone");
   iconeEl.className = `fas ${msg.icone || "fa-calendar"}`;
 
+  // Resetar estado de imagem
+  _removerImagem = false;
+
   // Imagem existente
   if (msg.imagemPath) {
     document.getElementById("modalMsgImagemPreview").style.display = "block";
-    document.getElementById("modalMsgImagemImg").src = resolveImgPath(
-      msg.imagemPath,
-    );
-    document.getElementById("modalMsgImagemNome").textContent = "";
+    document.getElementById("imgSemImagem").style.display = "none";
+    document.getElementById("modalMsgImagemImg").src = resolveImgPath(msg.imagemPath);
+    document.getElementById("modalMsgImagemNome").textContent = "Imagem atual";
   } else {
     document.getElementById("modalMsgImagemPreview").style.display = "none";
+    document.getElementById("imgSemImagem").style.display = "flex";
     document.getElementById("modalMsgImagemNome").textContent = "";
   }
 
@@ -709,12 +713,13 @@ function inserirVariavel(variavel) {
 function previewImagem(input) {
   if (input.files && input.files[0]) {
     _imagemArquivo = input.files[0];
-    document.getElementById("modalMsgImagemNome").textContent =
-      _imagemArquivo.name;
+    _removerImagem = false;
+    document.getElementById("modalMsgImagemNome").textContent = _imagemArquivo.name;
 
     const reader = new FileReader();
     reader.onload = (e) => {
       document.getElementById("modalMsgImagemPreview").style.display = "block";
+      document.getElementById("imgSemImagem").style.display = "none";
       document.getElementById("modalMsgImagemImg").src = e.target.result;
     };
     reader.readAsDataURL(_imagemArquivo);
@@ -723,13 +728,11 @@ function previewImagem(input) {
 
 function removerImagem() {
   _imagemArquivo = null;
+  _removerImagem = true;
   document.getElementById("modalMsgImagemPreview").style.display = "none";
+  document.getElementById("imgSemImagem").style.display = "flex";
   document.getElementById("modalMsgImagemNome").textContent = "";
   document.getElementById("modalMsgImagem").value = "";
-
-  // Marcar para remover imagem existente (salvo ao avançar)
-  const msg = _mensagens.find((m) => m.id === _modalMsgAtualId);
-  if (msg) msg._removerImagem = true;
 }
 
 /**
@@ -755,6 +758,8 @@ async function avancarParaConfiguracao() {
 
     if (_imagemArquivo) {
       formData.append("imagem", _imagemArquivo);
+    } else if (_removerImagem) {
+      formData.append("removerImagem", "true");
     }
 
     const res = await fetch(`${API}/mensagens/${id}`, {

@@ -1442,72 +1442,48 @@
         >
         </textarea>
 
-        <!-- Toolbar: emoji e variáveis -->
-        <div
-          style="
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-top: 10px;
-          "
-        >
-          <div style="display: flex; gap: 8px; align-items: center">
-            <!-- Upload de imagem -->
-            <label
-              for="modalMsgImagem"
-              style="
-                cursor: pointer;
-                color: #7c3aed;
-                font-size: 13px;
-                display: flex;
-                align-items: center;
-                gap: 4px;
-              "
-            >
-              <i class="fas fa-image"></i> Imagem
-            </label>
-            <input
-              type="file"
-              id="modalMsgImagem"
-              accept="image/*"
-              style="display: none"
-              onchange="previewImagem(this)"
-            />
-            <span
-              id="modalMsgImagemNome"
-              style="font-size: 12px; color: #666"
-            ></span>
-          </div>
-          <button onclick="mostrarVariaveis()" class="btn-variaveis">
-            Variáveis
-          </button>
+        <!-- Toolbar: variáveis -->
+        <div style="display: flex; justify-content: flex-end; margin-top: 10px;">
+          <button onclick="mostrarVariaveis()" class="btn-variaveis">Variáveis</button>
         </div>
 
-        <!-- Preview da imagem selecionada -->
-        <div id="modalMsgImagemPreview" style="display: none; margin-top: 8px">
-          <img
-            id="modalMsgImagemImg"
-            src=""
-            alt="Preview"
-            style="
-              max-height: 120px;
-              border-radius: 6px;
-              border: 1px solid #e5e7eb;
-            "
-          />
-          <button
-            onclick="removerImagem()"
-            style="
-              background: none;
-              border: none;
-              color: #ef4444;
-              cursor: pointer;
-              font-size: 12px;
-              margin-left: 8px;
-            "
-          >
-            <i class="fas fa-times"></i> Remover
-          </button>
+        <!-- Seção de imagem da campanha -->
+        <input type="file" id="modalMsgImagem" accept="image/jpeg,image/jpg,image/png" style="display: none" onchange="previewImagem(this)" />
+
+        <div style="margin-top: 14px; border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden;">
+          <!-- Cabeçalho -->
+          <div style="background: #f8f4ff; padding: 9px 14px; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; gap: 8px;">
+            <i class="fas fa-image" style="color: #7c3aed; font-size: 13px;"></i>
+            <span style="font-size: 13px; font-weight: 600; color: #374151;">Imagem da Campanha</span>
+            <span style="font-size: 11px; color: #9ca3af;">(opcional — JPG, JPEG, PNG)</span>
+          </div>
+
+          <!-- Estado: sem imagem -->
+          <div id="imgSemImagem" style="padding: 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <label for="modalMsgImagem" style="cursor: pointer; background: #7c3aed; color: white; border: none; padding: 8px 16px; border-radius: 7px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">
+              <i class="fas fa-upload"></i> Selecionar Imagem
+            </label>
+            <span style="font-size: 12px; color: #9ca3af;">Nenhuma imagem — campanha será enviada apenas com texto</span>
+          </div>
+
+          <!-- Estado: com imagem (preview) -->
+          <div id="modalMsgImagemPreview" style="display: none; padding: 14px;">
+            <div style="display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap;">
+              <img id="modalMsgImagemImg" src="" alt="Preview" style="max-height: 100px; max-width: 150px; border-radius: 8px; border: 1px solid #e5e7eb; object-fit: cover;" />
+              <div>
+                <div style="font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 3px;">Imagem selecionada</div>
+                <span id="modalMsgImagemNome" style="font-size: 11px; color: #6b7280; display: block; margin-bottom: 12px; word-break: break-all; max-width: 300px;"></span>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                  <label for="modalMsgImagem" style="cursor: pointer; background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; padding: 6px 13px; border-radius: 6px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">
+                    <i class="fas fa-exchange-alt"></i> Trocar Imagem
+                  </label>
+                  <button onclick="removerImagem()" type="button" style="background: #fef2f2; color: #ef4444; border: 1px solid #fecaca; padding: 6px 13px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 5px;">
+                    <i class="fas fa-trash-alt"></i> Remover Imagem
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Painel de variáveis (toggle) -->
