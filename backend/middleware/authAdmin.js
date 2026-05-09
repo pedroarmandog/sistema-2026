@@ -2,7 +2,8 @@ const jwt = require("jsonwebtoken");
 
 // Chave secreta para JWT — obrigatoriamente via variável de ambiente
 const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) throw new Error("JWT_SECRET não definido nas variáveis de ambiente");
+if (!JWT_SECRET)
+  throw new Error("JWT_SECRET não definido nas variáveis de ambiente");
 const JWT_EXPIRES_IN = "24h";
 
 // Token para acesso à página de cadastro de admin

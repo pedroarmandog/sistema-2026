@@ -1,14 +1,15 @@
 const { Sequelize } = require("../backend/node_modules/sequelize");
-require('dotenv').config();
+require("dotenv").config();
 const seq = new Sequelize(
   process.env.LOCAL_DB_NAME || "petshop",
   process.env.LOCAL_DB_USER || "root",
   process.env.LOCAL_DB_PASSWORD,
   {
-  host: "localhost",
-  dialect: "mysql",
-  logging: false,
-});
+    host: "localhost",
+    dialect: "mysql",
+    logging: false,
+  },
+);
 seq
   .query(
     "SELECT id, nome, perfilComissao FROM itens WHERE nome LIKE '%BANHO%' OR nome LIKE '%HIDRAT%' OR nome LIKE '%ESCOVA%' ORDER BY nome",

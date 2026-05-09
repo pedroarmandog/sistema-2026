@@ -62,24 +62,38 @@ router.get("/:id/comprovante", async (req, res) => {
         }
       } catch (_) {}
       // Tentar query param como fallback
-      if (!empresaId && req.query && (req.query.empresaId || req.query.empresa_id)) {
+      if (
+        !empresaId &&
+        req.query &&
+        (req.query.empresaId || req.query.empresa_id)
+      ) {
         empresaId = req.query.empresaId || req.query.empresa_id;
       }
       if (empresaId) {
         empresa = await Empresa.findByPk(empresaId);
       }
       if (!empresa) {
-        empresa = await Empresa.findOne({ where: { ativa: true }, order: [["id", "ASC"]] });
+        empresa = await Empresa.findOne({
+          where: { ativa: true },
+          order: [["id", "ASC"]],
+        });
       }
 
       let logoPath = null;
       if (empresa && empresa.logo) {
         const candidates = [
           path.join(__dirname, "../../uploads", String(empresa.logo)),
-          path.join(__dirname, "../../uploads/logos-empresas", String(empresa.logo)),
+          path.join(
+            __dirname,
+            "../../uploads/logos-empresas",
+            String(empresa.logo),
+          ),
         ];
         for (const c of candidates) {
-          if (fs.existsSync(c)) { logoPath = c; break; }
+          if (fs.existsSync(c)) {
+            logoPath = c;
+            break;
+          }
         }
       }
       if (logoPath) {
@@ -104,7 +118,10 @@ router.get("/:id/comprovante", async (req, res) => {
     }
 
     if (!logoRendered) {
-      const headerText = empresa && (empresa.nome || empresa.razaoSocial) ? (empresa.nome || empresa.razaoSocial) : "Empresa";
+      const headerText =
+        empresa && (empresa.nome || empresa.razaoSocial)
+          ? empresa.nome || empresa.razaoSocial
+          : "Empresa";
       doc
         .fillColor("#000")
         .fontSize(18)
