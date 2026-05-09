@@ -352,36 +352,6 @@ async function registrarSessao(
     // Salvar ID da sessão atual para NUNCA removê-la no enforcement
     let minhaSessaoId = null;
 
-    // DEDUPLICAÇÃO POR USUÁRIO:
-    // Fechar todas as sessões ativas do mesmo usuário que usem UM TOKEN DIFERENTE.
-    // Isso evita que múltiplos logins no mesmo dispositivo acumulem sessões:
-    //   login 1 → sessão A, login 2 → fecha A, cria B, login 3 → fecha B, cria C...
-    // Sessões de OUTROS usuários da mesma empresa não são afetadas.
-    if (usuarioId) {
-      try {
-        const [qtdFechadas] = await SessaoAtiva.update(
-          { ativo: false },
-          {
-            where: {
-              usuario_id: usuarioId,
-              ativo: true,
-              token_hash: { [Op.ne]: tokenHash }, // preserva o token atual (idempotência)
-            },
-          },
-        );
-        if (qtdFechadas > 0) {
-          console.log(
-            `[acessos] deduplicação: ${qtdFechadas} sessão(ões) anterior(es) fechada(s) para usuario=${usuarioId}`,
-          );
-        }
-      } catch (dedupErr) {
-        console.warn(
-          "[acessos] falha ao fechar sessões anteriores do usuário:",
-          dedupErr && dedupErr.message,
-        );
-      }
-    }
-
     // Evitar duplicatas: se já existir uma sessão com o mesmo token, apenas atualizar
     const existente = await SessaoAtiva.findOne({
       where: { token_hash: tokenHash },
