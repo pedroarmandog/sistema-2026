@@ -215,15 +215,21 @@ async function authUser(req, res, next) {
       // Query raw: inclui empresa_id que não está no modelo Sequelize de Usuário
       const rows = await seq.query(
         "SELECT id, grupoUsuario, empresas, empresa_id, ativo FROM usuarios WHERE id = :id LIMIT 1",
-        { replacements: { id: parseInt(usuarioLegadoId) }, type: QueryTypes.SELECT },
+        {
+          replacements: { id: parseInt(usuarioLegadoId) },
+          type: QueryTypes.SELECT,
+        },
       );
       const usuario = rows && rows[0];
       if (usuario && usuario.ativo) {
         let empresas = [];
         try {
-          empresas = typeof usuario.empresas === "string"
-            ? JSON.parse(usuario.empresas)
-            : (Array.isArray(usuario.empresas) ? usuario.empresas : []);
+          empresas =
+            typeof usuario.empresas === "string"
+              ? JSON.parse(usuario.empresas)
+              : Array.isArray(usuario.empresas)
+                ? usuario.empresas
+                : [];
         } catch (_) {}
         const empresaId =
           (usuario.empresa_id ? Number(usuario.empresa_id) : null) ||
