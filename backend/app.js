@@ -298,6 +298,7 @@ const unidadeRoutes = require("./routes/unidadeRoutes");
 const fornecedorRoutes = require("./routes/fornecedorRoutes");
 const categoriaFinanceiraRoutes = require("./routes/categoriaFinanceiraRoutes");
 const periodicidadeRoutes = require("./routes/periodicidadeRoutes");
+const contaReceberRoutes = require("./routes/contaReceberRoutes");
 // Disparador de Mensagens (Marketing)
 app.use("/api/disparador", disparadorRoutes);
 // Instâncias de WhatsApp (Puppeteer / sessões)
@@ -1161,6 +1162,7 @@ app.use("/api/dashboard/full", dashboardFullRoutes);
 app.use("/api/unidades", unidadeRoutes);
 app.use("/api/fornecedores", fornecedorRoutes);
 app.use("/api/categorias-financeiras", categoriaFinanceiraRoutes);
+app.use("/api/contas-receber", contaReceberRoutes);
 
 // Painel Financeiro – dados reais do banco
 const painelFinanceiroRoutes = require("./routes/painelFinanceiroRoutes");

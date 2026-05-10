@@ -21,6 +21,7 @@ const { Venda, sequelize: seqVenda } = require("../models/Venda");
 const { Agendamento } = require("../models/Agendamento");
 const { MovimentoCaixa } = require("../models/MovimentoCaixa");
 const Entrada = require("../models/Entrada");
+const ContaReceber = require("../models/ContaReceber");
 
 // Instância do sequelize compartilhada
 const { sequelize } = require("../models/Cliente");
@@ -292,6 +293,70 @@ router.get("/resumo", async (req, res) => {
       proximoMes: calcReceber(recProxMes),
       atrasado: calcReceber(recAtrasado),
     };
+
+    // ── ACRESCENTAR DocumentosAReceber (ContaReceber) ─────────────────────────
+    try {
+      const calcCR = (rows) =>
+        rows.reduce(
+          (acc, r) => acc + Math.max(0, toNum(r.valor) - toNum(r.valorPago)),
+          0,
+        );
+      const statusPend = { [Op.in]: ["pendente", "parcial"] };
+      const [crHoje, crSem, crProxSem, crMes, crProxMes, crAtr] =
+        await Promise.all([
+          ContaReceber.findAll({
+            where: {
+              status: statusPend,
+              dataVencimento: { [Op.between]: [hoje0, hoje23] },
+            },
+            attributes: ["valor", "valorPago"],
+          }),
+          ContaReceber.findAll({
+            where: {
+              status: statusPend,
+              dataVencimento: { [Op.between]: [semana.inicio, semana.fim] },
+            },
+            attributes: ["valor", "valorPago"],
+          }),
+          ContaReceber.findAll({
+            where: {
+              status: statusPend,
+              dataVencimento: { [Op.between]: [proxSemIni, proxSemFim] },
+            },
+            attributes: ["valor", "valorPago"],
+          }),
+          ContaReceber.findAll({
+            where: {
+              status: statusPend,
+              dataVencimento: { [Op.between]: [mesMesIni, mesMesFim] },
+            },
+            attributes: ["valor", "valorPago"],
+          }),
+          ContaReceber.findAll({
+            where: {
+              status: statusPend,
+              dataVencimento: { [Op.between]: [proxMesIni, proxMesFim] },
+            },
+            attributes: ["valor", "valorPago"],
+          }),
+          ContaReceber.findAll({
+            where: { status: statusPend, dataVencimento: { [Op.lt]: hoje0 } },
+            attributes: ["valor", "valorPago"],
+          }),
+        ]);
+      receber.hoje += calcCR(crHoje);
+      receber.essaSemana += calcCR(crSem);
+      receber.proximaSemana += calcCR(crProxSem);
+      receber.esseMes += calcCR(crMes);
+      receber.proximoMes += calcCR(crProxMes);
+      receber.atrasado += calcCR(crAtr);
+    } catch (crErr) {
+      console.warn(
+        "[painel-financeiro/resumo] Aviso ao somar ContaReceber:",
+        crErr.message,
+      );
+    }
+
     receber.geral =
       receber.hoje +
       receber.essaSemana +
