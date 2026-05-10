@@ -1269,7 +1269,16 @@ async function syncAllTables() {
       }
     }
 
-    // 3) Verificar total de tabelas criadas
+    // 3) ContaReceber — mesmo sequelize que Cliente, garantir criação
+    try {
+      const ContaReceber = require("./models/ContaReceber");
+      await ContaReceber.sync();
+      console.log("  ✅ ContaReceber");
+    } catch (e) {
+      console.warn("  ⚠️ ContaReceber:", e.message);
+    }
+
+    // 4) Verificar total de tabelas criadas
     const [tables] = await sequelize.query("SHOW TABLES");
     console.log(`\n✅ Total de tabelas no banco: ${tables.length}`);
 

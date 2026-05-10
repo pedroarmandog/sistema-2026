@@ -547,11 +547,18 @@ async function carregarClientes() {
     });
     if (!res.ok) return;
     const data = await res.json();
+    // API retorna { success: true, clientes: [...] }
     clientesCache = Array.isArray(data)
       ? data
-      : Array.isArray(data.rows)
-        ? data.rows
-        : [];
+      : Array.isArray(data.clientes)
+        ? data.clientes
+        : Array.isArray(data.rows)
+          ? data.rows
+          : [];
+    console.log(
+      "[recebimento-cliente] Clientes carregados:",
+      clientesCache.length,
+    );
   } catch (e) {
     console.warn("[recebimento-cliente] Aviso ao carregar clientes:", e);
   }
@@ -1068,9 +1075,11 @@ function abrirModalNovoDocReceber() {
   document.body.appendChild(overlay);
 
   // Fechar modal
-  const fechar = () => overlay.remove();
-  overlay.querySelector("#ndFechar").addEventListener("click", fechar);
-  overlay.querySelector("#ndCancelar").addEventListener("click", fechar);
+  let fechar = () => overlay.remove();
+  overlay.querySelector("#ndFechar").addEventListener("click", () => fechar());
+  overlay
+    .querySelector("#ndCancelar")
+    .addEventListener("click", () => fechar());
   overlay.addEventListener("click", (e) => {
     if (e.target === overlay) fechar();
   });
@@ -1079,31 +1088,59 @@ function abrirModalNovoDocReceber() {
   const inputCliente = overlay.querySelector("#ndCliente");
   const inputClienteId = overlay.querySelector("#ndClienteId");
   const ddCliente = overlay.querySelector("#ndClienteDD");
+  // Mover ddCliente para document.body para evitar clipping do overflow-y:auto do modal
+  document.body.appendChild(ddCliente);
+
+  function posicionarDD() {
+    const rect = inputCliente.getBoundingClientRect();
+    ddCliente.style.top = rect.bottom + window.scrollY + "px";
+    ddCliente.style.left = rect.left + window.scrollX + "px";
+    ddCliente.style.width = rect.width + "px";
+  }
+
   function showClientDD(itens) {
     ddCliente.innerHTML = "";
     if (!itens || !itens.length) {
       ddCliente.style.display = "none";
       return;
     }
-    itens.slice(0, 50).forEach((c) => {
+    // position:fixed via body para não ser cortado pelo overflow do modal
+    ddCliente.style.cssText = [
+      "position:absolute",
+      "background:#fff",
+      "border:1px solid #dce1e7",
+      "border-radius:6px",
+      "box-shadow:0 4px 14px rgba(0,0,0,0.15)",
+      "z-index:999999",
+      "max-height:200px",
+      "overflow-y:auto",
+      "display:block",
+    ].join(";");
+    posicionarDD();
+    itens.slice(0, 60).forEach((c) => {
       const item = document.createElement("div");
       item.style.cssText =
-        "padding:10px 14px;cursor:pointer;font-size:14px;border-bottom:1px solid #f0f0f0;";
+        "padding:10px 14px;cursor:pointer;font-size:14px;border-bottom:1px solid #f0f0f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;";
       item.textContent = c.nome || c.nomeCompleto || `Cliente #${c.id}`;
       item.addEventListener(
         "mouseenter",
         () => (item.style.background = "#f5f5f5"),
       );
       item.addEventListener("mouseleave", () => (item.style.background = ""));
-      item.addEventListener("click", () => {
+      item.addEventListener("mousedown", (ev) => {
+        ev.preventDefault(); // evita blur antes do click
         inputCliente.value = item.textContent;
         inputClienteId.value = c.id;
         ddCliente.style.display = "none";
       });
       ddCliente.appendChild(item);
     });
-    ddCliente.style.display = "block";
   }
+
+  function ocultarDD() {
+    ddCliente.style.display = "none";
+  }
+
   inputCliente.addEventListener("input", () => {
     const q = inputCliente.value.trim().toLowerCase();
     const fil = q
@@ -1112,19 +1149,17 @@ function abrirModalNovoDocReceber() {
         )
       : clientesCache;
     showClientDD(fil);
-    if (!q) {
-      inputClienteId.value = "";
-    }
+    if (!q) inputClienteId.value = "";
   });
   inputCliente.addEventListener("focus", () => showClientDD(clientesCache));
-  document.addEventListener(
-    "click",
-    (e) => {
-      if (!inputCliente.contains(e.target) && !ddCliente.contains(e.target))
-        ddCliente.style.display = "none";
-    },
-    { once: true },
-  );
+  inputCliente.addEventListener("blur", () => setTimeout(ocultarDD, 150));
+
+  // Limpar ddCliente quando modal fechar
+  const _fecharOriginal = fechar;
+  fechar = () => {
+    ddCliente.remove();
+    _fecharOriginal();
+  };
 
   // Salvar
   overlay.querySelector("#ndSalvar").addEventListener("click", async () => {
