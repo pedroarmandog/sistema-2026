@@ -1122,15 +1122,25 @@ function _obterColunasPagRec() {
   return datas;
 }
 
-function renderizarTabelasPagRec() {
+async function renderizarTabelasPagRec() {
+  const periodo = document.getElementById("pagRecPeriodo")?.value || "mensal";
+  const dataVal =
+    document.getElementById("pagRecData")?.value ||
+    new Date().toISOString().slice(0, 7);
+
   const datas = _obterColunasPagRec();
   const _f2 = (n) => String(n).padStart(2, "0");
+  const fmtVal = (v) =>
+    (v || 0).toLocaleString("pt-BR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
 
+  // 1. Rebuild column headers e zerar células em ambas as tabelas
   ["pagamentosTabela", "recebimentosTabela"].forEach((tabelaId) => {
     const tabela = document.getElementById(tabelaId);
     if (!tabela) return;
 
-    // Rebuild thead
     const thead = tabela.querySelector("thead");
     if (thead) {
       const tr = document.createElement("tr");
@@ -1153,7 +1163,6 @@ function renderizarTabelasPagRec() {
       thead.appendChild(tr);
     }
 
-    // Rebuild tbody cells (keep row labels, replace col-valor cells)
     const tbody = tabela.querySelector("tbody");
     if (tbody) {
       tbody.querySelectorAll("tr").forEach((row) => {
@@ -1167,4 +1176,63 @@ function renderizarTabelasPagRec() {
       });
     }
   });
+
+  // 2. Buscar dados reais da API
+  try {
+    const params = new URLSearchParams({ periodo, data: dataVal });
+    const resp = await fetch(
+      `/api/painel-financeiro/pagamentos-recebimentos?${params}`,
+    );
+    if (!resp.ok) return;
+    const apiData = await resp.json();
+
+    const { colunas = [], recebimentos = {}, pagamentos = {} } = apiData;
+    if (!colunas.length) return;
+
+    // Encontra linha pelo texto da primeira célula
+    const findRow = (tabelaId, texto) => {
+      const tabela = document.getElementById(tabelaId);
+      if (!tabela) return null;
+      for (const row of tabela.querySelectorAll("tbody tr")) {
+        const td = row.querySelector("td");
+        if (td && td.textContent.trim().includes(texto)) return row;
+      }
+      return null;
+    };
+
+    // Preenche células de uma linha com valores por data
+    const preencherRow = (row, valoresPorDia) => {
+      if (!row) return;
+      const tds = row.querySelectorAll(".col-valor");
+      colunas.forEach((col, i) => {
+        if (tds[i])
+          tds[i].textContent = fmtVal(valoresPorDia[col.dataStr] || 0);
+      });
+    };
+
+    // Preenche SALDO FINAL com total acumulado
+    const preencherSaldoFinal = (tabelaId, valoresPorDia) => {
+      const saldoRow = document.querySelector(`#${tabelaId} .row-footer`);
+      if (!saldoRow) return;
+      const tds = saldoRow.querySelectorAll(".col-valor");
+      let acum = 0;
+      colunas.forEach((col, i) => {
+        acum += valoresPorDia[col.dataStr] || 0;
+        if (tds[i]) tds[i].textContent = fmtVal(acum);
+      });
+    };
+
+    // Recebimentos
+    preencherRow(
+      findRow("recebimentosTabela", "(-) Recebimentos"),
+      recebimentos,
+    );
+    preencherSaldoFinal("recebimentosTabela", recebimentos);
+
+    // Pagamentos
+    preencherRow(findRow("pagamentosTabela", "(-) Pagamentos"), pagamentos);
+    preencherSaldoFinal("pagamentosTabela", pagamentos);
+  } catch (err) {
+    console.error("Erro ao carregar pagamentos e recebimentos:", err);
+  }
 }

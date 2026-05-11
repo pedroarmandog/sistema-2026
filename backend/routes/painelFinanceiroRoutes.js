@@ -974,4 +974,197 @@ router.get("/fluxo-caixa", async (req, res) => {
   }
 });
 
+// ── ENDPOINT 5: Pagamentos e Recebimentos por dia ────────────────────────────
+/**
+ * GET /api/painel-financeiro/pagamentos-recebimentos?periodo=mensal&data=2026-05
+ * Retorna, por dia do período:
+ *   recebimentos: vendas + agendamentos + movimentos_caixa entrada + contas_receber pagas
+ *   pagamentos:   entradas_mercadoria pagas + movimentos_caixa saída
+ */
+router.get("/pagamentos-recebimentos", async (req, res) => {
+  try {
+    const hoje = new Date();
+    const periodo = ["mensal", "semanal", "diario"].includes(req.query.periodo)
+      ? req.query.periodo
+      : "mensal";
+
+    let ano, mes;
+    if (req.query.data && /^\d{4}-\d{2}$/.test(req.query.data)) {
+      [ano, mes] = req.query.data.split("-").map(Number);
+    } else {
+      ano = hoje.getFullYear();
+      mes = hoje.getMonth() + 1;
+    }
+
+    if (mes < 1 || mes > 12 || ano < 2000 || ano > 2100) {
+      return res.status(400).json({ error: "Parâmetros inválidos" });
+    }
+
+    // Montar colunas conforme período
+    let colunas = [];
+    if (periodo === "mensal") {
+      const totalDias = new Date(ano, mes, 0).getDate();
+      for (let d = 1; d <= totalDias; d++) {
+        const dt = new Date(ano, mes - 1, d);
+        colunas.push({
+          dataStr: `${ano}-${String(mes).padStart(2, "0")}-${String(d).padStart(2, "0")}`,
+          label: fmtData(dt),
+          diaSemana: nomeDiaSemana(dt),
+        });
+      }
+    } else if (periodo === "semanal") {
+      const dataRef = new Date(ano, mes - 1, 1);
+      const { inicio } = semanaContendo(dataRef);
+      for (let i = 0; i < 7; i++) {
+        const dt = new Date(inicio);
+        dt.setDate(inicio.getDate() + i);
+        colunas.push({
+          dataStr: dt.toISOString().slice(0, 10),
+          label: fmtData(dt),
+          diaSemana: nomeDiaSemana(dt),
+        });
+      }
+    } else {
+      // Diário: dia atual
+      const dt = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+      colunas.push({
+        dataStr: dt.toISOString().slice(0, 10),
+        label: fmtData(dt),
+        diaSemana: nomeDiaSemana(dt),
+      });
+    }
+
+    if (colunas.length === 0)
+      return res.json({ colunas: [], recebimentos: {}, pagamentos: {} });
+
+    const dataIni = new Date(`${colunas[0].dataStr}T00:00:00`);
+    const dataFim = new Date(`${colunas[colunas.length - 1].dataStr}T23:59:59`);
+
+    const [
+      vendasDia,
+      agendDia,
+      movEntDia,
+      comprasDia,
+      movSaiDia,
+      contasRecDia,
+    ] = await Promise.all([
+      // Recebimentos – vendas pagas/parciais
+      Venda.findAll({
+        attributes: [
+          [fn("DATE", col("data")), "dia"],
+          [fn("SUM", col("totalPago")), "total"],
+        ],
+        where: {
+          data: { [Op.between]: [dataIni, dataFim] },
+          status: { [Op.in]: ["pago", "parcial"] },
+        },
+        group: [fn("DATE", col("data"))],
+        raw: true,
+      }),
+      // Recebimentos – agendamentos concluídos
+      Agendamento.findAll({
+        attributes: [
+          [fn("DATE", col("dataAgendamento")), "dia"],
+          [fn("SUM", col("totalPago")), "total"],
+        ],
+        where: {
+          dataAgendamento: { [Op.between]: [dataIni, dataFim] },
+          status: "concluido",
+        },
+        group: [fn("DATE", col("dataAgendamento"))],
+        raw: true,
+      }),
+      // Recebimentos – movimentos de caixa entrada
+      MovimentoCaixa.findAll({
+        attributes: [
+          [fn("DATE", col("data")), "dia"],
+          [fn("SUM", col("valor")), "total"],
+        ],
+        where: {
+          data: { [Op.between]: [dataIni, dataFim] },
+          tipo: "entrada",
+        },
+        group: [fn("DATE", col("data"))],
+        raw: true,
+      }),
+      // Pagamentos – compras/entradas mercadoria pagas
+      Entrada.findAll({
+        attributes: [
+          ["dataPagamento", "dia"],
+          [fn("SUM", col("valorTotal")), "total"],
+        ],
+        where: {
+          dataPagamento: { [Op.between]: [dataIni, dataFim] },
+          situacao: "pago",
+        },
+        group: ["dataPagamento"],
+        raw: true,
+      }),
+      // Pagamentos – movimentos de caixa saída
+      MovimentoCaixa.findAll({
+        attributes: [
+          [fn("DATE", col("data")), "dia"],
+          [fn("SUM", col("valor")), "total"],
+        ],
+        where: {
+          data: { [Op.between]: [dataIni, dataFim] },
+          tipo: "saida",
+        },
+        group: [fn("DATE", col("data"))],
+        raw: true,
+      }),
+      // Recebimentos – contas_receber pagas (dataPagamento no período)
+      ContaReceber.findAll({
+        attributes: [
+          [fn("DATE", col("dataPagamento")), "dia"],
+          [fn("SUM", col("valorPago")), "total"],
+        ],
+        where: {
+          dataPagamento: { [Op.between]: [dataIni, dataFim] },
+          status: "pago",
+        },
+        group: [fn("DATE", col("dataPagamento"))],
+        raw: true,
+      }),
+    ]);
+
+    const idx = (arr) =>
+      arr.reduce((m, r) => {
+        const key = r.dia ? String(r.dia).slice(0, 10) : null;
+        if (key) m[key] = (m[key] || 0) + toNum(r.total);
+        return m;
+      }, {});
+
+    const iV = idx(vendasDia),
+      iA = idx(agendDia),
+      iME = idx(movEntDia);
+    const iC = idx(comprasDia),
+      iMS = idx(movSaiDia),
+      iCR = idx(contasRecDia);
+
+    const recebimentos = {};
+    const pagamentos = {};
+
+    for (const c of colunas) {
+      const d = c.dataStr;
+      recebimentos[d] = parseFloat(
+        ((iV[d] || 0) + (iA[d] || 0) + (iME[d] || 0) + (iCR[d] || 0)).toFixed(
+          2,
+        ),
+      );
+      pagamentos[d] = parseFloat(((iC[d] || 0) + (iMS[d] || 0)).toFixed(2));
+    }
+
+    return res.json({ colunas, recebimentos, pagamentos });
+  } catch (err) {
+    console.error(
+      "[painel-financeiro/pagamentos-recebimentos] Erro:",
+      err.message,
+    );
+    return res
+      .status(500)
+      .json({ error: "Erro ao buscar pagamentos e recebimentos" });
+  }
+});
+
 module.exports = router;
