@@ -442,13 +442,32 @@
           </a>
           <div class="submenu" id="financeiroSubmenu">
             <!-- Contas a receber (toggle) -->
-            <div class="submenu-item" id="finBtnReceber" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
-                        <a href="" style="flex:1;text-decoration:none;color:inherit;"><span>Contas a receber</span></a>
-                        <span id="finCaretReceber" style="font-weight:700">▼</span>
-                    </div>
-                    <div id="finSubReceber" class="nested-submenu submenu" style="display:none; padding-left:12px; margin-top:6px;">
-                        <a href="../financeiro/contas-a-receber/recebimento-cliente.html" class="submenu-item"><span>Recebimento de cliente</span></a>
-                    </div>
+            <div
+              class="submenu-item"
+              id="finBtnReceber"
+              style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                cursor: pointer;
+              "
+            >
+              <a href="" style="flex: 1; text-decoration: none; color: inherit"
+                ><span>Contas a receber</span></a
+              >
+              <span id="finCaretReceber" style="font-weight: 700">▼</span>
+            </div>
+            <div
+              id="finSubReceber"
+              class="nested-submenu submenu"
+              style="display: none; padding-left: 12px; margin-top: 6px"
+            >
+              <a
+                href="../financeiro/contas-a-receber/recebimento-cliente.html"
+                class="submenu-item"
+                ><span>Recebimento de cliente</span></a
+              >
+            </div>
 
             <!-- Contas a pagar (toggle) -->
             <div
@@ -1436,9 +1455,7 @@
               <div class="filtro-group">
                 <label class="filtro-label">Data</label>
                 <select class="filtro-select" id="pagRecData">
-                  <option value="novembro">Novembro</option>
-                  <option value="dezembro">Dezembro</option>
-                  <option value="janeiro">Janeiro</option>
+                  <!-- preenchido dinamicamente pelo JS -->
                 </select>
               </div>
 
@@ -1754,5 +1771,3 @@
     <script src="../novo-atendimento-global.js"></script>
   </body>
 </html>
-
-
