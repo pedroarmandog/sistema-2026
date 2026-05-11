@@ -977,9 +977,18 @@ router.get("/fluxo-caixa", async (req, res) => {
 // ── ENDPOINT 5: Pagamentos e Recebimentos por dia ────────────────────────────
 /**
  * GET /api/painel-financeiro/pagamentos-recebimentos?periodo=mensal&data=2026-05
- * Retorna, por dia do período:
- *   recebimentos: vendas + agendamentos + movimentos_caixa entrada + contas_receber pagas
- *   pagamentos:   entradas_mercadoria pagas + movimentos_caixa saída
+ *
+ * Recebimentos (tabela verde) por dia:
+ *   - contas_receber pendentes/parciais → agrupadas por dataVencimento
+ *   - contas_receber pagas             → agrupadas por dataPagamento
+ *   - vendas pagas/parciais            → agrupadas por data
+ *   - agendamentos concluídos          → agrupadas por dataAgendamento
+ *   - movimentos_caixa entrada         → agrupadas por data
+ *
+ * Pagamentos (tabela vermelha) por dia:
+ *   - entradas_mercadoria pendentes (concluido/pendente) → agrupadas por dataEntrada (vencimento)
+ *   - entradas_mercadoria pagas                         → agrupadas por dataPagamento
+ *   - movimentos_caixa saída                            → agrupadas por data
  */
 router.get("/pagamentos-recebimentos", async (req, res) => {
   try {
@@ -1025,7 +1034,6 @@ router.get("/pagamentos-recebimentos", async (req, res) => {
         });
       }
     } else {
-      // Diário: dia atual
       const dt = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
       colunas.push({
         dataStr: dt.toISOString().slice(0, 10),
@@ -1044,9 +1052,15 @@ router.get("/pagamentos-recebimentos", async (req, res) => {
       vendasDia,
       agendDia,
       movEntDia,
-      comprasDia,
+      // ContaReceber pendentes/parciais por vencimento
+      crPendVenc,
+      // ContaReceber pagas por dataPagamento
+      crPagoDia,
+      // Entradas pendentes (concluido/pendente) por dataEntrada (vencimento)
+      entPendDia,
+      // Entradas pagas por dataPagamento
+      entPagoDia,
       movSaiDia,
-      contasRecDia,
     ] = await Promise.all([
       // Recebimentos – vendas pagas/parciais
       Venda.findAll({
@@ -1080,14 +1094,50 @@ router.get("/pagamentos-recebimentos", async (req, res) => {
           [fn("DATE", col("data")), "dia"],
           [fn("SUM", col("valor")), "total"],
         ],
-        where: {
-          data: { [Op.between]: [dataIni, dataFim] },
-          tipo: "entrada",
-        },
+        where: { data: { [Op.between]: [dataIni, dataFim] }, tipo: "entrada" },
         group: [fn("DATE", col("data"))],
         raw: true,
       }),
-      // Pagamentos – compras/entradas mercadoria pagas
+      // Recebimentos – contas_receber PENDENTES/PARCIAIS por dataVencimento
+      ContaReceber.findAll({
+        attributes: [
+          [fn("DATE", col("dataVencimento")), "dia"],
+          [fn("SUM", col("valor")), "total"],
+        ],
+        where: {
+          dataVencimento: { [Op.between]: [dataIni, dataFim] },
+          status: { [Op.in]: ["pendente", "parcial"] },
+        },
+        group: [fn("DATE", col("dataVencimento"))],
+        raw: true,
+      }),
+      // Recebimentos – contas_receber PAGAS por dataPagamento
+      ContaReceber.findAll({
+        attributes: [
+          [fn("DATE", col("dataPagamento")), "dia"],
+          [fn("SUM", col("valorPago")), "total"],
+        ],
+        where: {
+          dataPagamento: { [Op.between]: [dataIni, dataFim] },
+          status: "pago",
+        },
+        group: [fn("DATE", col("dataPagamento"))],
+        raw: true,
+      }),
+      // Pagamentos – entradas_mercadoria PENDENTES (concluido/pendente) por dataEntrada (vencimento)
+      Entrada.findAll({
+        attributes: [
+          ["dataEntrada", "dia"],
+          [fn("SUM", col("valorTotal")), "total"],
+        ],
+        where: {
+          dataEntrada: { [Op.between]: [dataIni, dataFim] },
+          situacao: { [Op.notIn]: ["pago", "excluido", "ignorada"] },
+        },
+        group: ["dataEntrada"],
+        raw: true,
+      }),
+      // Pagamentos – entradas_mercadoria PAGAS por dataPagamento
       Entrada.findAll({
         attributes: [
           ["dataPagamento", "dia"],
@@ -1106,24 +1156,8 @@ router.get("/pagamentos-recebimentos", async (req, res) => {
           [fn("DATE", col("data")), "dia"],
           [fn("SUM", col("valor")), "total"],
         ],
-        where: {
-          data: { [Op.between]: [dataIni, dataFim] },
-          tipo: "saida",
-        },
+        where: { data: { [Op.between]: [dataIni, dataFim] }, tipo: "saida" },
         group: [fn("DATE", col("data"))],
-        raw: true,
-      }),
-      // Recebimentos – contas_receber pagas (dataPagamento no período)
-      ContaReceber.findAll({
-        attributes: [
-          [fn("DATE", col("dataPagamento")), "dia"],
-          [fn("SUM", col("valorPago")), "total"],
-        ],
-        where: {
-          dataPagamento: { [Op.between]: [dataIni, dataFim] },
-          status: "pago",
-        },
-        group: [fn("DATE", col("dataPagamento"))],
         raw: true,
       }),
     ]);
@@ -1135,24 +1169,34 @@ router.get("/pagamentos-recebimentos", async (req, res) => {
         return m;
       }, {});
 
-    const iV = idx(vendasDia),
-      iA = idx(agendDia),
-      iME = idx(movEntDia);
-    const iC = idx(comprasDia),
-      iMS = idx(movSaiDia),
-      iCR = idx(contasRecDia);
+    const iV = idx(vendasDia);
+    const iA = idx(agendDia);
+    const iME = idx(movEntDia);
+    const iCRp = idx(crPendVenc);
+    const iCRg = idx(crPagoDia);
+    const iEP = idx(entPendDia);
+    const iEG = idx(entPagoDia);
+    const iMS = idx(movSaiDia);
 
     const recebimentos = {};
     const pagamentos = {};
 
     for (const c of colunas) {
       const d = c.dataStr;
+      // Recebimentos: pendentes por vencimento + pagos por dataPagamento + vendas + agend + caixa
       recebimentos[d] = parseFloat(
-        ((iV[d] || 0) + (iA[d] || 0) + (iME[d] || 0) + (iCR[d] || 0)).toFixed(
-          2,
-        ),
+        (
+          (iV[d] || 0) +
+          (iA[d] || 0) +
+          (iME[d] || 0) +
+          (iCRp[d] || 0) +
+          (iCRg[d] || 0)
+        ).toFixed(2),
       );
-      pagamentos[d] = parseFloat(((iC[d] || 0) + (iMS[d] || 0)).toFixed(2));
+      // Pagamentos: pendentes por vencimento + pagos por dataPagamento + caixa saída
+      pagamentos[d] = parseFloat(
+        ((iEP[d] || 0) + (iEG[d] || 0) + (iMS[d] || 0)).toFixed(2),
+      );
     }
 
     return res.json({ colunas, recebimentos, pagamentos });
