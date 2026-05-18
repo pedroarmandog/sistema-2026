@@ -154,6 +154,22 @@ exports.criarVenda = async (req, res) => {
       ...dados,
       empresa_id: req.user?.empresaId || null,
     });
+
+    // Criar lembretes automáticos de produto recorrente (se cliente tiver ativado)
+    try {
+      const { criarLembretesDeVenda } = require("./produtoLembreteController");
+      await criarLembretesDeVenda(
+        venda.toJSON ? venda.toJSON() : venda,
+        req.user?.empresaId || 1,
+      );
+    } catch (lembreteErr) {
+      // Não bloquear a venda se o lembrete falhar
+      console.warn(
+        "[Venda] Erro ao criar lembretes de produto recorrente:",
+        lembreteErr && lembreteErr.message,
+      );
+    }
+
     res.status(201).json(venda);
   } catch (error) {
     console.error("Erro ao criar venda:", error);

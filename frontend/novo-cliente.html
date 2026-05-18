@@ -1170,6 +1170,59 @@
                     </div>
                 </div>
 
+                <!-- Lembrete Automático de Produto Recorrente -->
+                <div class="form-section lembrete-recorrente-section">
+                    <div class="lembrete-header">
+                        <div class="lembrete-icon-wrap">
+                            <i class="fas fa-box-open"></i>
+                        </div>
+                        <div class="lembrete-title-group">
+                            <h3 class="lembrete-title">Lembrete Automático de Produto</h3>
+                            <p class="lembrete-subtitle">Envia mensagem automática quando um produto recorrente estiver prestes a acabar</p>
+                        </div>
+                        <div class="lembrete-toggle-wrap">
+                            <label class="iphone-toggle" title="Ativar lembrete automático de produto">
+                                <input type="checkbox" id="lembreteAutomaticoAtivo" name="lembreteAutomaticoAtivo">
+                                <span class="iphone-toggle-slider"></span>
+                            </label>
+                            <span class="lembrete-toggle-label" id="lembreteToggleLabel">Desativado</span>
+                        </div>
+                    </div>
+
+                    <div class="lembrete-config" id="lembreteConfig" style="display:none;">
+                        <div class="lembrete-config-inner">
+                            <div class="form-group lembrete-dias-group">
+                                <label for="lembreteAutomaticoDias" class="lembrete-dias-label">
+                                    <i class="fas fa-calendar-alt"></i>
+                                    Dias para lembrete automático
+                                </label>
+                                <div class="lembrete-dias-input-wrap">
+                                    <input
+                                        type="number"
+                                        id="lembreteAutomaticoDias"
+                                        name="lembreteAutomaticoDias"
+                                        class="form-control lembrete-dias-input"
+                                        min="1"
+                                        max="365"
+                                        value="30"
+                                        placeholder="30"
+                                    >
+                                    <span class="lembrete-dias-suffix">dias</span>
+                                </div>
+                                <p class="lembrete-dias-hint">
+                                    <i class="fas fa-info-circle"></i>
+                                    O sistema enviará a mensagem no dia <strong id="lembretePreviewDia">29</strong> após a compra e repetirá o ciclo automaticamente.
+                                </p>
+                            </div>
+
+                            <div class="lembrete-status-badge" id="lembreteStatusBadge">
+                                <i class="fas fa-check-circle"></i>
+                                <span>Lembrete ativo — o sistema enviará mensagem automaticamente após cada compra</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Botões de Ação -->
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Salvar</button>

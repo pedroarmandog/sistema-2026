@@ -16,6 +16,7 @@
     this.setupDateCalculation();
     this.setupFieldFormatting();
     this.setupRealTimeValidation();
+    this.setupLembreteAutomatico();
     console.log("✅ Inicialização completa");
   }
 
@@ -112,6 +113,18 @@
           cliente.grupo_cliente_id,
         );
       }, 200); // Pequeno delay para garantir que o seletor foi inicializado
+    }
+
+    // Preencher campos de lembrete automático
+    const toggleLembrete = document.getElementById("lembreteAutomaticoAtivo");
+    const inputDias = document.getElementById("lembreteAutomaticoDias");
+    if (toggleLembrete) {
+      toggleLembrete.checked = !!cliente.lembrete_automatico_ativo;
+      toggleLembrete.dispatchEvent(new Event("change"));
+    }
+    if (inputDias && cliente.lembrete_automatico_dias) {
+      inputDias.value = cliente.lembrete_automatico_dias;
+      inputDias.dispatchEvent(new Event("input"));
     }
   }
 
@@ -260,6 +273,42 @@
         this.validateTelefone(telefoneField),
       );
     }
+  }
+
+  // Configurar toggle de Lembrete Automático de Produto
+  setupLembreteAutomatico() {
+    const toggle = document.getElementById("lembreteAutomaticoAtivo");
+    const configPanel = document.getElementById("lembreteConfig");
+    const label = document.getElementById("lembreteToggleLabel");
+    const diasInput = document.getElementById("lembreteAutomaticoDias");
+    const previewDia = document.getElementById("lembretePreviewDia");
+
+    if (!toggle || !configPanel) return;
+
+    const atualizarEstado = () => {
+      const ativo = toggle.checked;
+      configPanel.style.display = ativo ? "block" : "none";
+      if (label) {
+        label.textContent = ativo ? "Ativado" : "Desativado";
+        label.classList.toggle("active", ativo);
+      }
+    };
+
+    const atualizarPreview = () => {
+      if (!previewDia || !diasInput) return;
+      const dias = parseInt(diasInput.value, 10) || 30;
+      previewDia.textContent = Math.max(1, dias - 1);
+    };
+
+    toggle.addEventListener("change", atualizarEstado);
+
+    if (diasInput) {
+      diasInput.addEventListener("input", atualizarPreview);
+      atualizarPreview();
+    }
+
+    // Estado inicial
+    atualizarEstado();
   }
 
   // Validar CPF
@@ -838,6 +887,16 @@
       const imagemInput = document.getElementById("imagemPerfil");
       if (imagemInput && imagemInput.files[0]) {
         formData.append("imagem_perfil", imagemInput.files[0]);
+      }
+
+      // Lembrete Automático de Produto Recorrente
+      const lembreteToggle = document.getElementById("lembreteAutomaticoAtivo");
+      const lembreteDias = document.getElementById("lembreteAutomaticoDias");
+      if (lembreteToggle) {
+        formData.append("lembrete_automatico_ativo", lembreteToggle.checked);
+      }
+      if (lembreteDias && lembreteDias.value) {
+        formData.append("lembrete_automatico_dias", lembreteDias.value);
       }
 
       // Definir URL e método baseado no modo

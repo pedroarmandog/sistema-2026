@@ -208,6 +208,16 @@ const Cliente = sequelize.define(
     observacoes: { type: DataTypes.TEXT },
     proximidade: { type: DataTypes.STRING },
 
+    // Lembrete Automático de Produto Recorrente
+    lembrete_automatico_ativo: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
+    lembrete_automatico_dias: {
+      type: DataTypes.INTEGER,
+      defaultValue: 30,
+    },
+
     // Imagem
     imagem_perfil: { type: DataTypes.STRING },
   },

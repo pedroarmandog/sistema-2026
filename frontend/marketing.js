@@ -78,6 +78,8 @@ async function inicializarMarketing() {
   carregarMensagens();
   conectarSSE();
   iniciarMonitorFilaPendente();
+  carregarEstatisticasProdutoRecorrente();
+  carregarTabelaProdutoRecorrente();
 }
 
 // ──────────────────────────────────────────────────
@@ -1006,5 +1008,121 @@ window.MarketingSystem = {
   desativarMensagem,
   abrirModalConexaoWhatsapp,
 };
+
+// ──────────────────────────────────────────────────
+// PRODUTO RECORRENTE — Estatísticas e Tabela
+// ──────────────────────────────────────────────────
+
+async function carregarEstatisticasProdutoRecorrente() {
+  try {
+    const token =
+      localStorage.getItem("token") || sessionStorage.getItem("token");
+    const res = await fetch(
+      `${VPS_URL}/api/produto-lembrete/estatisticas?empresaId=${EMPRESA_ID}`,
+      {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      },
+    );
+    if (!res.ok) return;
+    const data = await res.json();
+    const elAtivos = document.getElementById("prTotalAtivos");
+    const elProximos = document.getElementById("prProximosDisparo");
+    if (elAtivos) elAtivos.textContent = data.totalAtivos ?? 0;
+    if (elProximos) elProximos.textContent = data.proximosSete ?? 0;
+  } catch (e) {
+    console.warn(
+      "[PR] Erro ao carregar estatísticas produto recorrente:",
+      e.message,
+    );
+  }
+}
+
+async function carregarTabelaProdutoRecorrente() {
+  const tbody = document.getElementById("prTableBody");
+  const loadingEl = document.getElementById("prTableLoading");
+  const emptyEl = document.getElementById("prTableEmpty");
+  if (!tbody) return;
+
+  if (loadingEl) loadingEl.style.display = "block";
+  if (emptyEl) emptyEl.style.display = "none";
+  tbody.innerHTML = "";
+
+  try {
+    const token =
+      localStorage.getItem("token") || sessionStorage.getItem("token");
+    const res = await fetch(
+      `${VPS_URL}/api/produto-lembrete?empresaId=${EMPRESA_ID}`,
+      {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      },
+    );
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const lista = await res.json();
+    if (loadingEl) loadingEl.style.display = "none";
+
+    const ativos = lista.filter((l) => l.ativo);
+    if (ativos.length === 0) {
+      if (emptyEl) emptyEl.style.display = "block";
+      return;
+    }
+
+    ativos.forEach((item) => {
+      const tr = document.createElement("tr");
+      const statusCls =
+        item.status === "ativo"
+          ? "pr-badge-status-ativo"
+          : "pr-badge-status-ativo pr-badge-status-pausado";
+      const proximoStr = item.data_proximo_disparo
+        ? new Date(item.data_proximo_disparo).toLocaleDateString("pt-BR")
+        : "—";
+      tr.innerHTML = `
+        <td>${item.cliente ? item.cliente.nome : item.cliente_id || "—"}</td>
+        <td>${item.produto_nome || "—"}</td>
+        <td>${item.dias_lembrete ?? 30} dias</td>
+        <td>${proximoStr}</td>
+        <td><span class="${statusCls}"><i class="fas fa-circle" style="font-size:8px"></i> ${item.status || "ativo"}</span></td>
+        <td><button class="pr-btn-danger" onclick="desativarProdutoLembrete(${item.id})" title="Desativar lembrete"><i class="fas fa-times"></i></button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  } catch (e) {
+    if (loadingEl) loadingEl.style.display = "none";
+    if (emptyEl) {
+      emptyEl.style.display = "block";
+      const p = emptyEl.querySelector("p");
+      if (p) p.textContent = "Erro ao carregar lembretes. Tente novamente.";
+    }
+    console.warn("[PR] Erro ao carregar tabela produto recorrente:", e.message);
+  }
+}
+
+async function desativarProdutoLembrete(id) {
+  if (!confirm("Desativar este lembrete automático?")) return;
+  try {
+    const token =
+      localStorage.getItem("token") || sessionStorage.getItem("token");
+    const res = await fetch(`${VPS_URL}/api/produto-lembrete/${id}`, {
+      method: "DELETE",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    carregarTabelaProdutoRecorrente();
+    carregarEstatisticasProdutoRecorrente();
+  } catch (e) {
+    alert("Erro ao desativar lembrete: " + e.message);
+  }
+}
+
+function abrirModalEditarProdutoRecorrente() {
+  // Reutiliza o modal existente de edição de mensagem
+  const msg = _mensagens.find((m) => m.tipo === "produto_recorrente");
+  if (msg) {
+    abrirModalEditar(msg.id);
+  } else {
+    alert(
+      "O template de mensagem será criado automaticamente após a primeira venda de um cliente com lembrete ativo.\n\nFaça uma venda primeiro para habilitar a edição do template.",
+    );
+  }
+}
 
 console.log("[Marketing] Sistema de Marketing inicializado com sucesso!");

@@ -1172,6 +1172,10 @@ app.use("/api/painel-financeiro", painelFinanceiroRoutes);
 const adminRoutes = require("./routes/adminRoutes");
 app.use("/api/admin", adminRoutes);
 
+// Lembrete Automático de Produto Recorrente
+const produtoLembreteRoutes = require("./routes/produtoLembreteRoutes");
+app.use("/api/produto-lembrete", produtoLembreteRoutes);
+
 // Endpoint compatível com frontend: buscar produtos com preço alterado
 app.get("/api/editar-produto", async (req, res) => {
   try {
@@ -1276,6 +1280,15 @@ async function syncAllTables() {
       console.log("  ✅ ContaReceber");
     } catch (e) {
       console.warn("  ⚠️ ContaReceber:", e.message);
+    }
+
+    // ProdutoLembreteRecorrente
+    try {
+      const { ProdutoLembreteRecorrente } = require("./models");
+      await ProdutoLembreteRecorrente.sync();
+      console.log("  ✅ ProdutoLembreteRecorrente");
+    } catch (e) {
+      console.warn("  ⚠️ ProdutoLembreteRecorrente:", e.message);
     }
 
     // 4) Verificar total de tabelas criadas
@@ -1982,6 +1995,35 @@ function startServer() {
     } catch (err) {
       console.warn(
         "⚠️ Não foi possível iniciar cron de vencimentos:",
+        err.message,
+      );
+    }
+
+    // Cron: lembretes automáticos de produto recorrente — todo dia às 10:00
+    try {
+      const cron = require("node-cron");
+      const {
+        processarLembretes,
+      } = require("./controllers/produtoLembreteController");
+      cron.schedule("0 10 * * *", async () => {
+        const executionLock = require("./services/executionLock");
+        const res = await executionLock.withLock(
+          "produtoLembreteRecorrente",
+          async () => {
+            await processarLembretes();
+          },
+        );
+        if (res && res.skipped)
+          console.log(
+            `[cron] produtoLembreteRecorrente ignorado: ${res.reason}`,
+          );
+      });
+      console.log(
+        "✅ Cron de lembretes de produto recorrente iniciado (10:00 diário)",
+      );
+    } catch (err) {
+      console.warn(
+        "⚠️ Não foi possível iniciar cron de produto recorrente:",
         err.message,
       );
     }

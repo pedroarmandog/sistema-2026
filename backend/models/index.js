@@ -68,6 +68,9 @@ const BackupEmpresaFactory = require("./BackupEmpresa");
 const BackupEmpresa = BackupEmpresaFactory(sequelize);
 const SessaoAtivaFactory = require("./SessaoAtiva");
 const SessaoAtiva = SessaoAtivaFactory(sequelize);
+// Lembrete Automático de Produto Recorrente
+const ProdutoLembreteRecorrenteFactory = require("./ProdutoLembreteRecorrente");
+const ProdutoLembreteRecorrente = ProdutoLembreteRecorrenteFactory(sequelize);
 
 // Definir associações
 Cliente.hasMany(Pet, {
@@ -114,6 +117,17 @@ PagamentoPainel.belongsTo(EmpresaPainel, {
   as: "empresa",
 });
 console.log("✅ Associações EmpresaPainel ↔ PagamentoPainel configuradas");
+
+// Associações ProdutoLembreteRecorrente ↔ Cliente
+Cliente.hasMany(ProdutoLembreteRecorrente, {
+  foreignKey: "cliente_id",
+  as: "lembretes",
+});
+ProdutoLembreteRecorrente.belongsTo(Cliente, {
+  foreignKey: "cliente_id",
+  as: "cliente",
+});
+console.log("✅ Associações Cliente ↔ ProdutoLembreteRecorrente configuradas");
 
 // Associações SessaoAtiva
 EmpresaPainel.hasMany(SessaoAtiva, {
@@ -172,5 +186,6 @@ module.exports = {
   AdminImpersonationToken,
   BackupEmpresa,
   SessaoAtiva,
+  ProdutoLembreteRecorrente,
   sequelize,
 };
