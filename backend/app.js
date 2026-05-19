@@ -1235,6 +1235,14 @@ async function syncAllTables() {
     await sequelize.authenticate();
     console.log("✅ Conexão com MySQL OK — banco: petshop");
 
+    // 0) Migrations: adicionar colunas novas em tabelas já existentes
+    try {
+      const addLembreteColunas = require("./scripts/add-lembrete-colunas-cliente");
+      await addLembreteColunas();
+    } catch (e) {
+      console.warn("  ⚠️ Migration lembrete colunas:", e.message);
+    }
+
     // 1) Sync principal: cobre Cliente + todos os factory models (Usuario, Empresa, etc.)
     await sequelize.sync();
     console.log("✅ Tabelas da instância principal criadas");
