@@ -1493,6 +1493,24 @@ process.on("uncaughtException", (err) => {
 
 // Iniciar o servidor SOMENTE após sync do banco
 function startServer() {
+  // Migrations pendentes: sempre rodar antes de iniciar o servidor
+  (async () => {
+    try {
+      const addLembreteColunas = require("./scripts/add-lembrete-colunas-cliente");
+      await addLembreteColunas();
+    } catch (e) {
+      console.warn("⚠️ Migration lembrete colunas no startup:", e.message);
+    }
+    // Garantir tabela produto_lembrete_recorrente
+    try {
+      const { ProdutoLembreteRecorrente } = require("./models");
+      await ProdutoLembreteRecorrente.sync();
+      console.log("✅ Tabela produto_lembrete_recorrente OK");
+    } catch (e) {
+      console.warn("⚠️ Sync ProdutoLembreteRecorrente no startup:", e.message);
+    }
+  })();
+
   const server = app.listen(3000, () => {
     console.log("🚀 Servidor rodando na porta 3000 ✅");
     console.log("🔗 URL: http://localhost:3000");
