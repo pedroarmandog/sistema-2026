@@ -1028,7 +1028,7 @@ async function carregarEstatisticasProdutoRecorrente() {
     const elAtivos = document.getElementById("prTotalAtivos");
     const elProximos = document.getElementById("prProximosDisparo");
     if (elAtivos) elAtivos.textContent = data.totalAtivos ?? 0;
-    if (elProximos) elProximos.textContent = data.proximosSete ?? 0;
+    if (elProximos) elProximos.textContent = data.disparosProximos ?? 0;
   } catch (e) {
     console.warn(
       "[PR] Erro ao carregar estatísticas produto recorrente:",
@@ -1057,7 +1057,8 @@ async function carregarTabelaProdutoRecorrente() {
       },
     );
     if (!res.ok) throw new Error("HTTP " + res.status);
-    const lista = await res.json();
+    const data = await res.json();
+    const lista = data.lembretes || data || [];
     if (loadingEl) loadingEl.style.display = "none";
 
     const ativos = lista.filter((l) => l.ativo);
@@ -1065,6 +1066,9 @@ async function carregarTabelaProdutoRecorrente() {
       if (emptyEl) emptyEl.style.display = "block";
       return;
     }
+
+    const table = document.getElementById("prTable");
+    if (table) table.style.display = "";
 
     ativos.forEach((item) => {
       const tr = document.createElement("tr");

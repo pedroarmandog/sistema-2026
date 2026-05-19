@@ -27,6 +27,8 @@ exports.createCliente = async (req, res) => {
       ativo,
       telefones_adicionais,
       emails_adicionais,
+      lembrete_automatico_ativo,
+      lembrete_automatico_dias,
     } = req.body;
 
     const imagem_perfil = req.file ? req.file.filename : null;
@@ -96,6 +98,8 @@ exports.createCliente = async (req, res) => {
       ativo,
       imagem_perfil,
       empresa_id: req.user?.empresaId || null,
+      lembrete_automatico_ativo: lembrete_automatico_ativo === 'true' || lembrete_automatico_ativo === true,
+      lembrete_automatico_dias: lembrete_automatico_dias ? parseInt(lembrete_automatico_dias, 10) || 30 : 30,
     });
 
     res.status(201).json({
@@ -276,6 +280,15 @@ exports.updateCliente = async (req, res) => {
       } catch (e) {
         console.log("Erro ao processar emails_adicionais na atualização:", e);
       }
+    }
+
+    // Converter campos booleanos/numéricos enviados via FormData como string
+    if ('lembrete_automatico_ativo' in updates) {
+      updates.lembrete_automatico_ativo =
+        updates.lembrete_automatico_ativo === 'true' || updates.lembrete_automatico_ativo === true;
+    }
+    if ('lembrete_automatico_dias' in updates) {
+      updates.lembrete_automatico_dias = parseInt(updates.lembrete_automatico_dias, 10) || 30;
     }
 
     // Recalcular idade se data_nascimento foi atualizada
