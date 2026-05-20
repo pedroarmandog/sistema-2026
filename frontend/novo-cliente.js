@@ -43,7 +43,6 @@
       const data = await response.json();
 
       if (data.success) {
-        console.log("[Lembrete] Cliente carregado — lembrete_automatico_ativo:", data.cliente.lembrete_automatico_ativo, "| dias:", data.cliente.lembrete_automatico_dias);
         this.preencherFormulario(data.cliente);
       } else {
         throw new Error(data.error);
@@ -51,6 +50,28 @@
     } catch (error) {
       console.error("Erro ao carregar dados do cliente:", error);
       this.mostrarNotificacao("Erro ao carregar dados do cliente", "error");
+    }
+
+    // Carregar config de lembrete separadamente via endpoint dedicado
+    try {
+      const API_BASE =
+        (window.__API_BASE__ && window.__API_BASE__.toString()) ||
+        window.location.origin;
+      const token =
+        localStorage.getItem("token") || sessionStorage.getItem("token");
+      const resp = await fetch(
+        `${API_BASE}/api/produto-lembrete/config-cliente/${clienteId}`,
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+      );
+      if (resp.ok) {
+        const cfg = await resp.json();
+        if (cfg.success && cfg.config) {
+          this._lembreteConfig = cfg.config;
+          this._aplicarLembreteConfig(cfg.config);
+        }
+      }
+    } catch (e) {
+      console.warn("[Lembrete] Erro ao carregar config:", e.message);
     }
   }
 
@@ -116,10 +137,11 @@
       }, 200); // Pequeno delay para garantir que o seletor foi inicializado
     }
 
-    // Preencher campos de lembrete automático
+    // Preencher campos de lembrete (será feito via _aplicarLembreteConfig após GET dedicado)
+    // Mantido apenas como fallback quando dados vêm do cliente sem endpoint dedicado
     const toggleLembrete = document.getElementById("lembreteAutomaticoAtivo");
     const inputDias = document.getElementById("lembreteAutomaticoDias");
-    if (toggleLembrete) {
+    if (toggleLembrete && cliente.lembrete_automatico_ativo !== undefined) {
       toggleLembrete.checked = !!cliente.lembrete_automatico_ativo;
       toggleLembrete.dispatchEvent(new Event("change"));
     }
@@ -276,40 +298,270 @@
     }
   }
 
-  // Configurar toggle de Lembrete Automático de Produto
+  // ──────────────────────────────────────────────────────────
+  // Lembrete Automático de Produto Recorrente
+  // ──────────────────────────────────────────────────────────
   setupLembreteAutomatico() {
-    const toggle = document.getElementById("lembreteAutomaticoAtivo");
+    const toggle      = document.getElementById("lembreteAutomaticoAtivo");
     const configPanel = document.getElementById("lembreteConfig");
-    const label = document.getElementById("lembreteToggleLabel");
-    const diasInput = document.getElementById("lembreteAutomaticoDias");
-    const previewDia = document.getElementById("lembretePreviewDia");
+    const label       = document.getElementById("lembreteToggleLabel");
+    const diasInput   = document.getElementById("lembreteAutomaticoDias");
+    const previewDia  = document.getElementById("lembretePreviewDia");
+    const btnSalvar   = document.getElementById("lembreteBtnSalvar");
+    const removerBtn  = document.getElementById("lembreteProdutoRemover");
 
-    if (!toggle || !configPanel) return;
+    if (!toggle) return;
 
-    const atualizarEstado = () => {
+    // ── Toggle show/hide ───────────────────────────────────
+    const atualizarToggle = () => {
       const ativo = toggle.checked;
-      configPanel.style.display = ativo ? "block" : "none";
+      if (configPanel) configPanel.style.display = ativo ? "block" : "none";
       if (label) {
         label.textContent = ativo ? "Ativado" : "Desativado";
         label.classList.toggle("active", ativo);
       }
     };
 
+    toggle.addEventListener("change", atualizarToggle);
+    atualizarToggle();
+
+    // ── Preview de dias ────────────────────────────────────
     const atualizarPreview = () => {
       if (!previewDia || !diasInput) return;
       const dias = parseInt(diasInput.value, 10) || 30;
       previewDia.textContent = Math.max(1, dias - 1);
+      // Atualizar card se já há produto selecionado
+      const cardDias = document.getElementById("lembreteProdutoCardDias");
+      if (cardDias && document.getElementById("lembreteProdutoId").value) {
+        cardDias.textContent = `A cada ${dias} dias`;
+      }
     };
-
-    toggle.addEventListener("change", atualizarEstado);
 
     if (diasInput) {
       diasInput.addEventListener("input", atualizarPreview);
       atualizarPreview();
     }
 
-    // Estado inicial
-    atualizarEstado();
+    // ── Autocomplete de produto ────────────────────────────
+    const searchInput   = document.getElementById("lembreteProdutoSearch");
+    const dropdown      = document.getElementById("lembreteProdutoDropdown");
+    const hiddenId      = document.getElementById("lembreteProdutoId");
+    const hiddenNome    = document.getElementById("lembreteProdutoNome");
+    const card          = document.getElementById("lembreteProdutoCard");
+    const cardNome      = document.getElementById("lembreteProdutoCardNome");
+    const cardDias      = document.getElementById("lembreteProdutoCardDias");
+
+    let debounceTimer = null;
+
+    const fecharDropdown = () => {
+      if (dropdown) dropdown.innerHTML = "";
+      if (dropdown) dropdown.style.display = "none";
+    };
+
+    const mostrarProdutoCard = (id, nome) => {
+      if (hiddenId)   hiddenId.value   = id;
+      if (hiddenNome) hiddenNome.value = nome;
+      if (searchInput) searchInput.value = nome;
+      if (cardNome)  cardNome.textContent  = nome;
+      const dias = parseInt(diasInput?.value, 10) || 30;
+      if (cardDias)  cardDias.textContent  = `A cada ${dias} dias`;
+      if (card)  card.style.display = "flex";
+      fecharDropdown();
+    };
+
+    this.limparProduto = () => {
+      if (hiddenId)    hiddenId.value    = "";
+      if (hiddenNome)  hiddenNome.value  = "";
+      if (searchInput) searchInput.value = "";
+      if (card)   card.style.display   = "none";
+      fecharDropdown();
+    };
+
+    if (removerBtn) {
+      removerBtn.addEventListener("click", () => this.limparProduto());
+    }
+
+    if (searchInput) {
+      searchInput.addEventListener("input", () => {
+        clearTimeout(debounceTimer);
+        const q = searchInput.value.trim();
+
+        if (q.length < 2) {
+          fecharDropdown();
+          return;
+        }
+
+        debounceTimer = setTimeout(async () => {
+          try {
+            const API_BASE =
+              (window.__API_BASE__ && window.__API_BASE__.toString()) ||
+              window.location.origin;
+            const token =
+              localStorage.getItem("token") ||
+              sessionStorage.getItem("token");
+            const resp = await fetch(
+              `${API_BASE}/api/itens?q=${encodeURIComponent(q)}&tipo=produto&limit=10`,
+              { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+            );
+            if (!resp.ok) return fecharDropdown();
+            const itens = await resp.json();
+            const lista = Array.isArray(itens) ? itens : (itens.items || itens.data || []);
+
+            if (!lista.length) {
+              dropdown.innerHTML = `<div class="lembrete-produto-dropdown-empty">Nenhum produto encontrado para "${q}"</div>`;
+              dropdown.style.display = "block";
+              return;
+            }
+
+            dropdown.innerHTML = lista
+              .slice(0, 10)
+              .map((item) => {
+                const nome = item.nome || item.descricao || item.name || "";
+                const id   = item.id;
+                return `<div class="lembrete-produto-dropdown-item" data-id="${id}" data-nome="${nome}">
+                  <i class="fas fa-box lembrete-dropdown-icon"></i>
+                  <span>${nome}</span>
+                </div>`;
+              })
+              .join("");
+            dropdown.style.display = "block";
+
+            dropdown.querySelectorAll(".lembrete-produto-dropdown-item").forEach((el) => {
+              el.addEventListener("click", () => {
+                mostrarProdutoCard(el.dataset.id, el.dataset.nome);
+              });
+            });
+          } catch (e) {
+            console.warn("[Lembrete] Erro ao buscar produto:", e.message);
+            fecharDropdown();
+          }
+        }, 300);
+      });
+
+      // Fechar dropdown ao clicar fora
+      document.addEventListener("click", (e) => {
+        if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+          fecharDropdown();
+        }
+      });
+    }
+
+    // ── Botão Salvar Lembrete ──────────────────────────────
+    if (btnSalvar) {
+      btnSalvar.addEventListener("click", async () => {
+        const clienteId = this.clienteId || new URLSearchParams(window.location.search).get("id");
+        if (!clienteId) {
+          this.mostrarNotificacao("Salve o cliente primeiro antes de configurar o lembrete", "warning");
+          return;
+        }
+        await this.salvarLembreteConfig(clienteId);
+      });
+    }
+  }
+
+  // Aplicar config carregada do servidor nos campos do lembrete
+  _aplicarLembreteConfig(config) {
+    const toggle   = document.getElementById("lembreteAutomaticoAtivo");
+    const diasInput = document.getElementById("lembreteAutomaticoDias");
+    const searchInput = document.getElementById("lembreteProdutoSearch");
+    const hiddenId    = document.getElementById("lembreteProdutoId");
+    const hiddenNome  = document.getElementById("lembreteProdutoNome");
+    const card        = document.getElementById("lembreteProdutoCard");
+    const cardNome    = document.getElementById("lembreteProdutoCardNome");
+    const cardDias    = document.getElementById("lembreteProdutoCardDias");
+    const configPanel = document.getElementById("lembreteConfig");
+    const label       = document.getElementById("lembreteToggleLabel");
+
+    if (toggle) {
+      toggle.checked = !!config.ativo;
+      if (configPanel) configPanel.style.display = config.ativo ? "block" : "none";
+      if (label) {
+        label.textContent = config.ativo ? "Ativado" : "Desativado";
+        label.classList.toggle("active", !!config.ativo);
+      }
+    }
+
+    if (diasInput) diasInput.value = config.dias || 30;
+
+    const previewDia = document.getElementById("lembretePreviewDia");
+    if (previewDia) previewDia.textContent = Math.max(1, (config.dias || 30) - 1);
+
+    if (config.produto_id && config.produto_nome) {
+      if (hiddenId)    hiddenId.value    = config.produto_id;
+      if (hiddenNome)  hiddenNome.value  = config.produto_nome;
+      if (searchInput) searchInput.value = config.produto_nome;
+      if (cardNome)    cardNome.textContent  = config.produto_nome;
+      if (cardDias)    cardDias.textContent  = `A cada ${config.dias || 30} dias`;
+      if (card)        card.style.display    = "flex";
+    } else {
+      if (card) card.style.display = "none";
+    }
+  }
+
+  // Salvar config de lembrete via endpoint dedicado (JSON, sem FormData)
+  async salvarLembreteConfig(clienteId) {
+    const toggle    = document.getElementById("lembreteAutomaticoAtivo");
+    const diasInput = document.getElementById("lembreteAutomaticoDias");
+    const hiddenId  = document.getElementById("lembreteProdutoId");
+    const hiddenNome = document.getElementById("lembreteProdutoNome");
+    const saveStatus = document.getElementById("lembreteSaveStatus");
+    const btnSalvar  = document.getElementById("lembreteBtnSalvar");
+
+    const ativo     = toggle?.checked ?? false;
+    const dias      = parseInt(diasInput?.value, 10) || 30;
+    const produto_id   = hiddenId?.value   ? parseInt(hiddenId.value, 10) : null;
+    const produto_nome = hiddenNome?.value || null;
+
+    if (saveStatus) {
+      saveStatus.textContent = "Salvando...";
+      saveStatus.className   = "lembrete-save-status saving";
+    }
+    if (btnSalvar) btnSalvar.disabled = true;
+
+    try {
+      const API_BASE =
+        (window.__API_BASE__ && window.__API_BASE__.toString()) ||
+        window.location.origin;
+      const token =
+        localStorage.getItem("token") || sessionStorage.getItem("token");
+
+      const resp = await fetch(
+        `${API_BASE}/api/produto-lembrete/config-cliente/${clienteId}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ ativo, dias, produto_id, produto_nome }),
+        },
+      );
+
+      const data = await resp.json();
+
+      if (data.success) {
+        if (saveStatus) {
+          saveStatus.textContent = "✓ Salvo!";
+          saveStatus.className   = "lembrete-save-status success";
+          setTimeout(() => {
+            saveStatus.textContent = "";
+            saveStatus.className   = "lembrete-save-status";
+          }, 3000);
+        }
+        console.log("[Lembrete] Config salva com sucesso:", { ativo, dias, produto_id, produto_nome });
+      } else {
+        throw new Error(data.error || "Erro ao salvar");
+      }
+    } catch (e) {
+      console.error("[Lembrete] Erro ao salvar config:", e.message);
+      if (saveStatus) {
+        saveStatus.textContent = "✗ Erro ao salvar";
+        saveStatus.className   = "lembrete-save-status error";
+      }
+      this.mostrarNotificacao("Erro ao salvar configuração de lembrete", "error");
+    } finally {
+      if (btnSalvar) btnSalvar.disabled = false;
+    }
   }
 
   // Validar CPF
@@ -890,17 +1142,6 @@
         formData.append("imagem_perfil", imagemInput.files[0]);
       }
 
-      // Lembrete Automático de Produto Recorrente
-      const lembreteToggle = document.getElementById("lembreteAutomaticoAtivo");
-      const lembreteDias = document.getElementById("lembreteAutomaticoDias");
-      if (lembreteToggle) {
-        formData.append("lembrete_automatico_ativo", lembreteToggle.checked);
-      }
-      if (lembreteDias && lembreteDias.value) {
-        formData.append("lembrete_automatico_dias", lembreteDias.value);
-      }
-      console.log("[Lembrete] Enviando — ativo:", lembreteToggle?.checked, "| dias:", lembreteDias?.value);
-
       // Definir URL e método baseado no modo
       const API_BASE =
         (window.__API_BASE__ && window.__API_BASE__.toString()) ||
@@ -918,9 +1159,17 @@
       });
 
       const data = await response.json();
-      console.log("[Lembrete] Resposta do servidor:", response.status, JSON.stringify(data).slice(0, 300));
 
       if (data.success) {
+        const clienteId = this.clienteIdParaEdicao || data.cliente?.id;
+
+        // Salvar config de lembrete via endpoint dedicado (JSON, separado do FormData)
+        if (clienteId) {
+          await this.salvarLembreteConfig(clienteId).catch((e) =>
+            console.warn("[Lembrete] Erro ao salvar após submit:", e.message),
+          );
+        }
+
         const mensagem = this.clienteIdParaEdicao
           ? "Cliente atualizado com sucesso!"
           : "Cliente cadastrado com sucesso!";
@@ -929,7 +1178,6 @@
 
         // Redirecionar para a página de detalhes após 2 segundos
         setTimeout(() => {
-          const clienteId = this.clienteIdParaEdicao || data.cliente.id;
           window.location.href = `client-details.html?id=${clienteId}`;
         }, 2000);
       } else {

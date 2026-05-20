@@ -13,6 +13,10 @@ const controller = require("../controllers/produtoLembreteController");
 // Aplicar autenticação em todas as rotas
 router.use(authUser);
 
+// ── Config por cliente (GET/POST separado do form de cliente) ──
+router.get("/config-cliente/:clienteId", controller.getConfigCliente);
+router.post("/config-cliente/:clienteId", controller.saveConfigCliente);
+
 // Listar todos os lembretes da empresa
 router.get("/", controller.listarLembretes);
 

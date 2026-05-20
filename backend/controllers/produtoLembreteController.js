@@ -241,6 +241,102 @@ exports.atualizarStatus = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────
+// Buscar config de lembrete de um cliente específico
+// GET /api/produto-lembrete/config-cliente/:clienteId
+// ─────────────────────────────────────────────────────────────
+exports.getConfigCliente = async (req, res) => {
+  try {
+    const { Cliente } = require("../models");
+    const { clienteId } = req.params;
+    const empresaId = req.user?.empresaId;
+
+    const where = { id: Number(clienteId) };
+    if (empresaId) where.empresa_id = empresaId;
+
+    const cliente = await Cliente.findOne({
+      where,
+      attributes: [
+        "id",
+        "lembrete_automatico_ativo",
+        "lembrete_automatico_dias",
+        "lembrete_produto_id",
+        "lembrete_produto_nome",
+      ],
+    });
+
+    if (!cliente) {
+      return res.status(404).json({ success: false, error: "Cliente não encontrado" });
+    }
+
+    res.json({
+      success: true,
+      config: {
+        ativo: !!cliente.lembrete_automatico_ativo,
+        dias: cliente.lembrete_automatico_dias || 30,
+        produto_id: cliente.lembrete_produto_id || null,
+        produto_nome: cliente.lembrete_produto_nome || null,
+      },
+    });
+  } catch (err) {
+    console.error("[ProdutoLembrete] Erro ao buscar config cliente:", err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// Salvar config de lembrete de um cliente específico (JSON)
+// POST /api/produto-lembrete/config-cliente/:clienteId
+// ─────────────────────────────────────────────────────────────
+exports.saveConfigCliente = async (req, res) => {
+  try {
+    const { Cliente } = require("../models");
+    const { clienteId } = req.params;
+    const { ativo, dias, produto_id, produto_nome } = req.body;
+    const empresaId = req.user?.empresaId;
+
+    if (!clienteId || isNaN(Number(clienteId))) {
+      return res.status(400).json({ success: false, error: "clienteId inválido" });
+    }
+
+    const diasInt = parseInt(dias, 10);
+    if (isNaN(diasInt) || diasInt <= 0) {
+      return res.status(400).json({ success: false, error: "Dias deve ser maior que zero" });
+    }
+
+    const where = { id: Number(clienteId) };
+    if (empresaId) where.empresa_id = empresaId;
+
+    const [updated] = await Cliente.update(
+      {
+        lembrete_automatico_ativo: ativo === true || ativo === "true",
+        lembrete_automatico_dias: diasInt,
+        lembrete_produto_id: produto_id ? Number(produto_id) : null,
+        lembrete_produto_nome: produto_nome || null,
+      },
+      { where },
+    );
+
+    if (updated === 0) {
+      return res.status(404).json({ success: false, error: "Cliente não encontrado" });
+    }
+
+    console.log(
+      `[ProdutoLembrete] Config salva — cliente ${clienteId}: ativo=${ativo}, dias=${diasInt}, produto_id=${produto_id}, produto_nome=${produto_nome}`,
+    );
+
+    // Seed do template de mensagem para a empresa
+    if (empresaId) {
+      garantirTemplateProdutoRecorrente(empresaId).catch(() => {});
+    }
+
+    res.json({ success: true, message: "Configuração salva com sucesso" });
+  } catch (err) {
+    console.error("[ProdutoLembrete] Erro ao salvar config cliente:", err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
 // Estatísticas de lembretes ativos para o painel de marketing
 // GET /api/produto-lembrete/estatisticas
 // ─────────────────────────────────────────────────────────────

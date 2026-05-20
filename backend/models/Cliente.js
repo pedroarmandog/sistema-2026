@@ -217,6 +217,14 @@ const Cliente = sequelize.define(
       type: DataTypes.INTEGER,
       defaultValue: 30,
     },
+    lembrete_produto_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    lembrete_produto_nome: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
 
     // Imagem
     imagem_perfil: { type: DataTypes.STRING },

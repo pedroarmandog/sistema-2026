@@ -1172,54 +1172,91 @@
 
                 <!-- Lembrete Automático de Produto Recorrente -->
                 <div class="form-section lembrete-recorrente-section">
+                    <!-- Cabeçalho com toggle -->
                     <div class="lembrete-header">
                         <div class="lembrete-icon-wrap">
                             <i class="fas fa-box-open"></i>
                         </div>
                         <div class="lembrete-title-group">
                             <h3 class="lembrete-title">Lembrete Automático de Produto</h3>
-                            <p class="lembrete-subtitle">Envia mensagem automática quando um produto recorrente estiver prestes a acabar</p>
+                            <p class="lembrete-subtitle">Envia mensagem WhatsApp automática quando o produto estiver prestes a acabar</p>
                         </div>
                         <div class="lembrete-toggle-wrap">
                             <label class="iphone-toggle" title="Ativar lembrete automático de produto">
-                                <input type="checkbox" id="lembreteAutomaticoAtivo" name="lembreteAutomaticoAtivo">
+                                <input type="checkbox" id="lembreteAutomaticoAtivo">
                                 <span class="iphone-toggle-slider"></span>
                             </label>
                             <span class="lembrete-toggle-label" id="lembreteToggleLabel">Desativado</span>
                         </div>
                     </div>
 
-                    <div class="lembrete-config" id="lembreteConfig" style="display:none;">
-                        <div class="lembrete-config-inner">
-                            <div class="form-group lembrete-dias-group">
-                                <label for="lembreteAutomaticoDias" class="lembrete-dias-label">
-                                    <i class="fas fa-calendar-alt"></i>
-                                    Dias para lembrete automático
-                                </label>
-                                <div class="lembrete-dias-input-wrap">
-                                    <input
-                                        type="number"
-                                        id="lembreteAutomaticoDias"
-                                        name="lembreteAutomaticoDias"
-                                        class="form-control lembrete-dias-input"
-                                        min="1"
-                                        max="365"
-                                        value="30"
-                                        placeholder="30"
-                                    >
-                                    <span class="lembrete-dias-suffix">dias</span>
-                                </div>
-                                <p class="lembrete-dias-hint">
-                                    <i class="fas fa-info-circle"></i>
-                                    O sistema enviará a mensagem no dia <strong id="lembretePreviewDia">29</strong> após a compra e repetirá o ciclo automaticamente.
-                                </p>
-                            </div>
+                    <!-- Painel de configuração (visível quando ativo) -->
+                    <div class="lembrete-config" id="lembreteConfig">
 
-                            <div class="lembrete-status-badge" id="lembreteStatusBadge">
-                                <i class="fas fa-check-circle"></i>
-                                <span>Lembrete ativo — o sistema enviará mensagem automaticamente após cada compra</span>
+                        <!-- Campo: Produto Recorrente (autocomplete) -->
+                        <div class="lembrete-produto-field">
+                            <label class="lembrete-field-label">
+                                <i class="fas fa-search"></i>
+                                Produto recorrente
+                            </label>
+                            <div class="lembrete-produto-search-wrap">
+                                <input
+                                    type="text"
+                                    id="lembreteProdutoSearch"
+                                    class="lembrete-produto-input"
+                                    placeholder="Digite para buscar produto... ex: Magnus, Ração, Antipulgas"
+                                    autocomplete="off"
+                                >
+                                <input type="hidden" id="lembreteProdutoId">
+                                <input type="hidden" id="lembreteProdutoNome">
+                                <div class="lembrete-produto-dropdown" id="lembreteProdutoDropdown"></div>
+                            </div>
+                            <!-- Card do produto selecionado -->
+                            <div class="lembrete-produto-card" id="lembreteProdutoCard" style="display:none;">
+                                <div class="lembrete-produto-card-icon"><i class="fas fa-box"></i></div>
+                                <div class="lembrete-produto-card-info">
+                                    <strong id="lembreteProdutoCardNome"></strong>
+                                    <span id="lembreteProdutoCardDias"></span>
+                                </div>
+                                <button type="button" class="lembrete-produto-card-remove" id="lembreteProdutoRemover" title="Remover produto">
+                                    <i class="fas fa-times"></i>
+                                </button>
                             </div>
                         </div>
+
+                        <!-- Campo: Dias -->
+                        <div class="lembrete-dias-field">
+                            <label class="lembrete-field-label">
+                                <i class="fas fa-calendar-alt"></i>
+                                Recompra automática a cada
+                            </label>
+                            <div class="lembrete-dias-input-wrap">
+                                <input
+                                    type="number"
+                                    id="lembreteAutomaticoDias"
+                                    class="form-control lembrete-dias-input"
+                                    min="1"
+                                    max="365"
+                                    value="30"
+                                    placeholder="30"
+                                >
+                                <span class="lembrete-dias-suffix">dias</span>
+                            </div>
+                            <p class="lembrete-dias-hint">
+                                <i class="fas fa-info-circle"></i>
+                                A mensagem será enviada no dia <strong id="lembretePreviewDia">29</strong> após a venda e o ciclo se repete automaticamente.
+                            </p>
+                        </div>
+
+                        <!-- Botão Salvar Lembrete -->
+                        <div class="lembrete-save-wrap">
+                            <button type="button" class="lembrete-btn-salvar" id="lembreteBtnSalvar">
+                                <i class="fas fa-save"></i>
+                                Salvar configuração de lembrete
+                            </button>
+                            <span class="lembrete-save-status" id="lembreteSaveStatus"></span>
+                        </div>
+
                     </div>
                 </div>
 

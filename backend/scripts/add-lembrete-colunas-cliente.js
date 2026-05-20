@@ -1,6 +1,6 @@
 /**
  * Migration: adicionar colunas de lembrete automático na tabela clientes
- * Executa automaticamente via syncAllTables no startup (app.js)
+ * Executa automaticamente no startup (app.js)
  * Seguro para rodar múltiplas vezes (ignora ER_DUP_FIELDNAME)
  */
 const { sequelize } = require("../models/Cliente");
@@ -9,6 +9,8 @@ async function addLembreteColunas() {
   const queries = [
     "ALTER TABLE clientes ADD COLUMN lembrete_automatico_ativo TINYINT(1) NOT NULL DEFAULT 0",
     "ALTER TABLE clientes ADD COLUMN lembrete_automatico_dias INT NOT NULL DEFAULT 30",
+    "ALTER TABLE clientes ADD COLUMN lembrete_produto_id INT NULL",
+    "ALTER TABLE clientes ADD COLUMN lembrete_produto_nome VARCHAR(255) NULL",
   ];
 
   for (const sql of queries) {
