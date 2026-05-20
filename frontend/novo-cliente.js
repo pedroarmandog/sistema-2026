@@ -43,6 +43,7 @@
       const data = await response.json();
 
       if (data.success) {
+        console.log("[Lembrete] Cliente carregado — lembrete_automatico_ativo:", data.cliente.lembrete_automatico_ativo, "| dias:", data.cliente.lembrete_automatico_dias);
         this.preencherFormulario(data.cliente);
       } else {
         throw new Error(data.error);
@@ -898,6 +899,7 @@
       if (lembreteDias && lembreteDias.value) {
         formData.append("lembrete_automatico_dias", lembreteDias.value);
       }
+      console.log("[Lembrete] Enviando — ativo:", lembreteToggle?.checked, "| dias:", lembreteDias?.value);
 
       // Definir URL e método baseado no modo
       const API_BASE =
@@ -916,6 +918,7 @@
       });
 
       const data = await response.json();
+      console.log("[Lembrete] Resposta do servidor:", response.status, JSON.stringify(data).slice(0, 300));
 
       if (data.success) {
         const mensagem = this.clienteIdParaEdicao
