@@ -78,7 +78,14 @@ exports.listarLembretes = async (req, res) => {
     if (lembretes.length === 0) {
       const clientesAtivos = await Cliente.findAll({
         where: { empresa_id: empId, lembrete_automatico_ativo: true },
-        attributes: ["id", "nome", "telefone", "lembrete_automatico_dias", "lembrete_produto_id", "lembrete_produto_nome"],
+        attributes: [
+          "id",
+          "nome",
+          "telefone",
+          "lembrete_automatico_dias",
+          "lembrete_produto_id",
+          "lembrete_produto_nome",
+        ],
       });
 
       if (clientesAtivos.length > 0) {
@@ -89,11 +96,17 @@ exports.listarLembretes = async (req, res) => {
           dataDisparo.setDate(dataDisparo.getDate() + Math.max(0, dias - 1));
 
           await ProdutoLembreteRecorrente.findOrCreate({
-            where: { cliente_id: cli.id, empresa_id: empId, status: { [Op.ne]: "cancelado" } },
+            where: {
+              cliente_id: cli.id,
+              empresa_id: empId,
+              status: { [Op.ne]: "cancelado" },
+            },
             defaults: {
               empresa_id: empId,
               cliente_id: cli.id,
-              produto_id: cli.lembrete_produto_id ? String(cli.lembrete_produto_id) : null,
+              produto_id: cli.lembrete_produto_id
+                ? String(cli.lembrete_produto_id)
+                : null,
               produto_nome: cli.lembrete_produto_nome || "Produto",
               ativo: true,
               status: "ativo",
@@ -107,7 +120,13 @@ exports.listarLembretes = async (req, res) => {
         // Buscar novamente após criar
         lembretes = await ProdutoLembreteRecorrente.findAll({
           where: { empresa_id: empId },
-          include: [{ model: Cliente, as: "cliente", attributes: ["id", "nome", "telefone"] }],
+          include: [
+            {
+              model: Cliente,
+              as: "cliente",
+              attributes: ["id", "nome", "telefone"],
+            },
+          ],
           order: [["data_proximo_disparo", "ASC"]],
           limit: 1000,
         });
@@ -307,7 +326,9 @@ exports.getConfigCliente = async (req, res) => {
     });
 
     if (!cliente) {
-      return res.status(404).json({ success: false, error: "Cliente não encontrado" });
+      return res
+        .status(404)
+        .json({ success: false, error: "Cliente não encontrado" });
     }
 
     res.json({
@@ -320,7 +341,10 @@ exports.getConfigCliente = async (req, res) => {
       },
     });
   } catch (err) {
-    console.error("[ProdutoLembrete] Erro ao buscar config cliente:", err.message);
+    console.error(
+      "[ProdutoLembrete] Erro ao buscar config cliente:",
+      err.message,
+    );
     res.status(500).json({ success: false, error: err.message });
   }
 };
@@ -337,12 +361,16 @@ exports.saveConfigCliente = async (req, res) => {
     const empresaId = req.user?.empresaId;
 
     if (!clienteId || isNaN(Number(clienteId))) {
-      return res.status(400).json({ success: false, error: "clienteId inválido" });
+      return res
+        .status(400)
+        .json({ success: false, error: "clienteId inválido" });
     }
 
     const diasInt = parseInt(dias, 10);
     if (isNaN(diasInt) || diasInt <= 0) {
-      return res.status(400).json({ success: false, error: "Dias deve ser maior que zero" });
+      return res
+        .status(400)
+        .json({ success: false, error: "Dias deve ser maior que zero" });
     }
 
     const lembreteAtivo = ativo === true || ativo === "true";
@@ -361,7 +389,9 @@ exports.saveConfigCliente = async (req, res) => {
     );
 
     if (updated === 0) {
-      return res.status(404).json({ success: false, error: "Cliente não encontrado" });
+      return res
+        .status(404)
+        .json({ success: false, error: "Cliente não encontrado" });
     }
 
     // ── Sincronizar produto_lembrete_recorrente ────────────────────────────
@@ -431,7 +461,10 @@ exports.saveConfigCliente = async (req, res) => {
 
     res.json({ success: true, message: "Configuração salva com sucesso" });
   } catch (err) {
-    console.error("[ProdutoLembrete] Erro ao salvar config cliente:", err.message);
+    console.error(
+      "[ProdutoLembrete] Erro ao salvar config cliente:",
+      err.message,
+    );
     res.status(500).json({ success: false, error: err.message });
   }
 };
