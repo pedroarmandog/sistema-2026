@@ -58,9 +58,10 @@ exports.listarLembretes = async (req, res) => {
   try {
     const { ProdutoLembreteRecorrente, Cliente } = require("../models");
     const empresaId = req.user?.empresaId || req.query.empresaId || 1;
+    const empId = Number(empresaId);
 
-    const lembretes = await ProdutoLembreteRecorrente.findAll({
-      where: { empresa_id: Number(empresaId) },
+    let lembretes = await ProdutoLembreteRecorrente.findAll({
+      where: { empresa_id: empId },
       include: [
         {
           model: Cliente,
@@ -71,6 +72,47 @@ exports.listarLembretes = async (req, res) => {
       order: [["data_proximo_disparo", "ASC"]],
       limit: 1000,
     });
+
+    // Se não há registros na tabela de recorrentes, buscar clientes com lembrete ativo
+    // e criar os ciclos automaticamente (bootstrap)
+    if (lembretes.length === 0) {
+      const clientesAtivos = await Cliente.findAll({
+        where: { empresa_id: empId, lembrete_automatico_ativo: true },
+        attributes: ["id", "nome", "telefone", "lembrete_automatico_dias", "lembrete_produto_id", "lembrete_produto_nome"],
+      });
+
+      if (clientesAtivos.length > 0) {
+        const hoje = new Date();
+        for (const cli of clientesAtivos) {
+          const dias = cli.lembrete_automatico_dias || 30;
+          const dataDisparo = new Date(hoje);
+          dataDisparo.setDate(dataDisparo.getDate() + Math.max(0, dias - 1));
+
+          await ProdutoLembreteRecorrente.findOrCreate({
+            where: { cliente_id: cli.id, empresa_id: empId, status: { [Op.ne]: "cancelado" } },
+            defaults: {
+              empresa_id: empId,
+              cliente_id: cli.id,
+              produto_id: cli.lembrete_produto_id ? String(cli.lembrete_produto_id) : null,
+              produto_nome: cli.lembrete_produto_nome || "Produto",
+              ativo: true,
+              status: "ativo",
+              dias_lembrete: dias,
+              data_ultima_venda: hoje,
+              data_proximo_disparo: dataDisparo,
+            },
+          });
+        }
+
+        // Buscar novamente após criar
+        lembretes = await ProdutoLembreteRecorrente.findAll({
+          where: { empresa_id: empId },
+          include: [{ model: Cliente, as: "cliente", attributes: ["id", "nome", "telefone"] }],
+          order: [["data_proximo_disparo", "ASC"]],
+          limit: 1000,
+        });
+      }
+    }
 
     res.json({ success: true, lembretes: lembretes.map((l) => l.toJSON()) });
   } catch (err) {
@@ -289,7 +331,7 @@ exports.getConfigCliente = async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 exports.saveConfigCliente = async (req, res) => {
   try {
-    const { Cliente } = require("../models");
+    const { Cliente, ProdutoLembreteRecorrente } = require("../models");
     const { clienteId } = req.params;
     const { ativo, dias, produto_id, produto_nome } = req.body;
     const empresaId = req.user?.empresaId;
@@ -303,12 +345,14 @@ exports.saveConfigCliente = async (req, res) => {
       return res.status(400).json({ success: false, error: "Dias deve ser maior que zero" });
     }
 
+    const lembreteAtivo = ativo === true || ativo === "true";
+
     const where = { id: Number(clienteId) };
     if (empresaId) where.empresa_id = empresaId;
 
     const [updated] = await Cliente.update(
       {
-        lembrete_automatico_ativo: ativo === true || ativo === "true",
+        lembrete_automatico_ativo: lembreteAtivo,
         lembrete_automatico_dias: diasInt,
         lembrete_produto_id: produto_id ? Number(produto_id) : null,
         lembrete_produto_nome: produto_nome || null,
@@ -320,14 +364,70 @@ exports.saveConfigCliente = async (req, res) => {
       return res.status(404).json({ success: false, error: "Cliente não encontrado" });
     }
 
-    console.log(
-      `[ProdutoLembrete] Config salva — cliente ${clienteId}: ativo=${ativo}, dias=${diasInt}, produto_id=${produto_id}, produto_nome=${produto_nome}`,
-    );
+    // ── Sincronizar produto_lembrete_recorrente ────────────────────────────
+    const empId = Number(empresaId) || 1;
+    const cliId = Number(clienteId);
 
-    // Seed do template de mensagem para a empresa
-    if (empresaId) {
-      garantirTemplateProdutoRecorrente(empresaId).catch(() => {});
+    if (lembreteAtivo) {
+      // Calcular datas do ciclo: começa hoje, disparo no dia (dias - 1)
+      const hoje = new Date();
+      const dataDisparo = new Date(hoje);
+      dataDisparo.setDate(dataDisparo.getDate() + Math.max(0, diasInt - 1));
+
+      const existing = await ProdutoLembreteRecorrente.findOne({
+        where: {
+          cliente_id: cliId,
+          empresa_id: empId,
+          status: { [Op.ne]: "cancelado" },
+        },
+      });
+
+      if (existing) {
+        // Atualizar ciclo existente
+        await existing.update({
+          ativo: true,
+          status: "ativo",
+          dias_lembrete: diasInt,
+          produto_id: produto_id ? String(produto_id) : existing.produto_id,
+          produto_nome: produto_nome || existing.produto_nome || "Produto",
+          // Recalcular data de disparo só se dias mudou ou estava cancelado
+          ...(existing.status !== "ativo"
+            ? { data_ultima_venda: hoje, data_proximo_disparo: dataDisparo }
+            : {}),
+        });
+        console.log(`[ProdutoLembrete] Ciclo atualizado — cliente ${cliId}`);
+      } else {
+        // Criar novo ciclo
+        await ProdutoLembreteRecorrente.create({
+          empresa_id: empId,
+          cliente_id: cliId,
+          produto_id: produto_id ? String(produto_id) : null,
+          produto_nome: produto_nome || "Produto",
+          venda_id: null,
+          ativo: true,
+          status: "ativo",
+          dias_lembrete: diasInt,
+          data_ultima_venda: hoje,
+          data_proximo_disparo: dataDisparo,
+        });
+        console.log(`[ProdutoLembrete] Ciclo criado — cliente ${cliId}`);
+      }
+
+      // Garantir template de mensagem para a empresa
+      garantirTemplateProdutoRecorrente(empId).catch(() => {});
+    } else {
+      // Desativar todos os ciclos ativos desse cliente
+      await ProdutoLembreteRecorrente.update(
+        { ativo: false, status: "cancelado" },
+        { where: { cliente_id: cliId, empresa_id: empId, ativo: true } },
+      );
+      console.log(`[ProdutoLembrete] Ciclos desativados — cliente ${cliId}`);
     }
+    // ──────────────────────────────────────────────────────────────────────
+
+    console.log(
+      `[ProdutoLembrete] Config salva — cliente ${clienteId}: ativo=${lembreteAtivo}, dias=${diasInt}, produto_id=${produto_id}, produto_nome=${produto_nome}`,
+    );
 
     res.json({ success: true, message: "Configuração salva com sucesso" });
   } catch (err) {
