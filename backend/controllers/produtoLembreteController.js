@@ -309,10 +309,10 @@ exports.getConfigCliente = async (req, res) => {
   try {
     const { Cliente } = require("../models");
     const { clienteId } = req.params;
-    const empresaId = req.user?.empresaId;
+    const empresaId = req.user?.empresaId || req.query?.empresaId;
 
     const where = { id: Number(clienteId) };
-    if (empresaId) where.empresa_id = empresaId;
+    if (empresaId) where.empresa_id = Number(empresaId);
 
     const cliente = await Cliente.findOne({
       where,
@@ -358,7 +358,7 @@ exports.saveConfigCliente = async (req, res) => {
     const { Cliente, ProdutoLembreteRecorrente } = require("../models");
     const { clienteId } = req.params;
     const { ativo, dias, produto_id, produto_nome } = req.body;
-    const empresaId = req.user?.empresaId;
+    const empresaId = req.user?.empresaId || req.body?.empresaId || req.query?.empresaId;
 
     if (!clienteId || isNaN(Number(clienteId))) {
       return res

@@ -10,13 +10,11 @@ const router = express.Router();
 const { authUser } = require("../middleware/authUser");
 const controller = require("../controllers/produtoLembreteController");
 
-// Aplicar autenticação em todas as rotas
-router.use(authUser);
+// ── Config por cliente (requer auth — chamado pelo form de cliente logado) ──
+router.get("/config-cliente/:clienteId", authUser, controller.getConfigCliente);
+router.post("/config-cliente/:clienteId", authUser, controller.saveConfigCliente);
 
-// ── Config por cliente (GET/POST separado do form de cliente) ──
-router.get("/config-cliente/:clienteId", controller.getConfigCliente);
-router.post("/config-cliente/:clienteId", controller.saveConfigCliente);
-
+// ── Rotas públicas por empresaId (mesmo padrão do marketing) ──────────────
 // Listar todos os lembretes da empresa
 router.get("/", controller.listarLembretes);
 
@@ -26,7 +24,7 @@ router.get("/estatisticas", controller.estatisticas);
 // Listar lembretes de um cliente específico
 router.get("/cliente/:clienteId", controller.listarPorCliente);
 
-// Criar ou atualizar lembrete
+// Criar ou atualizar lembrete (chamado por vendaController com req.user)
 router.post("/", controller.criarOuAtualizar);
 
 // Atualizar status (ativar/pausar)
