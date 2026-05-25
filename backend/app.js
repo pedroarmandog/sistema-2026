@@ -1622,9 +1622,7 @@ function startServer() {
           );
         }
       });
-      console.log(
-        "✅ Cron de lembrete de produto recorrente iniciado (09:00)",
-      );
+      console.log("✅ Cron de lembrete de produto recorrente iniciado (09:00)");
     } catch (err) {
       console.warn(
         "⚠️ Não foi possível iniciar cron de lembrete recorrente:",

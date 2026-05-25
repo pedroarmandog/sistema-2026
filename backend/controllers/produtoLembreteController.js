@@ -449,15 +449,32 @@ exports.saveConfigCliente = async (req, res) => {
 
       // Se data_proximo_disparo é hoje (ciclo curto: 1 dia), disparar imediatamente
       const agora2 = new Date();
-      const inicioDia2 = new Date(agora2.getFullYear(), agora2.getMonth(), agora2.getDate(), 0, 0, 0);
-      const fimDia2   = new Date(agora2.getFullYear(), agora2.getMonth(), agora2.getDate(), 23, 59, 59);
+      const inicioDia2 = new Date(
+        agora2.getFullYear(),
+        agora2.getMonth(),
+        agora2.getDate(),
+        0,
+        0,
+        0,
+      );
+      const fimDia2 = new Date(
+        agora2.getFullYear(),
+        agora2.getMonth(),
+        agora2.getDate(),
+        23,
+        59,
+        59,
+      );
       if (dataDisparo >= inicioDia2 && dataDisparo <= fimDia2) {
         // Fire-and-forget: não bloqueia a resposta ao cliente
         setImmediate(async () => {
           try {
             await exports.processarLembretes();
           } catch (e) {
-            console.warn("[ProdutoLembrete] Erro no disparo imediato:", e.message);
+            console.warn(
+              "[ProdutoLembrete] Erro no disparo imediato:",
+              e.message,
+            );
           }
         });
       }
