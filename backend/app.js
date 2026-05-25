@@ -1605,6 +1605,33 @@ function startServer() {
       console.warn("⚠️ Não foi possível iniciar cron de backup:", err.message);
     }
 
+    // Cron: Lembrete automático de produto recorrente (todo dia às 09:00)
+    try {
+      const cron = require("node-cron");
+      const {
+        processarLembretes,
+      } = require("./controllers/produtoLembreteController");
+      cron.schedule("0 9 * * *", async () => {
+        console.log("[cron] Processando lembretes de produto recorrente...");
+        try {
+          await processarLembretes();
+        } catch (err) {
+          console.error(
+            "[cron] Erro ao processar lembretes:",
+            err && err.message,
+          );
+        }
+      });
+      console.log(
+        "✅ Cron de lembrete de produto recorrente iniciado (09:00)",
+      );
+    } catch (err) {
+      console.warn(
+        "⚠️ Não foi possível iniciar cron de lembrete recorrente:",
+        err.message,
+      );
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // Função reutilizável: processar aniversariantes do dia
     // ═══════════════════════════════════════════════════════════════
