@@ -358,7 +358,8 @@ exports.saveConfigCliente = async (req, res) => {
     const { Cliente, ProdutoLembreteRecorrente } = require("../models");
     const { clienteId } = req.params;
     const { ativo, dias, produto_id, produto_nome } = req.body;
-    const empresaId = req.user?.empresaId || req.body?.empresaId || req.query?.empresaId;
+    const empresaId =
+      req.user?.empresaId || req.body?.empresaId || req.query?.empresaId;
 
     if (!clienteId || isNaN(Number(clienteId))) {
       return res

@@ -12,7 +12,11 @@ const controller = require("../controllers/produtoLembreteController");
 
 // ── Config por cliente (requer auth — chamado pelo form de cliente logado) ──
 router.get("/config-cliente/:clienteId", authUser, controller.getConfigCliente);
-router.post("/config-cliente/:clienteId", authUser, controller.saveConfigCliente);
+router.post(
+  "/config-cliente/:clienteId",
+  authUser,
+  controller.saveConfigCliente,
+);
 
 // ── Rotas públicas por empresaId (mesmo padrão do marketing) ──────────────
 // Listar todos os lembretes da empresa
