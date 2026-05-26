@@ -260,7 +260,7 @@ exports.criarOuAtualizar = async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 exports.desativar = async (req, res) => {
   try {
-    const { ProdutoLembreteRecorrente } = require("../models");
+    const { ProdutoLembreteRecorrente, Cliente } = require("../models");
     const { id } = req.params;
 
     const lembrete = await ProdutoLembreteRecorrente.findByPk(id);
@@ -271,6 +271,21 @@ exports.desativar = async (req, res) => {
     }
 
     await lembrete.update({ ativo: false, status: "cancelado" });
+
+    // Limpar config de lembrete no cadastro do cliente
+    // (assim o form de edição fica em branco para nova configuração)
+    if (lembrete.cliente_id) {
+      await Cliente.update(
+        {
+          lembrete_automatico_ativo: false,
+          lembrete_produto_id: null,
+          lembrete_produto_nome: null,
+          lembrete_automatico_dias: 30,
+        },
+        { where: { id: lembrete.cliente_id } },
+      );
+    }
+
     res.json({ success: true, message: "Lembrete desativado" });
   } catch (err) {
     console.error("[ProdutoLembrete] Erro ao desativar:", err.message);
@@ -485,12 +500,21 @@ exports.saveConfigCliente = async (req, res) => {
         });
       }
     } else {
-      // Desativar todos os ciclos ativos desse cliente
+      // Desativar todos os ciclos ativos desse cliente e limpar campos do cadastro
       await ProdutoLembreteRecorrente.update(
         { ativo: false, status: "cancelado" },
         { where: { cliente_id: cliId, empresa_id: empId, ativo: true } },
       );
-      console.log(`[ProdutoLembrete] Ciclos desativados — cliente ${cliId}`);
+      await Cliente.update(
+        {
+          lembrete_automatico_ativo: false,
+          lembrete_produto_id: null,
+          lembrete_produto_nome: null,
+          lembrete_automatico_dias: 30,
+        },
+        { where: { id: cliId } },
+      );
+      console.log(`[ProdutoLembrete] Ciclos desativados e config limpa — cliente ${cliId}`);
     }
     // ──────────────────────────────────────────────────────────────────────
 
