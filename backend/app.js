@@ -1512,7 +1512,9 @@ function startServer() {
     // Processar lembretes atrasados no startup (recupera registros que não foram disparados)
     setTimeout(async () => {
       try {
-        const { processarLembretes } = require("./controllers/produtoLembreteController");
+        const {
+          processarLembretes,
+        } = require("./controllers/produtoLembreteController");
         await processarLembretes();
         console.log("✅ Processamento de lembretes atrasados concluído");
       } catch (e) {
