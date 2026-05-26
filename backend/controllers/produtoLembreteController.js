@@ -665,9 +665,7 @@ exports.processarLembretes = async function processarLembretes() {
         if (envio) {
           // Reagendar próximo ciclo: nova data = hoje + dias_lembrete
           const proximaData = new Date();
-          proximaData.setDate(
-            proximaData.getDate() + lembrete.dias_lembrete,
-          );
+          proximaData.setDate(proximaData.getDate() + lembrete.dias_lembrete);
 
           await lembrete.update({
             ultima_execucao: agora,
