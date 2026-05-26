@@ -1453,7 +1453,9 @@ function substituirVariaveis(template, variaveis) {
     "{servico}": variaveis.servico || "",
     "{nome_empresa}":
       variaveis.nomeEmpresa || variaveis.nome_empresa || "PetHub",
-    "{produto}": variaveis.produto || "",
+    "{produto}": variaveis.produto || variaveis.produto_nome || variaveis.produtoNome || "",
+    "{produto_nome}":
+      variaveis.produto_nome || variaveis.produtoNome || variaveis.produto || "",
     "{data_renovacao}":
       variaveis.dataRenovacao || variaveis.data_renovacao || "",
     // suporte ao formato legado do frontend
