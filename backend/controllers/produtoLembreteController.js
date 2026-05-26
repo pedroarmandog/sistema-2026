@@ -514,7 +514,9 @@ exports.saveConfigCliente = async (req, res) => {
         },
         { where: { id: cliId } },
       );
-      console.log(`[ProdutoLembrete] Ciclos desativados e config limpa — cliente ${cliId}`);
+      console.log(
+        `[ProdutoLembrete] Ciclos desativados e config limpa — cliente ${cliId}`,
+      );
     }
     // ──────────────────────────────────────────────────────────────────────
 
@@ -814,13 +816,11 @@ exports.dispararIndividual = async function dispararIndividual(req, res) {
       });
     }
 
-    res
-      .status(500)
-      .json({
-        success: false,
-        error:
-          "Falha ao enviar a mensagem. Verifique se o WhatsApp está conectado e o template está ativo.",
-      });
+    res.status(500).json({
+      success: false,
+      error:
+        "Falha ao enviar a mensagem. Verifique se o WhatsApp está conectado e o template está ativo.",
+    });
   } catch (err) {
     console.error("[ProdutoLembrete] Erro no disparo individual:", err.message);
     res.status(500).json({ success: false, error: err.message });
