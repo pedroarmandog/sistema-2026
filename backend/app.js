@@ -1509,6 +1509,16 @@ function startServer() {
     } catch (e) {
       console.warn("⚠️ Sync ProdutoLembreteRecorrente no startup:", e.message);
     }
+    // Processar lembretes atrasados no startup (recupera registros que não foram disparados)
+    setTimeout(async () => {
+      try {
+        const { processarLembretes } = require("./controllers/produtoLembreteController");
+        await processarLembretes();
+        console.log("✅ Processamento de lembretes atrasados concluído");
+      } catch (e) {
+        console.warn("⚠️ Erro ao processar lembretes no startup:", e.message);
+      }
+    }, 5000); // aguarda 5s para o servidor estar completamente pronto
   })();
 
   const server = app.listen(3000, () => {

@@ -24,7 +24,7 @@ const TEMPLATE_PRODUTO_RECORRENTE = {
 };
 
 // ─────────────────────────────────────────────────────────────
-// Seed: garantir que a empresa tenha o template produto_recorrente
+// Seed: garantir que a empresa tenha o template produto_recorrente ATIVO
 // ─────────────────────────────────────────────────────────────
 async function garantirTemplateProdutoRecorrente(empresaId) {
   try {
@@ -39,7 +39,13 @@ async function garantirTemplateProdutoRecorrente(empresaId) {
         empresaId: empId,
       });
       console.log(
-        `[ProdutoLembrete] Template produto_recorrente criado para empresa ${empId}`,
+        `[ProdutoLembrete] Template produto_recorrente criado (ativo) para empresa ${empId}`,
+      );
+    } else if (!existe.ativo) {
+      // Ativar template existente que foi criado inativo
+      await existe.update({ ativo: true });
+      console.log(
+        `[ProdutoLembrete] Template produto_recorrente ATIVADO para empresa ${empId}`,
       );
     }
   } catch (err) {
@@ -519,12 +525,13 @@ exports.estatisticas = async (req, res) => {
     const seteDias = new Date();
     seteDias.setDate(seteDias.getDate() + 7);
 
+    // Conta registros atrasados + próximos 7 dias
     const disparosProximos = await ProdutoLembreteRecorrente.count({
       where: {
         empresa_id: Number(empresaId),
         ativo: true,
         status: "ativo",
-        data_proximo_disparo: { [Op.between]: [hoje, seteDias] },
+        data_proximo_disparo: { [Op.lte]: seteDias },
       },
     });
 
@@ -572,12 +579,12 @@ exports.processarLembretes = async function processarLembretes() {
       59,
     );
 
-    // Buscar lembretes ativos com disparo para hoje
+    // Buscar lembretes ativos com disparo até hoje (inclui atrasados)
     const lembretes = await ProdutoLembreteRecorrente.findAll({
       where: {
         ativo: true,
         status: "ativo",
-        data_proximo_disparo: { [Op.between]: [inicioDia, fimDia] },
+        data_proximo_disparo: { [Op.lte]: fimDia },
       },
       include: [
         {
