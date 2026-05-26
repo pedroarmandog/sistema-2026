@@ -704,7 +704,10 @@ exports.processarLembretes = async function processarLembretes() {
 exports.dispararManual = async function dispararManual(req, res) {
   try {
     await exports.processarLembretes();
-    res.json({ success: true, message: "Processamento de lembretes concluído." });
+    res.json({
+      success: true,
+      message: "Processamento de lembretes concluído.",
+    });
   } catch (err) {
     console.error("[ProdutoLembrete] Erro no disparo manual:", err.message);
     res.status(500).json({ success: false, error: err.message });
@@ -742,12 +745,16 @@ exports.dispararIndividual = async function dispararIndividual(req, res) {
     });
 
     if (!lembrete) {
-      return res.status(404).json({ success: false, error: "Lembrete não encontrado ou inativo." });
+      return res
+        .status(404)
+        .json({ success: false, error: "Lembrete não encontrado ou inativo." });
     }
 
     const cliente = lembrete.cliente;
     if (!cliente || !cliente.telefone) {
-      return res.status(400).json({ success: false, error: "Cliente sem telefone cadastrado." });
+      return res
+        .status(400)
+        .json({ success: false, error: "Cliente sem telefone cadastrado." });
     }
 
     const empresaId = lembrete.empresa_id || cliente.empresa_id || 1;
@@ -783,7 +790,13 @@ exports.dispararIndividual = async function dispararIndividual(req, res) {
       });
     }
 
-    res.status(500).json({ success: false, error: "Falha ao enviar a mensagem. Verifique se o WhatsApp está conectado e o template está ativo." });
+    res
+      .status(500)
+      .json({
+        success: false,
+        error:
+          "Falha ao enviar a mensagem. Verifique se o WhatsApp está conectado e o template está ativo.",
+      });
   } catch (err) {
     console.error("[ProdutoLembrete] Erro no disparo individual:", err.message);
     res.status(500).json({ success: false, error: err.message });

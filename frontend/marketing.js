@@ -1135,7 +1135,8 @@ function _atualizarBannerAtrasadosPR(qtd) {
   if (!banner) return;
   if (qtd > 0 && !_prBannerOculto) {
     const texto = document.getElementById("prAtrasadosTexto");
-    if (texto) texto.textContent = `${qtd} lembrete${qtd > 1 ? "s" : ""} com disparo atrasado`;
+    if (texto)
+      texto.textContent = `${qtd} lembrete${qtd > 1 ? "s" : ""} com disparo atrasado`;
     banner.style.display = "flex";
   } else {
     banner.style.display = "none";
@@ -1166,7 +1167,9 @@ async function dispararTodosAtrasadosPR() {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Erro ao disparar");
-    alert("✅ Lembretes disparados com sucesso!\nO WhatsApp enviará as mensagens em instantes.");
+    alert(
+      "✅ Lembretes disparados com sucesso!\nO WhatsApp enviará as mensagens em instantes.",
+    );
     _prBannerOculto = false;
     carregarTabelaProdutoRecorrente();
     carregarEstatisticasProdutoRecorrente();
