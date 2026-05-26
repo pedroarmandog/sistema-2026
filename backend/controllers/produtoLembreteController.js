@@ -685,7 +685,7 @@ exports.processarLembretes = async function processarLembretes() {
             clienteId: cliente.id,
             lembreteId: lembrete.id,
             diasAntes: 0, // já é o dia do disparo
-            cicloData,    // identifica o ciclo — evita bloqueio de dedup entre ciclos
+            cicloData, // identifica o ciclo — evita bloqueio de dedup entre ciclos
           },
           empresaId,
         );
@@ -801,7 +801,12 @@ exports.dispararIndividual = async function dispararIndividual(req, res) {
       },
       cliente.telefone,
       null,
-      { clienteId: cliente.id, lembreteId: lembrete.id, diasAntes: 0, cicloData },
+      {
+        clienteId: cliente.id,
+        lembreteId: lembrete.id,
+        diasAntes: 0,
+        cicloData,
+      },
       empresaId,
     );
 
