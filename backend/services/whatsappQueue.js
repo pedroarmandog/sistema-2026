@@ -351,6 +351,15 @@ async function agendarEnvio(params) {
         );
       }
 
+      // Lembretes recorrentes: cada ciclo tem data única — não bloquear ciclos futuros
+      if (ctx.cicloData) {
+        conditions.push(
+          sequelize.literal(
+            `JSON_EXTRACT(contexto, '$.cicloData') = '${ctx.cicloData}'`,
+          ),
+        );
+      }
+
       if (conditions.length > 0) {
         whereClause[Op.and] = conditions;
       }

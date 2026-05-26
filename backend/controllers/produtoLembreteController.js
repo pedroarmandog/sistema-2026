@@ -670,6 +670,7 @@ exports.processarLembretes = async function processarLembretes() {
         await garantirTemplateProdutoRecorrente(empresaId);
 
         // Disparar mensagem via sistema de marketing existente
+        const cicloData = new Date().toISOString().slice(0, 10); // "2026-05-26"
         const envio = await dispararMensagemAutomatica(
           "produto_recorrente",
           {
@@ -684,6 +685,7 @@ exports.processarLembretes = async function processarLembretes() {
             clienteId: cliente.id,
             lembreteId: lembrete.id,
             diasAntes: 0, // já é o dia do disparo
+            cicloData,    // identifica o ciclo — evita bloqueio de dedup entre ciclos
           },
           empresaId,
         );
@@ -788,6 +790,7 @@ exports.dispararIndividual = async function dispararIndividual(req, res) {
 
     await garantirTemplateProdutoRecorrente(empresaId);
 
+    const cicloData = new Date().toISOString().slice(0, 10);
     const envio = await dispararMensagemAutomatica(
       "produto_recorrente",
       {
@@ -798,7 +801,7 @@ exports.dispararIndividual = async function dispararIndividual(req, res) {
       },
       cliente.telefone,
       null,
-      { clienteId: cliente.id, lembreteId: lembrete.id, diasAntes: 0 },
+      { clienteId: cliente.id, lembreteId: lembrete.id, diasAntes: 0, cicloData },
       empresaId,
     );
 
