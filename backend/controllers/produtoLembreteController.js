@@ -663,16 +663,15 @@ exports.processarLembretes = async function processarLembretes() {
         );
 
         if (envio) {
-          // Reagendar próximo ciclo: nova data = hoje + dias_lembrete - 1
+          // Reagendar próximo ciclo: nova data = hoje + dias_lembrete
           const proximaData = new Date();
           proximaData.setDate(
-            proximaData.getDate() + lembrete.dias_lembrete - 1,
+            proximaData.getDate() + lembrete.dias_lembrete,
           );
 
           await lembrete.update({
             ultima_execucao: agora,
             data_proximo_disparo: proximaData,
-            data_ultima_venda: agora, // resetar ciclo a partir de hoje
           });
 
           disparados++;
