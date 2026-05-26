@@ -698,6 +698,99 @@ exports.processarLembretes = async function processarLembretes() {
 };
 
 // ─────────────────────────────────────────────────────────────
+// POST /api/produto-lembrete/disparar-agora
+// Disparo manual via painel de marketing — processa todos os atrasados
+// ─────────────────────────────────────────────────────────────
+exports.dispararManual = async function dispararManual(req, res) {
+  try {
+    await exports.processarLembretes();
+    res.json({ success: true, message: "Processamento de lembretes concluído." });
+  } catch (err) {
+    console.error("[ProdutoLembrete] Erro no disparo manual:", err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// POST /api/produto-lembrete/:id/disparar
+// Disparo manual de um único lembrete pelo ID
+// ─────────────────────────────────────────────────────────────
+exports.dispararIndividual = async function dispararIndividual(req, res) {
+  try {
+    const id = Number(req.params.id);
+    const { ProdutoLembreteRecorrente, Cliente, Pet } = require("../models");
+    const { dispararMensagemAutomatica } = require("./marketingController");
+
+    const lembrete = await ProdutoLembreteRecorrente.findOne({
+      where: { id, ativo: true },
+      include: [
+        {
+          model: Cliente,
+          as: "cliente",
+          attributes: ["id", "nome", "telefone", "ativo", "empresa_id"],
+          include: [
+            {
+              model: Pet,
+              as: "pets",
+              attributes: ["id", "nome"],
+              required: false,
+              limit: 1,
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!lembrete) {
+      return res.status(404).json({ success: false, error: "Lembrete não encontrado ou inativo." });
+    }
+
+    const cliente = lembrete.cliente;
+    if (!cliente || !cliente.telefone) {
+      return res.status(400).json({ success: false, error: "Cliente sem telefone cadastrado." });
+    }
+
+    const empresaId = lembrete.empresa_id || cliente.empresa_id || 1;
+    const primeiroPet = cliente.pets && cliente.pets[0];
+
+    await garantirTemplateProdutoRecorrente(empresaId);
+
+    const envio = await dispararMensagemAutomatica(
+      "produto_recorrente",
+      {
+        nome_tutor: cliente.nome || "Cliente",
+        produto_nome: lembrete.produto_nome,
+        nome_pet: primeiroPet?.nome || "seu pet",
+        dias: String(lembrete.dias_lembrete),
+      },
+      cliente.telefone,
+      null,
+      { clienteId: cliente.id, lembreteId: lembrete.id, diasAntes: 0 },
+      empresaId,
+    );
+
+    if (envio) {
+      const proximaData = new Date();
+      proximaData.setDate(proximaData.getDate() + lembrete.dias_lembrete);
+      await lembrete.update({
+        ultima_execucao: new Date(),
+        data_proximo_disparo: proximaData,
+      });
+      return res.json({
+        success: true,
+        message: `Lembrete disparado para ${cliente.nome}. Próximo disparo: ${proximaData.toISOString().slice(0, 10)}`,
+        proximaData,
+      });
+    }
+
+    res.status(500).json({ success: false, error: "Falha ao enviar a mensagem. Verifique se o WhatsApp está conectado e o template está ativo." });
+  } catch (err) {
+    console.error("[ProdutoLembrete] Erro no disparo individual:", err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
 // Hook: Criar lembretes a partir de uma venda (chamado pelo vendaController)
 // Verifica se o cliente tem lembrete_automatico_ativo = true no modelo Cliente
 // ─────────────────────────────────────────────────────────────

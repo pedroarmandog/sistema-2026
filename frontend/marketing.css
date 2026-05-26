@@ -515,6 +515,132 @@
   background: #fee2e2;
 }
 
+/* ── Banner de lembretes atrasados ── */
+.pr-atrasados-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: linear-gradient(135deg, #fff7ed, #ffedd5);
+  border: 1.5px solid #fb923c;
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.pr-atrasados-banner .pr-atrasados-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #fb923c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.pr-atrasados-banner .pr-atrasados-text {
+  flex: 1;
+  min-width: 200px;
+}
+
+.pr-atrasados-banner .pr-atrasados-text strong {
+  display: block;
+  font-size: 13px;
+  color: #9a3412;
+  font-weight: 700;
+}
+
+.pr-atrasados-banner .pr-atrasados-text span {
+  font-size: 12px;
+  color: #c2410c;
+}
+
+.pr-atrasados-banner .pr-atrasados-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.pr-btn-enviar-todos {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #16a34a, #15803d);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 3px 10px rgba(22, 163, 74, 0.3);
+}
+
+.pr-btn-enviar-todos:hover:not(:disabled) {
+  background: linear-gradient(135deg, #15803d, #166534);
+  transform: translateY(-1px);
+}
+
+.pr-btn-enviar-todos:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.pr-btn-fechar-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: #fff;
+  color: #64748b;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.pr-btn-fechar-banner:hover {
+  background: #f1f5f9;
+}
+
+/* Linha atrasada na tabela */
+.pr-table tbody tr.pr-row-atrasado td {
+  background: #fff7ed;
+}
+
+.pr-table tbody tr.pr-row-atrasado:hover td {
+  background: #ffedd5;
+}
+
+.pr-data-atrasada {
+  color: #c2410c;
+  font-weight: 600;
+}
+
+.pr-btn-enviar-individual {
+  background: none;
+  border: none;
+  color: #ea580c;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 5px;
+  font-size: 12px;
+  transition: background 0.15s;
+  margin-right: 2px;
+}
+
+.pr-btn-enviar-individual:hover {
+  background: #ffedd5;
+}
+
 @media (max-width: 768px) {
   .produto-recorrente-header {
     gap: 12px;

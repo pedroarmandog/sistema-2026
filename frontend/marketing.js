@@ -1064,31 +1064,58 @@ async function carregarTabelaProdutoRecorrente() {
     const ativos = lista.filter((l) => l.ativo);
     if (ativos.length === 0) {
       if (emptyEl) emptyEl.style.display = "block";
+      _prBannerOculto = false;
+      _atualizarBannerAtrasadosPR(0);
       return;
     }
 
     const table = document.getElementById("prTable");
     if (table) table.style.display = "";
 
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    let qtdAtrasados = 0;
+
     ativos.forEach((item) => {
       const tr = document.createElement("tr");
+      const dataDisparo = item.data_proximo_disparo
+        ? new Date(item.data_proximo_disparo)
+        : null;
+      const atrasado = dataDisparo && dataDisparo < hoje;
+      if (atrasado) qtdAtrasados++;
+
       const statusCls =
         item.status === "ativo"
           ? "pr-badge-status-ativo"
           : "pr-badge-status-ativo pr-badge-status-pausado";
-      const proximoStr = item.data_proximo_disparo
-        ? new Date(item.data_proximo_disparo).toLocaleDateString("pt-BR")
+      const proximoStr = dataDisparo
+        ? dataDisparo.toLocaleDateString("pt-BR")
         : "—";
+      const dataHtml = atrasado
+        ? `<span class="pr-data-atrasada" title="Disparo atrasado!"><i class="fas fa-exclamation-circle" style="margin-right:4px;font-size:11px"></i>${proximoStr}</span>`
+        : proximoStr;
+
+      if (atrasado) tr.classList.add("pr-row-atrasado");
+
+      const btnEnviarIndividual = atrasado
+        ? `<button class="pr-btn-enviar-individual" onclick="dispararLembreteIndividualPR(${item.id}, this)" title="Enviar lembrete agora"><i class="fas fa-paper-plane"></i></button>`
+        : "";
+
       tr.innerHTML = `
         <td>${item.cliente ? item.cliente.nome : item.cliente_id || "—"}</td>
         <td>${item.produto_nome || "—"}</td>
         <td>${item.dias_lembrete ?? 30} dias</td>
-        <td>${proximoStr}</td>
+        <td>${dataHtml}</td>
         <td><span class="${statusCls}"><i class="fas fa-circle" style="font-size:8px"></i> ${item.status || "ativo"}</span></td>
-        <td><button class="pr-btn-danger" onclick="desativarProdutoLembrete(${item.id})" title="Desativar lembrete"><i class="fas fa-times"></i></button></td>
+        <td>
+          ${btnEnviarIndividual}
+          <button class="pr-btn-danger" onclick="desativarProdutoLembrete(${item.id})" title="Desativar lembrete"><i class="fas fa-times"></i></button>
+        </td>
       `;
       tbody.appendChild(tr);
     });
+
+    _atualizarBannerAtrasadosPR(qtdAtrasados);
   } catch (e) {
     if (loadingEl) loadingEl.style.display = "none";
     if (emptyEl) {
@@ -1100,6 +1127,87 @@ async function carregarTabelaProdutoRecorrente() {
   }
 }
 
+// ── controle interno do banner ──
+let _prBannerOculto = false;
+
+function _atualizarBannerAtrasadosPR(qtd) {
+  const banner = document.getElementById("prAtrasadosBanner");
+  if (!banner) return;
+  if (qtd > 0 && !_prBannerOculto) {
+    const texto = document.getElementById("prAtrasadosTexto");
+    if (texto) texto.textContent = `${qtd} lembrete${qtd > 1 ? "s" : ""} com disparo atrasado`;
+    banner.style.display = "flex";
+  } else {
+    banner.style.display = "none";
+  }
+}
+
+function fecharBannerAtrasadosPR() {
+  _prBannerOculto = true;
+  const banner = document.getElementById("prAtrasadosBanner");
+  if (banner) banner.style.display = "none";
+}
+
+async function dispararTodosAtrasadosPR() {
+  const btn = document.getElementById("prBtnEnviarTodos");
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+  }
+  try {
+    const token =
+      localStorage.getItem("token") || sessionStorage.getItem("token");
+    const res = await fetch(`${VPS_URL}/api/produto-lembrete/disparar-agora`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Erro ao disparar");
+    alert("✅ Lembretes disparados com sucesso!\nO WhatsApp enviará as mensagens em instantes.");
+    _prBannerOculto = false;
+    carregarTabelaProdutoRecorrente();
+    carregarEstatisticasProdutoRecorrente();
+  } catch (e) {
+    alert("❌ Erro ao disparar lembretes: " + e.message);
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar todos';
+    }
+  }
+}
+
+async function dispararLembreteIndividualPR(id, btnEl) {
+  if (btnEl) {
+    btnEl.disabled = true;
+    btnEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+  }
+  try {
+    const token =
+      localStorage.getItem("token") || sessionStorage.getItem("token");
+    const res = await fetch(`${VPS_URL}/api/produto-lembrete/${id}/disparar`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Erro ao disparar");
+    alert("✅ Mensagem agendada!\n" + (data.message || ""));
+    _prBannerOculto = false;
+    carregarTabelaProdutoRecorrente();
+    carregarEstatisticasProdutoRecorrente();
+  } catch (e) {
+    alert("❌ Erro: " + e.message);
+    if (btnEl) {
+      btnEl.disabled = false;
+      btnEl.innerHTML = '<i class="fas fa-paper-plane"></i>';
+    }
+  }
+}
 async function desativarProdutoLembrete(id) {
   if (!confirm("Desativar este lembrete automático?")) return;
   try {

@@ -1342,6 +1342,25 @@
                 </p>
               </div>
             </div>
+
+            <!-- Banner de atrasados — visível só quando há disparos pendentes -->
+            <div id="prAtrasadosBanner" class="pr-atrasados-banner" style="display:none">
+              <div class="pr-atrasados-icon">
+                <i class="fas fa-exclamation"></i>
+              </div>
+              <div class="pr-atrasados-text">
+                <strong id="prAtrasadosTexto">Lembretes com disparo atrasado</strong>
+                <span>WhatsApp conectado — clique em "Enviar todos" para disparar agora.</span>
+              </div>
+              <div class="pr-atrasados-actions">
+                <button class="pr-btn-enviar-todos" id="prBtnEnviarTodos" onclick="dispararTodosAtrasadosPR()">
+                  <i class="fas fa-paper-plane"></i> Enviar todos
+                </button>
+                <button class="pr-btn-fechar-banner" onclick="fecharBannerAtrasadosPR()">
+                  <i class="fas fa-times"></i> Fechar
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>

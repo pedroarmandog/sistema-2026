@@ -19,6 +19,13 @@ router.post(
 );
 
 // ── Rotas públicas por empresaId (mesmo padrão do marketing) ──────────────
+// ── Disparo manual via painel de marketing ──────────────────────────────────
+// Processar todos os atrasados agora
+router.post("/disparar-agora", controller.dispararManual);
+
+// Disparar lembrete individual por ID
+router.post("/:id/disparar", controller.dispararIndividual);
+
 // Listar todos os lembretes da empresa
 router.get("/", controller.listarLembretes);
 
