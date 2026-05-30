@@ -126,11 +126,14 @@ function delay(ms) {
     var deviceId = getDeviceId();
     if (!deviceId) return;
     var _base = window.VPS_URL || window.API_URL || "";
-    var payload = JSON.stringify({ device_id: deviceId });
     try {
+      // URLSearchParams gera application/x-www-form-urlencoded
+      // → "simple request" no CORS → não precisa de preflight
+      // → sendBeacon funciona cross-origin sem credentials
+      var params = new URLSearchParams({ device_id: deviceId });
       var ok = navigator.sendBeacon(
         _base + "/api/sessoes/encerrar-dispositivo",
-        new Blob([payload], { type: "application/json" }),
+        params,
       );
       console.log("[abas] sendBeacon encerrar-dispositivo ok=" + ok);
     } catch (e) {
