@@ -1212,7 +1212,7 @@ async function dispararLembreteIndividualPR(id, btnEl) {
   }
 }
 async function desativarProdutoLembrete(id) {
-  if (!confirm("Desativar este lembrete automático?")) return;
+  if (!(await confirmar("Desativar este lembrete automático?", "Produto Recorrente"))) return;
   try {
     const token =
       localStorage.getItem("token") || sessionStorage.getItem("token");
