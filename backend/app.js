@@ -1520,9 +1520,10 @@ function startServer() {
     }, 5000); // aguarda 5s para o servidor estar completamente pronto
   })();
 
-  const server = app.listen(3000, () => {
-    console.log("🚀 Servidor rodando na porta 3000 ✅");
-    console.log("🔗 URL: http://localhost:3000");
+  const PORT = process.env.PORT || 3000;
+  const server = app.listen(PORT, () => {
+    console.log(`🚀 Servidor rodando na porta ${PORT} ✅`);
+    console.log(`🔗 URL: http://localhost:${PORT}`);
 
     // Iniciar agendador de mensagens WhatsApp (node-cron)
     try {
@@ -2132,7 +2133,8 @@ function startServer() {
   server.on("error", (error) => {
     console.error("❌ Erro no servidor:", error.message);
     if (error.code === "EADDRINUSE") {
-      console.error("🚫 Porta 3000 já está em uso!");
+      console.error(`🚫 Porta ${PORT} já está em uso!`);
+      process.exit(1);
     }
   });
 
