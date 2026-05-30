@@ -352,14 +352,11 @@ async function registrarSessao(
     // Salvar ID da sessão atual para NUNCA removê-la no enforcement
     let minhaSessaoId = null;
 
-    // Evitar duplicatas: se já existir uma sessão com o mesmo token, apenas atualizar
+    // 1. Verificar pelo token_hash exato (mesma aba / cookie reutilizado)
     const existente = await SessaoAtiva.findOne({
       where: { token_hash: tokenHash },
     });
     if (existente) {
-      console.log(
-        `[acessos] atualizando sessão existente token=${tokenHash.substring(0, 10)} usuario=${usuarioId} empresa=${empresaPainelId}`,
-      );
       await existente.update({
         usuario_id: usuarioId,
         empresa_id: empresaPainelId || existente.empresa_id,
@@ -372,49 +369,100 @@ async function registrarSessao(
       });
       minhaSessaoId = existente.id;
       console.log(
-        `[acessos] sessão atualizada token=${tokenHash.substring(0, 10)} id=${minhaSessaoId}`,
+        `[acessos] sessão existente (mesmo token) atualizada id=${minhaSessaoId}`,
       );
     } else {
-      console.log(
-        `[acessos] criando nova sessão token=${tokenHash.substring(0, 10)} usuario=${usuarioId} empresa=${empresaPainelId} ip=${ip}`,
-      );
-      const nova = await SessaoAtiva.create({
-        usuario_id: usuarioId,
-        empresa_id: empresaPainelId,
-        token_hash: tokenHash,
-        ip_address: ip || null,
-        user_agent: userAgent ? userAgent.substring(0, 500) : null,
-        data_login: new Date(),
-        ultima_atividade: new Date(),
-        ativo: true,
-      });
-      minhaSessaoId = nova.id;
-      console.log(`[acessos] nova sessão criada id=${minhaSessaoId}`);
+      // 2. Verificar se o mesmo usuário já tem sessão ativa nesta empresa.
+      //    Se sim, reutilizar a linha atualizando o token_hash — assim o mesmo
+      //    usuário logando de novo (reload, nova aba, cookie expirado) nunca
+      //    acumula linhas extras. 1 usuário = 1 linha na tabela.
+      const sessaoDoUsuario = empresaPainelId
+        ? await SessaoAtiva.findOne({
+            where: {
+              usuario_id: usuarioId,
+              empresa_id: empresaPainelId,
+              ativo: true,
+            },
+            order: [["ultima_atividade", "DESC"]],
+          })
+        : null;
+
+      if (sessaoDoUsuario) {
+        await sessaoDoUsuario.update({
+          token_hash: tokenHash,
+          ip_address: ip || sessaoDoUsuario.ip_address,
+          user_agent: userAgent
+            ? userAgent.substring(0, 500)
+            : sessaoDoUsuario.user_agent,
+          ultima_atividade: new Date(),
+          ativo: true,
+        });
+        minhaSessaoId = sessaoDoUsuario.id;
+        console.log(
+          `[acessos] sessão existente do usuário reutilizada (novo token) id=${minhaSessaoId} usuario=${usuarioId}`,
+        );
+      } else {
+        // 3. Nenhuma sessão ativa para este usuário — criar nova linha
+        console.log(
+          `[acessos] criando nova sessão token=${tokenHash.substring(0, 10)} usuario=${usuarioId} empresa=${empresaPainelId} ip=${ip}`,
+        );
+        const nova = await SessaoAtiva.create({
+          usuario_id: usuarioId,
+          empresa_id: empresaPainelId,
+          token_hash: tokenHash,
+          ip_address: ip || null,
+          user_agent: userAgent ? userAgent.substring(0, 500) : null,
+          data_login: new Date(),
+          ultima_atividade: new Date(),
+          ativo: true,
+        });
+        minhaSessaoId = nova.id;
+        console.log(`[acessos] nova sessão criada id=${minhaSessaoId}`);
+      }
     }
 
-    // Enforçar limite DEPOIS de registrar.
-    // IMPORTANTE: excluir a sessão atual (minhaSessaoId) da busca — ela JAMAIS pode ser removida.
-    // Isso resolve o race condition onde o middleware atualiza ultima_atividade de sessões antigas
-    // durante o login, tornando-as "mais recentes" que a nova sessão.
+    // Após registrar: limpar duplicatas do mesmo usuário (sessões acumuladas de logins anteriores)
+    // e enforçar o limite da empresa.
     if (empresaPainelId && minhaSessaoId) {
       try {
+        // Desativar quaisquer outras linhas ativas do MESMO usuário nesta empresa
+        // (garante 1 linha por usuário independente de quantas vezes ele logou antes)
+        const duplicatasDoUsuario = await SessaoAtiva.findAll({
+          where: {
+            usuario_id: usuarioId,
+            empresa_id: empresaPainelId,
+            ativo: true,
+            id: { [Op.ne]: minhaSessaoId },
+          },
+          attributes: ["id"],
+        });
+        if (duplicatasDoUsuario.length > 0) {
+          const idsDuplicatas = duplicatasDoUsuario.map((s) => s.id);
+          await SessaoAtiva.update(
+            { ativo: false },
+            { where: { id: { [Op.in]: idsDuplicatas } } },
+          );
+          console.log(
+            `[acessos] ${idsDuplicatas.length} sessão(ões) duplicada(s) do usuário=${usuarioId} desativada(s)`,
+          );
+        }
+
+        // Enforçar limite da empresa (outras sessões de outros usuários)
         const empresaPainelRec = await EmpresaPainel.findByPk(empresaPainelId, {
           attributes: ["id", "limite_acessos"],
         });
         if (empresaPainelRec && empresaPainelRec.limite_acessos) {
           const limite = empresaPainelRec.limite_acessos;
-          // Buscar OUTRAS sessões ativas (excluindo a atual)
           const outrasAtivas = await SessaoAtiva.findAll({
             where: {
               empresa_id: empresaPainelId,
               ativo: true,
-              id: { [Op.ne]: minhaSessaoId }, // nunca remover a sessão atual
+              id: { [Op.ne]: minhaSessaoId },
             },
             attributes: ["id", "ultima_atividade"],
-            order: [["ultima_atividade", "ASC"]], // mais antigas primeiro
+            order: [["ultima_atividade", "ASC"]],
             limit: 2000,
           });
-          // Se as outras sessões já atingem ou excedem o limite, remover as mais antigas
           if (outrasAtivas.length >= limite) {
             const excesso = outrasAtivas.length - limite + 1;
             const idsRemover = outrasAtivas.slice(0, excesso).map((s) => s.id);
@@ -423,7 +471,7 @@ async function registrarSessao(
               { where: { id: { [Op.in]: idsRemover } } },
             );
             console.log(
-              `[acessos] limite=${limite} enforçado: ${idsRemover.length} sessão(ões) antiga(s) derrubada(s) para empresa_painel=${empresaPainelId} (sessão atual id=${minhaSessaoId} preservada)`,
+              `[acessos] limite=${limite} enforçado: ${idsRemover.length} sessão(ões) antiga(s) derrubada(s) para empresa_painel=${empresaPainelId}`,
             );
           }
         }
