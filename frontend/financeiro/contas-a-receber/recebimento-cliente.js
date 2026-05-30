@@ -922,9 +922,68 @@ function abrirModalReceber(id) {
   });
 }
 
+// ── Modal de confirmação no estilo do sistema ────────────────────────────────
+function confirmarModal({
+  titulo,
+  mensagem,
+  textoBotaoOk = "Confirmar",
+  corHeader = "#1976d2",
+  iconeHeader = "fa-question-circle",
+}) {
+  return new Promise((resolve) => {
+    document
+      .querySelectorAll(".modal-confirmar-overlay")
+      .forEach((m) => m.remove());
+    const overlay = document.createElement("div");
+    overlay.className = "modal-confirmar-overlay";
+    overlay.style.cssText =
+      "position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99999;display:flex;align-items:center;justify-content:center;";
+    overlay.innerHTML = `
+      <div style="background:#fff;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,0.25);border:2px solid ${corHeader};width:95%;max-width:420px;overflow:hidden;">
+        <div style="background:${corHeader};padding:16px 22px;display:flex;justify-content:space-between;align-items:center;">
+          <span style="color:#fff;font-size:16px;font-weight:600;"><i class="fas ${iconeHeader}" style="margin-right:8px;"></i>${titulo}</span>
+          <button class="mc-fechar" style="background:rgba(255,255,255,0.2);border:none;color:#fff;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:18px;line-height:1;">×</button>
+        </div>
+        <div style="padding:22px 26px;">
+          <p style="margin:0 0 22px;color:#555;font-size:14px;line-height:1.6;">${mensagem}</p>
+          <div style="display:flex;gap:12px;justify-content:flex-end;">
+            <button class="mc-cancelar" style="padding:11px 22px;border:2px solid #e0e0e0;background:#fff;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;color:#555;">Cancelar</button>
+            <button class="mc-confirmar" style="padding:11px 22px;background:${corHeader};border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;color:#fff;">${textoBotaoOk}</button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const fechar = (val) => {
+      overlay.remove();
+      resolve(val);
+    };
+    overlay
+      .querySelector(".mc-fechar")
+      .addEventListener("click", () => fechar(false));
+    overlay
+      .querySelector(".mc-cancelar")
+      .addEventListener("click", () => fechar(false));
+    overlay
+      .querySelector(".mc-confirmar")
+      .addEventListener("click", () => fechar(true));
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) fechar(false);
+    });
+  });
+}
+
 // ── Excluir documento ─────────────────────────────────────────────────────────
 async function excluirDocumento(id) {
-  if (!confirm("Deseja realmente excluir este documento a receber?")) return;
+  if (
+    !(await confirmarModal({
+      titulo: "Excluir Documento",
+      mensagem: "Deseja realmente excluir este documento a receber?",
+      textoBotaoOk: "Excluir",
+      corHeader: "#d32f2f",
+      iconeHeader: "fa-trash",
+    }))
+  )
+    return;
   try {
     const res = await fetch(`${API_BASE}/api/contas-receber/${id}`, {
       method: "DELETE",
@@ -940,7 +999,15 @@ async function excluirDocumento(id) {
 }
 
 async function excluirDocumentoHistorico(id) {
-  if (!confirm("Deseja realmente excluir este recebimento do histórico?"))
+  if (
+    !(await confirmarModal({
+      titulo: "Excluir Recebimento",
+      mensagem: "Deseja realmente excluir este recebimento do histórico?",
+      textoBotaoOk: "Excluir",
+      corHeader: "#d32f2f",
+      iconeHeader: "fa-trash",
+    }))
+  )
     return;
   try {
     const res = await fetch(`${API_BASE}/api/contas-receber/${id}`, {
@@ -1283,9 +1350,13 @@ function configurarEventListeners() {
         return;
       }
       if (
-        !confirm(
-          `Receber ${documentosSelecionados.length} documentos pelo valor total?`,
-        )
+        !(await confirmarModal({
+          titulo: "Confirmar Recebimento",
+          mensagem: `Receber <strong>${documentosSelecionados.length}</strong> documento(s) pelo valor total?`,
+          textoBotaoOk: "Receber",
+          corHeader: "#1976d2",
+          iconeHeader: "fa-check-circle",
+        }))
       )
         return;
       let erros = 0;
