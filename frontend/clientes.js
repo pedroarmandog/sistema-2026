@@ -47,6 +47,10 @@ async function loadClients() {
     console.log("📡 loadClients Response status:", response && response.status);
     if (!response || !response.ok) {
       if (response && response.status === 401) {
+        document.cookie =
+          "usuarioLogadoId=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        document.cookie =
+          "usuarioLogadoNome=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
         window.location.href = "/login/login.html";
         return;
       }

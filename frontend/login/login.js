@@ -196,8 +196,28 @@ window.addEventListener("DOMContentLoaded", function () {
   const usuarioLogadoId = getCookie("usuarioLogadoId");
 
   if (usuarioLogadoId) {
-    // Já está logado, redirecionar para o dashboard
-    window.location.href = "/dashboard.html";
+    // Verificar se a sessão ainda é válida antes de redirecionar
+    // (evita loop: 401 → login → dashboard → 401 → ...)
+    const _base = window.VPS_URL || window.API_URL || "";
+    fetch(_base + "/api/usuarios/heartbeat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({}),
+    })
+      .then(function (r) {
+        return r.ok ? r.json() : { ativa: false };
+      })
+      .then(function (data) {
+        if (data && data.ativa !== false) {
+          window.location.href = "/dashboard.html";
+        }
+        // Se ativa === false: sessão inválida → mostrar formulário de login
+      })
+      .catch(function () {
+        // Erro de rede: redirecionar para o dashboard (benefício da dúvida)
+        window.location.href = "/dashboard.html";
+      });
   }
 });
 

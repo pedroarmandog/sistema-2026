@@ -576,6 +576,12 @@ const DashboardApp = {
       }
 
       if (res.status === 401) {
+        // Limpar cookies de sessão para evitar loop: login detectaria usuarioLogadoId
+        // e redirecionaria de volta ao dashboard causando loop infinito de 401.
+        document.cookie =
+          "usuarioLogadoId=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        document.cookie =
+          "usuarioLogadoNome=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
         window.location.href = "/login/login.html";
         throw new Error(`Não autenticado — redirecionando ao login`);
       }

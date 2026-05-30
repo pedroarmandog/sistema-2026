@@ -58,6 +58,11 @@ class ApiClient {
 
         // Se não autenticado, redirecionar para login
         if (response.status === 401) {
+          // Limpar cookies para evitar loop: login detectaria usuarioLogadoId e voltaria ao dashboard
+          document.cookie =
+            "usuarioLogadoId=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+          document.cookie =
+            "usuarioLogadoNome=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
           window.location.href = "/login/login.html";
           return;
         }
