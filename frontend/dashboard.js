@@ -30,6 +30,141 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// =====================================================
+// Controle de abas: fecha sessão quando última aba fecha
+// Roda no topo (fora do DOMContentLoaded) para garantir
+// execução em todas as páginas que carregam dashboard.js
+// (inject-sidebar.js carrega dashboard.js em todas as páginas)
+// =====================================================
+(function gerenciarAbas() {
+  var TABS_KEY = "pethub_open_tabs";
+  var CHANNEL_NAME = "pethub_tabs";
+
+  // TAB_ID persiste em sessionStorage: sobrevive a navegações na mesma aba,
+  // mas é único por aba (diferente de localStorage que é compartilhado)
+  var TAB_ID = (function () {
+    try {
+      var id = sessionStorage.getItem("pethub_tab_id");
+      if (!id) {
+        id =
+          typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : Date.now().toString(36) + Math.random().toString(36);
+        sessionStorage.setItem("pethub_tab_id", id);
+      }
+      return id;
+    } catch (e) {
+      return "fb_" + Math.random().toString(36).slice(2, 10);
+    }
+  })();
+
+  var bc =
+    typeof BroadcastChannel !== "undefined"
+      ? new BroadcastChannel(CHANNEL_NAME)
+      : null;
+
+  function getTabs() {
+    try {
+      return JSON.parse(localStorage.getItem(TABS_KEY) || "{}");
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function setTabs(tabs) {
+    try {
+      localStorage.setItem(TABS_KEY, JSON.stringify(tabs));
+    } catch (e) {}
+  }
+
+  function getDeviceId() {
+    try {
+      var id = localStorage.getItem("pethub_device_id");
+      if (!id) {
+        id =
+          typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : Date.now().toString(36) + Math.random().toString(36);
+        localStorage.setItem("pethub_device_id", id);
+      }
+      return id;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function registrar() {
+    var tabs = getTabs();
+    tabs[TAB_ID] = Date.now();
+    setTabs(tabs);
+    if (bc) bc.postMessage({ type: "TAB_OPEN", tabId: TAB_ID });
+    var total = Object.keys(tabs).length;
+    console.log(
+      "[abas] registrada id=" + TAB_ID.substring(0, 8) + " total=" + total,
+    );
+  }
+
+  function desregistrar() {
+    var tabs = getTabs();
+    delete tabs[TAB_ID];
+    setTabs(tabs);
+    var restantes = Object.keys(tabs).length;
+    if (bc) {
+      bc.postMessage({
+        type: "TAB_CLOSE",
+        tabId: TAB_ID,
+        restantes: restantes,
+      });
+    }
+    console.log(
+      "[abas] fechada id=" + TAB_ID.substring(0, 8) + " restantes=" + restantes,
+    );
+    return restantes;
+  }
+
+  function encerrarSessaoBeacon() {
+    var deviceId = getDeviceId();
+    if (!deviceId) return;
+    var _base = window.VPS_URL || window.API_URL || "";
+    var payload = JSON.stringify({ device_id: deviceId });
+    try {
+      var ok = navigator.sendBeacon(
+        _base + "/api/sessoes/encerrar-dispositivo",
+        new Blob([payload], { type: "application/json" }),
+      );
+      console.log("[abas] sendBeacon encerrar-dispositivo ok=" + ok);
+    } catch (e) {
+      console.warn("[abas] sendBeacon falhou:", e);
+    }
+  }
+
+  // Registrar ao carregar a página
+  registrar();
+
+  // Desregistrar e encerrar sessão (se última aba) ao fechar/navegar
+  window.addEventListener("pagehide", function (e) {
+    if (e.persisted) return; // bfcache: a aba não está sendo fechada de verdade
+    var restantes = desregistrar();
+    if (restantes === 0) {
+      encerrarSessaoBeacon();
+    }
+  });
+
+  // Ouvir outras abas via BroadcastChannel (informativo)
+  if (bc) {
+    bc.onmessage = function (e) {
+      var d = e.data || {};
+      if (d.type === "TAB_OPEN") {
+        console.log(
+          "[abas] outra aba aberta id=" + String(d.tabId).substring(0, 8),
+        );
+      } else if (d.type === "TAB_CLOSE") {
+        console.log("[abas] outra aba fechada restantes=" + d.restantes);
+      }
+    };
+  }
+})();
+
 // Função de debug para detectar IDs duplicados
 function detectarIDsDuplicados() {
   const idsParaVerificar = [

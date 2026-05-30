@@ -565,6 +565,9 @@ async function registrarSessao(
  * Retorna { ativa: true } ou { ativa: false, motivo: string }.
  */
 async function heartbeatSessao(deviceId, tokenHash) {
+  // Período de graça: sessão fechada pelo controle de abas mas dentro desse
+  // tempo ainda pode ser reativada (cobre navegação entre páginas no mesmo tab).
+  const GRACE_MS = 30 * 1000; // 30 segundos
   try {
     // Primeiro buscar por device_id (principal identificador)
     if (deviceId) {
@@ -572,16 +575,35 @@ async function heartbeatSessao(deviceId, tokenHash) {
         where: { device_id: deviceId },
       });
       if (sessao) {
-        if (!sessao.ativo) {
-          return { ativa: false, motivo: "sessao_encerrada" };
+        if (sessao.ativo) {
+          // Sessão ativa normal — atualizar atividade
+          const updates = { ultima_atividade: new Date() };
+          if (tokenHash && sessao.token_hash !== tokenHash) {
+            updates.token_hash = tokenHash;
+          }
+          await sessao.update(updates);
+          return { ativa: true };
         }
-        // Atualizar token_hash caso tenha mudado (novo login) e atividade
-        const updates = { ultima_atividade: new Date() };
-        if (tokenHash && sessao.token_hash !== tokenHash) {
-          updates.token_hash = tokenHash;
+        // Sessão inativa — verificar período de graça (navegação entre páginas)
+        const encerradoEm = sessao.encerrado_em
+          ? new Date(sessao.encerrado_em).getTime()
+          : null;
+        if (encerradoEm && Date.now() - encerradoEm < GRACE_MS) {
+          // Reativar: era navegação, não fechamento real do navegador
+          const updates = {
+            ativo: true,
+            encerrado_em: null,
+            ultima_atividade: new Date(),
+          };
+          if (tokenHash) updates.token_hash = tokenHash;
+          await sessao.update(updates);
+          console.log(
+            `[acessos] sessão reativada (graça) device=${deviceId.substring(0, 8)}`,
+          );
+          return { ativa: true };
         }
-        await sessao.update(updates);
-        return { ativa: true };
+        // Encerrada há mais de GRACE_MS — sessão realmente fechada
+        return { ativa: false, motivo: "sessao_encerrada" };
       }
     }
 
@@ -609,6 +631,29 @@ async function heartbeatSessao(deviceId, tokenHash) {
   } catch (e) {
     console.warn("[acessos] heartbeatSessao erro:", e && e.message);
     return { ativa: true, motivo: "db_error" }; // fail open
+  }
+}
+
+/**
+ * Encerra sessão de um dispositivo específico via soft-close.
+ * Chamado quando a última aba do dispositivo é fechada (sendBeacon).
+ * Usa soft-close (ativo=false + encerrado_em) em vez de DELETE para
+ * suportar o período de graça de 30s que cobre navegações entre páginas.
+ */
+async function encerrarDispositivo(deviceId) {
+  if (!deviceId) return 0;
+  try {
+    const [count] = await SessaoAtiva.update(
+      { ativo: false, encerrado_em: new Date(), ultima_atividade: new Date() },
+      { where: { device_id: deviceId, ativo: true } },
+    );
+    console.log(
+      `[acessos] encerrarDispositivo device=${deviceId.substring(0, 8)} rows=${count}`,
+    );
+    return count;
+  } catch (e) {
+    console.warn("[acessos] encerrarDispositivo erro:", e && e.message);
+    return 0;
   }
 }
 
@@ -655,6 +700,7 @@ module.exports = {
   verificarLimiteAcessos,
   registrarSessao,
   encerrarSessaoPorToken,
+  encerrarDispositivo,
   atualizarAtividade,
   limparSessoesExpiradas,
   verificarSessaoAtiva,

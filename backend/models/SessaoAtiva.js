@@ -48,6 +48,11 @@ module.exports = (sequelize) => {
         allowNull: false,
         defaultValue: true,
       },
+      encerrado_em: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        defaultValue: null,
+      },
     },
     {
       tableName: "sessoes_ativas",

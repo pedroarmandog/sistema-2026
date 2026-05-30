@@ -1155,6 +1155,8 @@ app.use("/api/boxes", boxRoutes);
 app.use("/api/grupos-clientes", grupoClienteRoutes);
 app.use("/api/usuarios", usuarioRoutes);
 app.use("/api/user-filters", userFilterRoutes);
+const sessaoRoutes = require("./routes/sessaoRoutes");
+app.use("/api/sessoes", sessaoRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/dashboard/full", dashboardFullRoutes);
 app.use("/api/unidades", unidadeRoutes);
@@ -1259,6 +1261,25 @@ async function syncAllTables() {
       }
     } catch (e) {
       console.warn("  ⚠️ Migration device_id:", e.message);
+    }
+
+    // 0c) Migration: encerrado_em em sessoes_ativas (soft-close para controle de abas)
+    try {
+      const [cols3] = await sequelize.query(
+        "SHOW COLUMNS FROM sessoes_ativas LIKE 'encerrado_em'",
+      );
+      if (cols3.length === 0) {
+        await sequelize.query(
+          "ALTER TABLE sessoes_ativas ADD COLUMN encerrado_em DATETIME NULL DEFAULT NULL AFTER ativo",
+        );
+        console.log(
+          "  ✅ Migration: encerrado_em adicionado em sessoes_ativas",
+        );
+      } else {
+        console.log("  ℹ️ encerrado_em já existe em sessoes_ativas — ok");
+      }
+    } catch (e) {
+      console.warn("  ⚠️ Migration encerrado_em:", e.message);
     }
 
     // 1) Sync principal: cobre Cliente + todos os factory models (Usuario, Empresa, etc.)
