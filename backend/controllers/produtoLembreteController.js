@@ -260,7 +260,12 @@ exports.criarOuAtualizar = async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 exports.desativar = async (req, res) => {
   try {
-    const { ProdutoLembreteRecorrente, Cliente, EnvioAgendado, MensagemAutomatica } = require("../models");
+    const {
+      ProdutoLembreteRecorrente,
+      Cliente,
+      EnvioAgendado,
+      MensagemAutomatica,
+    } = require("../models");
     const { sequelize } = require("../models/Cliente");
     const { id } = req.params;
 
@@ -277,7 +282,10 @@ exports.desativar = async (req, res) => {
     if (lembrete.cliente_id) {
       try {
         const template = await MensagemAutomatica.findOne({
-          where: { tipo: "produto_recorrente", empresaId: lembrete.empresa_id || 1 },
+          where: {
+            tipo: "produto_recorrente",
+            empresaId: lembrete.empresa_id || 1,
+          },
         });
         if (template) {
           await EnvioAgendado.update(
@@ -296,7 +304,10 @@ exports.desativar = async (req, res) => {
           );
         }
       } catch (e) {
-        console.warn("[ProdutoLembrete] Erro ao cancelar envios pendentes:", e.message);
+        console.warn(
+          "[ProdutoLembrete] Erro ao cancelar envios pendentes:",
+          e.message,
+        );
       }
 
       // Limpar config de lembrete no cadastro do cliente
@@ -554,7 +565,10 @@ exports.saveConfigCliente = async (req, res) => {
           );
         }
       } catch (e) {
-        console.warn("[ProdutoLembrete] Erro ao cancelar envios pendentes:", e.message);
+        console.warn(
+          "[ProdutoLembrete] Erro ao cancelar envios pendentes:",
+          e.message,
+        );
       }
       await Cliente.update(
         {
