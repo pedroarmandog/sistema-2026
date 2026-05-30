@@ -76,9 +76,67 @@ document.addEventListener("DOMContentLoaded", function () {
   console.log("📍 URL atual:", window.location.pathname);
 
   // ===============================================
-  // Monitoramento de sessão ativa (polling a cada 15s)
-  // Se o admin ou outro login derrubar esta sessão,
-  // redireciona para a página de sessão expirada.
+  // Controle de abas: fechar a ÚLTIMA aba = logout
+  // Cada aba registra-se no localStorage e atualiza seu "heartbeat".
+  // No beforeunload, se não há mais abas ativas → logout via sendBeacon.
+  // ===============================================
+  (function gerenciarAbas() {
+    const TAB_ID =
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : Date.now().toString(36) + Math.random().toString(36);
+    const CHAVE = "pethub_abas_ativas";
+    const STALE_MS = 5 * 60 * 1000; // 5 min sem update = aba morta
+
+    function lerAbas() {
+      try {
+        return JSON.parse(localStorage.getItem(CHAVE) || "{}");
+      } catch (e) {
+        return {};
+      }
+    }
+
+    function registrarAba() {
+      try {
+        const abas = lerAbas();
+        abas[TAB_ID] = Date.now();
+        localStorage.setItem(CHAVE, JSON.stringify(abas));
+      } catch (e) {}
+    }
+
+    registrarAba();
+    // Atualizar a cada 60s para mostrar que a aba continua viva
+    setInterval(registrarAba, 60000);
+
+    window.addEventListener("beforeunload", function () {
+      try {
+        const abas = lerAbas();
+        delete abas[TAB_ID];
+        // Filtrar entradas obsoletas (abas que travaram sem disparar beforeunload)
+        const agora = Date.now();
+        const abasVivas = Object.entries(abas).filter(
+          ([, ts]) => agora - ts < STALE_MS,
+        );
+        // Salvar estado sem esta aba
+        const novoObj = Object.fromEntries(abasVivas);
+        localStorage.setItem(CHAVE, JSON.stringify(novoObj));
+
+        if (abasVivas.length === 0) {
+          // Última aba sendo fechada → logout
+          const deviceId = localStorage.getItem("pethub_device_id");
+          const apiBase = window.VPS_URL || window.API_URL || "";
+          const payload = JSON.stringify({ device_id: deviceId });
+          navigator.sendBeacon(
+            apiBase + "/api/usuarios/logout",
+            new Blob([payload], { type: "application/json" }),
+          );
+        }
+      } catch (e) {}
+    });
+  })();
+
+  // ===============================================
+  // Monitoramento de sessão ativa (heartbeat a cada 60s)
   // ===============================================
   (function iniciarHeartbeat() {
     const HEARTBEAT_INTERVAL = 60000; // 60 segundos

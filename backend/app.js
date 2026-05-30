@@ -1241,6 +1241,26 @@ async function syncAllTables() {
       console.warn("  ⚠️ Migration lembrete colunas:", e.message);
     }
 
+    // 0b) Migration: device_id em sessoes_ativas (identificador por dispositivo)
+    try {
+      const [cols] = await sequelize.query(
+        "SHOW COLUMNS FROM sessoes_ativas LIKE 'device_id'",
+      );
+      if (cols.length === 0) {
+        await sequelize.query(
+          "ALTER TABLE sessoes_ativas ADD COLUMN device_id VARCHAR(64) NULL DEFAULT NULL AFTER token_hash",
+        );
+        await sequelize.query(
+          "ALTER TABLE sessoes_ativas ADD INDEX idx_device_id (device_id)",
+        );
+        console.log("  ✅ Migration: device_id adicionado em sessoes_ativas");
+      } else {
+        console.log("  ℹ️ device_id já existe em sessoes_ativas — ok");
+      }
+    } catch (e) {
+      console.warn("  ⚠️ Migration device_id:", e.message);
+    }
+
     // 1) Sync principal: cobre Cliente + todos os factory models (Usuario, Empresa, etc.)
     await sequelize.sync();
     console.log("✅ Tabelas da instância principal criadas");

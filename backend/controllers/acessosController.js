@@ -1,8 +1,9 @@
 const { EmpresaPainel, SessaoAtiva, sequelize } = require("../models");
 const { Op } = require("sequelize");
 
-// Tempo máximo de inatividade: 5 minutos sem heartbeat = sessão expirada.
-const SESSAO_TIMEOUT_MINUTES = 5;
+// Tempo máximo de inatividade: 30 minutos sem heartbeat = sessão expirada.
+// Valor seguro mesmo com browser throttling de background tabs (heartbeat 60s).
+const SESSAO_TIMEOUT_MINUTES = 30;
 const SESSAO_TIMEOUT_MS = SESSAO_TIMEOUT_MINUTES * 60 * 1000;
 
 /**
@@ -340,9 +341,10 @@ async function verificarSessaoAtiva(tokenHash) {
  * Ordem de lookup:
  *   1. device_id (identificador único do navegador/dispositivo) — prioritário
  *   2. token_hash (mesmo cookie)
- *   3. usuario_id + empresa_id sem device_id (legado)
+ *   3. usuario_id + empresa_id (legado)
  *   4. Cria nova linha
  * Garante: 1 device = 1 linha na tabela, independente de abas ou reloads.
+ * Resiliente: se a coluna device_id ainda não existir no DB, usa fallback.
  */
 async function registrarSessao(
   usuarioId,
@@ -356,35 +358,47 @@ async function registrarSessao(
     let minhaSessaoId = null;
 
     // 1. Buscar por device_id (dispositivo já conhecido)
-    const porDevice = deviceId
-      ? await SessaoAtiva.findOne({ where: { device_id: deviceId } })
-      : null;
+    // Usa try-catch individual para ser resiliente se a coluna ainda não existir
+    if (deviceId) {
+      try {
+        const porDevice = await SessaoAtiva.findOne({
+          where: { device_id: deviceId },
+        });
+        if (porDevice) {
+          await porDevice.update({
+            token_hash: tokenHash,
+            usuario_id: usuarioId,
+            empresa_id: empresaPainelId || porDevice.empresa_id,
+            ip_address: ip || porDevice.ip_address,
+            user_agent: userAgent
+              ? userAgent.substring(0, 500)
+              : porDevice.user_agent,
+            ultima_atividade: new Date(),
+            ativo: true,
+          });
+          minhaSessaoId = porDevice.id;
+          console.log(
+            `[acessos] sessão reutilizada por device_id=${deviceId.substring(0, 8)} id=${minhaSessaoId}`,
+          );
+        }
+      } catch (deviceErr) {
+        // Coluna device_id pode não existir ainda no DB (migration pendente)
+        console.warn(
+          "[acessos] lookup por device_id falhou (coluna ausente?):",
+          deviceErr.message,
+        );
+        deviceId = null; // desabilitar uso de device_id nesta execução
+      }
+    }
 
-    if (porDevice) {
-      await porDevice.update({
-        token_hash: tokenHash,
-        usuario_id: usuarioId,
-        empresa_id: empresaPainelId || porDevice.empresa_id,
-        ip_address: ip || porDevice.ip_address,
-        user_agent: userAgent
-          ? userAgent.substring(0, 500)
-          : porDevice.user_agent,
-        ultima_atividade: new Date(),
-        ativo: true,
-      });
-      minhaSessaoId = porDevice.id;
-      console.log(
-        `[acessos] sessão reutilizada por device_id=${deviceId?.substring(0, 8)} id=${minhaSessaoId}`,
-      );
-    } else {
+    if (!minhaSessaoId) {
       // 2. Buscar por token_hash exato
       const porToken = await SessaoAtiva.findOne({
         where: { token_hash: tokenHash },
       });
 
       if (porToken) {
-        await porToken.update({
-          device_id: deviceId || porToken.device_id,
+        const updateData = {
           usuario_id: usuarioId,
           empresa_id: empresaPainelId || porToken.empresa_id,
           ip_address: ip || porToken.ip_address,
@@ -393,7 +407,10 @@ async function registrarSessao(
             : porToken.user_agent,
           ultima_atividade: new Date(),
           ativo: true,
-        });
+        };
+        // Associar device_id se tiver o campo
+        if (deviceId) updateData.device_id = deviceId;
+        await porToken.update(updateData);
         minhaSessaoId = porToken.id;
         console.log(
           `[acessos] sessão reutilizada por token_hash id=${minhaSessaoId}`,
@@ -406,43 +423,42 @@ async function registrarSessao(
                 usuario_id: usuarioId,
                 empresa_id: empresaPainelId,
                 ativo: true,
-                device_id: null,
               },
               order: [["ultima_atividade", "DESC"]],
             })
           : null;
 
         if (porUsuario) {
-          await porUsuario.update({
+          const updateData = {
             token_hash: tokenHash,
-            device_id: deviceId || null,
             ip_address: ip || porUsuario.ip_address,
             user_agent: userAgent
               ? userAgent.substring(0, 500)
               : porUsuario.user_agent,
             ultima_atividade: new Date(),
             ativo: true,
-          });
+          };
+          if (deviceId) updateData.device_id = deviceId;
+          await porUsuario.update(updateData);
           minhaSessaoId = porUsuario.id;
-          console.log(
-            `[acessos] sessão legada atualizada com device_id id=${minhaSessaoId}`,
-          );
+          console.log(`[acessos] sessão legada atualizada id=${minhaSessaoId}`);
         } else {
           // 4. Criar nova sessão
-          const nova = await SessaoAtiva.create({
+          const createData = {
             usuario_id: usuarioId,
             empresa_id: empresaPainelId,
             token_hash: tokenHash,
-            device_id: deviceId || null,
             ip_address: ip || null,
             user_agent: userAgent ? userAgent.substring(0, 500) : null,
             data_login: new Date(),
             ultima_atividade: new Date(),
             ativo: true,
-          });
+          };
+          if (deviceId) createData.device_id = deviceId;
+          const nova = await SessaoAtiva.create(createData);
           minhaSessaoId = nova.id;
           console.log(
-            `[acessos] nova sessão criada id=${minhaSessaoId} device_id=${deviceId?.substring(0, 8)}`,
+            `[acessos] nova sessão criada id=${minhaSessaoId} device=${deviceId ? deviceId.substring(0, 8) : "none"}`,
           );
         }
       }
@@ -451,7 +467,6 @@ async function registrarSessao(
     // Limpar duplicatas do mesmo usuário + enforcar limite
     if (empresaPainelId && minhaSessaoId) {
       try {
-        // Desativar outras linhas ativas do MESMO usuário nesta empresa
         const duplicatas = await SessaoAtiva.findAll({
           where: {
             usuario_id: usuarioId,
@@ -471,7 +486,6 @@ async function registrarSessao(
           );
         }
 
-        // Enforcar limite da empresa
         const ep = await EmpresaPainel.findByPk(empresaPainelId, {
           attributes: ["id", "limite_acessos"],
         });
@@ -494,7 +508,7 @@ async function registrarSessao(
               { where: { id: { [Op.in]: idsRemover } } },
             );
             console.log(
-              `[acessos] limite=${ep.limite_acessos} enforçado: ${idsRemover.length} sessão(es) antiga(s) derrubada(s)`,
+              `[acessos] limite=${ep.limite_acessos} enforçado: ${idsRemover.length} sessão(es) derrubada(s)`,
             );
           }
         }

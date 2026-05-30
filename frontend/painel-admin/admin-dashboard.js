@@ -1523,7 +1523,7 @@ function _iniciarPollingAcessos(empresaId) {
         atualizarModalAcessos(data);
       }
     } catch (_) {}
-  }, 8000);
+  }, 3000);
 }
 
 function _pararPollingAcessos() {
