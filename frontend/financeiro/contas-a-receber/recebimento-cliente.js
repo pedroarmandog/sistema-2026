@@ -712,7 +712,11 @@ function renderizarTabelaHistorico() {
       <td>R$ ${fmtVal(doc.valorPago)}</td>
       <td>${statusBadge(doc.status)}</td>
       <td>R$ <strong>${fmtVal(doc.valorPago)}</strong></td>
-      <td>${doc.dataPagamento ? fmtData(doc.dataPagamento) : "-"}</td>
+      <td>
+        <button onclick="excluirDocumentoHistorico(${doc.id})" title="Excluir" style="background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:6px;color:#d32f2f;font-size:15px;" onmouseenter="this.style.background='#fdecea'" onmouseleave="this.style.background='none'">
+          <i class="fas fa-trash"></i>
+        </button>
+      </td>
     </tr>`,
     )
     .join("");
@@ -932,6 +936,23 @@ async function excluirDocumento(id) {
   } catch (e) {
     console.error("[excluirDocumento] Erro:", e);
     mostrarToast("Erro ao excluir documento", "error");
+  }
+}
+
+async function excluirDocumentoHistorico(id) {
+  if (!confirm("Deseja realmente excluir este recebimento do histórico?"))
+    return;
+  try {
+    const res = await fetch(`${API_BASE}/api/contas-receber/${id}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (!res.ok) throw new Error("status " + res.status);
+    mostrarToast("Recebimento excluído com sucesso!");
+    await carregarHistorico();
+  } catch (e) {
+    console.error("[excluirDocumentoHistorico] Erro:", e);
+    mostrarToast("Erro ao excluir recebimento", "error");
   }
 }
 
