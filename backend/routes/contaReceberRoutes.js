@@ -23,9 +23,9 @@ router.get("/", async (req, res) => {
 
     const where = {};
 
-    // Filtro de empresa (multi-tenant)
+    // Filtro de empresa (multi-tenant) — isolamento estrito por empresa_id
     if (req.user?.empresaId) {
-      where[Op.or] = [{ empresa_id: req.user.empresaId }, { empresa_id: null }];
+      where.empresa_id = req.user.empresaId;
     }
 
     if (clienteId) where.clienteId = Number(clienteId);
@@ -99,8 +99,9 @@ router.get("/todos", async (req, res) => {
     const { clienteId, clienteNome, limit: lim, offset: off } = req.query;
     const where = {};
 
+    // Filtro de empresa (multi-tenant) — isolamento estrito por empresa_id
     if (req.user?.empresaId) {
-      where[Op.or] = [{ empresa_id: req.user.empresaId }, { empresa_id: null }];
+      where.empresa_id = req.user.empresaId;
     }
     if (clienteId) where.clienteId = Number(clienteId);
     if (clienteNome) where.clienteNome = { [Op.like]: `%${clienteNome}%` };
@@ -125,7 +126,14 @@ router.get("/todos", async (req, res) => {
 router.get("/:id", async (req, res) => {
   try {
     const row = await ContaReceber.findByPk(req.params.id);
-    if (!row) return res.status(404).json({ error: "Registro não encontrado" });
+    if (!row) return res.status(404).json({ error: "Registro não encontrado" }); // Isolamento multi-tenant: verificar que o registro pertence à empresa logada
+    if (
+      req.user?.empresaId &&
+      row.empresa_id &&
+      row.empresa_id !== req.user.empresaId
+    ) {
+      return res.status(403).json({ error: "Acesso negado" });
+    }
     return res.json(row.toJSON());
   } catch (err) {
     console.error("[GET /api/contas-receber/:id] Erro:", err.message);
@@ -201,8 +209,14 @@ router.post("/", async (req, res) => {
 router.put("/:id", async (req, res) => {
   try {
     const row = await ContaReceber.findByPk(req.params.id);
-    if (!row) return res.status(404).json({ error: "Registro não encontrado" });
-
+    if (!row) return res.status(404).json({ error: "Registro não encontrado" }); // Isolamento multi-tenant
+    if (
+      req.user?.empresaId &&
+      row.empresa_id &&
+      row.empresa_id !== req.user.empresaId
+    ) {
+      return res.status(403).json({ error: "Acesso negado" });
+    }
     const body = req.body || {};
     await row.update({
       clienteId: body.clienteId !== undefined ? body.clienteId : row.clienteId,
@@ -253,8 +267,14 @@ router.put("/:id", async (req, res) => {
 router.patch("/:id/receber", async (req, res) => {
   try {
     const row = await ContaReceber.findByPk(req.params.id);
-    if (!row) return res.status(404).json({ error: "Registro não encontrado" });
-
+    if (!row) return res.status(404).json({ error: "Registro não encontrado" }); // Isolamento multi-tenant
+    if (
+      req.user?.empresaId &&
+      row.empresa_id &&
+      row.empresa_id !== req.user.empresaId
+    ) {
+      return res.status(403).json({ error: "Acesso negado" });
+    }
     const { valorRecebido, dataPagamento, formaPagamento } = req.body || {};
     const vr = toNum(valorRecebido);
     if (vr <= 0) {
@@ -283,7 +303,14 @@ router.patch("/:id/receber", async (req, res) => {
 router.delete("/:id", async (req, res) => {
   try {
     const row = await ContaReceber.findByPk(req.params.id);
-    if (!row) return res.status(404).json({ error: "Registro não encontrado" });
+    if (!row) return res.status(404).json({ error: "Registro não encontrado" }); // Isolamento multi-tenant
+    if (
+      req.user?.empresaId &&
+      row.empresa_id &&
+      row.empresa_id !== req.user.empresaId
+    ) {
+      return res.status(403).json({ error: "Acesso negado" });
+    }
     await row.destroy();
     console.log(`[DELETE /api/contas-receber/${req.params.id}] Removido`);
     return res.json({ success: true, message: "Registro removido" });
@@ -303,8 +330,9 @@ router.get("/resumo/periodo", async (req, res) => {
     const hoje23 = new Date(agora);
     hoje23.setHours(23, 59, 59, 999);
 
+    // Isolamento estrito por empresa_id — sem fallback para null
     const baseWhere = req.user?.empresaId
-      ? { [Op.or]: [{ empresa_id: req.user.empresaId }, { empresa_id: null }] }
+      ? { empresa_id: req.user.empresaId }
       : {};
 
     const statusPendentes = { [Op.in]: ["pendente", "parcial"] };

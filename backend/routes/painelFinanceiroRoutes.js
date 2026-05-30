@@ -302,10 +302,15 @@ router.get("/resumo", async (req, res) => {
           0,
         );
       const statusPend = { [Op.in]: ["pendente", "parcial"] };
+      // Isolamento estrito por empresa_id
+      const empresaWhere = req.user?.empresaId
+        ? { empresa_id: req.user.empresaId }
+        : {};
       const [crHoje, crSem, crProxSem, crMes, crProxMes, crAtr] =
         await Promise.all([
           ContaReceber.findAll({
             where: {
+              ...empresaWhere,
               status: statusPend,
               dataVencimento: { [Op.between]: [hoje0, hoje23] },
             },
@@ -313,6 +318,7 @@ router.get("/resumo", async (req, res) => {
           }),
           ContaReceber.findAll({
             where: {
+              ...empresaWhere,
               status: statusPend,
               dataVencimento: { [Op.between]: [semana.inicio, semana.fim] },
             },
@@ -320,6 +326,7 @@ router.get("/resumo", async (req, res) => {
           }),
           ContaReceber.findAll({
             where: {
+              ...empresaWhere,
               status: statusPend,
               dataVencimento: { [Op.between]: [proxSemIni, proxSemFim] },
             },
@@ -327,6 +334,7 @@ router.get("/resumo", async (req, res) => {
           }),
           ContaReceber.findAll({
             where: {
+              ...empresaWhere,
               status: statusPend,
               dataVencimento: { [Op.between]: [mesMesIni, mesMesFim] },
             },
@@ -334,13 +342,18 @@ router.get("/resumo", async (req, res) => {
           }),
           ContaReceber.findAll({
             where: {
+              ...empresaWhere,
               status: statusPend,
               dataVencimento: { [Op.between]: [proxMesIni, proxMesFim] },
             },
             attributes: ["valor", "valorPago"],
           }),
           ContaReceber.findAll({
-            where: { status: statusPend, dataVencimento: { [Op.lt]: hoje0 } },
+            where: {
+              ...empresaWhere,
+              status: statusPend,
+              dataVencimento: { [Op.lt]: hoje0 },
+            },
             attributes: ["valor", "valorPago"],
           }),
         ]);

@@ -565,11 +565,8 @@ app.get("/api/entrada/manual", authUser, async (req, res) => {
     if (Entrada && typeof Entrada.findAll === "function") {
       const where = {};
       if (req.user?.empresaId) {
-        // Inclui registros da empresa atual E registros antigos sem empresa_id
-        where[Op.or] = [
-          { empresa_id: req.user.empresaId },
-          { empresa_id: null },
-        ];
+        // Isolamento estrito por empresa_id — sem fallback para null
+        where.empresa_id = req.user.empresaId;
       }
       const rows = await Entrada.findAll({
         where,
