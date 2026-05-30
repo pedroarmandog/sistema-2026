@@ -260,7 +260,8 @@ exports.criarOuAtualizar = async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 exports.desativar = async (req, res) => {
   try {
-    const { ProdutoLembreteRecorrente, Cliente } = require("../models");
+    const { ProdutoLembreteRecorrente, Cliente, EnvioAgendado, MensagemAutomatica } = require("../models");
+    const { sequelize } = require("../models/Cliente");
     const { id } = req.params;
 
     const lembrete = await ProdutoLembreteRecorrente.findByPk(id);
@@ -272,9 +273,33 @@ exports.desativar = async (req, res) => {
 
     await lembrete.update({ ativo: false, status: "cancelado" });
 
-    // Limpar config de lembrete no cadastro do cliente
-    // (assim o form de edição fica em branco para nova configuração)
+    // Cancelar envios agendados pendentes deste cliente (pizarra limpa para reativação)
     if (lembrete.cliente_id) {
+      try {
+        const template = await MensagemAutomatica.findOne({
+          where: { tipo: "produto_recorrente", empresaId: lembrete.empresa_id || 1 },
+        });
+        if (template) {
+          await EnvioAgendado.update(
+            { status: "cancelado" },
+            {
+              where: {
+                mensagemAutomaticaId: template.id,
+                status: { [Op.in]: ["pendente", "enviando"] },
+                [Op.and]: [
+                  sequelize.literal(
+                    `JSON_EXTRACT(contexto, '$.clienteId') = ${Number(lembrete.cliente_id)}`,
+                  ),
+                ],
+              },
+            },
+          );
+        }
+      } catch (e) {
+        console.warn("[ProdutoLembrete] Erro ao cancelar envios pendentes:", e.message);
+      }
+
+      // Limpar config de lembrete no cadastro do cliente
       await Cliente.update(
         {
           lembrete_automatico_ativo: false,
@@ -505,6 +530,32 @@ exports.saveConfigCliente = async (req, res) => {
         { ativo: false, status: "cancelado" },
         { where: { cliente_id: cliId, empresa_id: empId, ativo: true } },
       );
+      // Cancelar envios agendados pendentes (pizarra limpa para reativação)
+      try {
+        const { EnvioAgendado, MensagemAutomatica } = require("../models");
+        const { sequelize } = require("../models/Cliente");
+        const template = await MensagemAutomatica.findOne({
+          where: { tipo: "produto_recorrente", empresaId: empId },
+        });
+        if (template) {
+          await EnvioAgendado.update(
+            { status: "cancelado" },
+            {
+              where: {
+                mensagemAutomaticaId: template.id,
+                status: { [Op.in]: ["pendente", "enviando"] },
+                [Op.and]: [
+                  sequelize.literal(
+                    `JSON_EXTRACT(contexto, '$.clienteId') = ${cliId}`,
+                  ),
+                ],
+              },
+            },
+          );
+        }
+      } catch (e) {
+        console.warn("[ProdutoLembrete] Erro ao cancelar envios pendentes:", e.message);
+      }
       await Cliente.update(
         {
           lembrete_automatico_ativo: false,
@@ -670,7 +721,8 @@ exports.processarLembretes = async function processarLembretes() {
         await garantirTemplateProdutoRecorrente(empresaId);
 
         // Disparar mensagem via sistema de marketing existente
-        const cicloData = new Date().toISOString().slice(0, 10); // "2026-05-26"
+        // cicloId único por lembrete+dia: reativações criam novo cicloData → novo envio
+        const cicloId = `${lembrete.id}-${new Date().toISOString().slice(0, 10)}`;
         const envio = await dispararMensagemAutomatica(
           "produto_recorrente",
           {
@@ -685,7 +737,7 @@ exports.processarLembretes = async function processarLembretes() {
             clienteId: cliente.id,
             lembreteId: lembrete.id,
             diasAntes: 0, // já é o dia do disparo
-            cicloData, // identifica o ciclo — evita bloqueio de dedup entre ciclos
+            cicloData: cicloId, // identifica o ciclo — evita bloqueio de dedup entre ciclos
           },
           empresaId,
         );
@@ -790,7 +842,7 @@ exports.dispararIndividual = async function dispararIndividual(req, res) {
 
     await garantirTemplateProdutoRecorrente(empresaId);
 
-    const cicloData = new Date().toISOString().slice(0, 10);
+    const cicloId = `${lembrete.id}-${new Date().toISOString().slice(0, 10)}`;
     const envio = await dispararMensagemAutomatica(
       "produto_recorrente",
       {
@@ -805,7 +857,7 @@ exports.dispararIndividual = async function dispararIndividual(req, res) {
         clienteId: cliente.id,
         lembreteId: lembrete.id,
         diasAntes: 0,
-        cicloData,
+        cicloData: cicloId,
       },
       empresaId,
     );
