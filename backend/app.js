@@ -127,6 +127,7 @@ app.use(
       const allowed = [
         "https://pethubflow.com.br",
         "https://www.pethubflow.com.br",
+        "https://api.pethubflow.com.br",
         "http://72.60.244.46:3000",
         "https://72.60.244.46:3000",
       ];
