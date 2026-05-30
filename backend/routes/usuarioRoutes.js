@@ -273,11 +273,16 @@ router.post("/logout", async (req, res) => {
     }
   }
 
-  res.clearCookie("pethub_token", {
+  const _logoutCookieDomain = process.env.COOKIE_DOMAIN || null;
+  const _logoutCookieSecure = process.env.COOKIE_SECURE === "1";
+  const _clearOpts = {
     path: "/",
     httpOnly: true,
-    sameSite: "Lax",
-  });
+    sameSite: process.env.COOKIE_SAMESITE || "Lax",
+  };
+  if (_logoutCookieDomain) _clearOpts.domain = _logoutCookieDomain;
+  if (_logoutCookieSecure) _clearOpts.secure = true;
+  res.clearCookie("pethub_token", _clearOpts);
   res.json({ mensagem: "Logout realizado com sucesso" });
 });
 

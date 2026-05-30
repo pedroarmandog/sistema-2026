@@ -254,12 +254,17 @@ exports.login = async (req, res) => {
     }
 
     // Cookie HttpOnly (seguro) — enviado automaticamente pelo navegador
-    res.cookie("pethub_token", token, {
+    const _cookieDomain = process.env.COOKIE_DOMAIN || null;
+    const _cookieSecure = process.env.COOKIE_SECURE === "1";
+    const _jwtCookieOptions = {
       httpOnly: true,
-      sameSite: "Lax",
+      sameSite: process.env.COOKIE_SAMESITE || "Lax",
       maxAge: 8 * 60 * 60 * 1000, // 8 horas
       path: "/",
-    });
+    };
+    if (_cookieDomain) _jwtCookieOptions.domain = _cookieDomain;
+    if (_cookieSecure) _jwtCookieOptions.secure = true;
+    res.cookie("pethub_token", token, _jwtCookieOptions);
 
     // Remover senha antes de retornar
     const usuarioData = usuarioEncontrado.toJSON();
