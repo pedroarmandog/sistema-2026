@@ -80,6 +80,19 @@ async function realizarLogin(usuario, senha) {
   try {
     console.log("Enviando requisição de login:", { usuario, senha: "***" });
 
+    // Obter ou gerar identificador persistente do dispositivo
+    let deviceId = null;
+    try {
+      deviceId = localStorage.getItem("pethub_device_id");
+      if (!deviceId) {
+        deviceId =
+          typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : Date.now().toString(36) + Math.random().toString(36);
+        localStorage.setItem("pethub_device_id", deviceId);
+      }
+    } catch (e) {}
+
     const _base = window.VPS_URL || window.API_URL || "";
     const response = await fetch(_base + "/api/usuarios/login", {
       method: "POST",
@@ -90,6 +103,7 @@ async function realizarLogin(usuario, senha) {
       body: JSON.stringify({
         usuario: usuario,
         senha: senha,
+        device_id: deviceId,
       }),
     });
 
@@ -159,18 +173,6 @@ document
       // Salvar informações nos cookies (não no localStorage)
       setCookie("usuarioLogadoId", resultado.id, 30);
       setCookie("usuarioLogadoNome", resultado.nome, 30);
-
-      // Tentar registrar sessão explicitamente no backend (uma vez)
-      try {
-        const _base = window.VPS_URL || window.API_URL || "";
-        await fetch(_base + "/api/usuarios/start-session", {
-          method: "POST",
-          credentials: "include",
-        });
-        console.log("[login] start-session chamado com sucesso");
-      } catch (e) {
-        console.warn("[login] falha ao chamar start-session:", e);
-      }
 
       // Redirecionar para o dashboard (caminho público servido pelo backend)
       window.location.href = "/dashboard.html";

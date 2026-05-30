@@ -18,6 +18,7 @@ const {
 exports.login = async (req, res) => {
   try {
     const { usuario, senha } = req.body;
+    const deviceId = req.body.device_id || null;
 
     console.log("🔐 Tentativa de login:", usuario);
     console.log("📦 Dados recebidos:", {
@@ -173,62 +174,6 @@ exports.login = async (req, res) => {
       });
     }
 
-    // -----------------------------------------------------------------------
-    // REUTILIZAR SESSÃO EXISTENTE: se o mesmo browser já tem um cookie válido
-    // para este usuário com sessão ativa no banco, reaproveitar o token.
-    // Isso garante que abrir várias abas no mesmo computador nunca cria novas
-    // sessões — só um acesso de outro dispositivo gera uma nova entrada.
-    // -----------------------------------------------------------------------
-    const JWT_SECRET_LOCAL =
-      process.env.JWT_USER_SECRET || "pethub_user_secret_2026_!@#$%";
-    const existingCookieToken = req.cookies?.pethub_token;
-    if (existingCookieToken) {
-      try {
-        const existingDecoded = jwt.verify(
-          existingCookieToken,
-          JWT_SECRET_LOCAL,
-        );
-        if (
-          existingDecoded &&
-          Number(existingDecoded.id) === Number(usuarioEncontrado.id)
-        ) {
-          const existingHash = crypto
-            .createHash("sha256")
-            .update(existingCookieToken)
-            .digest("hex");
-          const { SessaoAtiva } = require("../models");
-          const sessaoExistente = await SessaoAtiva.findOne({
-            where: { token_hash: existingHash, ativo: true },
-          });
-          if (sessaoExistente) {
-            // Reutilizar sessão — apenas atualizar atividade e renovar cookie
-            await atualizarAtividade(existingHash);
-            const _cd = process.env.COOKIE_DOMAIN || null;
-            const _cs = process.env.COOKIE_SECURE === "1";
-            const _reuseOpts = {
-              httpOnly: true,
-              sameSite: process.env.COOKIE_SAMESITE || "Lax",
-              maxAge: 8 * 60 * 60 * 1000,
-              path: "/",
-            };
-            if (_cd) _reuseOpts.domain = _cd;
-            if (_cs) _reuseOpts.secure = true;
-            res.cookie("pethub_token", existingCookieToken, _reuseOpts);
-            const usuarioDataReuse = usuarioEncontrado.toJSON();
-            delete usuarioDataReuse.senha;
-            console.log(
-              `[login] sessão existente reutilizada para usuário ${usuarioEncontrado.id} — sem nova sessão criada`,
-            );
-            return res
-              .status(200)
-              .json({ ...usuarioDataReuse, token: existingCookieToken });
-          }
-        }
-      } catch (e) {
-        // token expirado ou inválido — prosseguir com novo login normalmente
-      }
-    }
-
     // Verificar limite de acessos simultâneos
     const limiteCheck = await verificarLimiteAcessos(_empresaId);
 
@@ -301,6 +246,7 @@ exports.login = async (req, res) => {
         tokenHash,
         typeof clientIp === "string" ? clientIp.split(",")[0].trim() : "",
         userAgent,
+        deviceId,
       );
       console.log(
         `📝 Sessão registrada para usuário ${usuarioEncontrado.id} na empresa painel ${limiteCheckToUse.empresaPainelId}`,

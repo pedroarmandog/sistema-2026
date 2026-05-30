@@ -1,10 +1,9 @@
 const { EmpresaPainel, SessaoAtiva, sequelize } = require("../models");
 const { Op } = require("sequelize");
 
-// Tempo máximo de inatividade (em minutos) para considerar sessão expirada.
-// 30 minutos: seguro para uso normal e tolerante a falhas transitórias de DB.
-const SESSAO_TIMEOUT_MINUTES = 30;
-const SESSAO_TIMEOUT_MS = SESSAO_TIMEOUT_MINUTES * 60 * 1000; // mantido para compatibilidade
+// Tempo máximo de inatividade: 5 minutos sem heartbeat = sessão expirada.
+const SESSAO_TIMEOUT_MINUTES = 5;
+const SESSAO_TIMEOUT_MS = SESSAO_TIMEOUT_MINUTES * 60 * 1000;
 
 /**
  * Limpa sessões expiradas usando NOW() do MySQL (timezone-safe)
@@ -337,9 +336,13 @@ async function verificarSessaoAtiva(tokenHash) {
 }
 
 /**
- * Registra uma nova sessão ativa (chamado após login bem-sucedido)
- * Fluxo seguro: cria/atualiza a sessão PRIMEIRO, depois derruba as excedentes.
- * Isso elimina a condição de corrida do modelo antigo (verificar → terminar → registrar).
+ * Registra ou atualiza sessão após login.
+ * Ordem de lookup:
+ *   1. device_id (identificador único do navegador/dispositivo) — prioritário
+ *   2. token_hash (mesmo cookie)
+ *   3. usuario_id + empresa_id sem device_id (legado)
+ *   4. Cria nova linha
+ * Garante: 1 device = 1 linha na tabela, independente de abas ou reloads.
  */
 async function registrarSessao(
   usuarioId,
@@ -347,87 +350,109 @@ async function registrarSessao(
   tokenHash,
   ip,
   userAgent,
+  deviceId,
 ) {
   try {
-    // Salvar ID da sessão atual para NUNCA removê-la no enforcement
     let minhaSessaoId = null;
 
-    // 1. Verificar pelo token_hash exato (mesma aba / cookie reutilizado)
-    const existente = await SessaoAtiva.findOne({
-      where: { token_hash: tokenHash },
-    });
-    if (existente) {
-      await existente.update({
+    // 1. Buscar por device_id (dispositivo já conhecido)
+    const porDevice = deviceId
+      ? await SessaoAtiva.findOne({ where: { device_id: deviceId } })
+      : null;
+
+    if (porDevice) {
+      await porDevice.update({
+        token_hash: tokenHash,
         usuario_id: usuarioId,
-        empresa_id: empresaPainelId || existente.empresa_id,
-        ip_address: ip || existente.ip_address,
+        empresa_id: empresaPainelId || porDevice.empresa_id,
+        ip_address: ip || porDevice.ip_address,
         user_agent: userAgent
           ? userAgent.substring(0, 500)
-          : existente.user_agent,
+          : porDevice.user_agent,
         ultima_atividade: new Date(),
         ativo: true,
       });
-      minhaSessaoId = existente.id;
+      minhaSessaoId = porDevice.id;
       console.log(
-        `[acessos] sessão existente (mesmo token) atualizada id=${minhaSessaoId}`,
+        `[acessos] sessão reutilizada por device_id=${deviceId?.substring(0, 8)} id=${minhaSessaoId}`,
       );
     } else {
-      // 2. Verificar se o mesmo usuário já tem sessão ativa nesta empresa.
-      //    Se sim, reutilizar a linha atualizando o token_hash — assim o mesmo
-      //    usuário logando de novo (reload, nova aba, cookie expirado) nunca
-      //    acumula linhas extras. 1 usuário = 1 linha na tabela.
-      const sessaoDoUsuario = empresaPainelId
-        ? await SessaoAtiva.findOne({
-            where: {
-              usuario_id: usuarioId,
-              empresa_id: empresaPainelId,
-              ativo: true,
-            },
-            order: [["ultima_atividade", "DESC"]],
-          })
-        : null;
+      // 2. Buscar por token_hash exato
+      const porToken = await SessaoAtiva.findOne({
+        where: { token_hash: tokenHash },
+      });
 
-      if (sessaoDoUsuario) {
-        await sessaoDoUsuario.update({
-          token_hash: tokenHash,
-          ip_address: ip || sessaoDoUsuario.ip_address,
+      if (porToken) {
+        await porToken.update({
+          device_id: deviceId || porToken.device_id,
+          usuario_id: usuarioId,
+          empresa_id: empresaPainelId || porToken.empresa_id,
+          ip_address: ip || porToken.ip_address,
           user_agent: userAgent
             ? userAgent.substring(0, 500)
-            : sessaoDoUsuario.user_agent,
+            : porToken.user_agent,
           ultima_atividade: new Date(),
           ativo: true,
         });
-        minhaSessaoId = sessaoDoUsuario.id;
+        minhaSessaoId = porToken.id;
         console.log(
-          `[acessos] sessão existente do usuário reutilizada (novo token) id=${minhaSessaoId} usuario=${usuarioId}`,
+          `[acessos] sessão reutilizada por token_hash id=${minhaSessaoId}`,
         );
       } else {
-        // 3. Nenhuma sessão ativa para este usuário — criar nova linha
-        console.log(
-          `[acessos] criando nova sessão token=${tokenHash.substring(0, 10)} usuario=${usuarioId} empresa=${empresaPainelId} ip=${ip}`,
-        );
-        const nova = await SessaoAtiva.create({
-          usuario_id: usuarioId,
-          empresa_id: empresaPainelId,
-          token_hash: tokenHash,
-          ip_address: ip || null,
-          user_agent: userAgent ? userAgent.substring(0, 500) : null,
-          data_login: new Date(),
-          ultima_atividade: new Date(),
-          ativo: true,
-        });
-        minhaSessaoId = nova.id;
-        console.log(`[acessos] nova sessão criada id=${minhaSessaoId}`);
+        // 3. Buscar sessão ativa do usuário sem device_id (legado)
+        const porUsuario = empresaPainelId
+          ? await SessaoAtiva.findOne({
+              where: {
+                usuario_id: usuarioId,
+                empresa_id: empresaPainelId,
+                ativo: true,
+                device_id: null,
+              },
+              order: [["ultima_atividade", "DESC"]],
+            })
+          : null;
+
+        if (porUsuario) {
+          await porUsuario.update({
+            token_hash: tokenHash,
+            device_id: deviceId || null,
+            ip_address: ip || porUsuario.ip_address,
+            user_agent: userAgent
+              ? userAgent.substring(0, 500)
+              : porUsuario.user_agent,
+            ultima_atividade: new Date(),
+            ativo: true,
+          });
+          minhaSessaoId = porUsuario.id;
+          console.log(
+            `[acessos] sessão legada atualizada com device_id id=${minhaSessaoId}`,
+          );
+        } else {
+          // 4. Criar nova sessão
+          const nova = await SessaoAtiva.create({
+            usuario_id: usuarioId,
+            empresa_id: empresaPainelId,
+            token_hash: tokenHash,
+            device_id: deviceId || null,
+            ip_address: ip || null,
+            user_agent: userAgent ? userAgent.substring(0, 500) : null,
+            data_login: new Date(),
+            ultima_atividade: new Date(),
+            ativo: true,
+          });
+          minhaSessaoId = nova.id;
+          console.log(
+            `[acessos] nova sessão criada id=${minhaSessaoId} device_id=${deviceId?.substring(0, 8)}`,
+          );
+        }
       }
     }
 
-    // Após registrar: limpar duplicatas do mesmo usuário (sessões acumuladas de logins anteriores)
-    // e enforçar o limite da empresa.
+    // Limpar duplicatas do mesmo usuário + enforcar limite
     if (empresaPainelId && minhaSessaoId) {
       try {
-        // Desativar quaisquer outras linhas ativas do MESMO usuário nesta empresa
-        // (garante 1 linha por usuário independente de quantas vezes ele logou antes)
-        const duplicatasDoUsuario = await SessaoAtiva.findAll({
+        // Desativar outras linhas ativas do MESMO usuário nesta empresa
+        const duplicatas = await SessaoAtiva.findAll({
           where: {
             usuario_id: usuarioId,
             empresa_id: empresaPainelId,
@@ -436,23 +461,21 @@ async function registrarSessao(
           },
           attributes: ["id"],
         });
-        if (duplicatasDoUsuario.length > 0) {
-          const idsDuplicatas = duplicatasDoUsuario.map((s) => s.id);
+        if (duplicatas.length > 0) {
           await SessaoAtiva.update(
             { ativo: false },
-            { where: { id: { [Op.in]: idsDuplicatas } } },
+            { where: { id: { [Op.in]: duplicatas.map((d) => d.id) } } },
           );
           console.log(
-            `[acessos] ${idsDuplicatas.length} sessão(ões) duplicada(s) do usuário=${usuarioId} desativada(s)`,
+            `[acessos] ${duplicatas.length} sessão(es) duplicada(s) do usuario=${usuarioId} desativada(s)`,
           );
         }
 
-        // Enforçar limite da empresa (outras sessões de outros usuários)
-        const empresaPainelRec = await EmpresaPainel.findByPk(empresaPainelId, {
+        // Enforcar limite da empresa
+        const ep = await EmpresaPainel.findByPk(empresaPainelId, {
           attributes: ["id", "limite_acessos"],
         });
-        if (empresaPainelRec && empresaPainelRec.limite_acessos) {
-          const limite = empresaPainelRec.limite_acessos;
+        if (ep && ep.limite_acessos) {
           const outrasAtivas = await SessaoAtiva.findAll({
             where: {
               empresa_id: empresaPainelId,
@@ -463,27 +486,80 @@ async function registrarSessao(
             order: [["ultima_atividade", "ASC"]],
             limit: 2000,
           });
-          if (outrasAtivas.length >= limite) {
-            const excesso = outrasAtivas.length - limite + 1;
+          if (outrasAtivas.length >= ep.limite_acessos) {
+            const excesso = outrasAtivas.length - ep.limite_acessos + 1;
             const idsRemover = outrasAtivas.slice(0, excesso).map((s) => s.id);
             await SessaoAtiva.update(
               { ativo: false },
               { where: { id: { [Op.in]: idsRemover } } },
             );
             console.log(
-              `[acessos] limite=${limite} enforçado: ${idsRemover.length} sessão(ões) antiga(s) derrubada(s) para empresa_painel=${empresaPainelId}`,
+              `[acessos] limite=${ep.limite_acessos} enforçado: ${idsRemover.length} sessão(es) antiga(s) derrubada(s)`,
             );
           }
         }
       } catch (limiteErr) {
         console.warn(
-          "[acessos] falha ao enforçar limite após registrar sessão:",
+          "[acessos] falha ao enforcar limite:",
           limiteErr && limiteErr.message,
         );
       }
     }
   } catch (e) {
     console.warn("[acessos] Erro ao registrar sessão:", e && e.message);
+  }
+}
+
+/**
+ * Heartbeat: atualiza ultima_atividade e verifica se a sessão ainda está ativa.
+ * Chamado a cada 60s pelo frontend.
+ * Retorna { ativa: true } ou { ativa: false, motivo: string }.
+ */
+async function heartbeatSessao(deviceId, tokenHash) {
+  try {
+    // Primeiro buscar por device_id (principal identificador)
+    if (deviceId) {
+      const sessao = await SessaoAtiva.findOne({
+        where: { device_id: deviceId },
+      });
+      if (sessao) {
+        if (!sessao.ativo) {
+          return { ativa: false, motivo: "sessao_encerrada" };
+        }
+        // Atualizar token_hash caso tenha mudado (novo login) e atividade
+        const updates = { ultima_atividade: new Date() };
+        if (tokenHash && sessao.token_hash !== tokenHash) {
+          updates.token_hash = tokenHash;
+        }
+        await sessao.update(updates);
+        return { ativa: true };
+      }
+    }
+
+    // Fallback: buscar por token_hash
+    if (tokenHash) {
+      const sessaoPorToken = await SessaoAtiva.findOne({
+        where: { token_hash: tokenHash },
+      });
+      if (sessaoPorToken) {
+        if (!sessaoPorToken.ativo) {
+          return { ativa: false, motivo: "sessao_encerrada" };
+        }
+        const updates = { ultima_atividade: new Date() };
+        if (deviceId && !sessaoPorToken.device_id) {
+          updates.device_id = deviceId; // associar device_id se ainda não tiver
+        }
+        await sessaoPorToken.update(updates);
+        return { ativa: true };
+      }
+    }
+
+    // Nenhum registro no banco — JWT pode ser válido mas sem sessão registrada
+    // (empresa sem painel, deploy após migração, etc.) — não desconectar
+    return { ativa: true, motivo: "no_record" };
+  } catch (e) {
+    console.warn("[acessos] heartbeatSessao erro:", e && e.message);
+    return { ativa: true, motivo: "db_error" }; // fail open
   }
 }
 
@@ -533,4 +609,5 @@ module.exports = {
   atualizarAtividade,
   limparSessoesExpiradas,
   verificarSessaoAtiva,
+  heartbeatSessao,
 };

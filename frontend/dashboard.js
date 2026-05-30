@@ -80,94 +80,68 @@ document.addEventListener("DOMContentLoaded", function () {
   // Se o admin ou outro login derrubar esta sessão,
   // redireciona para a página de sessão expirada.
   // ===============================================
-  (function iniciarMonitorSessao() {
-    let sessaoVerificando = false;
-    const INTERVALO_CHECK = 8000; // 8 segundos
-    let falhasConsecutivas = 0;
-    const LIMITE_FALHAS = 3; // redirecionar apenas após 3 falhas consecutivas (~24s)
+  (function iniciarHeartbeat() {
+    const HEARTBEAT_INTERVAL = 60000; // 60 segundos
+    let heartbeatRunning = false;
 
-    async function checarSessao() {
-      if (sessaoVerificando) return;
-      sessaoVerificando = true;
-      const _apiBase = window.VPS_URL || window.API_URL || "";
+    function getDeviceId() {
       try {
-        const resp = await fetch(_apiBase + "/api/usuarios/sessao-ativa", {
-          credentials: "include",
-        });
-        if (resp.ok) {
-          const data = await resp.json();
-          if (data.ativa === false) {
-            // Erros de DB/rede não devem desconectar o usuário — apenas falhas confirmadas
-            if (data.motivo === "db_error" || data.motivo === "erro") {
-              console.warn(
-                `[checarSessao] erro transitório de DB — ignorando (motivo=${data.motivo})`,
-              );
-              sessaoVerificando = false;
-              return;
-            }
-
-            falhasConsecutivas++;
-            console.warn(
-              `⚠️ Sessão inativa detectada (${falhasConsecutivas}/${LIMITE_FALHAS}) motivo=${data.motivo}`,
-            );
-
-            // Tentar reativar a sessão UMA VEZ antes de redirecionar.
-            if (falhasConsecutivas === 1) {
-              try {
-                const resp2 = await fetch(
-                  _apiBase + "/api/usuarios/start-session",
-                  {
-                    method: "POST",
-                    credentials: "include",
-                  },
-                );
-                if (resp2.ok) {
-                  const sdata = await resp2.json().catch(() => null);
-                  if (sdata && sdata.ativa) {
-                    console.log(
-                      "[checarSessao] start-session reativou a sessão",
-                    );
-                    falhasConsecutivas = 0;
-                    sessaoVerificando = false;
-                    return;
-                  }
-                }
-              } catch (e) {
-                console.warn(
-                  "[checarSessao] falha ao chamar start-session:",
-                  e,
-                );
-              }
-            }
-
-            if (falhasConsecutivas >= LIMITE_FALHAS) {
-              console.warn(
-                "⚠️ Sessão encerrada remotamente — redirecionando...",
-              );
-              window.location.href = "/sessao-expirada.html";
-              return;
-            }
-          } else {
-            if (falhasConsecutivas > 0) {
-              console.log(
-                "✅ Sessão reestabelecida, limpando contador de falhas",
-              );
-            }
-            falhasConsecutivas = 0;
-          }
+        let id = localStorage.getItem("pethub_device_id");
+        if (!id) {
+          id =
+            typeof crypto !== "undefined" && crypto.randomUUID
+              ? crypto.randomUUID()
+              : Date.now().toString(36) + Math.random().toString(36);
+          localStorage.setItem("pethub_device_id", id);
         }
+        return id;
       } catch (e) {
-        console.warn("[checarSessao] Erro de rede ao verificar sessão:", e);
-        // Erro de rede — não incrementar contador para evitar falsos positivos
-      } finally {
-        sessaoVerificando = false;
+        return null;
       }
     }
 
-    // Primeira verificação após 1.5s (evita race condition pós-login), depois a cada 8s.
-    // O check de cookie no topo do arquivo já protege o botão "voltar" do navegador.
-    setTimeout(checarSessao, 1500);
-    setInterval(checarSessao, INTERVALO_CHECK);
+    async function enviarHeartbeat() {
+      if (heartbeatRunning) return;
+      heartbeatRunning = true;
+      const _apiBase = window.VPS_URL || window.API_URL || "";
+      const deviceId = getDeviceId();
+      if (!deviceId) {
+        heartbeatRunning = false;
+        return;
+      }
+      try {
+        const resp = await fetch(_apiBase + "/api/usuarios/heartbeat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ device_id: deviceId }),
+        });
+        if (resp.ok) {
+          const data = await resp.json().catch(() => null);
+          if (
+            data &&
+            data.ativa === false &&
+            data.motivo !== "db_error" &&
+            data.motivo !== "no_record"
+          ) {
+            console.warn(
+              `[heartbeat] sessão encerrada remotamente (motivo=${data.motivo}) — redirecionando`,
+            );
+            window.location.href = "/sessao-expirada.html";
+            return;
+          }
+        }
+      } catch (e) {
+        // Erro de rede — não desconectar
+        console.warn("[heartbeat] erro de rede:", e);
+      } finally {
+        heartbeatRunning = false;
+      }
+    }
+
+    // Primeiro heartbeat após 2s, depois a cada 60s
+    setTimeout(enviarHeartbeat, 2000);
+    setInterval(enviarHeartbeat, HEARTBEAT_INTERVAL);
   })();
 
   // Verificar IDs duplicados primeiro
@@ -2433,10 +2407,19 @@ function escapeHtml(text) {
     // Encerrar sessão no backend
     try {
       const _base = window.VPS_URL || window.API_URL || "";
+      const _deviceId = (() => {
+        try {
+          return localStorage.getItem("pethub_device_id");
+        } catch (e) {
+          return null;
+        }
+      })();
       await fetch(_base + "/api/usuarios/logout", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         credentials: "include",
         keepalive: true,
+        body: JSON.stringify({ device_id: _deviceId }),
       });
     } catch (e) {
       // Ignorar erro — prosseguir com logout local

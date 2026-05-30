@@ -21,6 +21,10 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING,
         allowNull: false,
       },
+      device_id: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+      },
       ip_address: {
         type: DataTypes.STRING(45),
         allowNull: true,
