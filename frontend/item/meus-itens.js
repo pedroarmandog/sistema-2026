@@ -2829,6 +2829,19 @@ function renderizarProdutos(categoria, filtrosAdicionais = {}) {
     `[renderizarProdutos] Renderizando ${produtosFiltrados.length} produtos no grid`,
   );
 
+  // Estado vazio — nenhum produto cadastrado ou filtrado
+  if (produtosFiltrados.length === 0) {
+    grid.innerHTML = `
+      <div style="width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;color:#adb5bd;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.2" style="margin-bottom:16px;opacity:0.5;">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M20 7H4a1 1 0 00-1 1v11a1 1 0 001 1h16a1 1 0 001-1V8a1 1 0 00-1-1z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/>
+        </svg>
+        <p style="font-size:15px;font-weight:500;color:#6c757d;margin:0;">Nenhum produto cadastrado</p>
+      </div>`;
+    return;
+  }
+
   // Renderizar cada produto
   produtosFiltrados.forEach((produto, index) => {
     try {
@@ -3757,10 +3770,13 @@ function filtrarProdutosPorBusca(query) {
   grid.innerHTML = "";
 
   if (produtosFiltrados.length === 0) {
-    grid.innerHTML =
-      '<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #999; font-size: 14px;">Nenhum produto encontrado para "' +
-      query +
-      '"</div>';
+    grid.innerHTML = `
+      <div style="width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;color:#adb5bd;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.2" style="margin-bottom:16px;opacity:0.5;">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
+        </svg>
+        <p style="font-size:15px;font-weight:500;color:#6c757d;margin:0;">Nenhum produto encontrado para "<strong>${query}</strong>"</p>
+      </div>`;
     return;
   }
 
