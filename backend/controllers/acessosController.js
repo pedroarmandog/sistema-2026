@@ -408,7 +408,6 @@ async function registrarSessao(
           ultima_atividade: new Date(),
           ativo: true,
         };
-        // Associar device_id se tiver o campo
         if (deviceId) updateData.device_id = deviceId;
         await porToken.update(updateData);
         minhaSessaoId = porToken.id;
@@ -416,50 +415,86 @@ async function registrarSessao(
           `[acessos] sessão reutilizada por token_hash id=${minhaSessaoId}`,
         );
       } else {
-        // 3. Buscar sessão ativa do usuário sem device_id (legado)
-        const porUsuario = empresaPainelId
-          ? await SessaoAtiva.findOne({
-              where: {
-                usuario_id: usuarioId,
-                empresa_id: empresaPainelId,
-                ativo: true,
-              },
-              order: [["ultima_atividade", "DESC"]],
-            })
-          : null;
+        // 3. Buscar sessão ativa do mesmo usuário no mesmo IP
+        //    Garante que normal + incógnito no mesmo PC (mesmo IP) = 1 sessão
+        const ipLimpo = ip ? ip.split(",")[0].trim() : null;
+        const porIp =
+          ipLimpo && empresaPainelId
+            ? await SessaoAtiva.findOne({
+                where: {
+                  usuario_id: usuarioId,
+                  empresa_id: empresaPainelId,
+                  ip_address: ipLimpo,
+                  ativo: true,
+                },
+                order: [["ultima_atividade", "DESC"]],
+              }).catch(() => null)
+            : null;
 
-        if (porUsuario) {
-          const updateData = {
+        if (porIp) {
+          const updateIp = {
             token_hash: tokenHash,
-            ip_address: ip || porUsuario.ip_address,
+            ip_address: ipLimpo,
             user_agent: userAgent
               ? userAgent.substring(0, 500)
-              : porUsuario.user_agent,
+              : porIp.user_agent,
             ultima_atividade: new Date(),
             ativo: true,
           };
-          if (deviceId) updateData.device_id = deviceId;
-          await porUsuario.update(updateData);
-          minhaSessaoId = porUsuario.id;
-          console.log(`[acessos] sessão legada atualizada id=${minhaSessaoId}`);
-        } else {
-          // 4. Criar nova sessão
-          const createData = {
-            usuario_id: usuarioId,
-            empresa_id: empresaPainelId,
-            token_hash: tokenHash,
-            ip_address: ip || null,
-            user_agent: userAgent ? userAgent.substring(0, 500) : null,
-            data_login: new Date(),
-            ultima_atividade: new Date(),
-            ativo: true,
-          };
-          if (deviceId) createData.device_id = deviceId;
-          const nova = await SessaoAtiva.create(createData);
-          minhaSessaoId = nova.id;
+          if (deviceId) updateIp.device_id = deviceId;
+          await porIp.update(updateIp);
+          minhaSessaoId = porIp.id;
           console.log(
-            `[acessos] nova sessão criada id=${minhaSessaoId} device=${deviceId ? deviceId.substring(0, 8) : "none"}`,
+            `[acessos] sessão reutilizada por IP=${ipLimpo} id=${minhaSessaoId}`,
           );
+        } else {
+          // 4. Buscar qualquer sessão ativa do usuário nesta empresa (legado)
+          const porUsuario = empresaPainelId
+            ? await SessaoAtiva.findOne({
+                where: {
+                  usuario_id: usuarioId,
+                  empresa_id: empresaPainelId,
+                  ativo: true,
+                },
+                order: [["ultima_atividade", "DESC"]],
+              })
+            : null;
+
+          if (porUsuario) {
+            const updateData = {
+              token_hash: tokenHash,
+              ip_address: ipLimpo || porUsuario.ip_address,
+              user_agent: userAgent
+                ? userAgent.substring(0, 500)
+                : porUsuario.user_agent,
+              ultima_atividade: new Date(),
+              ativo: true,
+            };
+            if (deviceId) updateData.device_id = deviceId;
+            await porUsuario.update(updateData);
+            minhaSessaoId = porUsuario.id;
+            console.log(
+              `[acessos] sessão legada atualizada id=${minhaSessaoId}`,
+            );
+          } else {
+            // 5. Criar nova sessão
+            const createData = {
+              usuario_id: usuarioId,
+              empresa_id: empresaPainelId,
+              token_hash: tokenHash,
+              ip_address: ipLimpo || null,
+              user_agent: userAgent ? userAgent.substring(0, 500) : null,
+              data_login: new Date(),
+              ultima_atividade: new Date(),
+              ativo: true,
+            };
+            if (deviceId) createData.device_id = deviceId;
+            const nova = await SessaoAtiva.create(createData);
+            minhaSessaoId = nova.id;
+            console.log(
+              `[acessos] nova sessão criada id=${minhaSessaoId} device=${deviceId ? deviceId.substring(0, 8) : "none"} ip=${ipLimpo}`,
+            );
+          }
         }
       }
     }
