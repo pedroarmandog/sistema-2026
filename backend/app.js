@@ -1540,6 +1540,40 @@ function startServer() {
     } catch (e) {
       console.warn("⚠️ Migration lembrete colunas no startup:", e.message);
     }
+
+    // Migration: device_id em sessoes_ativas (roda sempre — garante coluna em produção)
+    try {
+      const [cols] = await sequelize.query(
+        "SHOW COLUMNS FROM sessoes_ativas LIKE 'device_id'",
+      );
+      if (cols.length === 0) {
+        await sequelize.query(
+          "ALTER TABLE sessoes_ativas ADD COLUMN device_id VARCHAR(64) NULL DEFAULT NULL AFTER token_hash",
+        );
+        await sequelize.query(
+          "ALTER TABLE sessoes_ativas ADD INDEX idx_device_id (device_id)",
+        );
+        console.log("✅ Migration: device_id adicionado em sessoes_ativas");
+      }
+    } catch (e) {
+      console.warn("⚠️ Migration device_id no startup:", e.message);
+    }
+
+    // Migration: encerrado_em em sessoes_ativas (roda sempre — garante coluna em produção)
+    try {
+      const [cols2] = await sequelize.query(
+        "SHOW COLUMNS FROM sessoes_ativas LIKE 'encerrado_em'",
+      );
+      if (cols2.length === 0) {
+        await sequelize.query(
+          "ALTER TABLE sessoes_ativas ADD COLUMN encerrado_em DATETIME NULL DEFAULT NULL AFTER ativo",
+        );
+        console.log("✅ Migration: encerrado_em adicionado em sessoes_ativas");
+      }
+    } catch (e) {
+      console.warn("⚠️ Migration encerrado_em no startup:", e.message);
+    }
+
     // Garantir tabela produto_lembrete_recorrente
     try {
       const { ProdutoLembreteRecorrente } = require("./models");
