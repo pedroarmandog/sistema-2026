@@ -36,7 +36,11 @@ async function limparSessoesExpiradas() {
       );
     }
   } catch (e) {
-    console.warn("[sessoes] limparSessoesExpiradas erro:", e && e.message);
+    console.error(
+      "[sessoes] limparSessoesExpiradas ERRO:",
+      e && e.message,
+      e && e.sql ? `\nSQL: ${e.sql}` : "",
+    );
   }
 }
 
