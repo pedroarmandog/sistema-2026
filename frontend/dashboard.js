@@ -1089,9 +1089,8 @@ function novoCliente() {
 }
 
 function novoContrato() {
-  console.log("Novo Contrato");
-  window.location.href = "/atendimento/novo-contrato.html";
   closeDropdown();
+  alert("Esta funcionalidade ainda está em desenvolvimento.");
 }
 
 function novaVenda() {
