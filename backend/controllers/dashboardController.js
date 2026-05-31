@@ -5,6 +5,7 @@ const {
   Agendamento,
   Venda,
   Entrada,
+  Periodicidade,
   sequelize,
 } = require("../models");
 const { Op, literal } = require("sequelize");
@@ -561,7 +562,7 @@ exports.ticketMedio = async (req, res) => {
   }
 };
 
-// Periódicos: pets com serviços periódicos a renovar nos próximos 7 dias
+// Periódicos: pets com vacinas/vermífugos/antiparasitários a renovar nos próximos 7 dias
 exports.periodicos = async (req, res) => {
   try {
     const hoje = new Date();
@@ -569,76 +570,95 @@ exports.periodicos = async (req, res) => {
     const em7Dias = new Date(hoje);
     em7Dias.setDate(em7Dias.getDate() + 7);
 
-    const whereEmpresa = req.user?.empresaId
-      ? { empresa_id: req.user.empresaId }
-      : {};
+    const empresaId = req.user?.empresaId;
+    const whereEmpresa = empresaId ? { empresa_id: empresaId } : {};
 
-    // Buscar agendamentos concluídos (limitado ao último ano) para evitar findAll massivo
+    // Buscar agendamentos do último ano com servicos populados
     const desde = new Date();
-    desde.setDate(desde.getDate() - 365);
-    const agendamentos = await Agendamento.findAll({
-      where: Object.assign(
-        { status: "concluido", dataAgendamento: { [Op.gte]: desde } },
-        whereEmpresa,
-      ),
-      include: [
-        {
-          model: Pet,
-          as: "pet",
-          attributes: ["id", "nome"],
-          include: [
-            {
-              model: Cliente,
-              as: "cliente",
-              attributes: ["id", "nome"],
-            },
-          ],
-        },
-      ],
-      order: [["dataAgendamento", "DESC"]],
-    });
+    desde.setFullYear(desde.getFullYear() - 1);
 
-    // Agrupar por pet e analisar periodicidades
-    const periodicosMap = new Map();
+    const [agendamentos, periodicidades] = await Promise.all([
+      Agendamento.findAll({
+        where: Object.assign({ dataAgendamento: { [Op.gte]: desde } }, whereEmpresa),
+        include: [
+          {
+            model: Pet,
+            as: "pet",
+            attributes: ["id", "nome"],
+            include: [{ model: Cliente, as: "cliente", attributes: ["id", "nome"] }],
+          },
+        ],
+        order: [["dataAgendamento", "DESC"]],
+      }),
+      Periodicidade.findAll(),
+    ]);
+
+    const periodicidadesMap = new Map(
+      periodicidades.map((p) => [p.descricao.trim().toLowerCase(), p]),
+    );
+
+    function parseServicos(raw) {
+      if (!raw) return [];
+      if (Array.isArray(raw)) return raw;
+      try { return JSON.parse(raw); } catch (_) { return []; }
+    }
+
+    function calcDataRenovacao(dataAplic, renovacaoLabel) {
+      if (!dataAplic || !renovacaoLabel) return null;
+      const p = periodicidadesMap.get(renovacaoLabel.trim().toLowerCase());
+      if (!p || !p.dias) return null;
+      const dateStr = typeof dataAplic === "string"
+        ? dataAplic.slice(0, 10)
+        : new Date(dataAplic).toISOString().slice(0, 10);
+      const [y, m, d] = dateStr.split("-").map(Number);
+      const dt = new Date(y, m - 1, d);
+      dt.setDate(dt.getDate() + Number(p.dias));
+      return dt;
+    }
+
+    // Mapear por pet+tipoEspecial+produto — manter apenas a renovação mais próxima dentro da janela
+    const resultMap = new Map();
 
     agendamentos.forEach((ag) => {
       if (!ag.pet) return;
-      const servicos = ag.servicos || ag.servico || "";
-      const servicosStr =
-        typeof servicos === "string" ? servicos : JSON.stringify(servicos);
+      parseServicos(ag.servicos).forEach((s) => {
+        const meta = s.meta || {};
+        if (!["vacina", "vermifugo", "antiparasitario"].includes(meta.tipoEspecial)) return;
 
-      // Verificar se o agendamento tem serviços periódicos
-      const ehPeriodico =
-        servicosStr.toLowerCase().includes("vacina") ||
-        servicosStr.toLowerCase().includes("vermifug") ||
-        servicosStr.toLowerCase().includes("antipara") ||
-        servicosStr.toLowerCase().includes("banho") ||
-        servicosStr.toLowerCase().includes("tosa");
+        const dataAplic = meta.dataAplic || ag.dataAgendamento;
+        const renovacaoLabel = meta.renovacao || meta.proximaDose || "";
+        const dataRenovacao = calcDataRenovacao(dataAplic, renovacaoLabel);
+        if (!dataRenovacao) return;
 
-      if (!ehPeriodico) return;
+        // Só exibir se dentro dos próximos 7 dias
+        if (dataRenovacao < hoje || dataRenovacao > em7Dias) return;
 
-      const key = `${ag.pet.id}-${servicosStr}`;
-      if (!periodicosMap.has(key)) {
-        const dataAg = new Date(ag.dataAgendamento);
-        // Estimar renovação em 30 dias após o último atendimento
-        const dataRenovacao = new Date(dataAg);
-        dataRenovacao.setDate(dataRenovacao.getDate() + 30);
+        const produtoNome = s.nome || meta.nome || meta.tipoEspecial;
+        const key = `${ag.pet.id}-${meta.tipoEspecial}-${produtoNome}`;
 
-        if (dataRenovacao >= hoje && dataRenovacao <= em7Dias) {
-          periodicosMap.set(key, {
-            petId: ag.pet.id,
-            petNome: ag.pet.nome,
-            clienteNome: ag.pet.cliente?.nome || "N/A",
-            clienteId: ag.pet.cliente?.id || null,
-            servico: servicosStr,
-            ultimoAtendimento: ag.dataAgendamento,
-            dataRenovacao: dataRenovacao.toISOString().split("T")[0],
-          });
+        // Se já existe uma entrada para este pet+produto, manter a mais próxima de hoje
+        if (resultMap.has(key)) {
+          const existing = resultMap.get(key);
+          if (dataRenovacao > new Date(existing.dataRenovacao)) return;
         }
-      }
+
+        resultMap.set(key, {
+          petId: ag.pet.id,
+          petNome: ag.pet.nome,
+          clienteNome: ag.pet.cliente?.nome || "N/A",
+          clienteId: ag.pet.cliente?.id || null,
+          servico: produtoNome,
+          tipoEspecial: meta.tipoEspecial,
+          dataRenovacao: dataRenovacao.toISOString().split("T")[0],
+        });
+      });
     });
 
-    res.json(Array.from(periodicosMap.values()));
+    const resultado = Array.from(resultMap.values()).sort(
+      (a, b) => new Date(a.dataRenovacao) - new Date(b.dataRenovacao),
+    );
+
+    res.json(resultado);
   } catch (error) {
     return handleError(res, "Erro ao buscar periódicos", error);
   }
