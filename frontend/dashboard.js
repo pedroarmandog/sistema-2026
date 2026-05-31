@@ -554,18 +554,32 @@ const DashboardApp = {
       }
 
       if (res.status === 401) {
-        // Limpar cookies de sessão (com e sem domain) para evitar loop login→dashboard
-        const _cookieDomain = window.location.hostname.includes(".")
-          ? "; domain=." +
-            window.location.hostname.split(".").slice(-2).join(".")
-          : "";
-        const _exp = "; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/";
-        document.cookie = "usuarioLogadoId=" + _exp + _cookieDomain;
-        document.cookie = "usuarioLogadoNome=" + _exp + _cookieDomain;
-        document.cookie = "usuarioLogadoId=" + _exp; // sem domain tb
-        document.cookie = "usuarioLogadoNome=" + _exp;
-        window.location.href = "/login/login.html";
-        throw new Error(`Não autenticado — redirecionando ao login`);
+        // Redirecionar apenas quando o backend sinaliza sessão encerrada/expirada
+        // 401 genéricos (permissão, erro transiente) não devem derrubar o usuário
+        let _body401 = null;
+        try {
+          _body401 = await res.clone().json();
+        } catch (_) {}
+        const _deveRedirecionar =
+          !_body401 ||
+          _body401.encerrado === true ||
+          _body401.expirado === true ||
+          (typeof _body401.mensagem === "string" &&
+            _body401.mensagem.toLowerCase().includes("autenticad"));
+        if (_deveRedirecionar) {
+          const _cookieDomain = window.location.hostname.includes(".")
+            ? "; domain=." +
+              window.location.hostname.split(".").slice(-2).join(".")
+            : "";
+          const _exp = "; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/";
+          document.cookie = "usuarioLogadoId=" + _exp + _cookieDomain;
+          document.cookie = "usuarioLogadoNome=" + _exp + _cookieDomain;
+          document.cookie = "usuarioLogadoId=" + _exp;
+          document.cookie = "usuarioLogadoNome=" + _exp;
+          window.location.href = "/login/login.html";
+          throw new Error(`Não autenticado — redirecionando ao login`);
+        }
+        throw new Error(`Não autorizado (401)`);
       }
 
       if (!res.ok) {

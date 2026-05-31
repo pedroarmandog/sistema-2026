@@ -56,15 +56,26 @@ class ApiClient {
           return;
         }
 
-        // Se não autenticado, redirecionar para login
+        // Redirecionar para login APENAS quando o backend sinaliza explicitamente
+        // que a sessão foi encerrada ou não existe. 401 genéricos (ex: permissão)
+        // não devem derrubar o usuário no meio de uma operação.
         if (response.status === 401) {
-          // Limpar cookies para evitar loop: login detectaria usuarioLogadoId e voltaria ao dashboard
-          document.cookie =
-            "usuarioLogadoId=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-          document.cookie =
-            "usuarioLogadoNome=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-          window.location.href = "/login/login.html";
-          return;
+          const _deveRedirecionar =
+            !errorBody || // sem corpo = sem token
+            errorBody.encerrado === true ||
+            errorBody.expirado === true ||
+            (typeof errorBody.mensagem === "string" &&
+              errorBody.mensagem.toLowerCase().includes("autenticad"));
+          if (_deveRedirecionar) {
+            window.location.href = "/login/login.html";
+            return;
+          }
+          // 401 sem indicador de sessão: lançar erro sem redirecionar
+          throw new Error(
+            errorBody && errorBody.mensagem
+              ? errorBody.mensagem
+              : "Não autorizado",
+          );
         }
 
         // compor mensagem de erro a partir dos campos mais comuns
