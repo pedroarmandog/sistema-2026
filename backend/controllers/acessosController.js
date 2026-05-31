@@ -237,8 +237,15 @@ const encerrarSessao = async (req, res) => {
       return res.status(404).json({ error: "Sessão não encontrada" });
     }
 
+    const usuarioIdParaInvalidar = sessao.usuario_id;
     sessao.ativo = false;
     await sessao.save();
+
+    // Invalidar cache de auth para forçar re-verificação imediata
+    try {
+      const { invalidateUserCache } = require("../middleware/authUser");
+      invalidateUserCache(usuarioIdParaInvalidar);
+    } catch (_) {}
 
     res.json({ message: "Sessão encerrada com sucesso" });
   } catch (error) {
@@ -254,10 +261,29 @@ const encerrarTodasSessoes = async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Coletar IDs dos usuários afetados antes de encerrar (para invalidar cache)
+    const sessoesAtivas = await SessaoAtiva.findAll({
+      where: { empresa_id: id, ativo: true },
+      attributes: ["usuario_id"],
+    });
+    const usuarioIdsAfetados = [
+      ...new Set(sessoesAtivas.map((s) => s.usuario_id)),
+    ];
+
     await SessaoAtiva.update(
       { ativo: false },
       { where: { empresa_id: id, ativo: true } },
     );
+
+    // Invalidar cache de auth para todos os usuários afetados
+    try {
+      const { invalidateUserCache } = require("../middleware/authUser");
+      usuarioIdsAfetados.forEach((uid) => invalidateUserCache(uid));
+      if (usuarioIdsAfetados.length > 0)
+        console.log(
+          `[acessos] cache invalidado para ${usuarioIdsAfetados.length} usuário(s)`,
+        );
+    } catch (_) {}
 
     res.json({ message: "Todas as sessões foram encerradas" });
   } catch (error) {

@@ -200,11 +200,19 @@ async function authUser(req, res, next) {
                 { ativo: false },
                 { where: { id: _sessaoCheck.id } },
               );
+              USER_CACHE.delete(userId);
               return res.status(401).json({
                 mensagem: "Sessão expirada por inatividade.",
                 expirado: true,
               });
             }
+          } else if (!_sessaoCheck) {
+            // Sessão encerrada pelo admin ou inexistente → forçar novo login
+            USER_CACHE.delete(userId);
+            return res.status(401).json({
+              mensagem: "Sessão encerrada.",
+              encerrado: true,
+            });
           }
         } catch (_inativErr) {
           // Não bloquear em caso de falha na verificação de inatividade
@@ -319,10 +327,19 @@ function gerarTokenUsuario(usuario) {
   );
 }
 
+/**
+ * Remove um usuário do cache de autenticação.
+ * Chamar ao encerrar sessões externamente (admin) para forçar re-verificação imediata.
+ */
+function invalidateUserCache(userId) {
+  if (userId) USER_CACHE.delete(Number(userId));
+}
+
 module.exports = {
   authUser,
   gerarTokenUsuario,
   isEmpresaBloqueada,
   extractEmpresaId,
+  invalidateUserCache,
   JWT_SECRET,
 };
