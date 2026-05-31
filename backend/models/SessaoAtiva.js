@@ -56,10 +56,7 @@ module.exports = (sequelize) => {
     },
     {
       tableName: "sessoes_ativas",
-      // timestamps: false para evitar que o Sequelize inclua updatedAt/createdAt
-      // nos UPDATE/INSERT. Se essas colunas não existirem na tabela de produção,
-      // todos os SessaoAtiva.update() falhariam silenciosamente.
-      timestamps: false,
+      timestamps: true,
     },
   );
 
