@@ -571,7 +571,6 @@ exports.periodicos = async (req, res) => {
     em7Dias.setDate(em7Dias.getDate() + 7);
 
     const empresaId = req.user?.empresaId;
-    const whereEmpresa = empresaId ? { empresa_id: empresaId } : {};
 
     // Buscar agendamentos do último ano com servicos populados
     const desde = new Date();
@@ -579,15 +578,14 @@ exports.periodicos = async (req, res) => {
 
     const [agendamentos, periodicidades] = await Promise.all([
       Agendamento.findAll({
-        where: Object.assign(
-          { dataAgendamento: { [Op.gte]: desde } },
-          whereEmpresa,
-        ),
+        where: { dataAgendamento: { [Op.gte]: desde } },
         include: [
           {
             model: Pet,
             as: "pet",
-            attributes: ["id", "nome"],
+            attributes: ["id", "nome", "empresa_id"],
+            where: empresaId ? { empresa_id: empresaId } : {},
+            required: true,
             include: [
               { model: Cliente, as: "cliente", attributes: ["id", "nome"] },
             ],

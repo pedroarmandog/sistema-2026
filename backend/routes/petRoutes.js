@@ -441,6 +441,7 @@ router.post("/:id/vacinas", async (req, res) => {
       servicos: [servicoItem],
       status: "concluido",
       profissional: profissional || "",
+      empresa_id: req.user?.empresaId || null,
     });
     // Agendar envios de vencimento automaticamente
     dispararVencimentoSeConfigurado(ag.id, petId).catch(() => {});
@@ -485,6 +486,7 @@ router.post("/:id/vermifugos", async (req, res) => {
       servicos: [servicoItem],
       status: "concluido",
       profissional: profissional || "",
+      empresa_id: req.user?.empresaId || null,
     });
     // Agendar envios de vencimento automaticamente
     dispararVencimentoSeConfigurado(ag.id, petId).catch(() => {});
@@ -529,6 +531,7 @@ router.post("/:id/antiparasitarios", async (req, res) => {
       servicos: [servicoItem],
       status: "concluido",
       profissional: profissional || "",
+      empresa_id: req.user?.empresaId || null,
     });
     // Agendar envios de vencimento automaticamente
     dispararVencimentoSeConfigurado(ag.id, petId).catch(() => {});
