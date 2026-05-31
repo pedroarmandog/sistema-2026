@@ -17,10 +17,12 @@
   }
 })();
 
-// Verificação periódica de sessão — detecta encerramento pelo admin em até 15s
+// Verificação periódica de sessão — detecta encerramento pelo admin
+// Só redireciona após 2 falhas consecutivas para evitar falso-positivo durante navegação rápida
 (function () {
   const _API = (window.VPS_URL || "") + "/api";
   var _sessaoChecking = false;
+  var _falhasConsecutivas = 0;
 
   async function _verificarSessao() {
     if (_sessaoChecking) return;
@@ -31,11 +33,16 @@
         cache: "no-store",
       });
       if (r.status === 401 || r.status === 403) {
-        window.location.replace("/login/login.html");
-        return;
+        _falhasConsecutivas++;
+      } else {
+        const data = await r.json().catch(() => null);
+        if (data && data.ativa === false) {
+          _falhasConsecutivas++;
+        } else {
+          _falhasConsecutivas = 0; // sessão válida — resetar contador
+        }
       }
-      const data = await r.json().catch(() => null);
-      if (data && data.ativa === false) {
+      if (_falhasConsecutivas >= 2) {
         window.location.replace("/login/login.html");
       }
     } catch (_) {
@@ -45,12 +52,11 @@
     }
   }
 
-  // Verificar após 5s (evita race condition na navegação entre páginas)
-  // e depois a cada 15 segundos
+  // Iniciar polling após 30s (evita race condition na navegação entre páginas)
+  // Intervalo de 20s: detecta encerramento em até ~40s (2 falhas × 20s)
   setTimeout(function () {
-    _verificarSessao();
-    setInterval(_verificarSessao, 15000);
-  }, 5000);
+    setInterval(_verificarSessao, 20000);
+  }, 30000);
 })();
 
 console.log("🚀 Dashboard.js carregado - versão debug");
