@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const vendaController = require("../controllers/vendaController");
-const { Venda, Empresa } = require("../models");
+const { Venda, Empresa, Cliente } = require("../models");
 const path = require("path");
 const fs = require("fs");
 const { authUser } = require("../middleware/authUser");
@@ -17,6 +17,26 @@ router.get("/:id/comprovante", async (req, res) => {
 
     const venda = await Venda.findByPk(id);
     if (!venda) return res.status(404).json({ erro: "Venda não encontrada" });
+
+    // Buscar cliente para exibir nome e endereço no comprovante
+    let clienteObj = null;
+    if (venda.clienteId) {
+      try {
+        clienteObj = await Cliente.findByPk(venda.clienteId, {
+          attributes: [
+            "id",
+            "nome",
+            "endereco",
+            "numero",
+            "complemento",
+            "bairro",
+            "cidade",
+            "estado",
+            "cep",
+          ],
+        });
+      } catch (_) {}
+    }
 
     const mmToPt = (mm) => (mm * 72) / 25.4;
     const RECEIPT_MM = 72;
@@ -236,6 +256,33 @@ router.get("/:id/comprovante", async (req, res) => {
     });
     y += lineHeight + 6;
 
+    // --- Cliente ---
+    const nomeCliente = (clienteObj && clienteObj.nome) || venda.cliente || "";
+    if (nomeCliente) {
+      doc.fontSize(8).font("Helvetica-Bold").fillColor("#000");
+      doc.text(`Cliente: ${nomeCliente}`, left, y, { width: contentWidth });
+      y += lineHeight + 2;
+    }
+    if (clienteObj) {
+      const partesEndereco = [
+        clienteObj.endereco,
+        clienteObj.numero,
+        clienteObj.complemento,
+        clienteObj.bairro,
+        clienteObj.cidade && clienteObj.estado
+          ? `${clienteObj.cidade} - ${clienteObj.estado}`
+          : clienteObj.cidade || clienteObj.estado || null,
+        clienteObj.cep,
+      ].filter(Boolean);
+      if (partesEndereco.length > 0) {
+        doc.fontSize(7).font("Helvetica").fillColor("#555");
+        doc.text(partesEndereco.join(", "), left, y, { width: contentWidth });
+        doc.fillColor("#000");
+        y += lineHeight + 2;
+      }
+    }
+    if (nomeCliente || clienteObj) y += 4;
+
     // --- Produto/Serviço ---
     // Linha pontilhada
     doc.save();
@@ -357,7 +404,15 @@ router.get("/:id/comprovante", async (req, res) => {
       });
     y += lineHeight + 4;
 
-    const pagamentos = Array.isArray(venda.pagamentos) ? venda.pagamentos : [];
+    let pagamentosRaw = venda.pagamentos;
+    if (typeof pagamentosRaw === "string") {
+      try {
+        pagamentosRaw = JSON.parse(pagamentosRaw);
+      } catch (_) {
+        pagamentosRaw = [];
+      }
+    }
+    const pagamentos = Array.isArray(pagamentosRaw) ? pagamentosRaw : [];
     const formaLabel = (f) => {
       if (!f) return "";
       const map = {
