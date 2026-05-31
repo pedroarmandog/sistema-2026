@@ -1593,23 +1593,20 @@ function startServer() {
       }
     }, 30000);
 
-    // Limpeza periódica de sessões inativas (a cada 2 minutos).
-    // Com SESSAO_TIMEOUT_MS = 3min, sessões de usuários deslogados somem em até 5min.
-    setInterval(
-      async () => {
-        try {
-          const {
-            limparSessoesExpiradas,
-          } = require("./controllers/acessosController");
-          await limparSessoesExpiradas();
-        } catch (e) {
-          // silencioso — não interromper o servidor por erro de limpeza
-        }
-      },
-      2 * 60 * 1000,
-    ); // 2 minutos
+    // Limpeza periódica de sessões inativas (a cada 60 segundos).
+    // Com SESSAO_TIMEOUT_SECONDS = 90s, sessões expiram em no máximo 150s após browser fechar.
+    setInterval(async () => {
+      try {
+        const {
+          limparSessoesExpiradas,
+        } = require("./controllers/acessosController");
+        await limparSessoesExpiradas();
+      } catch (e) {
+        // silencioso — não interromper o servidor por erro de limpeza
+      }
+    }, 60 * 1000); // 60 segundos
     console.log(
-      "✅ Limpeza periódica de sessões inativas iniciada (a cada 2 min)",
+      "✅ Limpeza periódica de sessões inativas iniciada (a cada 60s)",
     );
 
     // Cron: verificação de vencimentos do painel admin (mover para 09:00)

@@ -31,17 +31,14 @@ function delay(ms) {
 }
 
 // =====================================================
-// Controle de abas: fecha sessão quando última aba fecha
-// Roda no topo (fora do DOMContentLoaded) para garantir
-// execução em todas as páginas que carregam dashboard.js
-// (inject-sidebar.js carrega dashboard.js em todas as páginas)
+// Envio de sendBeacon ao fechar (acelerador de encerramento)
+// A confiabilidade real vem do heartbeat: se o browser fechar
+// sem disparar este evento, a sessão expira em 90s por timeout.
 // =====================================================
 (function gerenciarAbas() {
   var TABS_KEY = "pethub_open_tabs";
-  var CHANNEL_NAME = "pethub_tabs";
 
-  // TAB_ID persiste em sessionStorage: sobrevive a navegações na mesma aba,
-  // mas é único por aba (diferente de localStorage que é compartilhado)
+  // TAB_ID único por aba, persiste em sessionStorage (sobrevive a navegações)
   var TAB_ID = (function () {
     try {
       var id = sessionStorage.getItem("pethub_tab_id");
@@ -57,11 +54,6 @@ function delay(ms) {
       return "fb_" + Math.random().toString(36).slice(2, 10);
     }
   })();
-
-  var bc =
-    typeof BroadcastChannel !== "undefined"
-      ? new BroadcastChannel(CHANNEL_NAME)
-      : null;
 
   function getTabs() {
     try {
@@ -93,39 +85,25 @@ function delay(ms) {
     }
   }
 
+  // Registrar esta aba no contador compartilhado (localStorage)
   function registrar() {
     var tabs = getTabs();
     tabs[TAB_ID] = Date.now();
     setTabs(tabs);
-    if (bc) bc.postMessage({ type: "TAB_OPEN", tabId: TAB_ID });
-    var total = Object.keys(tabs).length;
-    console.log(
-      "[abas] registrada id=" + TAB_ID.substring(0, 8) + " total=" + total,
-    );
   }
 
+  // Remover esta aba e retornar quantas restam
   function desregistrar() {
     var tabs = getTabs();
     delete tabs[TAB_ID];
     setTabs(tabs);
-    var restantes = Object.keys(tabs).length;
-    if (bc) {
-      bc.postMessage({
-        type: "TAB_CLOSE",
-        tabId: TAB_ID,
-        restantes: restantes,
-      });
-    }
-    console.log(
-      "[abas] fechada id=" + TAB_ID.substring(0, 8) + " restantes=" + restantes,
-    );
-    return restantes;
+    return Object.keys(tabs).length;
   }
 
+  // Encerrar sessão via fetch keepalive (mais confiável que sendBeacon cross-origin)
   function encerrarSessaoBeacon() {
     var deviceId = getDeviceId();
     if (!deviceId) return;
-    // Fallback hardcoded: api-config.js pode não ter carregado ainda
     var _base =
       window.VPS_URL ||
       window.API_URL ||
@@ -133,84 +111,38 @@ function delay(ms) {
       window.location.hostname === "www.pethubflow.com.br"
         ? "https://api.pethubflow.com.br"
         : "");
-    try {
-      // fetch com keepalive: true é o método recomendado para unload — mais
-      // confiável que sendBeacon em requisições cross-origin. Content-Type
-      // application/x-www-form-urlencoded é "simple request" (sem preflight).
-      fetch(_base + "/api/sessoes/encerrar-dispositivo", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ device_id: deviceId }).toString(),
-        keepalive: true,
-      });
-      console.log("[abas] fetch keepalive encerrar-dispositivo disparado");
-    } catch (e) {
+    // fetch keepalive: browser garante o envio mesmo após a página fechar
+    fetch(_base + "/api/sessoes/encerrar-dispositivo", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ device_id: deviceId }).toString(),
+      keepalive: true,
+    }).catch(function () {
       // Fallback: sendBeacon
-      try {
-        navigator.sendBeacon(
-          _base + "/api/sessoes/encerrar-dispositivo",
-          new URLSearchParams({ device_id: deviceId }),
-        );
-        console.log("[abas] sendBeacon encerrar-dispositivo (fallback)");
-      } catch (e2) {
-        console.warn("[abas] encerrar-dispositivo falhou:", e2);
-      }
-    }
+      navigator.sendBeacon(
+        _base + "/api/sessoes/encerrar-dispositivo",
+        new URLSearchParams({ device_id: deviceId }),
+      );
+    });
+    console.log("[abas] beacon encerrar-dispositivo disparado");
   }
 
-  var _beaconSent = false; // evitar envio duplo (beforeunload + pagehide)
-
-  // beforeunload: dispara antes do fechamento, mais confiável para tab close
-  window.addEventListener("beforeunload", function () {
-    // Não usar e.returnValue — apenas disparar beacon
-    // Se o usuário cancelar o fechamento, o tab voltará e registrar() re-registra
-    var tabs = getTabs();
-    delete tabs[TAB_ID];
-    var restantes = Object.keys(tabs).length;
-    if (restantes === 0 && !_beaconSent) {
-      _beaconSent = true;
-      encerrarSessaoBeacon();
-    }
-  });
-
-  // Registrar ao carregar a página
+  // Registrar ao carregar
   registrar();
-  _beaconSent = false; // resetar flag ao registrar (cobre pageshow pós-bfcache)
 
-  // pagehide: backup para casos onde beforeunload não dispara
+  // Ao fechar/navegar: remover aba e disparar beacon se última
   window.addEventListener("pagehide", function (e) {
-    if (e.persisted) {
-      // Página foi para bfcache — re-registrar quando voltar
-      return;
-    }
+    if (e.persisted) return; // bfcache—não está fechando
     var restantes = desregistrar();
-    if (restantes === 0 && !_beaconSent) {
-      _beaconSent = true;
+    if (restantes === 0) {
       encerrarSessaoBeacon();
     }
   });
 
-  // pageshow: re-registrar aba quando restaurada do bfcache
+  // pageshow após bfcache: re-registrar aba
   window.addEventListener("pageshow", function (e) {
-    if (e.persisted) {
-      registrar();
-      _beaconSent = false;
-    }
+    if (e.persisted) registrar();
   });
-
-  // Ouvir outras abas via BroadcastChannel (informativo)
-  if (bc) {
-    bc.onmessage = function (e) {
-      var d = e.data || {};
-      if (d.type === "TAB_OPEN") {
-        console.log(
-          "[abas] outra aba aberta id=" + String(d.tabId).substring(0, 8),
-        );
-      } else if (d.type === "TAB_CLOSE") {
-        console.log("[abas] outra aba fechada restantes=" + d.restantes);
-      }
-    };
-  }
 })();
 
 // Função de debug para detectar IDs duplicados
@@ -259,10 +191,13 @@ document.addEventListener("DOMContentLoaded", function () {
   console.log("📍 URL atual:", window.location.pathname);
 
   // ===============================================
-  // Monitoramento de sessão ativa (heartbeat a cada 60s)
+  // Monitoramento de sessão ativa (heartbeat a cada 30s)
+  // Backend expira sessões após 90s sem heartbeat (3 ciclos perdidos)
+  // Cobre: browser fechado, computador desligado, queda de internet
   // ===============================================
   (function iniciarHeartbeat() {
-    const HEARTBEAT_INTERVAL = 60000; // 60 segundos
+    const HEARTBEAT_INTERVAL = 30000; // 30 segundos
+    // Backend expira sessões após 90s sem heartbeat (3 ciclos perdidos)
     let heartbeatRunning = false;
 
     function getDeviceId() {

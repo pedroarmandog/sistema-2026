@@ -1,19 +1,20 @@
 const { EmpresaPainel, SessaoAtiva, sequelize } = require("../models");
 const { Op } = require("sequelize");
 
-// Tempo máximo de inatividade: 30 minutos sem heartbeat = sessão expirada.
-// Valor seguro mesmo com browser throttling de background tabs (heartbeat 60s).
-const SESSAO_TIMEOUT_MINUTES = 30;
-const SESSAO_TIMEOUT_MS = SESSAO_TIMEOUT_MINUTES * 60 * 1000;
+// Tempo máximo de inatividade: 90 segundos sem heartbeat = sessão expirada.
+// Frontend envia heartbeat a cada 30s, então 90s = 3 ciclos perdidos.
+// Cobre: browser fechado, computador desligado, queda de internet.
+const SESSAO_TIMEOUT_SECONDS = 90;
 
 /**
- * Limpa sessões expiradas usando NOW() do MySQL (timezone-safe)
+ * Limpa sessões expiradas usando NOW() do MySQL (timezone-safe).
+ * Sessões sem heartbeat por mais de 90s são marcadas como inativas.
  */
 async function limparSessoesExpiradas() {
   // Usar NOW() do próprio MySQL evita problemas de timezone entre Node.js e DB
   await sequelize.query(
     `UPDATE sessoes_ativas SET ativo = 0, updatedAt = NOW()
-     WHERE ativo = 1 AND ultima_atividade < (NOW() - INTERVAL ${SESSAO_TIMEOUT_MINUTES} MINUTE)`,
+     WHERE ativo = 1 AND ultima_atividade < (NOW() - INTERVAL ${SESSAO_TIMEOUT_SECONDS} SECOND)`,
   );
 }
 
@@ -565,45 +566,24 @@ async function registrarSessao(
  * Retorna { ativa: true } ou { ativa: false, motivo: string }.
  */
 async function heartbeatSessao(deviceId, tokenHash) {
-  // Período de graça: sessão fechada pelo controle de abas mas dentro desse
-  // tempo ainda pode ser reativada (cobre navegação entre páginas no mesmo tab).
-  const GRACE_MS = 30 * 1000; // 30 segundos
   try {
-    // Primeiro buscar por device_id (principal identificador)
+    // Buscar por device_id (principal identificador)
     if (deviceId) {
       const sessao = await SessaoAtiva.findOne({
         where: { device_id: deviceId },
       });
       if (sessao) {
-        if (sessao.ativo) {
-          // Sessão ativa normal — atualizar atividade
-          const updates = { ultima_atividade: new Date() };
-          if (tokenHash && sessao.token_hash !== tokenHash) {
-            updates.token_hash = tokenHash;
-          }
-          await sessao.update(updates);
-          return { ativa: true };
+        if (!sessao.ativo) {
+          // Sessão encerrada (logout manual ou timeout) — não reativar
+          return { ativa: false, motivo: "sessao_encerrada" };
         }
-        // Sessão inativa — verificar período de graça (navegação entre páginas)
-        const encerradoEm = sessao.encerrado_em
-          ? new Date(sessao.encerrado_em).getTime()
-          : null;
-        if (encerradoEm && Date.now() - encerradoEm < GRACE_MS) {
-          // Reativar: era navegação, não fechamento real do navegador
-          const updates = {
-            ativo: true,
-            encerrado_em: null,
-            ultima_atividade: new Date(),
-          };
-          if (tokenHash) updates.token_hash = tokenHash;
-          await sessao.update(updates);
-          console.log(
-            `[acessos] sessão reativada (graça) device=${deviceId.substring(0, 8)}`,
-          );
-          return { ativa: true };
+        // Sessão ativa: atualizar ultima_atividade
+        const updates = { ultima_atividade: new Date() };
+        if (tokenHash && sessao.token_hash !== tokenHash) {
+          updates.token_hash = tokenHash;
         }
-        // Encerrada há mais de GRACE_MS — sessão realmente fechada
-        return { ativa: false, motivo: "sessao_encerrada" };
+        await sessao.update(updates);
+        return { ativa: true };
       }
     }
 
@@ -618,15 +598,14 @@ async function heartbeatSessao(deviceId, tokenHash) {
         }
         const updates = { ultima_atividade: new Date() };
         if (deviceId && !sessaoPorToken.device_id) {
-          updates.device_id = deviceId; // associar device_id se ainda não tiver
+          updates.device_id = deviceId;
         }
         await sessaoPorToken.update(updates);
         return { ativa: true };
       }
     }
 
-    // Nenhum registro no banco — JWT pode ser válido mas sem sessão registrada
-    // (empresa sem painel, deploy após migração, etc.) — não desconectar
+    // Nenhum registro — JWT válido mas sessão não registrada (migração/deploy)
     return { ativa: true, motivo: "no_record" };
   } catch (e) {
     console.warn("[acessos] heartbeatSessao erro:", e && e.message);
