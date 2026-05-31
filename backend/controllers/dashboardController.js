@@ -579,13 +579,18 @@ exports.periodicos = async (req, res) => {
 
     const [agendamentos, periodicidades] = await Promise.all([
       Agendamento.findAll({
-        where: Object.assign({ dataAgendamento: { [Op.gte]: desde } }, whereEmpresa),
+        where: Object.assign(
+          { dataAgendamento: { [Op.gte]: desde } },
+          whereEmpresa,
+        ),
         include: [
           {
             model: Pet,
             as: "pet",
             attributes: ["id", "nome"],
-            include: [{ model: Cliente, as: "cliente", attributes: ["id", "nome"] }],
+            include: [
+              { model: Cliente, as: "cliente", attributes: ["id", "nome"] },
+            ],
           },
         ],
         order: [["dataAgendamento", "DESC"]],
@@ -600,16 +605,21 @@ exports.periodicos = async (req, res) => {
     function parseServicos(raw) {
       if (!raw) return [];
       if (Array.isArray(raw)) return raw;
-      try { return JSON.parse(raw); } catch (_) { return []; }
+      try {
+        return JSON.parse(raw);
+      } catch (_) {
+        return [];
+      }
     }
 
     function calcDataRenovacao(dataAplic, renovacaoLabel) {
       if (!dataAplic || !renovacaoLabel) return null;
       const p = periodicidadesMap.get(renovacaoLabel.trim().toLowerCase());
       if (!p || !p.dias) return null;
-      const dateStr = typeof dataAplic === "string"
-        ? dataAplic.slice(0, 10)
-        : new Date(dataAplic).toISOString().slice(0, 10);
+      const dateStr =
+        typeof dataAplic === "string"
+          ? dataAplic.slice(0, 10)
+          : new Date(dataAplic).toISOString().slice(0, 10);
       const [y, m, d] = dateStr.split("-").map(Number);
       const dt = new Date(y, m - 1, d);
       dt.setDate(dt.getDate() + Number(p.dias));
@@ -623,7 +633,12 @@ exports.periodicos = async (req, res) => {
       if (!ag.pet) return;
       parseServicos(ag.servicos).forEach((s) => {
         const meta = s.meta || {};
-        if (!["vacina", "vermifugo", "antiparasitario"].includes(meta.tipoEspecial)) return;
+        if (
+          !["vacina", "vermifugo", "antiparasitario"].includes(
+            meta.tipoEspecial,
+          )
+        )
+          return;
 
         const dataAplic = meta.dataAplic || ag.dataAgendamento;
         const renovacaoLabel = meta.renovacao || meta.proximaDose || "";
