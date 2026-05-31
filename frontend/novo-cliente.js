@@ -302,13 +302,13 @@
   // Lembrete Automático de Produto Recorrente
   // ──────────────────────────────────────────────────────────
   setupLembreteAutomatico() {
-    const toggle      = document.getElementById("lembreteAutomaticoAtivo");
+    const toggle = document.getElementById("lembreteAutomaticoAtivo");
     const configPanel = document.getElementById("lembreteConfig");
-    const label       = document.getElementById("lembreteToggleLabel");
-    const diasInput   = document.getElementById("lembreteAutomaticoDias");
-    const previewDia  = document.getElementById("lembretePreviewDia");
-    const btnSalvar   = document.getElementById("lembreteBtnSalvar");
-    const removerBtn  = document.getElementById("lembreteProdutoRemover");
+    const label = document.getElementById("lembreteToggleLabel");
+    const diasInput = document.getElementById("lembreteAutomaticoDias");
+    const previewDia = document.getElementById("lembretePreviewDia");
+    const btnSalvar = document.getElementById("lembreteBtnSalvar");
+    const removerBtn = document.getElementById("lembreteProdutoRemover");
 
     if (!toggle) return;
 
@@ -343,13 +343,13 @@
     }
 
     // ── Autocomplete de produto ────────────────────────────
-    const searchInput   = document.getElementById("lembreteProdutoSearch");
-    const dropdown      = document.getElementById("lembreteProdutoDropdown");
-    const hiddenId      = document.getElementById("lembreteProdutoId");
-    const hiddenNome    = document.getElementById("lembreteProdutoNome");
-    const card          = document.getElementById("lembreteProdutoCard");
-    const cardNome      = document.getElementById("lembreteProdutoCardNome");
-    const cardDias      = document.getElementById("lembreteProdutoCardDias");
+    const searchInput = document.getElementById("lembreteProdutoSearch");
+    const dropdown = document.getElementById("lembreteProdutoDropdown");
+    const hiddenId = document.getElementById("lembreteProdutoId");
+    const hiddenNome = document.getElementById("lembreteProdutoNome");
+    const card = document.getElementById("lembreteProdutoCard");
+    const cardNome = document.getElementById("lembreteProdutoCardNome");
+    const cardDias = document.getElementById("lembreteProdutoCardDias");
 
     let debounceTimer = null;
 
@@ -359,21 +359,21 @@
     };
 
     const mostrarProdutoCard = (id, nome) => {
-      if (hiddenId)   hiddenId.value   = id;
+      if (hiddenId) hiddenId.value = id;
       if (hiddenNome) hiddenNome.value = nome;
       if (searchInput) searchInput.value = nome;
-      if (cardNome)  cardNome.textContent  = nome;
+      if (cardNome) cardNome.textContent = nome;
       const dias = parseInt(diasInput?.value, 10) || 30;
-      if (cardDias)  cardDias.textContent  = `A cada ${dias} dias`;
-      if (card)  card.style.display = "flex";
+      if (cardDias) cardDias.textContent = `A cada ${dias} dias`;
+      if (card) card.style.display = "flex";
       fecharDropdown();
     };
 
     this.limparProduto = () => {
-      if (hiddenId)    hiddenId.value    = "";
-      if (hiddenNome)  hiddenNome.value  = "";
+      if (hiddenId) hiddenId.value = "";
+      if (hiddenNome) hiddenNome.value = "";
       if (searchInput) searchInput.value = "";
-      if (card)   card.style.display   = "none";
+      if (card) card.style.display = "none";
       fecharDropdown();
     };
 
@@ -397,15 +397,16 @@
               (window.__API_BASE__ && window.__API_BASE__.toString()) ||
               window.location.origin;
             const token =
-              localStorage.getItem("token") ||
-              sessionStorage.getItem("token");
+              localStorage.getItem("token") || sessionStorage.getItem("token");
             const resp = await fetch(
               `${API_BASE}/api/itens?q=${encodeURIComponent(q)}&tipo=produto&limit=10`,
               { headers: token ? { Authorization: `Bearer ${token}` } : {} },
             );
             if (!resp.ok) return fecharDropdown();
             const itens = await resp.json();
-            const lista = Array.isArray(itens) ? itens : (itens.items || itens.data || []);
+            const lista = Array.isArray(itens)
+              ? itens
+              : itens.items || itens.data || [];
 
             if (!lista.length) {
               dropdown.innerHTML = `<div class="lembrete-produto-dropdown-empty">Nenhum produto encontrado para "${q}"</div>`;
@@ -417,7 +418,7 @@
               .slice(0, 10)
               .map((item) => {
                 const nome = item.nome || item.descricao || item.name || "";
-                const id   = item.id;
+                const id = item.id;
                 return `<div class="lembrete-produto-dropdown-item" data-id="${id}" data-nome="${nome}">
                   <i class="fas fa-box lembrete-dropdown-icon"></i>
                   <span>${nome}</span>
@@ -426,11 +427,13 @@
               .join("");
             dropdown.style.display = "block";
 
-            dropdown.querySelectorAll(".lembrete-produto-dropdown-item").forEach((el) => {
-              el.addEventListener("click", () => {
-                mostrarProdutoCard(el.dataset.id, el.dataset.nome);
+            dropdown
+              .querySelectorAll(".lembrete-produto-dropdown-item")
+              .forEach((el) => {
+                el.addEventListener("click", () => {
+                  mostrarProdutoCard(el.dataset.id, el.dataset.nome);
+                });
               });
-            });
           } catch (e) {
             console.warn("[Lembrete] Erro ao buscar produto:", e.message);
             fecharDropdown();
@@ -449,9 +452,14 @@
     // ── Botão Salvar Lembrete ──────────────────────────────
     if (btnSalvar) {
       btnSalvar.addEventListener("click", async () => {
-        const clienteId = this.clienteId || new URLSearchParams(window.location.search).get("id");
+        const clienteId =
+          this.clienteId ||
+          new URLSearchParams(window.location.search).get("id");
         if (!clienteId) {
-          this.mostrarNotificacao("Salve o cliente primeiro antes de configurar o lembrete", "warning");
+          this.mostrarNotificacao(
+            "Salve o cliente primeiro antes de configurar o lembrete",
+            "warning",
+          );
           return;
         }
         await this.salvarLembreteConfig(clienteId);
@@ -461,20 +469,21 @@
 
   // Aplicar config carregada do servidor nos campos do lembrete
   _aplicarLembreteConfig(config) {
-    const toggle   = document.getElementById("lembreteAutomaticoAtivo");
+    const toggle = document.getElementById("lembreteAutomaticoAtivo");
     const diasInput = document.getElementById("lembreteAutomaticoDias");
     const searchInput = document.getElementById("lembreteProdutoSearch");
-    const hiddenId    = document.getElementById("lembreteProdutoId");
-    const hiddenNome  = document.getElementById("lembreteProdutoNome");
-    const card        = document.getElementById("lembreteProdutoCard");
-    const cardNome    = document.getElementById("lembreteProdutoCardNome");
-    const cardDias    = document.getElementById("lembreteProdutoCardDias");
+    const hiddenId = document.getElementById("lembreteProdutoId");
+    const hiddenNome = document.getElementById("lembreteProdutoNome");
+    const card = document.getElementById("lembreteProdutoCard");
+    const cardNome = document.getElementById("lembreteProdutoCardNome");
+    const cardDias = document.getElementById("lembreteProdutoCardDias");
     const configPanel = document.getElementById("lembreteConfig");
-    const label       = document.getElementById("lembreteToggleLabel");
+    const label = document.getElementById("lembreteToggleLabel");
 
     if (toggle) {
       toggle.checked = !!config.ativo;
-      if (configPanel) configPanel.style.display = config.ativo ? "block" : "none";
+      if (configPanel)
+        configPanel.style.display = config.ativo ? "block" : "none";
       if (label) {
         label.textContent = config.ativo ? "Ativado" : "Desativado";
         label.classList.toggle("active", !!config.ativo);
@@ -484,15 +493,16 @@
     if (diasInput) diasInput.value = config.dias || 30;
 
     const previewDia = document.getElementById("lembretePreviewDia");
-    if (previewDia) previewDia.textContent = Math.max(1, (config.dias || 30) - 1);
+    if (previewDia)
+      previewDia.textContent = Math.max(1, (config.dias || 30) - 1);
 
     if (config.produto_id && config.produto_nome) {
-      if (hiddenId)    hiddenId.value    = config.produto_id;
-      if (hiddenNome)  hiddenNome.value  = config.produto_nome;
+      if (hiddenId) hiddenId.value = config.produto_id;
+      if (hiddenNome) hiddenNome.value = config.produto_nome;
       if (searchInput) searchInput.value = config.produto_nome;
-      if (cardNome)    cardNome.textContent  = config.produto_nome;
-      if (cardDias)    cardDias.textContent  = `A cada ${config.dias || 30} dias`;
-      if (card)        card.style.display    = "flex";
+      if (cardNome) cardNome.textContent = config.produto_nome;
+      if (cardDias) cardDias.textContent = `A cada ${config.dias || 30} dias`;
+      if (card) card.style.display = "flex";
     } else {
       if (card) card.style.display = "none";
     }
@@ -500,21 +510,21 @@
 
   // Salvar config de lembrete via endpoint dedicado (JSON, sem FormData)
   async salvarLembreteConfig(clienteId) {
-    const toggle    = document.getElementById("lembreteAutomaticoAtivo");
+    const toggle = document.getElementById("lembreteAutomaticoAtivo");
     const diasInput = document.getElementById("lembreteAutomaticoDias");
-    const hiddenId  = document.getElementById("lembreteProdutoId");
+    const hiddenId = document.getElementById("lembreteProdutoId");
     const hiddenNome = document.getElementById("lembreteProdutoNome");
     const saveStatus = document.getElementById("lembreteSaveStatus");
-    const btnSalvar  = document.getElementById("lembreteBtnSalvar");
+    const btnSalvar = document.getElementById("lembreteBtnSalvar");
 
-    const ativo     = toggle?.checked ?? false;
-    const dias      = parseInt(diasInput?.value, 10) || 30;
-    const produto_id   = hiddenId?.value   ? parseInt(hiddenId.value, 10) : null;
+    const ativo = toggle?.checked ?? false;
+    const dias = parseInt(diasInput?.value, 10) || 30;
+    const produto_id = hiddenId?.value ? parseInt(hiddenId.value, 10) : null;
     const produto_nome = hiddenNome?.value || null;
 
     if (saveStatus) {
       saveStatus.textContent = "Salvando...";
-      saveStatus.className   = "lembrete-save-status saving";
+      saveStatus.className = "lembrete-save-status saving";
     }
     if (btnSalvar) btnSalvar.disabled = true;
 
@@ -542,13 +552,18 @@
       if (data.success) {
         if (saveStatus) {
           saveStatus.textContent = "✓ Salvo!";
-          saveStatus.className   = "lembrete-save-status success";
+          saveStatus.className = "lembrete-save-status success";
           setTimeout(() => {
             saveStatus.textContent = "";
-            saveStatus.className   = "lembrete-save-status";
+            saveStatus.className = "lembrete-save-status";
           }, 3000);
         }
-        console.log("[Lembrete] Config salva com sucesso:", { ativo, dias, produto_id, produto_nome });
+        console.log("[Lembrete] Config salva com sucesso:", {
+          ativo,
+          dias,
+          produto_id,
+          produto_nome,
+        });
       } else {
         throw new Error(data.error || "Erro ao salvar");
       }
@@ -556,9 +571,12 @@
       console.error("[Lembrete] Erro ao salvar config:", e.message);
       if (saveStatus) {
         saveStatus.textContent = "✗ Erro ao salvar";
-        saveStatus.className   = "lembrete-save-status error";
+        saveStatus.className = "lembrete-save-status error";
       }
-      this.mostrarNotificacao("Erro ao salvar configuração de lembrete", "error");
+      this.mostrarNotificacao(
+        "Erro ao salvar configuração de lembrete",
+        "error",
+      );
     } finally {
       if (btnSalvar) btnSalvar.disabled = false;
     }
@@ -715,7 +733,10 @@
       btnSearchCep.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
       btnSearchCep.disabled = true;
 
-      const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      const apiBase = (window.VPS_URL || "") + "/api";
+      const response = await fetch(`${apiBase}/cep/${cep}`, {
+        credentials: "include",
+      });
 
       if (!response.ok) {
         throw new Error("Erro na requisição");

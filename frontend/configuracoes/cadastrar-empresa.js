@@ -875,9 +875,10 @@ function limparCep(cep) {
 async function buscarCep(cepRaw) {
   const cep = limparCep(cepRaw);
   if (!cep || cep.length !== 8) return;
-  const url = `https://viacep.com.br/ws/${cep}/json/`;
+  const apiBase = (window.VPS_URL || "") + "/api";
+  const url = `${apiBase}/cep/${cep}`;
   try {
-    const res = await fetch(url, { cache: "no-store" });
+    const res = await fetch(url, { credentials: "include", cache: "no-store" });
     if (!res.ok) throw new Error("Erro ao consultar CEP");
     const data = await res.json();
     if (data.erro) {

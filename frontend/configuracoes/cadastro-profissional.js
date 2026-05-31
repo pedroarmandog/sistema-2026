@@ -592,7 +592,8 @@ function buscarCEP() {
 
   console.log("🔍 Buscando CEP:", cep);
 
-  fetch(`https://viacep.com.br/ws/${cep}/json/`)
+  const _cepApi = (window.VPS_URL || "") + "/api";
+  fetch(`${_cepApi}/cep/${cep}`, { credentials: "include" })
     .then((response) => response.json())
     .then((data) => {
       if (!data.erro) {

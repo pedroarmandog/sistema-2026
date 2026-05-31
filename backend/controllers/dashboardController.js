@@ -321,6 +321,7 @@ exports.levaTraz = async (req, res) => {
         "observacoes",
         "servicos",
         "dataAgendamento",
+        "taxidog",
       ],
       where: Object.assign(
         { dataAgendamento: { [Op.gte]: hoje, [Op.lt]: amanha } },

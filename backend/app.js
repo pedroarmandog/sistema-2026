@@ -1159,6 +1159,36 @@ const sessaoRoutes = require("./routes/sessaoRoutes");
 app.use("/api/sessoes", sessaoRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/dashboard/full", dashboardFullRoutes);
+
+// Proxy público para busca de CEP via ViaCEP (sem autenticação)
+app.get("/api/cep/:cep", async (req, res) => {
+  try {
+    const cep = req.params.cep.replace(/\D/g, "");
+    if (!/^\d{8}$/.test(cep))
+      return res.status(400).json({ erro: "CEP inválido" });
+    const https = require("https");
+    const url = `https://viacep.com.br/ws/${cep}/json/`;
+    https
+      .get(url, (resp) => {
+        let data = "";
+        resp.on("data", (chunk) => {
+          data += chunk;
+        });
+        resp.on("end", () => {
+          try {
+            res.json(JSON.parse(data));
+          } catch (_) {
+            res.status(500).json({ erro: "Resposta inválida do ViaCEP" });
+          }
+        });
+      })
+      .on("error", (e) => {
+        res.status(500).json({ erro: "Erro ao consultar ViaCEP" });
+      });
+  } catch (e) {
+    res.status(500).json({ erro: "Erro interno" });
+  }
+});
 app.use("/api/unidades", unidadeRoutes);
 app.use("/api/fornecedores", fornecedorRoutes);
 app.use("/api/categorias-financeiras", categoriaFinanceiraRoutes);
