@@ -1694,7 +1694,7 @@
   display: grid;
   grid-template-columns: 100px 2fr 1.5fr 150px 120px 130px 100px;
   gap: 20px;
-  align-items: start;
+  align-items: center;
 }
 
 /* Todas as células do grid devem respeitar o min-width:0 para não estourar */
@@ -1706,7 +1706,6 @@
 .agendamento-detalhes {
   word-break: break-word;
   overflow-wrap: anywhere;
-  padding-top: 2px;
 }
 
 .agendamento-detalhes .agendamento-observacao,
