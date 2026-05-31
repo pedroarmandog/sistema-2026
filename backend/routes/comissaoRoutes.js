@@ -1,6 +1,9 @@
 const express = require("express");
 const router = express.Router();
 const comissaoController = require("../controllers/comissaoController");
+const { authUser } = require("../middleware/authUser");
+
+router.use(authUser);
 
 router.get("/por-perfil", comissaoController.porPerfil);
 router.get("/calcular", comissaoController.calcular);
