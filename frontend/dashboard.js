@@ -125,31 +125,76 @@ function delay(ms) {
   function encerrarSessaoBeacon() {
     var deviceId = getDeviceId();
     if (!deviceId) return;
-    var _base = window.VPS_URL || window.API_URL || "";
+    // Fallback hardcoded: api-config.js pode não ter carregado ainda
+    var _base =
+      window.VPS_URL ||
+      window.API_URL ||
+      (window.location.hostname === "pethubflow.com.br" ||
+      window.location.hostname === "www.pethubflow.com.br"
+        ? "https://api.pethubflow.com.br"
+        : "");
     try {
-      // URLSearchParams gera application/x-www-form-urlencoded
-      // → "simple request" no CORS → não precisa de preflight
-      // → sendBeacon funciona cross-origin sem credentials
-      var params = new URLSearchParams({ device_id: deviceId });
-      var ok = navigator.sendBeacon(
-        _base + "/api/sessoes/encerrar-dispositivo",
-        params,
-      );
-      console.log("[abas] sendBeacon encerrar-dispositivo ok=" + ok);
+      // fetch com keepalive: true é o método recomendado para unload — mais
+      // confiável que sendBeacon em requisições cross-origin. Content-Type
+      // application/x-www-form-urlencoded é "simple request" (sem preflight).
+      fetch(_base + "/api/sessoes/encerrar-dispositivo", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ device_id: deviceId }).toString(),
+        keepalive: true,
+      });
+      console.log("[abas] fetch keepalive encerrar-dispositivo disparado");
     } catch (e) {
-      console.warn("[abas] sendBeacon falhou:", e);
+      // Fallback: sendBeacon
+      try {
+        navigator.sendBeacon(
+          _base + "/api/sessoes/encerrar-dispositivo",
+          new URLSearchParams({ device_id: deviceId }),
+        );
+        console.log("[abas] sendBeacon encerrar-dispositivo (fallback)");
+      } catch (e2) {
+        console.warn("[abas] encerrar-dispositivo falhou:", e2);
+      }
     }
   }
 
+  var _beaconSent = false; // evitar envio duplo (beforeunload + pagehide)
+
+  // beforeunload: dispara antes do fechamento, mais confiável para tab close
+  window.addEventListener("beforeunload", function () {
+    // Não usar e.returnValue — apenas disparar beacon
+    // Se o usuário cancelar o fechamento, o tab voltará e registrar() re-registra
+    var tabs = getTabs();
+    delete tabs[TAB_ID];
+    var restantes = Object.keys(tabs).length;
+    if (restantes === 0 && !_beaconSent) {
+      _beaconSent = true;
+      encerrarSessaoBeacon();
+    }
+  });
+
   // Registrar ao carregar a página
   registrar();
+  _beaconSent = false; // resetar flag ao registrar (cobre pageshow pós-bfcache)
 
-  // Desregistrar e encerrar sessão (se última aba) ao fechar/navegar
+  // pagehide: backup para casos onde beforeunload não dispara
   window.addEventListener("pagehide", function (e) {
-    if (e.persisted) return; // bfcache: a aba não está sendo fechada de verdade
+    if (e.persisted) {
+      // Página foi para bfcache — re-registrar quando voltar
+      return;
+    }
     var restantes = desregistrar();
-    if (restantes === 0) {
+    if (restantes === 0 && !_beaconSent) {
+      _beaconSent = true;
       encerrarSessaoBeacon();
+    }
+  });
+
+  // pageshow: re-registrar aba quando restaurada do bfcache
+  window.addEventListener("pageshow", function (e) {
+    if (e.persisted) {
+      registrar();
+      _beaconSent = false;
     }
   });
 
