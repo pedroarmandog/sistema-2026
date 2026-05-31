@@ -5,17 +5,39 @@ const { Op } = require("sequelize");
 // Frontend envia heartbeat a cada 30s, então 90s = 3 ciclos perdidos.
 // Cobre: browser fechado, computador desligado, queda de internet.
 const SESSAO_TIMEOUT_SECONDS = 90;
+const SESSAO_TIMEOUT_MS = SESSAO_TIMEOUT_SECONDS * 1000;
 
 /**
- * Limpa sessões expiradas usando NOW() do MySQL (timezone-safe).
- * Sessões sem heartbeat por mais de 90s são marcadas como inativas.
+ * Limpa sessões expiradas via Sequelize ORM (timezone-safe).
+ *
+ * POR QUÊ ORM e NÃO raw SQL:
+ * O Sequelize usa timezone '+00:00' por padrão para serializar datas — grava
+ * ultima_atividade em UTC. Se o MySQL estiver em timezone local (ex: UTC-3),
+ * a função NOW() retornaria UTC-3 e a comparação com valores UTC nunca seria
+ * verdadeira, impedindo o cleanup. Usando Op.lt com new Date(), Sequelize
+ * serializa a data de corte com o mesmo timezone das datas gravadas, garantindo
+ * consistência independente da configuração de timezone do servidor MySQL.
  */
 async function limparSessoesExpiradas() {
-  // Usar NOW() do próprio MySQL evita problemas de timezone entre Node.js e DB
-  await sequelize.query(
-    `UPDATE sessoes_ativas SET ativo = 0, updatedAt = NOW()
-     WHERE ativo = 1 AND ultima_atividade < (NOW() - INTERVAL ${SESSAO_TIMEOUT_SECONDS} SECOND)`,
-  );
+  try {
+    const cutoff = new Date(Date.now() - SESSAO_TIMEOUT_MS);
+    const [count] = await SessaoAtiva.update(
+      { ativo: false },
+      {
+        where: {
+          ativo: true,
+          ultima_atividade: { [Op.lt]: cutoff },
+        },
+      },
+    );
+    if (count > 0) {
+      console.log(
+        `[sessoes] ${count} sessão(es) expirada(s) marcada(s) como inativa(s) (cutoff=${cutoff.toISOString()})`,
+      );
+    }
+  } catch (e) {
+    console.warn("[sessoes] limparSessoesExpiradas erro:", e && e.message);
+  }
 }
 
 /**

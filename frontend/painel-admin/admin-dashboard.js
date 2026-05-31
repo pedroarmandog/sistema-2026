@@ -1196,6 +1196,15 @@ async function init() {
 let acessosEmpresaSelecionada = null;
 let acessosLimiteTemp = 3;
 
+// Auto-refresh da tabela principal de Acessos (a cada 15s quando a aba estiver ativa).
+// Garante que a limpeza de sessões expiradas no backend reflita na tela sem intervenção manual.
+setInterval(() => {
+  const acessosTab = document.getElementById("tab-acessos");
+  if (acessosTab && acessosTab.classList.contains("active")) {
+    carregarAcessos();
+  }
+}, 15000);
+
 async function carregarAcessos() {
   try {
     const resp = await fetch(`${API}/acessos`, { headers: authHeaders() });
