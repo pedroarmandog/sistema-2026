@@ -90,8 +90,14 @@ router.get("/sessao-ativa", async (req, res) => {
       return res.json({ ativa: true });
     }
 
-    // Nenhum registro no DB — sessão nunca foi registrada ou foi apagada
-    return res.json({ ativa: false, motivo: "sessao_encerrada" });
+    // Nenhum registro no DB — pode ser sessão anterior ao rastreamento (JWT ainda válido)
+    // Admin encerrar NUNCA apaga registros, só marca ativo=false — então ausência = sessão legítima
+    try {
+      jwt.verify(token, JWT_SECRET);
+      return res.json({ ativa: true, motivo: "jwt_valid_no_db" });
+    } catch (e) {
+      return res.json({ ativa: false, motivo: "token_invalido" });
+    }
   } catch (e) {
     return res.json({ ativa: true, motivo: "db_error" });
   }

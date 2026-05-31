@@ -45,10 +45,12 @@
     }
   }
 
-  // Verificar imediatamente ao carregar a página
-  _verificarSessao();
-  // Verificar a cada 15 segundos
-  setInterval(_verificarSessao, 15000);
+  // Verificar após 5s (evita race condition na navegação entre páginas)
+  // e depois a cada 15 segundos
+  setTimeout(function () {
+    _verificarSessao();
+    setInterval(_verificarSessao, 15000);
+  }, 5000);
 })();
 
 console.log("🚀 Dashboard.js carregado - versão debug");
