@@ -90,13 +90,8 @@ router.get("/sessao-ativa", async (req, res) => {
       return res.json({ ativa: true });
     }
 
-    // Nenhum registro — verificar JWT
-    try {
-      jwt.verify(token, JWT_SECRET);
-      return res.json({ ativa: true, motivo: "jwt_valid_no_db" });
-    } catch (e) {
-      return res.json({ ativa: false, motivo: "sessao_encerrada" });
-    }
+    // Nenhum registro no DB — sessão nunca foi registrada ou foi apagada
+    return res.json({ ativa: false, motivo: "sessao_encerrada" });
   } catch (e) {
     return res.json({ ativa: true, motivo: "db_error" });
   }

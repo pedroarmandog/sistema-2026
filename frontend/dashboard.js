@@ -17,6 +17,40 @@
   }
 })();
 
+// Verificação periódica de sessão — detecta encerramento pelo admin em até 15s
+(function () {
+  const _API = (window.VPS_URL || "") + "/api";
+  var _sessaoChecking = false;
+
+  async function _verificarSessao() {
+    if (_sessaoChecking) return;
+    _sessaoChecking = true;
+    try {
+      const r = await fetch(_API + "/usuarios/sessao-ativa", {
+        credentials: "include",
+        cache: "no-store",
+      });
+      if (r.status === 401 || r.status === 403) {
+        window.location.replace("/login/login.html");
+        return;
+      }
+      const data = await r.json().catch(() => null);
+      if (data && data.ativa === false) {
+        window.location.replace("/login/login.html");
+      }
+    } catch (_) {
+      // erro de rede — não deslogar
+    } finally {
+      _sessaoChecking = false;
+    }
+  }
+
+  // Verificar imediatamente ao carregar a página
+  _verificarSessao();
+  // Verificar a cada 15 segundos
+  setInterval(_verificarSessao, 15000);
+})();
+
 console.log("🚀 Dashboard.js carregado - versão debug");
 console.log("📅 Timestamp:", new Date().toISOString());
 console.log("🌐 Location:", window.location.href);
