@@ -1,5 +1,7 @@
 const express = require("express");
 const router = express.Router();
+const { authUser } = require("../middleware/authUser");
+router.use(authUser);
 const path = require("path");
 const fs = require("fs");
 const { Empresa } = require("../models");
