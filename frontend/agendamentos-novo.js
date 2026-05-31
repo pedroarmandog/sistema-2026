@@ -19,6 +19,7 @@ class AgendamentosManager {
     this.viewMode = "list";
     this.period = "day";
     this.currentDate = new Date();
+    this._loadToken = 0; // controla race conditions no loadAgendamentos
     try {
       const params = new URLSearchParams(window.location.search || "");
       const periodParam = params.get("period");
@@ -526,6 +527,20 @@ class AgendamentosManager {
       console.log("🔄 Carregando agendamentos...");
       console.log("📅 Data atual:", this.currentDate);
 
+      // Token para descartar respostas de requisições obsoletas (race condition)
+      const loadToken = ++this._loadToken;
+
+      // Limpar dados antigos IMEDIATAMENTE antes do fetch para evitar exibição de dados de outras empresas
+      this.agendamentos = [];
+      const tableBody = document.getElementById("agendamentosTableBody");
+      if (tableBody) {
+        tableBody.innerHTML = `
+          <div class="empty-state" style="opacity:0.6">
+            <i class="fas fa-spinner fa-spin" style="font-size:28px;margin-bottom:12px"></i>
+            <p>Carregando agendamentos...</p>
+          </div>`;
+      }
+
       // Usar data local (YYYY-MM-DD) para evitar timezone
       const pad = (n) => String(n).padStart(2, "0");
       const dateStr = `${this.currentDate.getFullYear()}-${pad(this.currentDate.getMonth() + 1)}-${pad(this.currentDate.getDate())}`;
@@ -553,8 +568,14 @@ class AgendamentosManager {
         });
       }
 
-      const response = await fetch(url);
+      const response = await fetch(url, { credentials: "include" });
       console.log("📡 Response status:", response.status);
+
+      // Ignorar resposta se outra requisição mais recente foi iniciada
+      if (loadToken !== this._loadToken) {
+        console.log("⚠️ Resposta descartada (requisição obsoleta)");
+        return;
+      }
 
       if (response.ok) {
         this.agendamentos = await response.json();
