@@ -220,7 +220,6 @@ async function authUser(req, res, next) {
             }
           }
           // Sem registro no DB = sessão anterior ao rastreamento — JWT válido, deixar passar
-          }
         } catch (_inativErr) {
           // Não bloquear em caso de falha na verificação de inatividade
         }
