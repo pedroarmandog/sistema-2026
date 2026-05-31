@@ -18,11 +18,12 @@
 })();
 
 // Verificação periódica de sessão — detecta encerramento pelo admin
-// Só redireciona após 2 falhas consecutivas para evitar falso-positivo durante navegação rápida
+// SÓ redireciona quando motivo === "sessao_encerrada" (admin encerrou explicitamente)
+// Erros de rede, DB, inatividade ou 401 transientes NÃO causam redirect
 (function () {
   const _API = (window.VPS_URL || "") + "/api";
   var _sessaoChecking = false;
-  var _falhasConsecutivas = 0;
+  var _encerradasConsecutivas = 0;
 
   async function _verificarSessao() {
     if (_sessaoChecking) return;
@@ -32,17 +33,19 @@
         credentials: "include",
         cache: "no-store",
       });
-      if (r.status === 401 || r.status === 403) {
-        _falhasConsecutivas++;
-      } else {
-        const data = await r.json().catch(() => null);
-        if (data && data.ativa === false) {
-          _falhasConsecutivas++;
-        } else {
-          _falhasConsecutivas = 0; // sessão válida — resetar contador
-        }
+      if (!r.ok) {
+        // Erro HTTP (401, 500 etc) — não deslogar por erro transiente
+        _encerradasConsecutivas = 0;
+        return;
       }
-      if (_falhasConsecutivas >= 2) {
+      const data = await r.json().catch(() => null);
+      // Só conta como encerramento se o motivo for explicitamente sessao_encerrada
+      if (data && data.ativa === false && data.motivo === "sessao_encerrada") {
+        _encerradasConsecutivas++;
+      } else {
+        _encerradasConsecutivas = 0;
+      }
+      if (_encerradasConsecutivas >= 2) {
         window.location.replace("/login/login.html");
       }
     } catch (_) {
@@ -53,7 +56,7 @@
   }
 
   // Iniciar polling após 30s (evita race condition na navegação entre páginas)
-  // Intervalo de 20s: detecta encerramento em até ~40s (2 falhas × 20s)
+  // Intervalo de 20s: detecta encerramento em até ~70s (30s inicial + 2×20s)
   setTimeout(function () {
     setInterval(_verificarSessao, 20000);
   }, 30000);
@@ -551,12 +554,16 @@ const DashboardApp = {
       }
 
       if (res.status === 401) {
-        // Limpar cookies de sessão para evitar loop: login detectaria usuarioLogadoId
-        // e redirecionaria de volta ao dashboard causando loop infinito de 401.
-        document.cookie =
-          "usuarioLogadoId=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-        document.cookie =
-          "usuarioLogadoNome=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        // Limpar cookies de sessão (com e sem domain) para evitar loop login→dashboard
+        const _cookieDomain = window.location.hostname.includes(".")
+          ? "; domain=." +
+            window.location.hostname.split(".").slice(-2).join(".")
+          : "";
+        const _exp = "; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/";
+        document.cookie = "usuarioLogadoId=" + _exp + _cookieDomain;
+        document.cookie = "usuarioLogadoNome=" + _exp + _cookieDomain;
+        document.cookie = "usuarioLogadoId=" + _exp; // sem domain tb
+        document.cookie = "usuarioLogadoNome=" + _exp;
         window.location.href = "/login/login.html";
         throw new Error(`Não autenticado — redirecionando ao login`);
       }

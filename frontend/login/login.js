@@ -212,8 +212,7 @@ window.addEventListener("DOMContentLoaded", function () {
         // Se ativa === false: sessão inválida ou expirada por inatividade → mostrar login
       })
       .catch(function () {
-        // Erro de rede: redirecionar para o dashboard (benefício da dúvida)
-        window.location.href = "/dashboard.html";
+        // Erro de rede: manter na tela de login (não redirecionar)
       });
   }
 });
