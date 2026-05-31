@@ -613,8 +613,24 @@ exports.periodicos = async (req, res) => {
     }
 
     function calcDataRenovacao(dataAplic, renovacaoLabel) {
-      if (!dataAplic || !renovacaoLabel) return null;
-      const p = periodicidadesMap.get(renovacaoLabel.trim().toLowerCase());
+      if (!renovacaoLabel) return null;
+      const label = renovacaoLabel.trim();
+
+      // Caso 1: renovacaoLabel é uma data direta no formato DD/MM/YYYY
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(label)) {
+        const [d, m, y] = label.split("/").map(Number);
+        return new Date(y, m - 1, d);
+      }
+
+      // Caso 2: renovacaoLabel é uma data ISO YYYY-MM-DD
+      if (/^\d{4}-\d{2}-\d{2}$/.test(label)) {
+        const [y, m, d] = label.split("-").map(Number);
+        return new Date(y, m - 1, d);
+      }
+
+      // Caso 3: renovacaoLabel é uma label de periodicidade (ex: "1 ano", "30 dias")
+      if (!dataAplic) return null;
+      const p = periodicidadesMap.get(label.toLowerCase());
       if (!p || !p.dias) return null;
       const dateStr =
         typeof dataAplic === "string"
