@@ -3,7 +3,7 @@ const crypto = require("crypto");
 
 const JWT_SECRET =
   process.env.JWT_USER_SECRET || "pethub_user_secret_2026_!@#$%";
-const JWT_EXPIRES_IN = "8h";
+const JWT_EXPIRES_IN = "30d"; // JWT de longa duração — a validade real é controlada por ultima_atividade no DB (8h de inatividade)
 
 // Cache simples em memória para usuários e status de empresa
 const USER_CACHE = new Map(); // key: userId -> { user, expiresAt }
@@ -177,6 +177,37 @@ async function authUser(req, res, next) {
               );
             }
           }
+        }
+
+        // Verificar inatividade de 8h: se ultima_atividade > 8h → sessão expirada.
+        // Executado apenas no cache miss (máximo 1x a cada 60s por usuário).
+        const _INATIVIDADE_MAX_MS = 8 * 60 * 60 * 1000;
+        try {
+          const _tHash = crypto
+            .createHash("sha256")
+            .update(token)
+            .digest("hex");
+          const { SessaoAtiva } = require("../models");
+          const _sessaoCheck = await SessaoAtiva.findOne({
+            where: { token_hash: _tHash, ativo: true },
+            attributes: ["id", "ultima_atividade"],
+          });
+          if (_sessaoCheck && _sessaoCheck.ultima_atividade) {
+            const _inativoMs =
+              Date.now() - new Date(_sessaoCheck.ultima_atividade).getTime();
+            if (_inativoMs > _INATIVIDADE_MAX_MS) {
+              await SessaoAtiva.update(
+                { ativo: false },
+                { where: { id: _sessaoCheck.id } },
+              );
+              return res.status(401).json({
+                mensagem: "Sessão expirada por inatividade.",
+                expirado: true,
+              });
+            }
+          }
+        } catch (_inativErr) {
+          // Não bloquear em caso de falha na verificação de inatividade
         }
 
         // Cachear resultado e seguir

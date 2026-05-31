@@ -263,7 +263,7 @@ exports.login = async (req, res) => {
     const _jwtCookieOptions = {
       httpOnly: true,
       sameSite: process.env.COOKIE_SAMESITE || "Lax",
-      maxAge: 8 * 60 * 60 * 1000, // 8 horas
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 dias — persistente (sobrevive ao fechar o navegador)
       path: "/",
     };
     if (_cookieDomain) _jwtCookieOptions.domain = _cookieDomain;

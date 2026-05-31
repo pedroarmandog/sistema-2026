@@ -60,20 +60,34 @@ router.get("/sessao-ativa", async (req, res) => {
 
   try {
     const { SessaoAtiva } = require("../models");
+    const INATIVIDADE_MAX_MS = 8 * 60 * 60 * 1000;
     const registro = await SessaoAtiva.findOne({
       where: { token_hash: tokenHash },
-      attributes: ["id", "ativo"],
+      attributes: ["id", "ativo", "ultima_atividade"],
     });
 
     if (registro) {
-      if (registro.ativo) {
-        try {
-          await atualizarAtividade(tokenHash);
-        } catch (e) {}
-        return res.json({ ativa: true });
-      } else {
+      if (!registro.ativo) {
         return res.json({ ativa: false, motivo: "sessao_encerrada" });
       }
+      // Verificar inatividade de 8h
+      if (registro.ultima_atividade) {
+        const inativoMs =
+          Date.now() - new Date(registro.ultima_atividade).getTime();
+        if (inativoMs > INATIVIDADE_MAX_MS) {
+          try {
+            await SessaoAtiva.update(
+              { ativo: false },
+              { where: { id: registro.id } },
+            );
+          } catch (e) {}
+          return res.json({ ativa: false, motivo: "inatividade" });
+        }
+      }
+      try {
+        await atualizarAtividade(tokenHash);
+      } catch (e) {}
+      return res.json({ ativa: true });
     }
 
     // Nenhum registro — verificar JWT

@@ -1,11 +1,10 @@
 const { EmpresaPainel, SessaoAtiva, sequelize } = require("../models");
 const { Op } = require("sequelize");
 
-// Tempo máximo de inatividade: 90 segundos sem heartbeat = sessão expirada.
-// Frontend envia heartbeat a cada 30s, então 90s = 3 ciclos perdidos.
-// Cobre: browser fechado, computador desligado, queda de internet.
-const SESSAO_TIMEOUT_SECONDS = 90;
-const SESSAO_TIMEOUT_MS = SESSAO_TIMEOUT_SECONDS * 1000;
+// Tempo máximo de inatividade: 8 horas sem qualquer requisição autenticada = sessão expirada.
+// Cada requisição via authUser middleware atualiza ultima_atividade automaticamente.
+// Não depende de heartbeat — o timeout é detectado na próxima tentativa de acesso.
+const SESSAO_TIMEOUT_MS = 8 * 60 * 60 * 1000; // 8 horas
 
 /**
  * Limpa sessões expiradas via Sequelize ORM (timezone-safe).
