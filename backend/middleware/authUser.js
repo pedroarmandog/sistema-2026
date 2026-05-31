@@ -188,31 +188,38 @@ async function authUser(req, res, next) {
             .update(token)
             .digest("hex");
           const { SessaoAtiva } = require("../models");
+          // Buscar sessão pelo token — ativo ou não — para distinguir os casos
           const _sessaoCheck = await SessaoAtiva.findOne({
-            where: { token_hash: _tHash, ativo: true },
-            attributes: ["id", "ultima_atividade"],
+            where: { token_hash: _tHash },
+            attributes: ["id", "ativo", "ultima_atividade"],
           });
-          if (_sessaoCheck && _sessaoCheck.ultima_atividade) {
-            const _inativoMs =
-              Date.now() - new Date(_sessaoCheck.ultima_atividade).getTime();
-            if (_inativoMs > _INATIVIDADE_MAX_MS) {
-              await SessaoAtiva.update(
-                { ativo: false },
-                { where: { id: _sessaoCheck.id } },
-              );
+          if (_sessaoCheck) {
+            if (!_sessaoCheck.ativo) {
+              // Admin encerrou explicitamente (ativo=false) → forçar novo login
               USER_CACHE.delete(userId);
               return res.status(401).json({
-                mensagem: "Sessão expirada por inatividade.",
-                expirado: true,
+                mensagem: "Sessão encerrada.",
+                encerrado: true,
               });
             }
-          } else if (!_sessaoCheck) {
-            // Sessão encerrada pelo admin ou inexistente → forçar novo login
-            USER_CACHE.delete(userId);
-            return res.status(401).json({
-              mensagem: "Sessão encerrada.",
-              encerrado: true,
-            });
+            // Sessão ativa — verificar inatividade de 8h
+            if (_sessaoCheck.ultima_atividade) {
+              const _inativoMs =
+                Date.now() - new Date(_sessaoCheck.ultima_atividade).getTime();
+              if (_inativoMs > _INATIVIDADE_MAX_MS) {
+                await SessaoAtiva.update(
+                  { ativo: false },
+                  { where: { id: _sessaoCheck.id } },
+                );
+                USER_CACHE.delete(userId);
+                return res.status(401).json({
+                  mensagem: "Sessão expirada por inatividade.",
+                  expirado: true,
+                });
+              }
+            }
+          }
+          // Sem registro no DB = sessão anterior ao rastreamento — JWT válido, deixar passar
           }
         } catch (_inativErr) {
           // Não bloquear em caso de falha na verificação de inatividade
