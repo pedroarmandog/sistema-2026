@@ -93,11 +93,22 @@ function fmtData(date) {
  * Soma total de entradas (vendas + agendamentos + movimentos caixa entrada)
  * para um array de datas [Date start, Date end].
  */
-async function somaEntradas(inicio, fim) {
+async function somaEntradas(inicio, fim, empresaId) {
+  const eW = empresaId ? { empresa_id: empresaId } : {};
+  const movW = empresaId
+    ? {
+        [Op.and]: [
+          sequelize.literal(
+            `caixaId IN (SELECT id FROM caixas WHERE empresa_id = ${parseInt(empresaId, 10)})`,
+          ),
+        ],
+      }
+    : {};
   const [vendas, agendamentos, movimentos] = await Promise.all([
     // Vendas pagas total ou parcial dentro do período
     Venda.sum("totalPago", {
       where: {
+        ...eW,
         data: { [Op.between]: [inicio, fim] },
         status: { [Op.in]: ["pago", "parcial"] },
       },
@@ -105,6 +116,7 @@ async function somaEntradas(inicio, fim) {
     // Agendamentos concluídos
     Agendamento.sum("totalPago", {
       where: {
+        ...eW,
         dataAgendamento: { [Op.between]: [inicio, fim] },
         status: "concluido",
       },
@@ -112,6 +124,7 @@ async function somaEntradas(inicio, fim) {
     // Movimentos de caixa – entradas
     MovimentoCaixa.sum("valor", {
       where: {
+        ...movW,
         data: { [Op.between]: [inicio, fim] },
         tipo: "entrada",
       },
@@ -126,11 +139,22 @@ async function somaEntradas(inicio, fim) {
  * @param {Date} inicio
  * @param {Date} fim
  */
-async function somaSaidas(inicio, fim) {
+async function somaSaidas(inicio, fim, empresaId) {
+  const eW = empresaId ? { empresa_id: empresaId } : {};
+  const movW = empresaId
+    ? {
+        [Op.and]: [
+          sequelize.literal(
+            `caixaId IN (SELECT id FROM caixas WHERE empresa_id = ${parseInt(empresaId, 10)})`,
+          ),
+        ],
+      }
+    : {};
   const [comprasPagas, movimentos] = await Promise.all([
     // Entradas_mercadoria onde a data de pagamento cai no período e estão pagas
     Entrada.sum("valorTotal", {
       where: {
+        ...eW,
         dataPagamento: { [Op.between]: [inicio, fim] },
         situacao: "pago",
       },
@@ -138,6 +162,7 @@ async function somaSaidas(inicio, fim) {
     // Movimentos de caixa – saídas
     MovimentoCaixa.sum("valor", {
       where: {
+        ...movW,
         data: { [Op.between]: [inicio, fim] },
         tipo: "saida",
       },
@@ -154,6 +179,10 @@ async function somaSaidas(inicio, fim) {
  */
 router.get("/resumo", async (req, res) => {
   try {
+    const empresaId = req.user?.empresaId
+      ? parseInt(req.user.empresaId, 10)
+      : null;
+    const eW = empresaId ? { empresa_id: empresaId } : {};
     const agora = new Date();
     const hoje0 = new Date(agora);
     hoje0.setHours(0, 0, 0, 0);
@@ -225,6 +254,7 @@ router.get("/resumo", async (req, res) => {
         // Hoje
         Venda.findAll({
           where: {
+            ...eW,
             data: { [Op.between]: [hoje0, hoje23] },
             status: { [Op.in]: ["pendente", "parcial"] },
           },
@@ -233,6 +263,7 @@ router.get("/resumo", async (req, res) => {
         // Esta semana
         Venda.findAll({
           where: {
+            ...eW,
             data: { [Op.between]: [semana.inicio, semana.fim] },
             status: { [Op.in]: ["pendente", "parcial"] },
           },
@@ -241,6 +272,7 @@ router.get("/resumo", async (req, res) => {
         // Próxima semana
         Venda.findAll({
           where: {
+            ...eW,
             data: { [Op.between]: [proxSemIni, proxSemFim] },
             status: { [Op.in]: ["pendente", "parcial"] },
           },
@@ -249,6 +281,7 @@ router.get("/resumo", async (req, res) => {
         // Este mês
         Venda.findAll({
           where: {
+            ...eW,
             data: { [Op.between]: [mesMesIni, mesMesFim] },
             status: { [Op.in]: ["pendente", "parcial"] },
           },
@@ -257,6 +290,7 @@ router.get("/resumo", async (req, res) => {
         // Próximo mês
         Venda.findAll({
           where: {
+            ...eW,
             data: { [Op.between]: [proxMesIni, proxMesFim] },
             status: { [Op.in]: ["pendente", "parcial"] },
           },
@@ -265,6 +299,7 @@ router.get("/resumo", async (req, res) => {
         // Atrasadas (anteriores a hoje)
         Venda.findAll({
           where: {
+            ...eW,
             data: { [Op.lt]: hoje0 },
             status: { [Op.in]: ["pendente", "parcial"] },
           },
@@ -303,9 +338,7 @@ router.get("/resumo", async (req, res) => {
         );
       const statusPend = { [Op.in]: ["pendente", "parcial"] };
       // Isolamento estrito por empresa_id
-      const empresaWhere = req.user?.empresaId
-        ? { empresa_id: req.user.empresaId }
-        : {};
+      const empresaWhere = eW;
       const [crHoje, crSem, crProxSem, crMes, crProxMes, crAtr] =
         await Promise.all([
           ContaReceber.findAll({
@@ -396,6 +429,7 @@ router.get("/resumo", async (req, res) => {
       // Vencimento hoje
       Entrada.findAll({
         where: {
+          ...eW,
           dataEntrada: { [Op.between]: [hoje0, hoje23] },
           situacao: "concluido",
         },
@@ -404,6 +438,7 @@ router.get("/resumo", async (req, res) => {
       // Vencimento esta semana
       Entrada.findAll({
         where: {
+          ...eW,
           dataEntrada: { [Op.between]: [semana.inicio, semana.fim] },
           situacao: "concluido",
         },
@@ -412,6 +447,7 @@ router.get("/resumo", async (req, res) => {
       // Vencimento próxima semana
       Entrada.findAll({
         where: {
+          ...eW,
           dataEntrada: { [Op.between]: [proxSemIni, proxSemFim] },
           situacao: "concluido",
         },
@@ -420,6 +456,7 @@ router.get("/resumo", async (req, res) => {
       // Vencimento este mês
       Entrada.findAll({
         where: {
+          ...eW,
           dataEntrada: { [Op.between]: [mesMesIni, mesMesFim] },
           situacao: "concluido",
         },
@@ -428,6 +465,7 @@ router.get("/resumo", async (req, res) => {
       // Vencimento próximo mês
       Entrada.findAll({
         where: {
+          ...eW,
           dataEntrada: { [Op.between]: [proxMesIni, proxMesFim] },
           situacao: "concluido",
         },
@@ -435,12 +473,16 @@ router.get("/resumo", async (req, res) => {
       }),
       // Atrasados: vencimento anterior a hoje e ainda não pago
       Entrada.findAll({
-        where: { dataEntrada: { [Op.lt]: hoje0 }, situacao: "concluido" },
+        where: {
+          ...eW,
+          dataEntrada: { [Op.lt]: hoje0 },
+          situacao: "concluido",
+        },
         attributes: ["valorTotal"],
       }),
       // Geral: todos os documentos não pagos, independente de vencimento
       Entrada.findAll({
-        where: { situacao: "concluido" },
+        where: { ...eW, situacao: "concluido" },
         attributes: ["valorTotal"],
       }),
     ]);
@@ -473,6 +515,19 @@ router.get("/resumo", async (req, res) => {
  */
 router.get("/calendario", async (req, res) => {
   try {
+    const empresaId = req.user?.empresaId
+      ? parseInt(req.user.empresaId, 10)
+      : null;
+    const eW = empresaId ? { empresa_id: empresaId } : {};
+    const movW = empresaId
+      ? {
+          [Op.and]: [
+            sequelize.literal(
+              `caixaId IN (SELECT id FROM caixas WHERE empresa_id = ${empresaId})`,
+            ),
+          ],
+        }
+      : {};
     // Validar e sanitizar parâmetros
     const hoje = new Date();
     const mes = parseInt(req.query.mes) || hoje.getMonth() + 1;
@@ -495,6 +550,7 @@ router.get("/calendario", async (req, res) => {
             [fn("SUM", col("totalPago")), "total"],
           ],
           where: {
+            ...eW,
             data: { [Op.between]: [mesIni, mesFim] },
             status: { [Op.in]: ["pago", "parcial"] },
           },
@@ -508,6 +564,7 @@ router.get("/calendario", async (req, res) => {
             [fn("SUM", col("totalPago")), "total"],
           ],
           where: {
+            ...eW,
             dataAgendamento: { [Op.between]: [mesIni, mesFim] },
             status: "concluido",
           },
@@ -521,6 +578,7 @@ router.get("/calendario", async (req, res) => {
             [fn("SUM", col("valor")), "total"],
           ],
           where: {
+            ...movW,
             data: { [Op.between]: [mesIni, mesFim] },
             tipo: "entrada",
           },
@@ -534,6 +592,7 @@ router.get("/calendario", async (req, res) => {
             [fn("SUM", col("valorTotal")), "total"],
           ],
           where: {
+            ...eW,
             dataPagamento: { [Op.between]: [mesIni, mesFim] },
             situacao: "pago",
           },
@@ -547,6 +606,7 @@ router.get("/calendario", async (req, res) => {
             [fn("SUM", col("valor")), "total"],
           ],
           where: {
+            ...movW,
             data: { [Op.between]: [mesIni, mesFim] },
             tipo: "saida",
           },
@@ -610,6 +670,19 @@ router.get("/calendario", async (req, res) => {
  */
 router.get("/grafico", async (req, res) => {
   try {
+    const empresaId = req.user?.empresaId
+      ? parseInt(req.user.empresaId, 10)
+      : null;
+    const eW = empresaId ? { empresa_id: empresaId } : {};
+    const movW = empresaId
+      ? {
+          [Op.and]: [
+            sequelize.literal(
+              `caixaId IN (SELECT id FROM caixas WHERE empresa_id = ${empresaId})`,
+            ),
+          ],
+        }
+      : {};
     const hoje = new Date();
     const mes = parseInt(req.query.mes) || hoje.getMonth() + 1;
     const ano = parseInt(req.query.ano) || hoje.getFullYear();
@@ -637,6 +710,7 @@ router.get("/grafico", async (req, res) => {
           [fn("SUM", col("totalPago")), "total"],
         ],
         where: {
+          ...eW,
           data: { [Op.between]: [mesIni, mesFim] },
           status: { [Op.in]: ["pago", "parcial"] },
         },
@@ -649,6 +723,7 @@ router.get("/grafico", async (req, res) => {
           [fn("SUM", col("totalPago")), "total"],
         ],
         where: {
+          ...eW,
           dataAgendamento: { [Op.between]: [mesIni, mesFim] },
           status: "concluido",
         },
@@ -660,7 +735,11 @@ router.get("/grafico", async (req, res) => {
           [fn("DATE", col("data")), "dia"],
           [fn("SUM", col("valor")), "total"],
         ],
-        where: { data: { [Op.between]: [mesIni, mesFim] }, tipo: "entrada" },
+        where: {
+          ...movW,
+          data: { [Op.between]: [mesIni, mesFim] },
+          tipo: "entrada",
+        },
         group: [fn("DATE", col("data"))],
         raw: true,
       }),
@@ -670,6 +749,7 @@ router.get("/grafico", async (req, res) => {
           [fn("SUM", col("valorTotal")), "total"],
         ],
         where: {
+          ...eW,
           dataPagamento: { [Op.between]: [mesIni, mesFim] },
           situacao: "pago",
         },
@@ -681,7 +761,11 @@ router.get("/grafico", async (req, res) => {
           [fn("DATE", col("data")), "dia"],
           [fn("SUM", col("valor")), "total"],
         ],
-        where: { data: { [Op.between]: [mesIni, mesFim] }, tipo: "saida" },
+        where: {
+          ...movW,
+          data: { [Op.between]: [mesIni, mesFim] },
+          tipo: "saida",
+        },
         group: [fn("DATE", col("data"))],
         raw: true,
       }),
@@ -692,6 +776,7 @@ router.get("/grafico", async (req, res) => {
           [fn("SUM", col("totalPago")), "total"],
         ],
         where: {
+          ...eW,
           data: { [Op.between]: [mesIni, mesFim] },
           status: { [Op.in]: ["pendente", "parcial"] },
         },
@@ -705,6 +790,7 @@ router.get("/grafico", async (req, res) => {
           [fn("SUM", col("valorTotal")), "total"],
         ],
         where: {
+          ...eW,
           dataPagamento: { [Op.between]: [mesIni, mesFim] },
           situacao: "concluido",
         },
@@ -780,6 +866,19 @@ router.get("/grafico", async (req, res) => {
  */
 router.get("/fluxo-caixa", async (req, res) => {
   try {
+    const empresaId = req.user?.empresaId
+      ? parseInt(req.user.empresaId, 10)
+      : null;
+    const eW = empresaId ? { empresa_id: empresaId } : {};
+    const movW = empresaId
+      ? {
+          [Op.and]: [
+            sequelize.literal(
+              `caixaId IN (SELECT id FROM caixas WHERE empresa_id = ${empresaId})`,
+            ),
+          ],
+        }
+      : {};
     const hoje = new Date();
     const periodo = ["mensal", "semanal", "diario"].includes(req.query.periodo)
       ? req.query.periodo
@@ -852,6 +951,7 @@ router.get("/fluxo-caixa", async (req, res) => {
             [fn("SUM", col("totalPago")), "total"],
           ],
           where: {
+            ...eW,
             data: { [Op.between]: [dataIni, dataFim] },
             status: { [Op.in]: ["pago", "parcial"] },
           },
@@ -865,6 +965,7 @@ router.get("/fluxo-caixa", async (req, res) => {
             [fn("SUM", col("totalPago")), "total"],
           ],
           where: {
+            ...eW,
             dataAgendamento: { [Op.between]: [dataIni, dataFim] },
             status: "concluido",
           },
@@ -878,6 +979,7 @@ router.get("/fluxo-caixa", async (req, res) => {
             [fn("SUM", col("valor")), "total"],
           ],
           where: {
+            ...movW,
             data: { [Op.between]: [dataIni, dataFim] },
             tipo: "entrada",
           },
@@ -891,6 +993,7 @@ router.get("/fluxo-caixa", async (req, res) => {
             [fn("SUM", col("valorTotal")), "total"],
           ],
           where: {
+            ...eW,
             dataPagamento: { [Op.between]: [dataIni, dataFim] },
             situacao: "pago",
           },
@@ -903,7 +1006,11 @@ router.get("/fluxo-caixa", async (req, res) => {
             [fn("DATE", col("data")), "dia"],
             [fn("SUM", col("valor")), "total"],
           ],
-          where: { data: { [Op.between]: [dataIni, dataFim] }, tipo: "saida" },
+          where: {
+            ...movW,
+            data: { [Op.between]: [dataIni, dataFim] },
+            tipo: "saida",
+          },
           group: [fn("DATE", col("data"))],
           raw: true,
         }),
@@ -912,8 +1019,16 @@ router.get("/fluxo-caixa", async (req, res) => {
     // Calcular saldo inicial (acumulado ANTES do primeiro dia do período)
     const dataAntesDoPeriodo = new Date(dataIni);
     dataAntesDoPeriodo.setDate(dataAntesDoPeriodo.getDate() - 1);
-    const entAntes = await somaEntradas(new Date(0), dataAntesDoPeriodo);
-    const saiAntes = await somaSaidas(new Date(0), dataAntesDoPeriodo);
+    const entAntes = await somaEntradas(
+      new Date(0),
+      dataAntesDoPeriodo,
+      empresaId,
+    );
+    const saiAntes = await somaSaidas(
+      new Date(0),
+      dataAntesDoPeriodo,
+      empresaId,
+    );
     const saldoBase = entAntes - saiAntes;
 
     const idx = (arr) =>
@@ -1005,6 +1120,19 @@ router.get("/fluxo-caixa", async (req, res) => {
  */
 router.get("/pagamentos-recebimentos", async (req, res) => {
   try {
+    const empresaId = req.user?.empresaId
+      ? parseInt(req.user.empresaId, 10)
+      : null;
+    const eW = empresaId ? { empresa_id: empresaId } : {};
+    const movW = empresaId
+      ? {
+          [Op.and]: [
+            sequelize.literal(
+              `caixaId IN (SELECT id FROM caixas WHERE empresa_id = ${empresaId})`,
+            ),
+          ],
+        }
+      : {};
     const hoje = new Date();
     const periodo = ["mensal", "semanal", "diario"].includes(req.query.periodo)
       ? req.query.periodo
@@ -1082,6 +1210,7 @@ router.get("/pagamentos-recebimentos", async (req, res) => {
           [fn("SUM", col("totalPago")), "total"],
         ],
         where: {
+          ...eW,
           data: { [Op.between]: [dataIni, dataFim] },
           status: { [Op.in]: ["pago", "parcial"] },
         },
@@ -1095,6 +1224,7 @@ router.get("/pagamentos-recebimentos", async (req, res) => {
           [fn("SUM", col("totalPago")), "total"],
         ],
         where: {
+          ...eW,
           dataAgendamento: { [Op.between]: [dataIni, dataFim] },
           status: "concluido",
         },
@@ -1107,7 +1237,11 @@ router.get("/pagamentos-recebimentos", async (req, res) => {
           [fn("DATE", col("data")), "dia"],
           [fn("SUM", col("valor")), "total"],
         ],
-        where: { data: { [Op.between]: [dataIni, dataFim] }, tipo: "entrada" },
+        where: {
+          ...movW,
+          data: { [Op.between]: [dataIni, dataFim] },
+          tipo: "entrada",
+        },
         group: [fn("DATE", col("data"))],
         raw: true,
       }),
@@ -1118,6 +1252,7 @@ router.get("/pagamentos-recebimentos", async (req, res) => {
           [fn("SUM", col("valor")), "total"],
         ],
         where: {
+          ...eW,
           dataVencimento: { [Op.between]: [dataIni, dataFim] },
           status: { [Op.in]: ["pendente", "parcial"] },
         },
@@ -1131,6 +1266,7 @@ router.get("/pagamentos-recebimentos", async (req, res) => {
           [fn("SUM", col("valorPago")), "total"],
         ],
         where: {
+          ...eW,
           dataPagamento: { [Op.between]: [dataIni, dataFim] },
           status: "pago",
         },
@@ -1144,6 +1280,7 @@ router.get("/pagamentos-recebimentos", async (req, res) => {
           [fn("SUM", col("valorTotal")), "total"],
         ],
         where: {
+          ...eW,
           dataEntrada: { [Op.between]: [dataIni, dataFim] },
           situacao: { [Op.notIn]: ["pago", "excluido", "ignorada"] },
         },
@@ -1157,6 +1294,7 @@ router.get("/pagamentos-recebimentos", async (req, res) => {
           [fn("SUM", col("valorTotal")), "total"],
         ],
         where: {
+          ...eW,
           dataPagamento: { [Op.between]: [dataIni, dataFim] },
           situacao: "pago",
         },
@@ -1169,7 +1307,11 @@ router.get("/pagamentos-recebimentos", async (req, res) => {
           [fn("DATE", col("data")), "dia"],
           [fn("SUM", col("valor")), "total"],
         ],
-        where: { data: { [Op.between]: [dataIni, dataFim] }, tipo: "saida" },
+        where: {
+          ...movW,
+          data: { [Op.between]: [dataIni, dataFim] },
+          tipo: "saida",
+        },
         group: [fn("DATE", col("data"))],
         raw: true,
       }),
