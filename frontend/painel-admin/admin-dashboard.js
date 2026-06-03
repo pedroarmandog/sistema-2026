@@ -403,11 +403,19 @@ function abrirModalExcluirEmpresa(id) {
   const adminNome = getCookie("admin_nome") || "";
   usuarioInput.value = adminNome;
   document.getElementById("excluirSenha").value = "";
+  modal.removeAttribute("inert");
   modal.classList.add("show");
+  document.getElementById("excluirSenha").focus();
+}
+
+function fecharModalExcluirEmpresa() {
+  const modal = document.getElementById("modalExcluirEmpresa");
+  modal.classList.remove("show");
+  modal.setAttribute("inert", "");
 }
 
 document.getElementById("btnCancelarExcluir").addEventListener("click", () => {
-  document.getElementById("modalExcluirEmpresa").classList.remove("show");
+  fecharModalExcluirEmpresa();
 });
 
 document
@@ -438,7 +446,7 @@ document
           data.message || "Empresa excluída com sucesso",
           "success",
         );
-        modal.classList.remove("show");
+        fecharModalExcluirEmpresa();
         refreshAll();
       } else {
         showNotification(data.error || "Erro ao excluir empresa", "error");
@@ -458,18 +466,26 @@ function abrirModalImpersonar(id, nome) {
   const adminNome = getCookie("admin_nome") || "";
   usuarioInput.value = adminNome;
   document.getElementById("impersonarSenha").value = "";
+  modal.removeAttribute("inert");
   modal.classList.add("show");
+  document.getElementById("impersonarSenha").focus();
+}
+
+function fecharModalImpersonar() {
+  const modal = document.getElementById("modalImpersonarEmpresa");
+  modal.classList.remove("show");
+  modal.setAttribute("inert", "");
 }
 
 document
   .getElementById("btnCancelarImpersonar")
   .addEventListener("click", () => {
-    document.getElementById("modalImpersonarEmpresa").classList.remove("show");
+    fecharModalImpersonar();
   });
 document
   .getElementById("modalImpersonarEmpresa")
   .addEventListener("click", (e) => {
-    if (e.target === e.currentTarget) e.currentTarget.classList.remove("show");
+    if (e.target === e.currentTarget) fecharModalImpersonar();
   });
 
 document
@@ -506,7 +522,7 @@ document
       const data = await resp.json();
       if (resp.ok && data.impersonateUrl) {
         showNotification(`Acessando ${data.empresa}...`, "success");
-        modal.classList.remove("show");
+        fecharModalImpersonar();
         // Abrir em nova aba com o token de uso único
         window.open(data.impersonateUrl, "_blank");
       } else {
@@ -533,10 +549,12 @@ function showConfirm(message, title = "Confirmação") {
 
     msgEl.textContent = message;
     titleEl.textContent = title;
+    modal.removeAttribute("inert");
     modal.classList.add("show");
 
     function cleanup() {
       modal.classList.remove("show");
+      modal.setAttribute("inert", "");
       okBtn.removeEventListener("click", onOk);
       cancelBtn.removeEventListener("click", onCancel);
       modal.removeEventListener("click", onOverlayClick);
@@ -1072,18 +1090,26 @@ function abrirModalRestaurar(empresaId, empresaNome, dataReferencia) {
   const adminNome = getCookie("admin_nome") || "";
   usuarioInput.value = adminNome;
   document.getElementById("restaurarSenha").value = "";
+  modal.removeAttribute("inert");
   modal.classList.add("show");
+  document.getElementById("restaurarSenha").focus();
+}
+
+function fecharModalRestaurar() {
+  const modal = document.getElementById("modalRestaurarBackup");
+  modal.classList.remove("show");
+  modal.setAttribute("inert", "");
 }
 
 document
   .getElementById("btnCancelarRestaurar")
   .addEventListener("click", () => {
-    document.getElementById("modalRestaurarBackup").classList.remove("show");
+    fecharModalRestaurar();
   });
 document
   .getElementById("modalRestaurarBackup")
   .addEventListener("click", (e) => {
-    if (e.target === e.currentTarget) e.currentTarget.classList.remove("show");
+    if (e.target === e.currentTarget) fecharModalRestaurar();
   });
 
 document
@@ -1133,7 +1159,7 @@ document
             `Backup restaurado com sucesso para ${backupRestaurarEmpresa.nome}`,
           "success",
         );
-        modal.classList.remove("show");
+        fecharModalRestaurar();
         carregarBackups();
       } else {
         showNotification(data.error || "Erro ao restaurar backup", "error");
