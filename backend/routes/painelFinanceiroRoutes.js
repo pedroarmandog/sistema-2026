@@ -15,6 +15,10 @@
 const express = require("express");
 const router = express.Router();
 const { Op, fn, col, literal } = require("sequelize");
+const { authUser } = require("../middleware/authUser");
+
+// Proteger todas as rotas do painel financeiro com autenticação de usuário
+router.use(authUser);
 
 // ── Modelos ──────────────────────────────────────────────────────────────────
 const { Venda, sequelize: seqVenda } = require("../models/Venda");
