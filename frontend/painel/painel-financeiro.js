@@ -450,7 +450,7 @@ let graficoReceberPagar = null;
 document.addEventListener("DOMContentLoaded", function () {
   configurarAbas();
   configurarNavegacao();
-  preencherSelectMeses();
+  inicializarDatePicker();
   preencherSelectPagRec();
   carregarTudo();
   renderizarTabelasPagRec();
@@ -460,13 +460,7 @@ document.addEventListener("DOMContentLoaded", function () {
   document
     .getElementById("btnDownloadCSV")
     ?.addEventListener("click", exportarFluxoCaixaCSV);
-  [
-    "fluxoPeriodo",
-    "fluxoData",
-    "fluxoVisualizacao",
-    "fluxoEmpresa",
-    "fluxoCentro",
-  ].forEach((id) =>
+  ["fluxoPeriodo"].forEach((id) =>
     document.getElementById(id)?.addEventListener("change", carregarFluxoCaixa),
   );
   ["pagRecPeriodo", "pagRecData"].forEach((id) =>
@@ -511,37 +505,168 @@ function configurarNavegacao() {
   });
 }
 
-// ── Select de meses/anos ─────────────────
-function preencherSelectMeses() {
-  const sel = document.getElementById("fluxoData");
-  if (!sel) return;
-  sel.innerHTML = "";
-  const nomes = [
-    "Janeiro",
-    "Fevereiro",
-    "Marco",
-    "Abril",
-    "Maio",
-    "Junho",
-    "Julho",
-    "Agosto",
-    "Setembro",
-    "Outubro",
-    "Novembro",
-    "Dezembro",
-  ];
-  const hoje = new Date();
-  for (let i = -11; i <= 3; i++) {
-    const d = new Date(hoje.getFullYear(), hoje.getMonth() + i, 1);
-    const val =
-      d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
-    const opt = document.createElement("option");
-    opt.value = val;
-    opt.textContent = nomes[d.getMonth()] + " / " + d.getFullYear();
-    if (i === 0) opt.selected = true;
-    sel.appendChild(opt);
+// ── Date Picker (calendário) ─────────────
+var _calVisualizandoAno, _calVisualizandoMes, _calDataSelecionada;
+
+var _NOMES_MESES_CAL = [
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
+];
+
+function inicializarDatePicker() {
+  var hoje = new Date();
+  _calVisualizandoAno = hoje.getFullYear();
+  _calVisualizandoMes = hoje.getMonth(); // 0-11
+  _calDataSelecionada = new Date(
+    hoje.getFullYear(),
+    hoje.getMonth(),
+    hoje.getDate(),
+  );
+
+  // Atualiza o display e o hidden input com a data atual
+  _calAtualizarDisplay();
+
+  // Abre/fecha o calendário ao clicar no botão
+  var btn = document.getElementById("fluxoDataBtn");
+  if (btn)
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      var drop = document.getElementById("fluxoCalDropdown");
+      if (!drop) return;
+      if (drop.style.display === "none" || !drop.style.display) {
+        _calVisualizandoAno = _calDataSelecionada.getFullYear();
+        _calVisualizandoMes = _calDataSelecionada.getMonth();
+        _calRenderizarMes();
+        drop.style.display = "block";
+      } else {
+        drop.style.display = "none";
+      }
+    });
+
+  // Navegação: mês anterior
+  var prev = document.getElementById("calPrevMonth");
+  if (prev)
+    prev.addEventListener("click", function (e) {
+      e.stopPropagation();
+      _calVisualizandoMes--;
+      if (_calVisualizandoMes < 0) {
+        _calVisualizandoMes = 11;
+        _calVisualizandoAno--;
+      }
+      _calRenderizarMes();
+    });
+
+  // Navegação: próximo mês
+  var next = document.getElementById("calNextMonth");
+  if (next)
+    next.addEventListener("click", function (e) {
+      e.stopPropagation();
+      _calVisualizandoMes++;
+      if (_calVisualizandoMes > 11) {
+        _calVisualizandoMes = 0;
+        _calVisualizandoAno++;
+      }
+      _calRenderizarMes();
+    });
+
+  // Fecha ao clicar fora
+  document.addEventListener("click", function () {
+    var drop = document.getElementById("fluxoCalDropdown");
+    if (drop) drop.style.display = "none";
+  });
+
+  var wrapper = document.getElementById("fluxoDataWrapper");
+  if (wrapper)
+    wrapper.addEventListener("click", function (e) {
+      e.stopPropagation();
+    });
+}
+
+function _calRenderizarMes() {
+  var label = document.getElementById("calMesAnoLabel");
+  if (label)
+    label.textContent =
+      _NOMES_MESES_CAL[_calVisualizandoMes] + " / " + _calVisualizandoAno;
+
+  var container = document.getElementById("fluxoCalDays");
+  if (!container) return;
+  container.innerHTML = "";
+
+  var hoje = new Date();
+  var primeiroDia = new Date(_calVisualizandoAno, _calVisualizandoMes, 1);
+  var ultimoDia = new Date(_calVisualizandoAno, _calVisualizandoMes + 1, 0);
+  var iniciaDom = primeiroDia.getDay(); // 0 = domingo
+
+  // Dias do mês anterior (preenchimento)
+  for (var i = 0; i < iniciaDom; i++) {
+    var d = new Date(
+      _calVisualizandoAno,
+      _calVisualizandoMes,
+      -(iniciaDom - i - 1),
+    );
+    var el = document.createElement("div");
+    el.className = "cal-day outro-mes";
+    el.textContent = d.getDate();
+    container.appendChild(el);
+  }
+
+  // Dias do mês atual
+  for (var dia = 1; dia <= ultimoDia.getDate(); dia++) {
+    var el2 = document.createElement("div");
+    el2.className = "cal-day";
+    el2.textContent = dia;
+    var isHoje =
+      dia === hoje.getDate() &&
+      _calVisualizandoMes === hoje.getMonth() &&
+      _calVisualizandoAno === hoje.getFullYear();
+    var isSel =
+      _calDataSelecionada &&
+      dia === _calDataSelecionada.getDate() &&
+      _calVisualizandoMes === _calDataSelecionada.getMonth() &&
+      _calVisualizandoAno === _calDataSelecionada.getFullYear();
+    if (isHoje) el2.classList.add("hoje");
+    if (isSel) el2.classList.add("selecionado");
+    (function (d2) {
+      el2.addEventListener("click", function () {
+        _calDataSelecionada = new Date(
+          _calVisualizandoAno,
+          _calVisualizandoMes,
+          d2,
+        );
+        _calAtualizarDisplay();
+        var drop = document.getElementById("fluxoCalDropdown");
+        if (drop) drop.style.display = "none";
+        carregarFluxoCaixa();
+      });
+    })(dia);
+    container.appendChild(el2);
   }
 }
+
+function _calAtualizarDisplay() {
+  var d = _calDataSelecionada;
+  if (!d) return;
+  var yyyy = d.getFullYear();
+  var mm = String(d.getMonth() + 1).padStart(2, "0");
+  var dd = String(d.getDate()).padStart(2, "0");
+  var inputHidden = document.getElementById("fluxoData");
+  if (inputHidden) inputHidden.value = yyyy + "-" + mm + "-" + dd;
+  var display = document.getElementById("fluxoDataDisplay");
+  if (display) display.textContent = dd + "/" + mm + "/" + yyyy;
+}
+
+// Mantida por compatibilidade (não faz nada)
+function preencherSelectMeses() {}
 
 // ── Carregamento principal ───────────────
 async function carregarTudo() {

@@ -1141,7 +1141,11 @@
                 <i class="fas fa-shopping-bag"></i>
                 Nova Venda
               </a>
-              <a href="../../financeiro/contas-a-receber/contas-a-pagar/pagamento-fornecedor.html" class="dropdown-item" onclick="novaContaPagar()">
+              <a
+                href="../../financeiro/contas-a-receber/contas-a-pagar/pagamento-fornecedor.html"
+                class="dropdown-item"
+                onclick="novaContaPagar()"
+              >
                 <i class="fas fa-credit-card"></i>
                 Nova Conta a Pagar
               </a>
@@ -1385,12 +1389,41 @@
 
               <div class="filtro-group">
                 <label class="filtro-label">Data</label>
-                <select class="filtro-select" id="fluxoData">
-                  <!-- opções preenchidas pelo JS -->
-                </select>
+                <div class="date-picker-wrapper" id="fluxoDataWrapper">
+                  <button
+                    class="filtro-select date-picker-btn"
+                    id="fluxoDataBtn"
+                    type="button"
+                  >
+                    <span id="fluxoDataDisplay">Selecionar data</span>
+                    <i class="fas fa-calendar-alt"></i>
+                  </button>
+                  <input type="hidden" id="fluxoData" value="" />
+                  <div
+                    class="cal-dropdown"
+                    id="fluxoCalDropdown"
+                    style="display: none"
+                  >
+                    <div class="cal-header">
+                      <button class="cal-nav" id="calPrevMonth" type="button">
+                        <i class="fas fa-chevron-left"></i>
+                      </button>
+                      <span class="cal-mes-ano" id="calMesAnoLabel"></span>
+                      <button class="cal-nav" id="calNextMonth" type="button">
+                        <i class="fas fa-chevron-right"></i>
+                      </button>
+                    </div>
+                    <div class="cal-weekdays">
+                      <span>Dom</span><span>Seg</span><span>Ter</span
+                      ><span>Qua</span><span>Qui</span><span>Sex</span
+                      ><span>Sáb</span>
+                    </div>
+                    <div class="cal-days" id="fluxoCalDays"></div>
+                  </div>
+                </div>
               </div>
 
-              <div class="filtro-group">
+              <div class="filtro-group" style="display: none">
                 <label class="filtro-label">Visualização</label>
                 <select class="filtro-select" id="fluxoVisualizacao">
                   <option value="resumido">Resumido</option>
@@ -1398,7 +1431,7 @@
                 </select>
               </div>
 
-              <div class="filtro-group">
+              <div class="filtro-group" style="display: none">
                 <label class="filtro-label">Empresa</label>
                 <select class="filtro-select" id="fluxoEmpresa">
                   <option value="todas">Todas as empresas</option>
@@ -1407,7 +1440,7 @@
                 </select>
               </div>
 
-              <div class="filtro-group">
+              <div class="filtro-group" style="display: none">
                 <label class="filtro-label">Centro de Resultado</label>
                 <select class="filtro-select" id="fluxoCentro">
                   <option value="todos">Todos os centros de resultados</option>
