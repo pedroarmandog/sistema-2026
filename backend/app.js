@@ -1194,6 +1194,12 @@ app.use("/api/fornecedores", fornecedorRoutes);
 app.use("/api/categorias-financeiras", categoriaFinanceiraRoutes);
 app.use("/api/contas-receber", contaReceberRoutes);
 
+// Haver e Crediário
+const haverRoutes = require("./routes/haverRoutes");
+const crediarioRoutes = require("./routes/crediarioRoutes");
+app.use("/api/haver", haverRoutes);
+app.use("/api/crediario", crediarioRoutes);
+
 // Painel Financeiro – dados reais do banco
 const painelFinanceiroRoutes = require("./routes/painelFinanceiroRoutes");
 app.use("/api/painel-financeiro", painelFinanceiroRoutes);
@@ -1316,6 +1322,34 @@ async function syncAllTables() {
     await sequelize.sync();
     console.log("✅ Tabelas da instância principal criadas");
 
+    // Migration inline: adicionar saldo_haver e saldo_crediario à tabela clientes
+    try {
+      const [colsHaver] = await sequelize.query(
+        "SHOW COLUMNS FROM clientes LIKE 'saldo_haver'",
+      );
+      if (colsHaver.length === 0) {
+        await sequelize.query(
+          "ALTER TABLE clientes ADD COLUMN saldo_haver DECIMAL(12,2) NOT NULL DEFAULT 0.00",
+        );
+        console.log("  ✅ Migration: saldo_haver adicionado em clientes");
+      }
+    } catch (e) {
+      console.warn("  ⚠️ Migration saldo_haver:", e.message);
+    }
+    try {
+      const [colsCrediario] = await sequelize.query(
+        "SHOW COLUMNS FROM clientes LIKE 'saldo_crediario'",
+      );
+      if (colsCrediario.length === 0) {
+        await sequelize.query(
+          "ALTER TABLE clientes ADD COLUMN saldo_crediario DECIMAL(12,2) NOT NULL DEFAULT 0.00",
+        );
+        console.log("  ✅ Migration: saldo_crediario adicionado em clientes");
+      }
+    } catch (e) {
+      console.warn("  ⚠️ Migration saldo_crediario:", e.message);
+    }
+
     // 2) Modelos com instância própria de Sequelize (cada um tem seu new Sequelize)
     //    Precisam de .sync() individual
     const ownInstanceModels = [
@@ -1357,6 +1391,22 @@ async function syncAllTables() {
       console.log("  ✅ ContaReceber");
     } catch (e) {
       console.warn("  ⚠️ ContaReceber:", e.message);
+    }
+
+    // MovimentoHaver e MovimentoCrediario — mesmo sequelize que Cliente
+    try {
+      const MovimentoHaver = require("./models/MovimentoHaver");
+      await MovimentoHaver.sync();
+      console.log("  ✅ MovimentoHaver");
+    } catch (e) {
+      console.warn("  ⚠️ MovimentoHaver:", e.message);
+    }
+    try {
+      const MovimentoCrediario = require("./models/MovimentoCrediario");
+      await MovimentoCrediario.sync();
+      console.log("  ✅ MovimentoCrediario");
+    } catch (e) {
+      console.warn("  ⚠️ MovimentoCrediario:", e.message);
     }
 
     // ProdutoLembreteRecorrente

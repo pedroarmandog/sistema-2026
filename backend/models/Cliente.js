@@ -198,6 +198,16 @@ const Cliente = sequelize.define(
 
     // Informações Comerciais
     limite_credito: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0.0 },
+    saldo_haver: {
+      type: DataTypes.DECIMAL(12, 2),
+      defaultValue: 0.0,
+      allowNull: false,
+    },
+    saldo_crediario: {
+      type: DataTypes.DECIMAL(12, 2),
+      defaultValue: 0.0,
+      allowNull: false,
+    },
     grupo_cliente: { type: DataTypes.STRING },
     perfil_desconto: { type: DataTypes.STRING },
     ativo: { type: DataTypes.BOOLEAN, defaultValue: true },

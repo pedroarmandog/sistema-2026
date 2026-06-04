@@ -24,6 +24,8 @@ const Fornecedor = require("./Fornecedor");
 const Entrada = require("./Entrada");
 const Saida = require("./Saida");
 const ContaReceber = require("./ContaReceber");
+const MovimentoHaver = require("./MovimentoHaver");
+const MovimentoCrediario = require("./MovimentoCrediario");
 const PeriodicidadeFactory = require("./Periodicidade");
 // Modelos do módulo de Marketing/WhatsApp
 const WhatsappSessionFactory = require("./WhatsappSession");
@@ -171,6 +173,8 @@ module.exports = {
   Entrada,
   Saida,
   ContaReceber,
+  MovimentoHaver,
+  MovimentoCrediario,
   // Marketing/WhatsApp
   WhatsappSession,
   MensagemAutomatica,

@@ -198,6 +198,9 @@ function preencherDetalhesCliente(cliente) {
   document.title = `PetHub - ${cliente.nome}`;
 
   console.log("✅ Preenchimento de detalhes concluído com sucesso");
+
+  // Atualizar cards financeiros (haver/crediário) na aba detalhes
+  setTimeout(atualizarCardsFinanceiros, 100);
   // Renderizar pets: primeiro tentamos usar os pets embutidos na resposta do cliente
   try {
     if (
@@ -311,165 +314,488 @@ function inicializarTabs() {
 }
 
 // Mostrar o conteúdo de haver inline dentro da área de tabs (aba 'haver')
-function showHaverInline() {
+async function showHaverInline() {
   const container = document.getElementById("haver-tab");
   if (!container) return;
 
-  // Construir HTML básico: header com saldo + botões e tabela
-  container.innerHTML = `
-        <div class="card" style="padding:16px; margin:0 0 16px 0;">
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
-                <div>
-                    <div style="font-size:14px; color:#6b7280">Saldo em haver</div>
-                    <div id="haverSaldoInline" style="font-size:20px; font-weight:600; margin-top:6px">0,00</div>
-                </div>
-                <div style="display:flex; gap:8px;">
-                    <button id="btnFecharHaverInline" class="btn btn-secondary">Fechar</button>
-                    <button id="btnNovoAdiantamentoInline" class="btn btn-primary">Novo Adiantamento</button>
-                </div>
-            </div>
-        </div>
+  // Skeleton enquanto carrega
+  container.innerHTML = `<div style="padding:24px;color:#6b7280;">Carregando...</div>`;
+  switchTab("haver");
 
-        <div class="card" style="padding:0;">
-            <table style="width:100%; border-collapse:collapse;">
-                <thead style="background:#f9fafb; color:#374151;">
-                    <tr>
-                        <th style="padding:10px; text-align:left">ID</th>
-                        <th style="padding:10px; text-align:left">Data / Hora</th>
-                        <th style="padding:10px; text-align:left">Operação</th>
-                        <th style="padding:10px; text-align:left">Tipo movimento</th>
-                        <th style="padding:10px; text-align:right">Valor</th>
-                        <th style="padding:10px; text-align:right">Saldo</th>
-                    </tr>
-                </thead>
-                <tbody id="haverTableBodyInline"></tbody>
-            </table>
-        </div>
-    `;
+  const clienteId = clienteAtual && clienteAtual.id;
+  if (!clienteId) {
+    container.innerHTML = `<div style="padding:24px;color:#ef4444;">Cliente não identificado.</div>`;
+    return;
+  }
 
-  // Preencher saldo
-  const saldoEl = document.getElementById("haverSaldoInline");
-  let saldo = "0,00";
+  let saldo = 0;
+  let movimentos = [];
+
   try {
-    if (clienteAtual) {
-      saldo = formatarMoeda(
-        clienteAtual.saldo_haver ||
-          clienteAtual.saldo ||
-          clienteAtual.haver ||
-          0,
-      );
+    const resp = await fetch(`/api/haver/${clienteId}`);
+    if (resp.ok) {
+      const json = await resp.json();
+      if (json.success) {
+        saldo = json.saldo || 0;
+        movimentos = json.movimentos || [];
+      }
     }
   } catch (e) {
-    console.warn("Erro ao obter saldo haver", e);
+    console.warn("Falha ao carregar haver:", e);
   }
-  if (saldoEl) saldoEl.textContent = saldo;
 
-  // Preencher tabela de movimentos
+  container.innerHTML = `
+    <div class="card" style="padding:16px; margin:0 0 16px 0;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+        <div>
+          <div style="font-size:14px; color:#6b7280;">Saldo em haver</div>
+          <div id="haverSaldoInline" style="font-size:22px; font-weight:700; color:#16a34a; margin-top:4px;">R$ ${formatarMoeda(saldo)}</div>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button id="btnFecharHaverInline" class="btn btn-secondary" style="padding:8px 14px;">Fechar</button>
+          <button id="btnNovoAdiantamentoInline" class="btn btn-primary" style="padding:8px 14px;">Novo Adiantamento</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:0; overflow:auto;">
+      <table style="width:100%; border-collapse:collapse;">
+        <thead style="background:#f9fafb; color:#374151;">
+          <tr>
+            <th style="padding:10px; text-align:left;">ID</th>
+            <th style="padding:10px; text-align:left;">Data / Hora</th>
+            <th style="padding:10px; text-align:left;">Operação</th>
+            <th style="padding:10px; text-align:left;">Tipo</th>
+            <th style="padding:10px; text-align:right;">Valor</th>
+            <th style="padding:10px; text-align:right;">Saldo</th>
+          </tr>
+        </thead>
+        <tbody id="haverTableBodyInline"></tbody>
+      </table>
+    </div>
+
+    <!-- Modal Novo Adiantamento -->
+    <div id="modalAdiantamento" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
+      <div style="background:white; border-radius:12px; padding:24px; width:420px; max-width:95vw; box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+        <h3 style="margin:0 0 20px; font-size:18px;">Novo Adiantamento</h3>
+        <div style="margin-bottom:14px;">
+          <label style="font-size:13px; color:#374151; font-weight:600;">Valor *</label>
+          <input id="adiantValor" type="number" min="0.01" step="0.01" placeholder="0,00"
+            style="width:100%; margin-top:4px; padding:10px; border:1px solid #d1d5db; border-radius:6px; font-size:15px; box-sizing:border-box;">
+        </div>
+        <div style="margin-bottom:14px;">
+          <label style="font-size:13px; color:#374151; font-weight:600;">Data</label>
+          <input id="adiantData" type="date"
+            style="width:100%; margin-top:4px; padding:10px; border:1px solid #d1d5db; border-radius:6px; font-size:15px; box-sizing:border-box;">
+        </div>
+        <div style="margin-bottom:20px;">
+          <label style="font-size:13px; color:#374151; font-weight:600;">Observação</label>
+          <textarea id="adiantObs" rows="3" placeholder="Opcional..."
+            style="width:100%; margin-top:4px; padding:10px; border:1px solid #d1d5db; border-radius:6px; font-size:14px; resize:vertical; box-sizing:border-box;"></textarea>
+        </div>
+        <div id="adiantErro" style="color:#ef4444; font-size:13px; margin-bottom:12px; display:none;"></div>
+        <div style="display:flex; gap:10px; justify-content:flex-end;">
+          <button id="adiantCancelar" class="btn btn-secondary" style="padding:10px 20px;">Cancelar</button>
+          <button id="adiantSalvar" class="btn btn-primary" style="padding:10px 20px;">Salvar</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Definir data padrão como hoje
+  const dataInput = document.getElementById("adiantData");
+  if (dataInput) dataInput.value = new Date().toISOString().split("T")[0];
+
+  // Preencher tabela
   const tbody = document.getElementById("haverTableBodyInline");
   if (tbody) {
-    tbody.innerHTML = "";
-    let movimentos = [];
-    if (clienteAtual) {
-      movimentos =
-        clienteAtual.haver_movimentos ||
-        clienteAtual.movimentos_haver ||
-        clienteAtual.movimentos ||
-        [];
-    }
-
-    if (!Array.isArray(movimentos) || movimentos.length === 0) {
-      const tr = document.createElement("tr");
-      tr.innerHTML =
-        '<td colspan="6" style="padding:12px; color:#6b7280;">Nenhum movimento encontrado</td>';
-      tbody.appendChild(tr);
+    if (!movimentos.length) {
+      tbody.innerHTML =
+        '<tr><td colspan="6" style="padding:14px; color:#6b7280;">Nenhum movimento encontrado</td></tr>';
     } else {
-      movimentos.forEach((mov) => {
-        const tr = document.createElement("tr");
-        const dataHora = formatarDataHora(
-          mov.data_hora || mov.created_at || mov.data || "",
-        );
-        const operacao = mov.operacao || mov.descricao || mov.tipo || "";
-        const tipo = mov.tipo_movimento || mov.tipo_mov || mov.categoria || "";
-        const valor = mov.valor != null ? formatarMoeda(mov.valor) : "";
-        const saldoLinha = mov.saldo != null ? formatarMoeda(mov.saldo) : "";
-
-        tr.innerHTML = `
-                    <td style="padding:10px">${mov.id || ""}</td>
-                    <td style="padding:10px">${dataHora}</td>
-                    <td style="padding:10px">${operacao}</td>
-                    <td style="padding:10px">${tipo}</td>
-                    <td style="padding:10px; text-align:right">${valor}</td>
-                    <td style="padding:10px; text-align:right">${saldoLinha}</td>
-                `;
-        tbody.appendChild(tr);
-      });
+      tbody.innerHTML = movimentos
+        .map((m) => {
+          const cor = m.tipo === "entrada" ? "color:#16a34a" : "color:#dc2626";
+          return `<tr style="border-bottom:1px solid #f3f4f6;">
+          <td style="padding:10px;">${m.id || ""}</td>
+          <td style="padding:10px;">${formatarDataHora(m.data || m.createdAt || "")}</td>
+          <td style="padding:10px;">${m.operacao || ""}</td>
+          <td style="padding:10px;${cor}">${m.tipo === "entrada" ? "Entrada" : "Saída"}</td>
+          <td style="padding:10px; text-align:right; ${cor}">R$ ${formatarMoeda(m.valor)}</td>
+          <td style="padding:10px; text-align:right;">R$ ${m.saldoApos != null ? formatarMoeda(m.saldoApos) : "---"}</td>
+        </tr>`;
+        })
+        .join("");
     }
   }
 
-  // configurar botões
+  // Botão Fechar
   const btnFechar = document.getElementById("btnFecharHaverInline");
   if (btnFechar) btnFechar.onclick = () => switchTab("detalhes");
 
-  const novoBtn = document.getElementById("btnNovoAdiantamentoInline");
-  if (novoBtn) {
-    novoBtn.onclick = function () {
-      console.log("Novo adiantamento (inline) clicado");
-      // comportamento padrão: abrir formulário de adiantamento (não implementado)
+  // Botão Novo Adiantamento
+  const btnNovoAdiant = document.getElementById("btnNovoAdiantamentoInline");
+  const modalAdiant = document.getElementById("modalAdiantamento");
+  if (btnNovoAdiant && modalAdiant) {
+    btnNovoAdiant.onclick = () => {
+      modalAdiant.style.display = "flex";
+      const inp = document.getElementById("adiantValor");
+      if (inp) inp.focus();
     };
   }
 
-  // Ativar a aba haver
-  switchTab("haver");
+  // Cancelar modal
+  const btnCancelar = document.getElementById("adiantCancelar");
+  if (btnCancelar && modalAdiant) {
+    btnCancelar.onclick = () => {
+      modalAdiant.style.display = "none";
+    };
+  }
+
+  // Salvar adiantamento
+  const btnSalvar = document.getElementById("adiantSalvar");
+  if (btnSalvar) {
+    btnSalvar.onclick = async () => {
+      const valor = parseFloat(document.getElementById("adiantValor").value);
+      const obs = document.getElementById("adiantObs").value.trim();
+      const data = document.getElementById("adiantData").value;
+      const erroEl = document.getElementById("adiantErro");
+
+      if (!valor || valor <= 0) {
+        erroEl.textContent = "Informe um valor válido maior que zero.";
+        erroEl.style.display = "block";
+        return;
+      }
+      erroEl.style.display = "none";
+      btnSalvar.disabled = true;
+      btnSalvar.textContent = "Salvando...";
+
+      try {
+        const resp = await fetch(`/api/haver/${clienteId}/adiantamento`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ valor, observacao: obs || null, data }),
+        });
+        const json = await resp.json();
+        if (!resp.ok || !json.success)
+          throw new Error(json.error || "Erro ao salvar");
+
+        // Atualizar saldo local
+        if (clienteAtual) clienteAtual.saldo_haver = json.saldo;
+        modalAdiant.style.display = "none";
+        mostrarNotificacao("Adiantamento registrado com sucesso!", "success");
+        // Recarregar aba haver
+        await showHaverInline();
+        // Atualizar card de saldo na aba detalhes
+        atualizarCardsFinanceiros();
+      } catch (err) {
+        erroEl.textContent = err.message || "Erro ao salvar adiantamento.";
+        erroEl.style.display = "block";
+      } finally {
+        btnSalvar.disabled = false;
+        btnSalvar.textContent = "Salvar";
+      }
+    };
+  }
 }
 
 // Mostrar conteúdo do crediário inline com mesmo estilo do haver
-function showCrediarioInline() {
+async function showCrediarioInline() {
   const container = document.getElementById("crediario-tab");
   if (!container) return;
 
-  // Estrutura com dois cards lado a lado (Em aberto / Recebimentos)
-  container.innerHTML = `
-        <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px;">
-            <div class="card" style="flex:1 1 320px; padding:12px;">
-                <div style="display:flex; align-items:center; justify-content:space-between;">
-                    <div style="display:flex; align-items:center; gap:12px;">
-                        <div style="width:36px; height:36px; border-radius:6px; background:#fee2e2; display:flex; align-items:center; justify-content:center;">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2v6" stroke="#ef4444" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 12H4" stroke="#ef4444" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                        </div>
-                        <div>
-                            <div style="font-weight:600;">Em aberto</div>
-                            <div style="font-size:13px; color:#6b7280; margin-top:6px">Cliente não possui crediário em aberto!</div>
-                        </div>
-                    </div>
-                    <div style="display:flex; gap:8px; align-items:center;">
-                        <button class="btn btn-ghost" title="Compartilhar">🔗</button>
-                        <input type="checkbox" title="Marcar" />
-                    </div>
-                </div>
-            </div>
-
-            <div class="card" style="flex:1 1 320px; padding:12px;">
-                <div style="display:flex; align-items:center; justify-content:space-between;">
-                    <div style="display:flex; align-items:center; gap:12px;">
-                        <div style="width:36px; height:36px; border-radius:6px; background:#ecfdf5; display:flex; align-items:center; justify-content:center;">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 6L9 17l-5-5" stroke="#10b981" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                        </div>
-                        <div>
-                            <div style="font-weight:600;">Recebimentos</div>
-                            <div style="font-size:13px; color:#6b7280; margin-top:6px">Cliente não possui recebimentos!</div>
-                        </div>
-                    </div>
-                    <div style="display:flex; gap:8px; align-items:center;">
-                        <button class="btn btn-ghost" title="Compartilhar">🔗</button>
-                        <input type="checkbox" title="Marcar" />
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-
-  // Ativar a aba crediario
+  container.innerHTML = `<div style="padding:24px;color:#6b7280;">Carregando...</div>`;
   switchTab("crediario");
+
+  const clienteId = clienteAtual && clienteAtual.id;
+  if (!clienteId) {
+    container.innerHTML = `<div style="padding:24px;color:#ef4444;">Cliente não identificado.</div>`;
+    return;
+  }
+
+  let saldo = 0;
+  let movimentos = [];
+
+  try {
+    const resp = await fetch(`/api/crediario/${clienteId}`);
+    if (resp.ok) {
+      const json = await resp.json();
+      if (json.success) {
+        saldo = json.saldo || 0;
+        movimentos = json.movimentos || [];
+      }
+    }
+  } catch (e) {
+    console.warn("Falha ao carregar crediário:", e);
+  }
+
+  container.innerHTML = `
+    <div class="card" style="padding:16px; margin:0 0 16px 0;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+        <div>
+          <div style="font-size:14px; color:#6b7280;">Saldo em crediário (débito)</div>
+          <div id="crediarioSaldoInline" style="font-size:22px; font-weight:700; color:${saldo > 0 ? "#dc2626" : "#374151"}; margin-top:4px;">R$ ${formatarMoeda(saldo)}</div>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button id="btnFecharCrediarioInline" class="btn btn-secondary" style="padding:8px 14px;">Fechar</button>
+          <button id="btnReceberCrediarioInline" class="btn btn-success" style="padding:8px 14px; background:#16a34a; color:white; border:none; border-radius:6px; cursor:pointer;" ${saldo <= 0 ? "disabled" : ""}>Receber</button>
+          <button id="btnAdicionarDebitoInline" class="btn btn-primary" style="padding:8px 14px;">Adicionar Débito</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:0; overflow:auto;">
+      <table style="width:100%; border-collapse:collapse;">
+        <thead style="background:#f9fafb; color:#374151;">
+          <tr>
+            <th style="padding:10px; text-align:left;">ID</th>
+            <th style="padding:10px; text-align:left;">Data / Hora</th>
+            <th style="padding:10px; text-align:left;">Operação</th>
+            <th style="padding:10px; text-align:left;">Tipo</th>
+            <th style="padding:10px; text-align:left;">Forma</th>
+            <th style="padding:10px; text-align:right;">Valor</th>
+            <th style="padding:10px; text-align:right;">Saldo</th>
+          </tr>
+        </thead>
+        <tbody id="crediarioTableBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Modal Adicionar Débito -->
+    <div id="modalDebitoCrediario" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
+      <div style="background:white; border-radius:12px; padding:24px; width:420px; max-width:95vw; box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+        <h3 style="margin:0 0 20px; font-size:18px;">Adicionar Débito ao Crediário</h3>
+        <div style="margin-bottom:14px;">
+          <label style="font-size:13px; color:#374151; font-weight:600;">Valor *</label>
+          <input id="debitoValor" type="number" min="0.01" step="0.01" placeholder="0,00"
+            style="width:100%; margin-top:4px; padding:10px; border:1px solid #d1d5db; border-radius:6px; font-size:15px; box-sizing:border-box;">
+        </div>
+        <div style="margin-bottom:14px;">
+          <label style="font-size:13px; color:#374151; font-weight:600;">Data</label>
+          <input id="debitoData" type="date"
+            style="width:100%; margin-top:4px; padding:10px; border:1px solid #d1d5db; border-radius:6px; font-size:15px; box-sizing:border-box;">
+        </div>
+        <div style="margin-bottom:20px;">
+          <label style="font-size:13px; color:#374151; font-weight:600;">Observação</label>
+          <textarea id="debitoObs" rows="3" placeholder="Opcional..."
+            style="width:100%; margin-top:4px; padding:10px; border:1px solid #d1d5db; border-radius:6px; font-size:14px; resize:vertical; box-sizing:border-box;"></textarea>
+        </div>
+        <div id="debitoErro" style="color:#ef4444; font-size:13px; margin-bottom:12px; display:none;"></div>
+        <div style="display:flex; gap:10px; justify-content:flex-end;">
+          <button id="debitoCancelar" class="btn btn-secondary" style="padding:10px 20px;">Cancelar</button>
+          <button id="debitoSalvar" class="btn btn-primary" style="padding:10px 20px;">Salvar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Receber Crediário -->
+    <div id="modalReceberCrediario" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
+      <div style="background:white; border-radius:12px; padding:24px; width:440px; max-width:95vw; box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+        <h3 style="margin:0 0 8px; font-size:18px;">Receber Crediário</h3>
+        <div style="font-size:13px; color:#6b7280; margin-bottom:20px;">Saldo devedor: <strong style="color:#dc2626;">R$ <span id="receberSaldoDevedor">${formatarMoeda(saldo)}</span></strong></div>
+        <div style="margin-bottom:14px;">
+          <label style="font-size:13px; color:#374151; font-weight:600;">Valor a receber *</label>
+          <input id="receberValor" type="number" min="0.01" step="0.01" placeholder="0,00" value="${formatarMoeda(saldo).replace(".", "").replace(",", ".")}"
+            style="width:100%; margin-top:4px; padding:10px; border:1px solid #d1d5db; border-radius:6px; font-size:15px; box-sizing:border-box;">
+        </div>
+        <div style="margin-bottom:14px;">
+          <label style="font-size:13px; color:#374151; font-weight:600;">Forma de Pagamento *</label>
+          <select id="receberForma"
+            style="width:100%; margin-top:4px; padding:10px; border:1px solid #d1d5db; border-radius:6px; font-size:15px; box-sizing:border-box;">
+            <option value="">Selecione...</option>
+            <option value="dinheiro">Dinheiro</option>
+            <option value="pix">PIX</option>
+            <option value="debito">Cartão de Débito</option>
+            <option value="credito">Cartão de Crédito</option>
+            <option value="transferencia">Transferência</option>
+            <option value="cheque">Cheque</option>
+          </select>
+        </div>
+        <div style="margin-bottom:14px;">
+          <label style="font-size:13px; color:#374151; font-weight:600;">Data</label>
+          <input id="receberData" type="date"
+            style="width:100%; margin-top:4px; padding:10px; border:1px solid #d1d5db; border-radius:6px; font-size:15px; box-sizing:border-box;">
+        </div>
+        <div style="margin-bottom:20px;">
+          <label style="font-size:13px; color:#374151; font-weight:600;">Observação</label>
+          <textarea id="receberObs" rows="2" placeholder="Opcional..."
+            style="width:100%; margin-top:4px; padding:10px; border:1px solid #d1d5db; border-radius:6px; font-size:14px; resize:vertical; box-sizing:border-box;"></textarea>
+        </div>
+        <div id="receberErro" style="color:#ef4444; font-size:13px; margin-bottom:12px; display:none;"></div>
+        <div style="display:flex; gap:10px; justify-content:flex-end;">
+          <button id="receberCancelar" class="btn btn-secondary" style="padding:10px 20px;">Cancelar</button>
+          <button id="receberConfirmar" style="padding:10px 20px; background:#16a34a; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:600;">Confirmar Recebimento</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Datas padrão
+  const hoje = new Date().toISOString().split("T")[0];
+  const debitoDataEl = document.getElementById("debitoData");
+  if (debitoDataEl) debitoDataEl.value = hoje;
+  const receberDataEl = document.getElementById("receberData");
+  if (receberDataEl) receberDataEl.value = hoje;
+
+  // Preencher tabela
+  const tbody = document.getElementById("crediarioTableBody");
+  if (tbody) {
+    if (!movimentos.length) {
+      tbody.innerHTML =
+        '<tr><td colspan="7" style="padding:14px; color:#6b7280;">Nenhum movimento encontrado</td></tr>';
+    } else {
+      tbody.innerHTML = movimentos
+        .map((m) => {
+          const cor = m.tipo === "credito" ? "color:#16a34a" : "color:#dc2626";
+          const label = m.tipo === "credito" ? "Recebimento" : "Débito";
+          return `<tr style="border-bottom:1px solid #f3f4f6;">
+          <td style="padding:10px;">${m.id || ""}</td>
+          <td style="padding:10px;">${formatarDataHora(m.data || m.createdAt || "")}</td>
+          <td style="padding:10px;">${m.operacao || ""}</td>
+          <td style="padding:10px;${cor}">${label}</td>
+          <td style="padding:10px;">${m.formaPagamento || "---"}</td>
+          <td style="padding:10px; text-align:right; ${cor}">R$ ${formatarMoeda(m.valor)}</td>
+          <td style="padding:10px; text-align:right;">R$ ${m.saldoApos != null ? formatarMoeda(m.saldoApos) : "---"}</td>
+        </tr>`;
+        })
+        .join("");
+    }
+  }
+
+  // Fechar
+  const btnFechar = document.getElementById("btnFecharCrediarioInline");
+  if (btnFechar) btnFechar.onclick = () => switchTab("detalhes");
+
+  // Modal Débito
+  const modalDebito = document.getElementById("modalDebitoCrediario");
+  const btnAddDebito = document.getElementById("btnAdicionarDebitoInline");
+  if (btnAddDebito && modalDebito) {
+    btnAddDebito.onclick = () => {
+      modalDebito.style.display = "flex";
+      document.getElementById("debitoValor").focus();
+    };
+  }
+  const btnDebitoCancelar = document.getElementById("debitoCancelar");
+  if (btnDebitoCancelar && modalDebito) {
+    btnDebitoCancelar.onclick = () => {
+      modalDebito.style.display = "none";
+    };
+  }
+  const btnDebitoSalvar = document.getElementById("debitoSalvar");
+  if (btnDebitoSalvar) {
+    btnDebitoSalvar.onclick = async () => {
+      const valor = parseFloat(document.getElementById("debitoValor").value);
+      const obs = document.getElementById("debitoObs").value.trim();
+      const data = document.getElementById("debitoData").value;
+      const erroEl = document.getElementById("debitoErro");
+
+      if (!valor || valor <= 0) {
+        erroEl.textContent = "Informe um valor válido.";
+        erroEl.style.display = "block";
+        return;
+      }
+      erroEl.style.display = "none";
+      btnDebitoSalvar.disabled = true;
+      btnDebitoSalvar.textContent = "Salvando...";
+
+      try {
+        const resp = await fetch(`/api/crediario/${clienteId}/debito`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ valor, observacao: obs || null, data }),
+        });
+        const json = await resp.json();
+        if (!resp.ok || !json.success)
+          throw new Error(json.error || "Erro ao salvar");
+
+        if (clienteAtual) clienteAtual.saldo_crediario = json.saldo;
+        modalDebito.style.display = "none";
+        mostrarNotificacao("Débito registrado com sucesso!", "success");
+        await showCrediarioInline();
+        atualizarCardsFinanceiros();
+      } catch (err) {
+        erroEl.textContent = err.message || "Erro ao salvar débito.";
+        erroEl.style.display = "block";
+      } finally {
+        btnDebitoSalvar.disabled = false;
+        btnDebitoSalvar.textContent = "Salvar";
+      }
+    };
+  }
+
+  // Modal Receber
+  const modalReceber = document.getElementById("modalReceberCrediario");
+  const btnReceber = document.getElementById("btnReceberCrediarioInline");
+  if (btnReceber && modalReceber) {
+    btnReceber.onclick = () => {
+      modalReceber.style.display = "flex";
+      const inp = document.getElementById("receberValor");
+      if (inp) {
+        // Preencher com saldo atual
+        inp.value = saldo.toFixed(2);
+        inp.focus();
+      }
+    };
+  }
+  const btnReceberCancelar = document.getElementById("receberCancelar");
+  if (btnReceberCancelar && modalReceber) {
+    btnReceberCancelar.onclick = () => {
+      modalReceber.style.display = "none";
+    };
+  }
+  const btnReceberConfirmar = document.getElementById("receberConfirmar");
+  if (btnReceberConfirmar) {
+    btnReceberConfirmar.onclick = async () => {
+      const valor = parseFloat(document.getElementById("receberValor").value);
+      const forma = document.getElementById("receberForma").value;
+      const obs = document.getElementById("receberObs").value.trim();
+      const data = document.getElementById("receberData").value;
+      const erroEl = document.getElementById("receberErro");
+
+      if (!valor || valor <= 0) {
+        erroEl.textContent = "Informe um valor válido.";
+        erroEl.style.display = "block";
+        return;
+      }
+      if (!forma) {
+        erroEl.textContent = "Selecione a forma de pagamento.";
+        erroEl.style.display = "block";
+        return;
+      }
+      erroEl.style.display = "none";
+      btnReceberConfirmar.disabled = true;
+      btnReceberConfirmar.textContent = "Processando...";
+
+      try {
+        const resp = await fetch(`/api/crediario/${clienteId}/receber`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            valor,
+            formaPagamento: forma,
+            observacao: obs || null,
+            data,
+          }),
+        });
+        const json = await resp.json();
+        if (!resp.ok || !json.success)
+          throw new Error(json.error || "Erro ao processar");
+
+        if (clienteAtual) clienteAtual.saldo_crediario = json.saldo;
+        saldo = json.saldo;
+        modalReceber.style.display = "none";
+        mostrarNotificacao("Recebimento registrado com sucesso!", "success");
+        await showCrediarioInline();
+        atualizarCardsFinanceiros();
+      } catch (err) {
+        erroEl.textContent = err.message || "Erro ao processar recebimento.";
+        erroEl.style.display = "block";
+      } finally {
+        btnReceberConfirmar.disabled = false;
+        btnReceberConfirmar.textContent = "Confirmar Recebimento";
+      }
+    };
+  }
 }
 
 // Mostrar histórico inline com seletor de período e calendário duplo
@@ -1302,6 +1628,94 @@ function mostrarErro(mensagem) {
             </button>
         </div>
     `;
+}
+
+// =============================================
+// CARDS FINANCEIROS (HAVER / CREDIÁRIO) NA ABA DETALHES
+// =============================================
+
+function atualizarCardsFinanceiros() {
+  try {
+    const saldoHaver = parseFloat(
+      (clienteAtual && clienteAtual.saldo_haver) || 0,
+    );
+    const saldoCrediario = parseFloat(
+      (clienteAtual && clienteAtual.saldo_crediario) || 0,
+    );
+
+    // Buscar ou criar container de cards financeiros dentro da aba detalhes
+    let cardsContainer = document.getElementById("cards-financeiros-detalhes");
+    const detalhesTab = document.getElementById("detalhes-tab");
+    if (!detalhesTab) return;
+
+    if (!cardsContainer) {
+      cardsContainer = document.createElement("div");
+      cardsContainer.id = "cards-financeiros-detalhes";
+      cardsContainer.style.display = "flex";
+      cardsContainer.style.gap = "16px";
+      cardsContainer.style.flexWrap = "wrap";
+      cardsContainer.style.marginBottom = "16px";
+      // Inserir antes do primeiro filho
+      detalhesTab.insertBefore(cardsContainer, detalhesTab.firstChild);
+    }
+
+    let html = "";
+
+    // Card Haver — exibir sempre
+    html += `
+      <div style="flex:1 1 220px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:16px; cursor:pointer; transition:box-shadow .15s;"
+           title="Clique para ver detalhes do haver"
+           onclick="document.querySelector('[data-tab=\\'haver\\']').click()">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span style="font-size:22px;">💰</span>
+          <div>
+            <div style="font-size:12px; color:#166534; font-weight:600; text-transform:uppercase; letter-spacing:.5px;">Crédito Disponível</div>
+            <div style="font-size:20px; font-weight:700; color:#16a34a; margin-top:2px;">R$ ${formatarMoeda(saldoHaver)}</div>
+          </div>
+        </div>
+      </div>`;
+
+    // Card Crediário — exibir apenas se houver saldo
+    if (saldoCrediario > 0) {
+      html += `
+        <div style="flex:1 1 220px; background:#fef2f2; border:1px solid #fecaca; border-radius:10px; padding:16px; cursor:pointer; transition:box-shadow .15s;"
+             title="Clique para ver detalhes do crediário"
+             onclick="document.querySelector('[data-tab=\\'crediario\\']').click()">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span style="font-size:22px;">🔴</span>
+            <div>
+              <div style="font-size:12px; color:#991b1b; font-weight:600; text-transform:uppercase; letter-spacing:.5px;">Débito em Aberto</div>
+              <div style="font-size:20px; font-weight:700; color:#dc2626; margin-top:2px;">R$ ${formatarMoeda(saldoCrediario)}</div>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    cardsContainer.innerHTML = html;
+  } catch (e) {
+    console.warn("Erro ao atualizar cards financeiros:", e);
+  }
+}
+
+// Buscar saldos atualizados da API e atualizar cards
+async function recarregarSaldosFinanceiros() {
+  if (!clienteAtual || !clienteAtual.id) return;
+  try {
+    const [rHaver, rCrediario] = await Promise.all([
+      fetch(`/api/haver/${clienteAtual.id}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
+      fetch(`/api/crediario/${clienteAtual.id}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
+    ]);
+    if (rHaver && rHaver.success) clienteAtual.saldo_haver = rHaver.saldo;
+    if (rCrediario && rCrediario.success)
+      clienteAtual.saldo_crediario = rCrediario.saldo;
+    atualizarCardsFinanceiros();
+  } catch (e) {
+    console.warn("Falha ao recarregar saldos financeiros:", e);
+  }
 }
 
 // =============================================

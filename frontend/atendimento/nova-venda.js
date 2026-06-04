@@ -2909,6 +2909,55 @@ function configurarModalPagamento(modal, overlay, totalVenda) {
   let totalPago = 0;
   let pagamentosEfetuados = [];
 
+  // --- Banner de haver disponível ---
+  // Mostrar assincronamente se o cliente tiver saldo
+  (async () => {
+    try {
+      const idCliente = clienteSelecionado && clienteSelecionado.id;
+      if (!idCliente) return;
+      const resp = await fetch(`/api/haver/${idCliente}`);
+      if (!resp.ok) return;
+      const json = await resp.json();
+      const saldo = parseFloat(json.saldo) || 0;
+      if (saldo <= 0) return;
+
+      // Inserir banner entre o resumo e as formas de pagamento
+      const resumoEl = modal.querySelector("#formasPagamento");
+      if (!resumoEl || !resumoEl.parentNode) return;
+
+      const banner = document.createElement("div");
+      banner.id = "banner-haver-disponivel";
+      banner.style.cssText =
+        "background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;";
+      banner.innerHTML = `
+        <span style="font-size:20px;">💰</span>
+        <div style="flex:1;">
+          <span style="font-weight:600;color:#166534;">Crédito disponível: </span>
+          <span style="font-weight:700;color:#16a34a;">R$ ${saldo.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+        </div>
+        <button id="btnUsarHaver" type="button" style="padding:6px 14px;background:#16a34a;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">Usar</button>
+      `;
+      resumoEl.parentNode.insertBefore(banner, resumoEl);
+
+      // Botão "Usar" — seleciona forma Haver e preenche valor
+      document.getElementById("btnUsarHaver").addEventListener("click", () => {
+        // Clicar no botão de haver
+        const btnHaver = modal.querySelector('[data-forma="haver"]');
+        if (btnHaver) btnHaver.click();
+        // Preencher valor automaticamente
+        setTimeout(() => {
+          const inp = document.getElementById("valor-haver");
+          if (inp) {
+            const falta = totalVenda - totalPago;
+            inp.value = Math.min(saldo, falta > 0 ? falta : saldo).toFixed(2);
+          }
+        }, 100);
+      });
+    } catch (e) {
+      console.warn("[nova-venda] Falha ao carregar banner de haver:", e);
+    }
+  })();
+
   // Função para fechar modal
   function fecharModal() {
     modal.style.transition = "all 0.3s cubic-bezier(0.4, 0, 1, 1)";
@@ -3158,26 +3207,29 @@ function configurarModalPagamento(modal, overlay, totalVenda) {
     });
   }
 
-  // Simular obtenção de saldo haver (substitua pela sua API real)
+  // Simular obtenção de saldo haver — integrado com API real
   async function obterSaldoHaver(cliente) {
-    // Simular delay de API
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    // Tentar usar o ID do cliente selecionado (mais confiável que o nome)
+    const idCliente = (clienteSelecionado && clienteSelecionado.id) || null;
 
-    // Se não há cliente, retornar saldo zero
-    if (!cliente || !cliente.trim()) {
+    if (!idCliente) {
+      // Sem cliente selecionado com ID, retornar zero
       return 0.0;
     }
 
-    // Retornar saldo simulado (aqui você faria a consulta real)
-    const saldosSimulados = {
-      Karoline: 150.0,
-      Pedro: 89.5,
-      João: 0.0,
-      Maria: 234.75,
-    };
+    try {
+      const resp = await fetch(`/api/haver/${idCliente}`);
+      if (resp.ok) {
+        const json = await resp.json();
+        if (json.success) {
+          return parseFloat(json.saldo) || 0;
+        }
+      }
+    } catch (e) {
+      console.warn("[nova-venda] Falha ao buscar saldo haver:", e);
+    }
 
-    const clienteNome = cliente.split(" - ")[0] || cliente;
-    return saldosSimulados[clienteNome] || 0.0;
+    return 0.0;
   }
 
   // Obter dados específicos da forma de pagamento

@@ -3084,7 +3084,7 @@ function configurarDropdownPerfilComissaoNovo() {
   }
 
   function closeDropdown() {
-    console.log("DEBUG centroResultado: closeDropdown executando");
+    const wasOpen = dropdown !== null;
     if (dropdown && dropdown.parentElement)
       dropdown.parentElement.removeChild(dropdown);
     dropdown = null;
@@ -3092,7 +3092,7 @@ function configurarDropdownPerfilComissaoNovo() {
     setTimeout(() => {
       suppressOpen = false;
     }, 120);
-    if (input && input.value && input.value.trim()) {
+    if (wasOpen && input && input.value && input.value.trim()) {
       mostrarPainelComissaoProduto(input.value.trim(), wrapper);
     }
   }

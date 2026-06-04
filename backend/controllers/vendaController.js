@@ -155,6 +155,128 @@ exports.criarVenda = async (req, res) => {
       empresa_id: req.user?.empresaId || null,
     });
 
+    // --- Processar pagamento via Haver (debitar saldo do cliente) ---
+    try {
+      const pagamentos = Array.isArray(dados.pagamentos)
+        ? dados.pagamentos
+        : [];
+      const pagHaver = pagamentos.filter(
+        (p) =>
+          String(p.forma || p.tipo || "").toLowerCase() === "haver" &&
+          parseFloat(p.valor) > 0,
+      );
+
+      if (pagHaver.length > 0 && dados.clienteId) {
+        const MovimentoHaver = require("../models/MovimentoHaver");
+        const clienteId = dados.clienteId;
+        const empresaId = req.user?.empresaId;
+        const usuarioId = req.user?.id;
+        const usuarioNome = req.user?.nome || req.user?.email || null;
+
+        const clienteRecord = await Cliente.findOne({
+          where: {
+            id: clienteId,
+            ...(empresaId ? { empresa_id: empresaId } : {}),
+          },
+        }).catch(() => null);
+
+        if (clienteRecord) {
+          let saldoAtual = parseFloat(clienteRecord.saldo_haver) || 0;
+
+          for (const pag of pagHaver) {
+            const valorPag = parseFloat(pag.valor);
+            if (valorPag <= 0) continue;
+            const valorDebitado = Math.min(valorPag, saldoAtual);
+            if (valorDebitado <= 0) continue;
+
+            const novoSaldo = saldoAtual - valorDebitado;
+            await clienteRecord.update({ saldo_haver: novoSaldo });
+            saldoAtual = novoSaldo;
+
+            await MovimentoHaver.create({
+              clienteId: clienteRecord.id,
+              clienteNome: clienteRecord.nome,
+              tipo: "saida",
+              operacao: `Utilizado em Venda #${venda.id}`,
+              valor: valorDebitado,
+              saldoApos: novoSaldo,
+              observacao: null,
+              usuarioId: usuarioId || null,
+              usuarioNome: usuarioNome,
+              vendaId: venda.id,
+              empresa_id: empresaId || null,
+              data: new Date(),
+            });
+          }
+        }
+      }
+    } catch (haverErr) {
+      console.warn(
+        "[Venda] Erro ao processar haver:",
+        haverErr && haverErr.message,
+      );
+    }
+
+    // --- Processar pagamento via Crediário (registrar débito no crediário do cliente) ---
+    try {
+      const pagamentos = Array.isArray(dados.pagamentos)
+        ? dados.pagamentos
+        : [];
+      const pagCrediario = pagamentos.filter(
+        (p) =>
+          String(p.forma || p.tipo || "").toLowerCase() === "crediario" &&
+          parseFloat(p.valor) > 0,
+      );
+
+      if (pagCrediario.length > 0 && dados.clienteId) {
+        const MovimentoCrediario = require("../models/MovimentoCrediario");
+        const clienteId = dados.clienteId;
+        const empresaId = req.user?.empresaId;
+        const usuarioId = req.user?.id;
+        const usuarioNome = req.user?.nome || req.user?.email || null;
+
+        const clienteRecord = await Cliente.findOne({
+          where: {
+            id: clienteId,
+            ...(empresaId ? { empresa_id: empresaId } : {}),
+          },
+        }).catch(() => null);
+
+        if (clienteRecord) {
+          let saldoAtual = parseFloat(clienteRecord.saldo_crediario) || 0;
+
+          for (const pag of pagCrediario) {
+            const valorPag = parseFloat(pag.valor);
+            if (valorPag <= 0) continue;
+
+            const novoSaldo = saldoAtual + valorPag;
+            await clienteRecord.update({ saldo_crediario: novoSaldo });
+            saldoAtual = novoSaldo;
+
+            await MovimentoCrediario.create({
+              clienteId: clienteRecord.id,
+              clienteNome: clienteRecord.nome,
+              tipo: "debito",
+              operacao: `Venda #${venda.id} no crediário`,
+              valor: valorPag,
+              saldoApos: novoSaldo,
+              observacao: null,
+              usuarioId: usuarioId || null,
+              usuarioNome: usuarioNome,
+              vendaId: venda.id,
+              empresa_id: empresaId || null,
+              data: new Date(),
+            });
+          }
+        }
+      }
+    } catch (crediarioErr) {
+      console.warn(
+        "[Venda] Erro ao processar crediário:",
+        crediarioErr && crediarioErr.message,
+      );
+    }
+
     // Criar lembretes automáticos de produto recorrente (se cliente tiver ativado)
     try {
       const { criarLembretesDeVenda } = require("./produtoLembreteController");
