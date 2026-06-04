@@ -456,12 +456,9 @@
     var btn = buildHeaderButton();
     var calendar = headerRight.querySelector(".calendar-widget");
 
-    if (calendar && calendar.nextSibling) {
-      // Inserir imediatamente após o calendário
-      headerRight.insertBefore(btn, calendar.nextSibling);
-    } else if (calendar) {
-      // Calendário é o último filho
-      headerRight.appendChild(btn);
+    if (calendar) {
+      // Inserir imediatamente ANTES do calendário
+      headerRight.insertBefore(btn, calendar);
     } else {
       // Sem calendário: inserir como primeiro filho
       headerRight.insertBefore(btn, headerRight.firstChild);
