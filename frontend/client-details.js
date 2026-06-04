@@ -256,6 +256,29 @@ function formatarData(data) {
   return date.toLocaleDateString("pt-BR");
 }
 
+// Retorna string no formato YYYY-MM-DDTHH:mm no horário de Brasília (para input datetime-local)
+function getBrasiliaDatetimeLocal() {
+  const now = new Date();
+  const s = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(now); // ex: "2026-06-03 10:30:00"
+  return s.replace(" ", "T").slice(0, 16);
+}
+
+// Converte valor de input datetime-local (sem fuso) para ISO UTC explícito
+// Trata como horário de Brasília (UTC-3)
+function datetimeLocalToBrasiliaISO(value) {
+  if (!value) return null;
+  // Appenda o offset de Brasília para que o servidor receba UTC correto
+  return new Date(value + ":00-03:00").toISOString();
+}
+
 // Formatar data e hora em horário de Brasília
 function formatarDataHora(data) {
   if (!data) return "";
@@ -384,8 +407,8 @@ async function showHaverInline() {
             style="width:100%; margin-top:4px; padding:10px; border:1px solid #d1d5db; border-radius:6px; font-size:15px; box-sizing:border-box;">
         </div>
         <div style="margin-bottom:14px;">
-          <label style="font-size:13px; color:#374151; font-weight:600;">Data</label>
-          <input id="adiantData" type="date"
+          <label style="font-size:13px; color:#374151; font-weight:600;">Data / Hora</label>
+          <input id="adiantData" type="datetime-local"
             style="width:100%; margin-top:4px; padding:10px; border:1px solid #d1d5db; border-radius:6px; font-size:15px; box-sizing:border-box;">
         </div>
         <div style="margin-bottom:20px;">
@@ -402,9 +425,9 @@ async function showHaverInline() {
     </div>
   `;
 
-  // Definir data padrão como hoje
+  // Definir data/hora padrão como agora em Brasília
   const dataInput = document.getElementById("adiantData");
-  if (dataInput) dataInput.value = new Date().toISOString().split("T")[0];
+  if (dataInput) dataInput.value = getBrasiliaDatetimeLocal();
 
   // Preencher tabela
   const tbody = document.getElementById("haverTableBodyInline");
@@ -458,7 +481,9 @@ async function showHaverInline() {
     btnSalvar.onclick = async () => {
       const valor = parseFloat(document.getElementById("adiantValor").value);
       const obs = document.getElementById("adiantObs").value.trim();
-      const data = document.getElementById("adiantData").value;
+      const data = datetimeLocalToBrasiliaISO(
+        document.getElementById("adiantData").value,
+      );
       const erroEl = document.getElementById("adiantErro");
 
       if (!valor || valor <= 0) {
@@ -571,8 +596,8 @@ async function showCrediarioInline() {
             style="width:100%; margin-top:4px; padding:10px; border:1px solid #d1d5db; border-radius:6px; font-size:15px; box-sizing:border-box;">
         </div>
         <div style="margin-bottom:14px;">
-          <label style="font-size:13px; color:#374151; font-weight:600;">Data</label>
-          <input id="debitoData" type="date"
+          <label style="font-size:13px; color:#374151; font-weight:600;">Data / Hora</label>
+          <input id="debitoData" type="datetime-local"
             style="width:100%; margin-top:4px; padding:10px; border:1px solid #d1d5db; border-radius:6px; font-size:15px; box-sizing:border-box;">
         </div>
         <div style="margin-bottom:20px;">
@@ -612,8 +637,8 @@ async function showCrediarioInline() {
           </select>
         </div>
         <div style="margin-bottom:14px;">
-          <label style="font-size:13px; color:#374151; font-weight:600;">Data</label>
-          <input id="receberData" type="date"
+          <label style="font-size:13px; color:#374151; font-weight:600;">Data / Hora</label>
+          <input id="receberData" type="datetime-local"
             style="width:100%; margin-top:4px; padding:10px; border:1px solid #d1d5db; border-radius:6px; font-size:15px; box-sizing:border-box;">
         </div>
         <div style="margin-bottom:20px;">
@@ -630,12 +655,12 @@ async function showCrediarioInline() {
     </div>
   `;
 
-  // Datas padrão
-  const hoje = new Date().toISOString().split("T")[0];
+  // Datas padrão em horário de Brasília
+  const agora = getBrasiliaDatetimeLocal();
   const debitoDataEl = document.getElementById("debitoData");
-  if (debitoDataEl) debitoDataEl.value = hoje;
+  if (debitoDataEl) debitoDataEl.value = agora;
   const receberDataEl = document.getElementById("receberData");
-  if (receberDataEl) receberDataEl.value = hoje;
+  if (receberDataEl) receberDataEl.value = agora;
 
   // Preencher tabela
   const tbody = document.getElementById("crediarioTableBody");
@@ -686,7 +711,9 @@ async function showCrediarioInline() {
     btnDebitoSalvar.onclick = async () => {
       const valor = parseFloat(document.getElementById("debitoValor").value);
       const obs = document.getElementById("debitoObs").value.trim();
-      const data = document.getElementById("debitoData").value;
+      const data = datetimeLocalToBrasiliaISO(
+        document.getElementById("debitoData").value,
+      );
       const erroEl = document.getElementById("debitoErro");
 
       if (!valor || valor <= 0) {
@@ -749,7 +776,9 @@ async function showCrediarioInline() {
       const valor = parseFloat(document.getElementById("receberValor").value);
       const forma = document.getElementById("receberForma").value;
       const obs = document.getElementById("receberObs").value.trim();
-      const data = document.getElementById("receberData").value;
+      const data = datetimeLocalToBrasiliaISO(
+        document.getElementById("receberData").value,
+      );
       const erroEl = document.getElementById("receberErro");
 
       if (!valor || valor <= 0) {

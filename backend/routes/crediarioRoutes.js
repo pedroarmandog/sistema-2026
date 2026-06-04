@@ -6,6 +6,13 @@ const MovimentoCrediario = require("../models/MovimentoCrediario");
 const { MovimentoCaixa } = require("../models/MovimentoCaixa");
 const { sequelize } = require("../models/Cliente");
 
+// Interpreta data como Brasília (UTC-3) quando não há fuso explícito
+function parseDateBrasilia(data) {
+  if (!data) return new Date();
+  if (/Z$|[+-]\d{2}:\d{2}$/.test(String(data))) return new Date(data);
+  return new Date(String(data) + "-03:00");
+}
+
 router.use(authUser);
 
 // GET /api/crediario/:clienteId - listar movimentos e saldo
@@ -88,7 +95,7 @@ router.post("/:clienteId/debito", async (req, res) => {
         usuarioId: usuarioId || null,
         usuarioNome: usuarioNome,
         empresa_id: empresaId || null,
-        data: data ? new Date(data) : new Date(),
+        data: data ? parseDateBrasilia(data) : new Date(),
       },
       { transaction: t },
     );
@@ -178,7 +185,7 @@ router.post("/:clienteId/receber", async (req, res) => {
         usuarioId: usuarioId || null,
         usuarioNome: usuarioNome,
         empresa_id: empresaId || null,
-        data: data ? new Date(data) : new Date(),
+        data: data ? parseDateBrasilia(data) : new Date(),
       },
       { transaction: t },
     );
@@ -190,7 +197,7 @@ router.post("/:clienteId/receber", async (req, res) => {
           tipo: "entrada",
           observacao: `Recebimento crediário - ${cliente.nome} - ${formaLabel}${observacao ? " - " + observacao : ""}`,
           valor: valorNum,
-          data: data ? new Date(data) : new Date(),
+          data: data ? parseDateBrasilia(data) : new Date(),
           usuarioId: usuarioId || null,
           caixaId: caixaId || null,
         },

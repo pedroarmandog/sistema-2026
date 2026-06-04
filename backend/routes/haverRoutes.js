@@ -5,6 +5,15 @@ const { Cliente } = require("../models/Cliente");
 const MovimentoHaver = require("../models/MovimentoHaver");
 const { sequelize } = require("../models/Cliente");
 
+// Interpreta data como Brasília (UTC-3) quando não há fuso explícito
+function parseDateBrasilia(data) {
+  if (!data) return new Date();
+  // Já tem fuso (Z, +, ou -XX:XX no final) → parse direto
+  if (/Z$|[+-]\d{2}:\d{2}$/.test(String(data))) return new Date(data);
+  // Sem fuso → assumir Brasília UTC-3
+  return new Date(String(data) + "-03:00");
+}
+
 router.use(authUser);
 
 // GET /api/haver/:clienteId - listar movimentos e saldo
@@ -87,7 +96,7 @@ router.post("/:clienteId/adiantamento", async (req, res) => {
         usuarioId: usuarioId || null,
         usuarioNome: usuarioNome,
         empresa_id: empresaId || null,
-        data: data ? new Date(data) : new Date(),
+        data: data ? parseDateBrasilia(data) : new Date(),
       },
       { transaction: t },
     );
