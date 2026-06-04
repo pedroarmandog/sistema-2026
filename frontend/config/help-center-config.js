@@ -7,6 +7,7 @@
 window.HELP_CENTER_CONFIG = {
   // ── WhatsApp ────────────────────────────────────────────────
   // Formato: DDI + DDD + número, sem símbolos. Ex.: '5511987654321'
+  // ⬇ TROQUE AQUI pelo número real do seu WhatsApp de suporte
   whatsappNumber: "5511999999999",
   whatsappMessage: "Olá! Preciso de ajuda com o sistema PetHub. 🐾",
 

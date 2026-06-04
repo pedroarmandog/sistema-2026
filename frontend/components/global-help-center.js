@@ -406,7 +406,7 @@
       '<div class="hc-phrase">' +
       phrase +
       "</div>" +
-      '<a class="hc-btn-whatsapp" href="' +
+      '<a class="hc-btn-whatsapp" id="hcWhatsappBtn" href="' +
       waUrl +
       '" target="_blank" rel="noopener noreferrer">' +
       '<i class="fab fa-whatsapp" style="font-size:18px;"></i>' +
@@ -430,6 +430,17 @@
     var overlay = document.getElementById("hc-overlay");
     var modal = document.getElementById("hc-modal");
     if (!overlay || !modal) return;
+    // Atualizar URL do WhatsApp com o config mais recente (evita race condition)
+    var waBtn = document.getElementById("hcWhatsappBtn");
+    if (waBtn) {
+      var c = cfg();
+      var waNum = encodeURIComponent(c.whatsappNumber || "5511999999999");
+      var waMsg = encodeURIComponent(
+        c.whatsappMessage ||
+          "Ol\u00e1! Preciso de ajuda com o sistema PetHub. \uD83D\uDC3E",
+      );
+      waBtn.href = "https://wa.me/" + waNum + "?text=" + waMsg;
+    }
     overlay.classList.add("hc-open");
     modal.classList.add("hc-open");
     document.body.style.overflow = "hidden";
