@@ -451,6 +451,7 @@ document.addEventListener("DOMContentLoaded", function () {
   configurarAbas();
   configurarNavegacao();
   inicializarDatePicker();
+  inicializarDatePickerPagRec();
   preencherSelectPagRec();
   carregarTudo();
   renderizarTabelasPagRec();
@@ -463,7 +464,7 @@ document.addEventListener("DOMContentLoaded", function () {
   ["fluxoPeriodo"].forEach((id) =>
     document.getElementById(id)?.addEventListener("change", carregarFluxoCaixa),
   );
-  ["pagRecPeriodo", "pagRecData"].forEach((id) =>
+  ["pagRecPeriodo"].forEach((id) =>
     document
       .getElementById(id)
       ?.addEventListener("change", renderizarTabelasPagRec),
@@ -667,6 +668,149 @@ function _calAtualizarDisplay() {
 
 // Mantida por compatibilidade (não faz nada)
 function preencherSelectMeses() {}
+
+// ── Date Picker – Pagamentos e Recebimentos ─────────────
+var _pagCalVisualizandoAno, _pagCalVisualizandoMes, _pagCalDataSelecionada;
+
+function inicializarDatePickerPagRec() {
+  var hoje = new Date();
+  _pagCalVisualizandoAno = hoje.getFullYear();
+  _pagCalVisualizandoMes = hoje.getMonth();
+  _pagCalDataSelecionada = new Date(
+    hoje.getFullYear(),
+    hoje.getMonth(),
+    hoje.getDate(),
+  );
+  _pagCalAtualizarDisplay();
+
+  var btn = document.getElementById("pagRecDataBtn");
+  if (btn)
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      var drop = document.getElementById("pagRecCalDropdown");
+      if (!drop) return;
+      if (drop.style.display === "none" || !drop.style.display) {
+        _pagCalVisualizandoAno = _pagCalDataSelecionada.getFullYear();
+        _pagCalVisualizandoMes = _pagCalDataSelecionada.getMonth();
+        _pagCalRenderizarMes();
+        drop.style.display = "block";
+      } else {
+        drop.style.display = "none";
+      }
+    });
+
+  var prev = document.getElementById("pagCalPrevMonth");
+  if (prev)
+    prev.addEventListener("click", function (e) {
+      e.stopPropagation();
+      _pagCalVisualizandoMes--;
+      if (_pagCalVisualizandoMes < 0) {
+        _pagCalVisualizandoMes = 11;
+        _pagCalVisualizandoAno--;
+      }
+      _pagCalRenderizarMes();
+    });
+
+  var next = document.getElementById("pagCalNextMonth");
+  if (next)
+    next.addEventListener("click", function (e) {
+      e.stopPropagation();
+      _pagCalVisualizandoMes++;
+      if (_pagCalVisualizandoMes > 11) {
+        _pagCalVisualizandoMes = 0;
+        _pagCalVisualizandoAno++;
+      }
+      _pagCalRenderizarMes();
+    });
+
+  document.addEventListener("click", function () {
+    var drop = document.getElementById("pagRecCalDropdown");
+    if (drop) drop.style.display = "none";
+  });
+
+  var wrapper = document.getElementById("pagRecDataWrapper");
+  if (wrapper)
+    wrapper.addEventListener("click", function (e) {
+      e.stopPropagation();
+    });
+}
+
+function _pagCalRenderizarMes() {
+  var label = document.getElementById("pagCalMesAnoLabel");
+  if (label)
+    label.textContent =
+      _NOMES_MESES_CAL[_pagCalVisualizandoMes] + " / " + _pagCalVisualizandoAno;
+
+  var container = document.getElementById("pagRecCalDays");
+  if (!container) return;
+  container.innerHTML = "";
+
+  var hoje = new Date();
+  var primeiroDia = new Date(_pagCalVisualizandoAno, _pagCalVisualizandoMes, 1);
+  var ultimoDia = new Date(
+    _pagCalVisualizandoAno,
+    _pagCalVisualizandoMes + 1,
+    0,
+  );
+  var iniciaDom = primeiroDia.getDay();
+
+  for (var i = 0; i < iniciaDom; i++) {
+    var el = document.createElement("div");
+    el.className = "cal-day outro-mes";
+    el.textContent = new Date(
+      _pagCalVisualizandoAno,
+      _pagCalVisualizandoMes,
+      -(iniciaDom - i - 1),
+    ).getDate();
+    container.appendChild(el);
+  }
+
+  for (var dia = 1; dia <= ultimoDia.getDate(); dia++) {
+    var el2 = document.createElement("div");
+    el2.className = "cal-day";
+    el2.textContent = dia;
+    var isHoje =
+      dia === hoje.getDate() &&
+      _pagCalVisualizandoMes === hoje.getMonth() &&
+      _pagCalVisualizandoAno === hoje.getFullYear();
+    var isSel =
+      _pagCalDataSelecionada &&
+      dia === _pagCalDataSelecionada.getDate() &&
+      _pagCalVisualizandoMes === _pagCalDataSelecionada.getMonth() &&
+      _pagCalVisualizandoAno === _pagCalDataSelecionada.getFullYear();
+    if (isHoje) el2.classList.add("hoje");
+    if (isSel) el2.classList.add("selecionado");
+    (function (d2) {
+      el2.addEventListener("click", function () {
+        _pagCalDataSelecionada = new Date(
+          _pagCalVisualizandoAno,
+          _pagCalVisualizandoMes,
+          d2,
+        );
+        _pagCalAtualizarDisplay();
+        var drop = document.getElementById("pagRecCalDropdown");
+        if (drop) drop.style.display = "none";
+        renderizarTabelasPagRec();
+      });
+    })(dia);
+    container.appendChild(el2);
+  }
+}
+
+function _pagCalAtualizarDisplay() {
+  var d = _pagCalDataSelecionada;
+  if (!d) return;
+  var yyyy = d.getFullYear();
+  var mm = String(d.getMonth() + 1).padStart(2, "0");
+  var dd = String(d.getDate()).padStart(2, "0");
+  var inputHidden = document.getElementById("pagRecData");
+  if (inputHidden) inputHidden.value = yyyy + "-" + mm;
+  var display = document.getElementById("pagRecDataDisplay");
+  if (display) display.textContent = dd + "/" + mm + "/" + yyyy;
+}
+
+// Mantida por compatibilidade (não faz nada)
+function preencherSelectPagRec() {}
 
 // ── Carregamento principal ───────────────
 async function carregarTudo() {

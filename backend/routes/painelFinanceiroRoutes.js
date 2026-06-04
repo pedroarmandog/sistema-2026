@@ -707,6 +707,8 @@ router.get("/grafico", async (req, res) => {
       movSaiDia,
       recDia,
       pagDia,
+      crPagoDia,
+      crPendVenc,
     ] = await Promise.all([
       Venda.findAll({
         attributes: [
@@ -801,12 +803,40 @@ router.get("/grafico", async (req, res) => {
         group: ["dataPagamento"],
         raw: true,
       }),
+      // ContaReceber pagas por dataPagamento (saldo real)
+      ContaReceber.findAll({
+        attributes: [
+          [fn("DATE", col("dataPagamento")), "dia"],
+          [fn("SUM", col("valorPago")), "total"],
+        ],
+        where: {
+          ...eW,
+          dataPagamento: { [Op.between]: [mesIni, mesFim] },
+          status: "pago",
+        },
+        group: [fn("DATE", col("dataPagamento"))],
+        raw: true,
+      }),
+      // ContaReceber pendentes/parciais por dataVencimento (a receber)
+      ContaReceber.findAll({
+        attributes: [
+          [fn("DATE", col("dataVencimento")), "dia"],
+          [fn("SUM", col("valor")), "total"],
+        ],
+        where: {
+          ...eW,
+          dataVencimento: { [Op.between]: [mesIni, mesFim] },
+          status: { [Op.in]: ["pendente", "parcial"] },
+        },
+        group: [fn("DATE", col("dataVencimento"))],
+        raw: true,
+      }),
     ]);
 
     const idx = (arr) =>
       arr.reduce((m, r) => {
         const key = r.dia ? String(r.dia).slice(0, 10) : null;
-        if (key) m[key] = toNum(r.total);
+        if (key) m[key] = (m[key] || 0) + toNum(r.total);
         return m;
       }, {});
 
@@ -817,6 +847,8 @@ router.get("/grafico", async (req, res) => {
       iMS = idx(movSaiDia);
     const iR = idx(recDia),
       iP = idx(pagDia);
+    const iCRg = idx(crPagoDia),
+      iCRp = idx(crPendVenc);
 
     const labels = [],
       saldoContas = [],
@@ -830,20 +862,29 @@ router.get("/grafico", async (req, res) => {
       const dataStr = `${ano}-${String(mes).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
       const label = `${String(d).padStart(2, "0")}/${String(mes).padStart(2, "0")}`;
 
+      // Entradas reais: vendas + agendamentos + caixa entrada + ContaReceber pagos
       const entradas =
-        (iV[dataStr] || 0) + (iA[dataStr] || 0) + (iME[dataStr] || 0);
+        (iV[dataStr] || 0) +
+        (iA[dataStr] || 0) +
+        (iME[dataStr] || 0) +
+        (iCRg[dataStr] || 0);
       const saidas = (iC[dataStr] || 0) + (iMS[dataStr] || 0);
       acum += entradas - saidas;
 
-      // Saldo previsto considera também contas a receber e a pagar futuras
-      const prevEntrada = iR[dataStr] || 0;
+      // Saldo previsto considera também contas a receber pendentes e a pagar futuras
+      const prevEntrada = (iR[dataStr] || 0) + (iCRp[dataStr] || 0);
       const prevSaida = iP[dataStr] || 0;
       acumPrev += entradas - saidas + prevEntrada - prevSaida;
 
       labels.push(label);
       saldoContas.push(parseFloat(acum.toFixed(2)));
       saldoPrevisto.push(parseFloat(acumPrev.toFixed(2)));
-      aReceber.push(parseFloat(((iR[dataStr] || 0) + entradas).toFixed(2)));
+      // A Receber: vendas pendentes + ContaReceber pendentes + entradas reais do dia
+      aReceber.push(
+        parseFloat(
+          ((iR[dataStr] || 0) + (iCRp[dataStr] || 0) + entradas).toFixed(2),
+        ),
+      );
       aPagar.push(parseFloat(((iP[dataStr] || 0) + saidas).toFixed(2)));
     }
 

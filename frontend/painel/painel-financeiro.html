@@ -1487,12 +1487,49 @@
 
               <div class="filtro-group">
                 <label class="filtro-label">Data</label>
-                <select class="filtro-select" id="pagRecData">
-                  <!-- preenchido dinamicamente pelo JS -->
-                </select>
+                <div class="date-picker-wrapper" id="pagRecDataWrapper">
+                  <button
+                    class="filtro-select date-picker-btn"
+                    id="pagRecDataBtn"
+                    type="button"
+                  >
+                    <span id="pagRecDataDisplay">Selecionar data</span>
+                    <i class="fas fa-calendar-alt"></i>
+                  </button>
+                  <input type="hidden" id="pagRecData" value="" />
+                  <div
+                    class="cal-dropdown"
+                    id="pagRecCalDropdown"
+                    style="display: none"
+                  >
+                    <div class="cal-header">
+                      <button
+                        class="cal-nav"
+                        id="pagCalPrevMonth"
+                        type="button"
+                      >
+                        <i class="fas fa-chevron-left"></i>
+                      </button>
+                      <span class="cal-mes-ano" id="pagCalMesAnoLabel"></span>
+                      <button
+                        class="cal-nav"
+                        id="pagCalNextMonth"
+                        type="button"
+                      >
+                        <i class="fas fa-chevron-right"></i>
+                      </button>
+                    </div>
+                    <div class="cal-weekdays">
+                      <span>Dom</span><span>Seg</span><span>Ter</span
+                      ><span>Qua</span><span>Qui</span><span>Sex</span
+                      ><span>Sáb</span>
+                    </div>
+                    <div class="cal-days" id="pagRecCalDays"></div>
+                  </div>
+                </div>
               </div>
 
-              <div class="filtro-group">
+              <div class="filtro-group" style="display: none">
                 <label class="filtro-label">Empresa</label>
                 <select class="filtro-select" id="pagRecEmpresa">
                   <option value="todas">Todas as empresas</option>
