@@ -361,7 +361,7 @@
     );
     var imgSrc = c.mascotePath || "";
     var imgAlt = esc(c.mascoteAlt || "Mascote PetHub");
-    var waNum = encodeURIComponent(c.whatsappNumber || "5511999999999");
+    var waNum = encodeURIComponent(c.whatsappNumber || "5527998538741");
     var waMsg = encodeURIComponent(
       c.whatsappMessage || "Olá! Preciso de ajuda com o sistema PetHub. 🐾",
     );
