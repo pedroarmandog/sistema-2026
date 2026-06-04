@@ -68,6 +68,12 @@
   // carregar JS depois de um pequeno delay para garantir DOM
   setTimeout(() => ensureJs(jsSrc), 50);
 
+  // ── Central de Ajuda Global ─────────────────────────────────
+  // Carrega primeiro o arquivo de configuração e depois o componente.
+  // O atraso garante que o config esteja disponível quando o componente rodar.
+  ensureJs("/config/help-center-config.js");
+  setTimeout(() => ensureJs("/components/global-help-center.js"), 150);
+
   // --- Helpers locais: detectar submenus abertos e aplicar overflow-x:hidden ---
   function setupSidebarOverflowGuard() {
     // Evitar múltiplas configurações

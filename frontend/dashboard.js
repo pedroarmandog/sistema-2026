@@ -2434,3 +2434,22 @@ function escapeHtml(text) {
     initUserProfileDropdown();
   }
 })();
+
+// ── Central de Ajuda Global ─────────────────────────────────────────────────
+// Garante carregamento em todas as páginas que usam dashboard.js, independente
+// de passarem ou não pelo inject-sidebar. Usa script tags absolutas para que
+// ensureJs (no inject-sidebar) detecte duplicatas e não re-adicione.
+(function () {
+  function _ensureScript(src, delay) {
+    setTimeout(function () {
+      if (document.querySelector('script[src="' + src + '"]')) return;
+      var s = document.createElement("script");
+      s.src = src;
+      s.defer = true;
+      s.dataset.injected = "help-center";
+      document.head.appendChild(s);
+    }, delay || 0);
+  }
+  _ensureScript("/config/help-center-config.js", 0);
+  _ensureScript("/components/global-help-center.js", 200);
+})();
