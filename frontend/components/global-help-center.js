@@ -434,7 +434,7 @@
     var waBtn = document.getElementById("hcWhatsappBtn");
     if (waBtn) {
       var c = cfg();
-      var waNum = encodeURIComponent(c.whatsappNumber || "5511999999999");
+      var waNum = encodeURIComponent(c.whatsappNumber || "5527998538741");
       var waMsg = encodeURIComponent(
         c.whatsappMessage ||
           "Ol\u00e1! Preciso de ajuda com o sistema PetHub. \uD83D\uDC3E",
