@@ -72,8 +72,9 @@
       // ── Tooltip ──────────────────────────────────────────────
       ".btn-help-center .hc-tooltip {",
       "  position: absolute;",
-      "  bottom: calc(100% + 12px);",
-      "  right: 0;",
+      "  top: calc(100% + 12px);",
+      "  left: 50%;",
+      "  transform: translateX(-50%) translateY(-6px);",
       "  background: var(--bg-sidebar-start, #2c3e50);",
       "  color: #fff;",
       "  padding: 10px 14px;",
@@ -84,7 +85,6 @@
       "  pointer-events: none;",
       "  opacity: 0;",
       "  visibility: hidden;",
-      "  transform: translateY(6px);",
       "  transition: opacity 0.22s ease, transform 0.22s ease, visibility 0.22s ease;",
       "  z-index: 99999;",
       "  box-shadow: 0 6px 20px rgba(0,0,0,0.18);",
@@ -94,10 +94,11 @@
       ".btn-help-center .hc-tooltip::after {",
       '  content: "";',
       "  position: absolute;",
-      "  top: 100%;",
-      "  right: 14px;",
+      "  bottom: 100%;",
+      "  left: 50%;",
+      "  transform: translateX(-50%);",
       "  border: 6px solid transparent;",
-      "  border-top-color: var(--bg-sidebar-start, #2c3e50);",
+      "  border-bottom-color: var(--bg-sidebar-start, #2c3e50);",
       "}",
       ".btn-help-center .hc-tooltip .hc-tt-line1 {",
       "  font-weight: 700;",
@@ -113,7 +114,7 @@
       ".btn-help-center:hover .hc-tooltip {",
       "  opacity: 1;",
       "  visibility: visible;",
-      "  transform: translateY(0);",
+      "  transform: translateX(-50%) translateY(0);",
       "}",
       // ── Overlay ───────────────────────────────────────────────
       "#hc-overlay {",
@@ -443,7 +444,8 @@
     document.body.style.overflow = "";
   }
 
-  // ── Inserir botão no .header-right antes de .user-menu ────────
+  // ── Inserir botão no .header-right: após .calendar-widget se existir,
+  //    senão como primeiro filho de .header-right ────────────────
   function mountHeaderButton() {
     // Evitar botão duplicado
     if (document.getElementById("hcHeaderBtn")) return;
@@ -451,13 +453,18 @@
     var headerRight = document.querySelector(".header-right");
     if (!headerRight) return;
 
-    var userMenu = headerRight.querySelector(".user-menu");
     var btn = buildHeaderButton();
+    var calendar = headerRight.querySelector(".calendar-widget");
 
-    if (userMenu) {
-      headerRight.insertBefore(btn, userMenu);
-    } else {
+    if (calendar && calendar.nextSibling) {
+      // Inserir imediatamente após o calendário
+      headerRight.insertBefore(btn, calendar.nextSibling);
+    } else if (calendar) {
+      // Calendário é o último filho
       headerRight.appendChild(btn);
+    } else {
+      // Sem calendário: inserir como primeiro filho
+      headerRight.insertBefore(btn, headerRight.firstChild);
     }
   }
 
