@@ -14,6 +14,32 @@ const path = require("path");
 const fs = require("fs");
 const whatsappService = require("../services/whatsappService");
 
+/**
+ * Cria um objeto Date representando hora:min no fuso horário America/Sao_Paulo (BRT).
+ * Isso resolve o problema de servidores rodando em UTC que causam disparos
+ * em horário diferente do configurado pelo usuário.
+ *
+ * @param {number} hora - Hora (0-23) no horário de Brasília
+ * @param {number} min - Minuto (0-59)
+ * @param {Date|null} dataRef - Data base opcional (padrão: hoje)
+ * @returns {Date}
+ */
+function criarDataHoraLocal(hora, min, dataRef) {
+  const ref = dataRef ? new Date(dataRef) : new Date();
+  const ano = ref.getFullYear();
+  const mes = ref.getMonth();
+  const dia = ref.getDate();
+
+  // Construir string ISO com offset -03:00 (America/Sao_Paulo)
+  // O construtor Date() interpreta corretamente o timezone mesmo em servidores UTC
+  const isoStr =
+    `${ano}-${String(mes + 1).padStart(2, "0")}-${String(dia).padStart(2, "0")}T` +
+    `${String(hora).padStart(2, "0")}:${String(min).padStart(2, "0")}:00.000-03:00`;
+  
+  const data = new Date(isoStr);
+  return data;
+}
+
 // ──────────────────────────────────────────────
 // Mensagens padrão do sistema (seed inicial)
 // ──────────────────────────────────────────────
@@ -637,8 +663,7 @@ async function dispararMensagemAutomatica(
     if (contexto && contexto.diasAntes !== undefined) {
       const agora = new Date();
       const [hora, min] = (config.hora || "09:00").split(":").map(Number);
-      const dataEnvio = new Date();
-      dataEnvio.setHours(hora, min, 0, 0);
+      const dataEnvio = criarDataHoraLocal(hora, min);
       // Se o horário já passou hoje, enviar imediatamente
       const dataFinal = dataEnvio <= agora ? agora : dataEnvio;
 
@@ -676,8 +701,8 @@ async function dispararMensagemAutomatica(
       const ref = new Date(dataAgendada);
       ref.setDate(ref.getDate() - dia);
       const [hora, min] = (config.hora || "09:00").split(":").map(Number);
-      ref.setHours(hora, min, 0, 0);
-      const dataEnvio = ref <= agora ? agora : ref;
+      const dataHoraLocal = criarDataHoraLocal(hora, min, ref);
+      const dataEnvio = dataHoraLocal <= agora ? agora : dataHoraLocal;
 
       const envio = await agendarEnvio({
         empresaId,
@@ -713,18 +738,19 @@ function calcularDataEnvio(config, dataReferencia) {
 
   if (config.tipo === "no_dia") {
     const [hora, min] = (config.hora || "09:00").split(":").map(Number);
-    ref.setHours(hora, min, 0, 0);
+    const dataHoraLocal = criarDataHoraLocal(hora, min, ref);
     // Se o horário calculado já passou, disparar imediatamente
-    return ref <= agora ? agora : ref;
+    return dataHoraLocal <= agora ? agora : dataHoraLocal;
   }
 
   if (config.tipo === "dias_antes") {
     const dias = Number(config.valor || 1);
-    ref.setDate(ref.getDate() - dias);
+    const refDias = new Date(dataReferencia);
+    refDias.setDate(refDias.getDate() - dias);
     const [hora, min] = (config.hora || "09:00").split(":").map(Number);
-    ref.setHours(hora, min, 0, 0);
+    const dataHoraLocal = criarDataHoraLocal(hora, min, refDias);
     // Se a data calculada já passou, disparar imediatamente
-    return ref <= agora ? agora : ref;
+    return dataHoraLocal <= agora ? agora : dataHoraLocal;
   }
 
   if (config.tipo === "horas_antes") {
