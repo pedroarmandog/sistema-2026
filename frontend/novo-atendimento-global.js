@@ -631,39 +631,38 @@ function abrirNovoAgendamentoModal() {
             created,
           );
 
-          // adaptar para o formato esperado pelo DOM
-          const agObj = {
-            id: created.id || Date.now(),
-            horario: created.horario || objAg.horario || dados.hora || "",
-            petNome: created.petNome || objAg.petNome || "",
-            clienteNome: created.clienteNome || objAg.clienteNome || "",
-            servico: created.servico || objAg.servico || dados.servico || "",
-            profissional:
-              created.profissional ||
-              objAg.profissional ||
-              dados.profissional ||
-              "",
-            valor: created.valor || objAg.valor || 0,
-            status: created.status || "agendado",
-            statusTexto:
-              created.status && created.statusTexto
-                ? created.statusTexto
-                : "Agendado",
-            dataAgendamento:
-              created.dataAgendamento || formatDateForAPI(dados.data),
-          };
-
-          adicionarAgendamentoAoDOM(agObj);
-
-          // Garantir que a lista principal seja atualizada para posicionar corretamente
-          // o agendamento no grupo/data correta. Preferimos recarregar do servidor
-          // para manter consistência com o AgendamentosManager.
-          if (
-            window.agendamentosManager &&
-            typeof window.agendamentosManager.loadAgendamentos === "function"
-          ) {
+          // A lista principal será recarregada do servidor para garantir consistência
+          // com o AgendamentosManager. Primeiro, ajustar a data do manager para
+          // corresponder à data do agendamento que foi criado.
+          if (window.agendamentosManager) {
             try {
-              await window.agendamentosManager.loadAgendamentos();
+              // Extrair a data do agendamento criado (formato YYYY-MM-DD)
+              const dataAgendamentoStr = created.dataAgendamento || formatDateForAPI(dados.data);
+              let dataDoAgendamento = null;
+              if (dataAgendamentoStr) {
+                // Se veio como ISO string (ex: "2026-06-06T00:00:00.000Z")
+                if (dataAgendamentoStr.includes("T") || dataAgendamentoStr.includes("-")) {
+                  dataDoAgendamento = new Date(dataAgendamentoStr);
+                }
+                // Se veio como DD/MM/YYYY
+                if (!dataDoAgendamento || isNaN(dataDoAgendamento.getTime())) {
+                  const parts = dados.data ? dados.data.split("/") : [];
+                  if (parts.length === 3) {
+                    dataDoAgendamento = new Date(parts[2], parts[1] - 1, parts[0]);
+                  }
+                }
+              }
+              if (dataDoAgendamento && !isNaN(dataDoAgendamento.getTime())) {
+                window.agendamentosManager.currentDate = dataDoAgendamento;
+                // Se estava em 'today', trocar para 'day' para não resetar a data
+                if (window.agendamentosManager.period === "today") {
+                  window.agendamentosManager.period = "day";
+                }
+                window.agendamentosManager.handlePeriodChange("day");
+              } else {
+                // Fallback: se não conseguir extrair data, recarregar normalmente
+                await window.agendamentosManager.loadAgendamentos();
+              }
             } catch (e) {
               console.warn(
                 "[novo-atendimento-global] Falha ao recarregar agendamentos:",

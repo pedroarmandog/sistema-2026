@@ -2638,20 +2638,15 @@ class AgendamentosManager {
       console.error("❌ Erro ao carregar filtros salvos:", error);
     }
 
-    // Restaurar filtros de texto do localStorage
+    // NÃO restaurar filtros de texto do localStorage automaticamente.
+    // Filtros de texto (petCliente, profissional) ficam apenas na sessão atual
+    // e não devem persistir entre carregamentos de página, pois fazem a API
+    // retornar apenas agendamentos que contenham o termo pesquisado.
+    // O usuário deve reaplicar os filtros manualmente se desejar.
+    // Limpar localStorage para garantir que filtros antigos não interfiram.
     try {
-      const savedPet = localStorage.getItem("ag_filtro_petCliente") || "";
-      const savedProf = localStorage.getItem("ag_filtro_profissional") || "";
-      if (savedPet) {
-        this.filtros.petCliente = savedPet;
-        const elPet = document.getElementById("filterPetCliente");
-        if (elPet) elPet.value = savedPet;
-      }
-      if (savedProf) {
-        this.filtros.profissional = savedProf;
-        const elProf = document.getElementById("filterProfissional");
-        if (elProf) elProf.value = savedProf;
-      }
+      localStorage.removeItem("ag_filtro_petCliente");
+      localStorage.removeItem("ag_filtro_profissional");
     } catch (e) {}
   }
 
