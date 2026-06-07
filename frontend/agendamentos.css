@@ -1706,6 +1706,7 @@
 .agendamento-detalhes {
   word-break: break-word;
   overflow-wrap: anywhere;
+  align-self: start; /* garante que a célula cresça com o conteúdo em vez de ser centralizada verticalmente */
 }
 
 .agendamento-detalhes .agendamento-observacao,
@@ -1713,6 +1714,8 @@
   word-break: break-word;
   overflow-wrap: anywhere;
   white-space: normal;
+  display: block;
+  width: 100%;
 }
 
 /* Actions shown to the right of the status in each row */
