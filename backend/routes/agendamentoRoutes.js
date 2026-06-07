@@ -87,6 +87,7 @@ router.get("/", async (req, res) => {
         "id",
         "horario",
         "servico",
+        "observacoes",
         "profissional",
         "valor",
         "status",
