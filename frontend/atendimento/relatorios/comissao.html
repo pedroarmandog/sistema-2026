@@ -94,7 +94,7 @@
               "
             >
               <span>Novo</span>
-              <span id="leftCaretNovo" style="font-weight: 700">Ôû╝</span>
+              <span id="leftCaretNovo" style="font-weight: 700">▼</span>
             </div>
             <div
               id="leftSubNovo"
@@ -143,7 +143,7 @@
               "
             >
               <span>Estoque</span>
-              <span id="leftCaretEstoque" style="font-weight: 700">Ôû╝</span>
+              <span id="leftCaretEstoque" style="font-weight: 700">▼</span>
             </div>
             <div
               id="leftSubEstoque"
@@ -178,7 +178,7 @@
               "
             >
               <span>Clínica</span>
-              <span id="leftCaretClinica" style="font-weight: 700">Ôû╝</span>
+              <span id="leftCaretClinica" style="font-weight: 700">▼</span>
             </div>
             <div
               id="leftSubClinica"
@@ -283,7 +283,7 @@
               <a href="#" style="flex: 1; text-decoration: none; color: inherit"
                 ><span>Vendas</span></a
               >
-              <span id="attCaretVendas" style="font-weight: 700">Ôû╝</span>
+              <span id="attCaretVendas" style="font-weight: 700">▼</span>
             </div>
             <div
               id="attSubVendas"
@@ -325,7 +325,7 @@
               <a href="#" style="flex: 1; text-decoration: none; color: inherit"
                 ><span>Caixa</span></a
               >
-              <span id="attCaretCaixa" style="font-weight: 700">Ôû╝</span>
+              <span id="attCaretCaixa" style="font-weight: 700">▼</span>
             </div>
             <div
               id="attSubCaixa"
@@ -363,7 +363,7 @@
               <a href="#" style="flex: 1; text-decoration: none; color: inherit"
                 ><span>Relatórios</span></a
               >
-              <span id="attCaretRel" style="font-weight: 700">Ôû╝</span>
+              <span id="attCaretRel" style="font-weight: 700">▼</span>
             </div>
             <div
               id="attSubRelatorios"
@@ -452,7 +452,7 @@
               <a href="#" style="flex: 1; text-decoration: none; color: inherit"
                 ><span>Relatórios</span></a
               >
-              <span id="compCaretRel" style="font-weight: 700">Ôû╝</span>
+              <span id="compCaretRel" style="font-weight: 700">▼</span>
             </div>
             <div
               id="compSubRelatorios"
@@ -493,7 +493,7 @@
               <a href="" style="flex: 1; text-decoration: none; color: inherit"
                 ><span>Contas a receber</span></a
               >
-              <span id="finCaretReceber" style="font-weight: 700">Ôû╝</span>
+              <span id="finCaretReceber" style="font-weight: 700">▼</span>
             </div>
             <div
               id="finSubReceber"
@@ -521,7 +521,7 @@
               <a href="#" style="flex: 1; text-decoration: none; color: inherit"
                 ><span>Contas a pagar</span></a
               >
-              <span id="finCaretPagar" style="font-weight: 700">Ôû╝</span>
+              <span id="finCaretPagar" style="font-weight: 700">▼</span>
             </div>
             <div
               id="finSubPagar"
@@ -549,7 +549,7 @@
               <a href="#" style="flex: 1; text-decoration: none; color: inherit"
                 ><span>Conta</span></a
               >
-              <span id="finCaretConta" style="font-weight: 700">Ôû╝</span>
+              <span id="finCaretConta" style="font-weight: 700">▼</span>
             </div>
             <div
               id="finSubConta"
@@ -596,7 +596,7 @@
               <a href="#" style="flex: 1; text-decoration: none; color: inherit"
                 ><span>Cartão</span></a
               >
-              <span id="finCaretCartao" style="font-weight: 700">Ôû╝</span>
+              <span id="finCaretCartao" style="font-weight: 700">▼</span>
             </div>
             <div
               id="finSubCartao"
@@ -629,7 +629,7 @@
               <a href="#" style="flex: 1; text-decoration: none; color: inherit"
                 ><span>Relatórios</span></a
               >
-              <span id="finCaretRel" style="font-weight: 700">Ôû╝</span>
+              <span id="finCaretRel" style="font-weight: 700">▼</span>
             </div>
             <div
               id="finSubRelatorios"
@@ -778,7 +778,7 @@
               leftSub.style.display === "block" ||
               leftSub.style.display === "flex";
             leftSub.style.display = open ? "none" : "block";
-            if (leftCaret) leftCaret.innerText = open ? "Ôû╝" : "Ôû▓";
+            if (leftCaret) leftCaret.innerText = open ? "▼" : "▲";
           });
         }
         // Toggle para submenu aninhado Estoque
@@ -793,7 +793,7 @@
               leftSubEst.style.display === "block" ||
               leftSubEst.style.display === "flex";
             leftSubEst.style.display = open ? "none" : "block";
-            if (leftCaretEst) leftCaretEst.innerText = open ? "Ôû╝" : "Ôû▓";
+            if (leftCaretEst) leftCaretEst.innerText = open ? "▼" : "▲";
           });
         }
         // Toggle para submenu aninhado Clínica
@@ -808,7 +808,7 @@
               leftSubClin.style.display === "block" ||
               leftSubClin.style.display === "flex";
             leftSubClin.style.display = open ? "none" : "block";
-            if (leftCaretClin) leftCaretClin.innerText = open ? "Ôû╝" : "Ôû▓";
+            if (leftCaretClin) leftCaretClin.innerText = open ? "▼" : "▲";
           });
         }
         // Toggle para submenus em Atendimento: Vendas, Caixa, Relatórios
@@ -823,7 +823,7 @@
               attSubVendas.style.display === "block" ||
               attSubVendas.style.display === "flex";
             attSubVendas.style.display = open ? "none" : "block";
-            if (attCaretVendas) attCaretVendas.innerText = open ? "Ôû╝" : "Ôû▓";
+            if (attCaretVendas) attCaretVendas.innerText = open ? "▼" : "▲";
           });
         }
 
@@ -838,7 +838,7 @@
               attSubCaixa.style.display === "block" ||
               attSubCaixa.style.display === "flex";
             attSubCaixa.style.display = open ? "none" : "block";
-            if (attCaretCaixa) attCaretCaixa.innerText = open ? "Ôû╝" : "Ôû▓";
+            if (attCaretCaixa) attCaretCaixa.innerText = open ? "▼" : "▲";
           });
         }
 
@@ -853,7 +853,7 @@
               attSubRel.style.display === "block" ||
               attSubRel.style.display === "flex";
             attSubRel.style.display = open ? "none" : "block";
-            if (attCaretRel) attCaretRel.innerText = open ? "Ôû╝" : "Ôû▓";
+            if (attCaretRel) attCaretRel.innerText = open ? "▼" : "▲";
           });
         }
         // Toggle para submenu aninhado em Compras: Relatórios
@@ -868,7 +868,7 @@
               compSubRel.style.display === "block" ||
               compSubRel.style.display === "flex";
             compSubRel.style.display = open ? "none" : "block";
-            if (compCaretRel) compCaretRel.innerText = open ? "Ôû╝" : "Ôû▓";
+            if (compCaretRel) compCaretRel.innerText = open ? "▼" : "▲";
           });
         }
         // Toggle para submenus em Financeiro
@@ -884,7 +884,7 @@
               finSubReceber.style.display === "flex";
             finSubReceber.style.display = open ? "none" : "block";
             if (finCaretReceber)
-              finCaretReceber.innerText = open ? "Ôû╝" : "Ôû▓";
+              finCaretReceber.innerText = open ? "▼" : "▲";
           });
         }
 
@@ -899,7 +899,7 @@
               finSubPagar.style.display === "block" ||
               finSubPagar.style.display === "flex";
             finSubPagar.style.display = open ? "none" : "block";
-            if (finCaretPagar) finCaretPagar.innerText = open ? "Ôû╝" : "Ôû▓";
+            if (finCaretPagar) finCaretPagar.innerText = open ? "▼" : "▲";
           });
         }
 
@@ -914,7 +914,7 @@
               finSubConta.style.display === "block" ||
               finSubConta.style.display === "flex";
             finSubConta.style.display = open ? "none" : "block";
-            if (finCaretConta) finCaretConta.innerText = open ? "Ôû╝" : "Ôû▓";
+            if (finCaretConta) finCaretConta.innerText = open ? "▼" : "▲";
           });
         }
 
@@ -929,7 +929,7 @@
               finSubCartao.style.display === "block" ||
               finSubCartao.style.display === "flex";
             finSubCartao.style.display = open ? "none" : "block";
-            if (finCaretCartao) finCaretCartao.innerText = open ? "Ôû╝" : "Ôû▓";
+            if (finCaretCartao) finCaretCartao.innerText = open ? "▼" : "▲";
           });
         }
 
@@ -944,7 +944,7 @@
               finSubRel.style.display === "block" ||
               finSubRel.style.display === "flex";
             finSubRel.style.display = open ? "none" : "block";
-            if (finCaretRel) finCaretRel.innerText = open ? "Ôû╝" : "Ôû▓";
+            if (finCaretRel) finCaretRel.innerText = open ? "▼" : "▲";
           });
         }
 
@@ -952,7 +952,7 @@
         document.addEventListener("click", function (e) {
           if (!e.target.closest("#itemSubmenu")) {
             if (leftSub) leftSub.style.display = "none";
-            if (leftCaret) leftCaret.innerText = "Ôû╝";
+            if (leftCaret) leftCaret.innerText = "▼";
             // também fechar o submenu pai (#itemSubmenu) se estiver aberto
             try {
               var parentSub = document.getElementById("itemSubmenu");
@@ -984,45 +984,45 @@
             var leftSub = document.getElementById("leftSubNovo");
             var leftCaret = document.getElementById("leftCaretNovo");
             if (leftSub) leftSub.style.display = "none";
-            if (leftCaret) leftCaret.innerText = "Ôû╝";
+            if (leftCaret) leftCaret.innerText = "▼";
             // reset carets dos submenus de Atendimento
             try {
               var aV = document.getElementById("attCaretVendas");
-              if (aV) aV.innerText = "Ôû╝";
+              if (aV) aV.innerText = "▼";
             } catch (e) {}
             try {
               var aC = document.getElementById("attCaretCaixa");
-              if (aC) aC.innerText = "Ôû╝";
+              if (aC) aC.innerText = "▼";
             } catch (e) {}
             try {
               var aR = document.getElementById("attCaretRel");
-              if (aR) aR.innerText = "Ôû╝";
+              if (aR) aR.innerText = "▼";
             } catch (e) {}
             // reset caret do submenu de Compras -> Relatórios
             try {
               var cR = document.getElementById("compCaretRel");
-              if (cR) cR.innerText = "Ôû╝";
+              if (cR) cR.innerText = "▼";
             } catch (e) {}
             // reset carets dos submenus de Financeiro
             try {
               var fR1 = document.getElementById("finCaretReceber");
-              if (fR1) fR1.innerText = "Ôû╝";
+              if (fR1) fR1.innerText = "▼";
             } catch (e) {}
             try {
               var fR2 = document.getElementById("finCaretPagar");
-              if (fR2) fR2.innerText = "Ôû╝";
+              if (fR2) fR2.innerText = "▼";
             } catch (e) {}
             try {
               var fR3 = document.getElementById("finCaretConta");
-              if (fR3) fR3.innerText = "Ôû╝";
+              if (fR3) fR3.innerText = "▼";
             } catch (e) {}
             try {
               var fR4 = document.getElementById("finCaretCartao");
-              if (fR4) fR4.innerText = "Ôû╝";
+              if (fR4) fR4.innerText = "▼";
             } catch (e) {}
             try {
               var fR5 = document.getElementById("finCaretRel");
-              if (fR5) fR5.innerText = "Ôû╝";
+              if (fR5) fR5.innerText = "▼";
             } catch (e) {}
 
             // fechar todos os .submenu e remover classe open
@@ -1221,7 +1221,11 @@
                 <i class="fas fa-shopping-bag"></i>
                 Nova Venda
               </a>
-              <a href="../../financeiro/contas-a-receber/contas-a-pagar/pagamento-fornecedor.html" class="dropdown-item" onclick="novaContaPagar()">
+              <a
+                href="../../financeiro/contas-a-receber/contas-a-pagar/pagamento-fornecedor.html"
+                class="dropdown-item"
+                onclick="novaContaPagar()"
+              >
                 <i class="fas fa-credit-card"></i>
                 Nova Conta a Pagar
               </a>
