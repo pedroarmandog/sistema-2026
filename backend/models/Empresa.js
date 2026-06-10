@@ -21,7 +21,31 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING,
         allowNull: true,
       },
+      inscricaoEstadual: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      inscricaoMunicipal: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      credenciamento: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      regime: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
       telefone: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      telefone2: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+      telefonePlantao: {
         type: DataTypes.STRING,
         allowNull: true,
       },
@@ -36,6 +60,11 @@ module.exports = (sequelize) => {
       logo: {
         type: DataTypes.STRING,
         allowNull: true,
+      },
+      ativo: {
+        type: DataTypes.BOOLEAN,
+        allowNull: true,
+        defaultValue: true,
       },
       ultimaChavePix: {
         type: DataTypes.STRING,

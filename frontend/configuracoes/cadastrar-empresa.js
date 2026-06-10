@@ -972,9 +972,37 @@ document.addEventListener("DOMContentLoaded", function () {
               const telInput = document.getElementById("telefone1");
               if (telInput) telInput.value = empresa.telefone;
             }
+            if (empresa.telefone2) {
+              const tel2Input = document.getElementById("telefone2");
+              if (tel2Input) tel2Input.value = empresa.telefone2;
+            }
+            if (empresa.telefonePlantao) {
+              const telPInput = document.getElementById("telefonePlantao");
+              if (telPInput) telPInput.value = empresa.telefonePlantao;
+            }
             if (empresa.email) {
               const emailInput = document.getElementById("email");
               if (emailInput) emailInput.value = empresa.email;
+            }
+            if (empresa.inscricaoEstadual) {
+              const ieInput = document.getElementById("inscricaoEstadual");
+              if (ieInput) ieInput.value = empresa.inscricaoEstadual;
+            }
+            if (empresa.inscricaoMunicipal) {
+              const imInput = document.getElementById("inscricaoMunicipal");
+              if (imInput) imInput.value = empresa.inscricaoMunicipal;
+            }
+            if (empresa.credenciamento) {
+              const credInput = document.getElementById("credenciamento");
+              if (credInput) credInput.value = empresa.credenciamento;
+            }
+            if (empresa.regime) {
+              const regimeInput = document.getElementById("regime");
+              if (regimeInput) regimeInput.value = empresa.regime;
+            }
+            if (empresa.ativo !== undefined && empresa.ativo !== null) {
+              const ativoInput = document.getElementById("ativo");
+              if (ativoInput) ativoInput.value = empresa.ativo ? "Sim" : "Não";
             }
 
             // endereço (JSON -> campos individuais)
@@ -1266,7 +1294,13 @@ function salvarEmpresa() {
     nome: (document.getElementById("nomeFantasia") || {}).value || "", // Backend espera 'nome'
     razaoSocial: (document.getElementById("razaoSocial") || {}).value || "",
     cnpj: (document.getElementById("cnpj") || {}).value || "",
+    inscricaoEstadual: (document.getElementById("inscricaoEstadual") || {}).value || "",
+    inscricaoMunicipal: (document.getElementById("inscricaoMunicipal") || {}).value || "",
+    credenciamento: (document.getElementById("credenciamento") || {}).value || "",
+    regime: (document.getElementById("regime") || {}).value || "",
     telefone: (document.getElementById("telefone1") || {}).value || "",
+    telefone2: (document.getElementById("telefone2") || {}).value || "",
+    telefonePlantao: (document.getElementById("telefonePlantao") || {}).value || "",
     email: (document.getElementById("email") || {}).value || "",
     endereco: {
       rua: (document.getElementById("endereco") || {}).value || "",
@@ -1276,6 +1310,7 @@ function salvarEmpresa() {
       cidade: (document.getElementById("cidade") || {}).value || "",
       cep: (document.getElementById("cep") || {}).value || "",
     },
+    ativo: (document.getElementById("ativo") || {}).value === "Sim",
     ativa: true,
   };
 
