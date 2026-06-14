@@ -385,20 +385,11 @@ ul { list-style: none; }
     overflow: hidden;
 }
 
-.hero-mockup-inner {
-    padding: 40px;
-    text-align: center;
-    color: rgba(255, 255, 255, 0.3);
-}
-
-.hero-mockup-inner .mockup-icon {
-    font-size: 4rem;
-    margin-bottom: 16px;
+.hero-mockup-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
     display: block;
-}
-
-.hero-mockup-inner p {
-    font-size: 0.9375rem;
 }
 
 .floating-card {
