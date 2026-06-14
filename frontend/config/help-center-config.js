@@ -12,7 +12,7 @@ window.HELP_CENTER_CONFIG = {
   whatsappMessage: "Olá! Preciso de ajuda com o sistema PetHub. 🐾",
 
   // ── Mascote ─────────────────────────────────────────────────
-  mascotePath: "/mascote pethub/ChatGPT Image 4_06_2026, 11_04_14.png",
+  mascotePath: "/mascote pethub/mascote-pethub.png",
   mascoteAlt: "Mascote PetHub — Hub",
 
   // ── Textos do Modal ─────────────────────────────────────────
