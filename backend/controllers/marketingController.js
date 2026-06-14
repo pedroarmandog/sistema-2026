@@ -643,6 +643,32 @@ async function dispararMensagemAutomatica(
       return null;
     }
 
+    // ── Verificação de duplicidade ──────────────────────────────────────
+    // Evita que a mesma mensagem seja enviada mais de uma vez para o mesmo
+    // agendamento (ex: quando há múltiplos triggers ou chamadas concorrentes).
+    if (contexto?.agendamentoId) {
+      const { EnvioAgendado } = require("../models");
+      const { Op } = require("sequelize");
+      const sequelize = MensagemAutomatica.sequelize;
+      const jaExiste = await EnvioAgendado.findOne({
+        where: {
+          mensagemAutomaticaId: mensagem.id,
+          telefoneDestino: String(telefone).replace(/\D/g, ""),
+          status: { [Op.in]: ["pendente", "enviado", "enviando"] },
+          [Op.and]: sequelize.literal(
+            `JSON_EXTRACT(contexto, '$.agendamentoId') = ${Number(contexto.agendamentoId)}`,
+          ),
+        },
+      });
+      if (jaExiste) {
+        console.log(
+          `[Marketing] Envio duplicado ignorado: já existe envio #${jaExiste.id} para agendamento #${contexto.agendamentoId}`,
+        );
+        return null;
+      }
+    }
+    // ── Fim da verificação de duplicidade ───────────────────────────────
+
     // Substituir variáveis no template
     const nomeEmpresa = await obterNomeEmpresa(empresaId);
     const conteudoFinal = whatsappService.substituirVariaveis(
