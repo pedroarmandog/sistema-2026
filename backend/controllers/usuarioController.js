@@ -120,6 +120,34 @@ exports.login = async (req, res) => {
         .json({ mensagem: "Usuário/Email ou senha inválidos" });
     }
 
+    // ===== SANITIZAÇÃO DO CAMPO permissoes =====
+    // O campo 'permissoes' no MySQL pode vir como:
+    // - NULL
+    // - string JSON
+    // - array vazio []
+    // Esta normalização garante que nunca quebre o código
+    {
+      let rawPermissoes = usuarioEncontrado.permissoes;
+      if (rawPermissoes == null) {
+        rawPermissoes = [];
+      } else if (typeof rawPermissoes === "string") {
+        try {
+          rawPermissoes = JSON.parse(rawPermissoes);
+        } catch (e) {
+          console.warn(
+            "[login] Erro ao fazer JSON.parse do campo permissoes:",
+            e && e.message,
+          );
+          rawPermissoes = [];
+        }
+      }
+      if (!Array.isArray(rawPermissoes)) {
+        rawPermissoes = [];
+      }
+      usuarioEncontrado.permissoes = rawPermissoes;
+    }
+    // ===== FIM DA SANITIZAÇÃO =====
+
     // Verificar se usuário está ativo
     if (!usuarioEncontrado.ativo) {
       console.log("⚠️  Usuário inativo:", usuarioEncontrado.usuario);
