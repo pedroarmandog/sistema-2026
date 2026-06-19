@@ -1260,7 +1260,21 @@ async function impersonateRedirect(req, res) {
       return res.status(404).send("Usuário não encontrado");
     }
 
-    const jwtToken = gerarTokenUsuario(usuario.toJSON());
+    const userPayload = {
+      ...usuario.toJSON(),
+      empresaId: registro.empresa_id,
+      empresa_id: registro.empresa_id,
+    };
+
+    const jwtToken = gerarTokenUsuario(userPayload);
+
+    // Invalidar cache do authUser para forçar uso do novo JWT imediatamente
+    try {
+      const { invalidateUserCache } = require("../middleware/authUser");
+      if (typeof invalidateUserCache === "function") {
+        invalidateUserCache(usuario.id);
+      }
+    } catch (_) {}
 
     // Setar cookie e redirecionar para dashboard
     const cookieDomain = process.env.COOKIE_DOMAIN || null;
