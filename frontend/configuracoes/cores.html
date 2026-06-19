@@ -1261,7 +1261,7 @@
 
         let currentColors = JSON.parse(JSON.stringify(DEFAULT_COLORS));
 
-        // Carregar cores salvas do localStorage
+        // Carregar cores salvas do localStorage ou servidor
         function loadSavedColors() {
             const saved = localStorage.getItem('systemColors');
             if (saved) {
@@ -1272,6 +1272,18 @@
                     console.error('Erro ao carregar cores salvas:', e);
                 }
             }
+            // Buscar do servidor se autenticado e sobrescrever
+            fetch('/api/usuarios/preferencias', { credentials: 'include' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data && data.systemColors) {
+                        currentColors = JSON.parse(JSON.stringify(data.systemColors));
+                        localStorage.setItem('systemColors', JSON.stringify(currentColors));
+                        applyColorsToSystem();
+                        renderColors();
+                    }
+                })
+                .catch(() => {});
         }
 
         // Aplicar cores ao sistema (CSS Variables)
@@ -1286,10 +1298,17 @@
             });
         }
 
-        // Salvar cores no localStorage
+        // Salvar cores no localStorage e no servidor (quando autenticado)
         function saveColors() {
             localStorage.setItem('systemColors', JSON.stringify(currentColors));
             applyColorsToSystem();
+            // Persistir no servidor em background
+            fetch('/api/usuarios/preferencias', {
+                method: 'PUT',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ systemColors: currentColors })
+            }).catch(() => {});
         }
 
         // Restaurar cores padrão

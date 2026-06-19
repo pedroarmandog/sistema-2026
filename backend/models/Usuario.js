@@ -55,6 +55,11 @@ module.exports = (sequelize) => {
             type: DataTypes.JSON,
             allowNull: true,
             defaultValue: []
+        },
+        preferencias: {
+            type: DataTypes.JSON,
+            allowNull: true,
+            defaultValue: null
         }
     }, {
         tableName: 'usuarios',

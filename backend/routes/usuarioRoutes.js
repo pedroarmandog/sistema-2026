@@ -166,6 +166,34 @@ router.post("/logout", async (req, res) => {
 // Rota de validação de senha
 router.post("/validar-senha", usuarioController.validarSenha);
 
+// Rotas de preferências do usuário autenticado
+router.get("/preferencias", authUser, async (req, res) => {
+  try {
+    const { Usuario } = require("../models");
+    const usuario = await Usuario.findByPk(req.user.id, {
+      attributes: ["preferencias"],
+    });
+    return res.json(usuario?.preferencias || {});
+  } catch (err) {
+    console.error("[preferencias] Erro ao buscar:", err);
+    return res.status(500).json({ error: "Erro interno do servidor" });
+  }
+});
+
+router.put("/preferencias", authUser, async (req, res) => {
+  try {
+    const { Usuario } = require("../models");
+    await Usuario.update(
+      { preferencias: req.body },
+      { where: { id: req.user.id } },
+    );
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("[preferencias] Erro ao salvar:", err);
+    return res.status(500).json({ error: "Erro interno do servidor" });
+  }
+});
+
 // Rotas de usuários
 router.get("/", authUser, usuarioController.listarUsuarios);
 router.get("/:id", usuarioController.buscarUsuario);
