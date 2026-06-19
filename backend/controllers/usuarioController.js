@@ -144,7 +144,12 @@ exports.login = async (req, res) => {
       if (!Array.isArray(rawPermissoes)) {
         rawPermissoes = [];
       }
-      usuarioEncontrado.permissoes = rawPermissoes;
+      // Usar setDataValue para garantir que o Sequelize internalize o valor corrigido
+      try {
+        usuarioEncontrado.setDataValue('permissoes', rawPermissoes);
+      } catch (_) {
+        usuarioEncontrado.permissoes = rawPermissoes;
+      }
     }
     // ===== FIM DA SANITIZAÇÃO =====
 
