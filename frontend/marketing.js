@@ -8,9 +8,9 @@
 
 console.log("[Marketing] Módulo carregado");
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────
 // CONFIGURAÇÕES
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────
 const VPS_URL = window.VPS_URL || "https://api.pethubflow.com.br";
 const API = VPS_URL + "/api/marketing";
 
@@ -24,9 +24,24 @@ function resolveImgPath(p) {
   return VPS_URL + "/uploads/marketing/" + p;
 }
 
-// Obter empresaId do usuário logado (cookie → API → empresas[0])
-let EMPRESA_ID = 1; // fallback
+// Obter empresaId do usuário logado — via JWT ou cookie legado
+let EMPRESA_ID = null;
 let _empresaIdPromise = (async function detectarEmpresaId() {
+  // Estratégia 1: tentar obter do JWT via endpoint de sessão atual
+  try {
+    const sessRes = await fetch(VPS_URL + "/api/usuarios/sessao-atual", {
+      credentials: "include",
+    });
+    if (sessRes.ok) {
+      const sessData = await sessRes.json();
+      if (sessData.empresaId) {
+        EMPRESA_ID = Number(sessData.empresaId);
+        console.log("[Marketing] empresaId do JWT:", EMPRESA_ID);
+        return;
+      }
+    }
+  } catch (_) {}
+  // Estratégia 2: cookie legado usuarioLogadoId (fallback)
   try {
     const ca = document.cookie.split(";");
     let usuarioId = null;
@@ -37,7 +52,10 @@ let _empresaIdPromise = (async function detectarEmpresaId() {
         break;
       }
     }
-    if (!usuarioId) return;
+    if (!usuarioId) {
+      console.warn("[Marketing] Nenhum usuário logado detectado.");
+      return;
+    }
     const r = await fetch(VPS_URL + "/api/usuarios/" + usuarioId);
     if (!r.ok) return;
     const u = await r.json();
@@ -51,29 +69,35 @@ let _empresaIdPromise = (async function detectarEmpresaId() {
           : e?.id || e?.ID || null;
     if (id) {
       EMPRESA_ID = id;
-      console.log("[Marketing] empresaId detectado:", EMPRESA_ID);
+      console.log("[Marketing] empresaId detectado (cookie):", EMPRESA_ID);
     }
   } catch (_) {}
 })();
 
 // Estado em memória (espelho do banco — não é fonte da verdade)
 let _mensagens = []; // array de MensagemAutomatica vinda da API
-let _sseSource = null; // EventSource para atualizaÃ§Ãµes em tempo real
+let _sseSource = null; // EventSource para atualizações em tempo real
 let _modalMsgAtualId = null; // ID da mensagem sendo editada/ativada
 let _imagemArquivo = null; // Arquivo de imagem selecionado no modal
 let _removerImagem = false; // Flag para remover imagem existente ao salvar
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// INICIALIZAÃ‡ÃƒO
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────
+// INICIALIZAÇÃO
+// ─────────────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", function () {
-  console.log("[Marketing] DOMContentLoaded â€” inicializando...");
+  console.log("[Marketing] DOMContentLoaded — inicializando...");
   inicializarMarketing();
 });
 
 async function inicializarMarketing() {
   // Aguardar detecção do empresaId antes de buscar status/mensagens
   await _empresaIdPromise;
+  if (!EMPRESA_ID) {
+    console.warn("[Marketing] Nenhuma empresa identificada. Página não será carregada.");
+    document.getElementById("listaMensagensAtivas").innerHTML =
+      '<div style="color:#ef4444;padding:16px;font-size:13px;">Sessão não identificada. Faça login novamente.</div>';
+    return;
+  }
   carregarStatusWhatsapp();
   carregarMensagens();
   conectarSSE();
@@ -103,7 +127,7 @@ function iniciarMonitorFilaPendente() {
 
 async function verificarFilaPendente() {
   try {
-    const res = await fetch(`${API}/fila-pendente`);
+    const res = await fetch(`${API}/fila-pendente`, { credentials: "include" });
     if (!res.ok) return;
     const data = await res.json();
     const alerta = document.getElementById("filaPendenteAlerta");
@@ -130,6 +154,7 @@ async function filaEnviarUm() {
   try {
     const res = await fetch(`${API}/fila-pendente/enviar-um`, {
       method: "POST",
+      credentials: "include",
     });
     const data = await res.json();
     if (data.enviado) {
@@ -159,6 +184,7 @@ async function filaEnviarTodos() {
   try {
     const res = await fetch(`${API}/fila-pendente/enviar-todos`, {
       method: "POST",
+      credentials: "include",
     });
     const data = await res.json();
     mostrarNotificacaoFila("Fila processada! Verifique os logs.", "sucesso");
@@ -187,6 +213,7 @@ async function filaCancelarTodos() {
   try {
     const res = await fetch(`${API}/fila-pendente/cancelar-todos`, {
       method: "POST",
+      credentials: "include",
     });
     const data = await res.json();
     mostrarNotificacaoFila(
@@ -246,13 +273,14 @@ function mostrarNotificacaoFila(texto, tipo) {
   }, 4000);
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────
 // STATUS WHATSAPP
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────
 
 async function carregarStatusWhatsapp() {
+  if (!EMPRESA_ID) return;
   try {
-    const res = await fetch(`${API}/whatsapp/status?empresaId=${EMPRESA_ID}`);
+    const res = await fetch(`${API}/whatsapp/status`, { credentials: "include" });
     const data = await res.json();
     atualizarUIWhatsapp(data);
   } catch (err) {
@@ -288,9 +316,9 @@ function atualizarUIWhatsapp(data) {
   }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────
 // SERVER-SENT EVENTS (tempo real)
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────
 
 function conectarSSE() {
   if (_sseSource) {
@@ -299,8 +327,9 @@ function conectarSSE() {
   }
 
   try {
+    // SSE não envia cookies automaticamente, mas agora o backend obtém empresaId do JWT via cookie
     _sseSource = new EventSource(
-      `${API}/whatsapp/eventos?empresaId=${EMPRESA_ID}`,
+      `${API}/whatsapp/eventos`,
     );
 
     _sseSource.onmessage = function (event) {
@@ -418,9 +447,9 @@ function onWhatsappErro(data) {
   }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// MODAL: CONEXÃƒO WHATSAPP
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────
+// MODAL: CONEXÃO WHATSAPP
+// ─────────────────────────────────────────────────────────────────
 
 function abrirModalConexaoWhatsapp() {
   carregarStatusWhatsapp().then(() => {
@@ -480,7 +509,7 @@ async function iniciarConexaoWhatsapp() {
     const res = await fetch(`${API}/whatsapp/resetar`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ empresaId: EMPRESA_ID }),
+      credentials: "include",
     });
     const data = await res.json();
     console.log("[Marketing] Resposta ao conectar (via resetar):", data);
@@ -504,7 +533,6 @@ function iniciarPollingQR() {
     if (tentativas > MAX_TENTATIVAS) {
       pararPollingQR();
       console.warn("[Marketing] Timeout ao aguardar QR Code (3 min)");
-      // Mostrar estado de erro em vez de ficar no spinner
       onWhatsappErro({
         mensagem: "Timeout ao aguardar QR Code. Tente novamente.",
       });
@@ -512,7 +540,7 @@ function iniciarPollingQR() {
     }
     try {
       const res = await fetch(
-        `${API}/whatsapp/qr-status?empresaId=${EMPRESA_ID}`,
+        `${API}/whatsapp/qr-status`, { credentials: "include" },
       );
       const data = await res.json();
       console.log("[Marketing Polling] Status:", data.status);
@@ -524,8 +552,6 @@ function iniciarPollingQR() {
         pararPollingQR();
         onWhatsappConectado(data);
       } else if (data.status === "erro" || data.status === "desconectado") {
-        // Backend limpou (timeout, auth_failure, etc)
-        // Se o status mudou para desconectado durante polling, parar e mostrar erro
         if (tentativas > 5 && data.status === "desconectado") {
           pararPollingQR();
           onWhatsappErro({ mensagem: "Conexão falhou. Tente novamente." });
@@ -551,7 +577,7 @@ async function desconectarWhatsapp() {
     await fetch(`${API}/whatsapp/desconectar`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ empresaId: EMPRESA_ID }),
+      credentials: "include",
     });
   } catch (err) {
     console.error("[Marketing] Erro ao desconectar:", err.message);
@@ -561,13 +587,18 @@ async function desconectarWhatsapp() {
   fecharModal("modalQRCode");
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// MENSAGENS AUTOMÃTICAS
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────
+// MENSAGENS AUTOMÁTICAS
+// ─────────────────────────────────────────────────────────────────
 
 async function carregarMensagens() {
+  if (!EMPRESA_ID) {
+    document.getElementById("listaMensagensAtivas").innerHTML =
+      '<div style="color:#ef4444;padding:16px;font-size:13px;">Sessão não identificada. Faça login novamente.</div>';
+    return;
+  }
   try {
-    const res = await fetch(`${API}/mensagens?empresaId=${EMPRESA_ID}`);
+    const res = await fetch(`${API}/mensagens`, { credentials: "include" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     _mensagens = await res.json();
     renderizarMensagens();
@@ -659,9 +690,9 @@ function renderCardInativa(m) {
     </div>`;
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────
 // MODAL 2: EDITAR MENSAGEM
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────
 
 async function abrirModalEditar(id) {
   _modalMsgAtualId = id;
@@ -770,6 +801,7 @@ async function avancarParaConfiguracao() {
     const res = await fetch(`${API}/mensagens/${id}`, {
       method: "PUT",
       body: formData,
+      credentials: "include",
     });
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -807,7 +839,6 @@ async function avancarParaConfiguracao() {
 
   if (config) {
     if (config.dias && Array.isArray(config.dias)) {
-      // Novo formato: { hora, dias: [0, 1, 3] }
       for (const d of config.dias) {
         const cb = document.querySelector(
           `input[name="diasEnvio"][value="${d}"]`,
@@ -816,12 +847,10 @@ async function avancarParaConfiguracao() {
       }
       document.getElementById("horaEnvio").value = config.hora || "09:00";
     } else if (config.tipo === "no_dia") {
-      // Formato legado
       const cb = document.querySelector('input[name="diasEnvio"][value="0"]');
       if (cb) cb.checked = true;
       document.getElementById("horaEnvio").value = config.hora || "09:00";
     } else if (config.tipo === "dias_antes") {
-      // Formato legado
       const cb = document.querySelector(
         `input[name="diasEnvio"][value="${config.valor || 1}"]`,
       );
@@ -829,7 +858,6 @@ async function avancarParaConfiguracao() {
       document.getElementById("horaEnvio").value = config.hora || "09:00";
     }
   } else {
-    // Padrão: marcar "No dia"
     const cb = document.querySelector('input[name="diasEnvio"][value="0"]');
     if (cb) cb.checked = true;
     document.getElementById("horaEnvio").value = "09:00";
@@ -842,9 +870,9 @@ function atualizarOpcaoEnvio() {
   // Com checkboxes, o horário é sempre visível
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────
 // ATIVAR MENSAGEM (salva no banco)
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────
 
 async function ativarMensagemConfirmado() {
   const id = _modalMsgAtualId;
@@ -875,6 +903,7 @@ async function ativarMensagemConfirmado() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ configuracaoEnvio }),
+      credentials: "include",
     });
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -898,6 +927,7 @@ async function desativarMensagem(id) {
     const res = await fetch(`${API}/mensagens/${id}/desativar`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
@@ -909,9 +939,9 @@ async function desativarMensagem(id) {
   }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────
 // UTILITÁRIOS
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────
 
 function fecharModal(id) {
   const el = document.getElementById(id);
@@ -922,11 +952,17 @@ function fecharModal(id) {
 
 function escHtml(str) {
   if (!str) return "";
+  var amp = "&" + "amp;";
+  var lt = "&" + "lt;";
+  var gt = "&" + "gt;";
+  var quot = "&" + "quot;";
   return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/[&<>"]/g, function(m) {
+      if (m === "&") return amp;
+      if (m === "<") return lt;
+      if (m === ">") return gt;
+      return quot;
+    });
 }
 
 function mostrarToast(mensagem, tipo = "info") {
@@ -975,9 +1011,9 @@ document.addEventListener("click", function (e) {
   }
 });
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────
 // FUNÇÕES DO DROPDOWN INÍCIO RÁPIDO
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────
 
 function novoAtendimento() {
   window.location.href = "agendamentos-novo.html";
@@ -998,9 +1034,9 @@ function novaContaPagar() {
   alert("Funcionalidade em desenvolvimento.");
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────
 // EXPORTAR (compatibilidade com outros módulos)
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────────────────────────
 window.MarketingSystem = {
   carregarMensagens,
   abrirModalEditar,
@@ -1014,14 +1050,11 @@ window.MarketingSystem = {
 // ──────────────────────────────────────────────────
 
 async function carregarEstatisticasProdutoRecorrente() {
+  if (!EMPRESA_ID) return;
   try {
-    const token =
-      localStorage.getItem("token") || sessionStorage.getItem("token");
     const res = await fetch(
-      `${VPS_URL}/api/produto-lembrete/estatisticas?empresaId=${EMPRESA_ID}`,
-      {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      },
+      `${VPS_URL}/api/produto-lembrete/estatisticas`,
+      { credentials: "include" },
     );
     if (!res.ok) return;
     const data = await res.json();
@@ -1038,6 +1071,7 @@ async function carregarEstatisticasProdutoRecorrente() {
 }
 
 async function carregarTabelaProdutoRecorrente() {
+  if (!EMPRESA_ID) return;
   const tbody = document.getElementById("prTableBody");
   const loadingEl = document.getElementById("prTableLoading");
   const emptyEl = document.getElementById("prTableEmpty");
@@ -1048,13 +1082,9 @@ async function carregarTabelaProdutoRecorrente() {
   tbody.innerHTML = "";
 
   try {
-    const token =
-      localStorage.getItem("token") || sessionStorage.getItem("token");
     const res = await fetch(
-      `${VPS_URL}/api/produto-lembrete?empresaId=${EMPRESA_ID}`,
-      {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      },
+      `${VPS_URL}/api/produto-lembrete`,
+      { credentials: "include" },
     );
     if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
@@ -1156,14 +1186,10 @@ async function dispararTodosAtrasadosPR() {
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
   }
   try {
-    const token =
-      localStorage.getItem("token") || sessionStorage.getItem("token");
     const res = await fetch(`${VPS_URL}/api/produto-lembrete/disparar-agora`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Erro ao disparar");
@@ -1188,14 +1214,10 @@ async function dispararLembreteIndividualPR(id, btnEl) {
     btnEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
   }
   try {
-    const token =
-      localStorage.getItem("token") || sessionStorage.getItem("token");
     const res = await fetch(`${VPS_URL}/api/produto-lembrete/${id}/disparar`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Erro ao disparar");
@@ -1220,11 +1242,9 @@ async function desativarProdutoLembrete(id) {
   )
     return;
   try {
-    const token =
-      localStorage.getItem("token") || sessionStorage.getItem("token");
     const res = await fetch(`${VPS_URL}/api/produto-lembrete/${id}`, {
       method: "DELETE",
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: "include",
     });
     if (!res.ok) throw new Error("HTTP " + res.status);
     carregarTabelaProdutoRecorrente();

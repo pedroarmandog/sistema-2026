@@ -134,7 +134,8 @@ const MENSAGENS_PADRAO = [
  * Retorna o status atual da conexão WhatsApp da empresa.
  */
 exports.statusWhatsapp = async (req, res) => {
-  const empresaId = req.query.empresaId || 1;
+  const empresaId = req.user?.empresaId;
+  if (!empresaId) return res.status(403).json({ erro: "Empresa não identificada" });
   const statusAtual = whatsappService.obterStatus(empresaId);
 
   // Se o cliente em memória está conectado, confiar nele (fonte da verdade)
@@ -176,7 +177,8 @@ exports.statusWhatsapp = async (req, res) => {
  * Inicia a conexão WhatsApp (geração do QR Code).
  */
 exports.conectarWhatsapp = async (req, res) => {
-  const empresaId = req.body.empresaId || 1;
+  const empresaId = req.user?.empresaId;
+  if (!empresaId) return res.status(403).json({ erro: "Empresa não identificada" });
 
   try {
     const resultado = await whatsappService.inicializarCliente(
@@ -194,7 +196,8 @@ exports.conectarWhatsapp = async (req, res) => {
  * Desconecta o WhatsApp da empresa.
  */
 exports.desconectarWhatsapp = async (req, res) => {
-  const empresaId = req.body.empresaId || 1;
+  const empresaId = req.user?.empresaId;
+  if (!empresaId) return res.status(403).json({ erro: "Empresa não identificada" });
 
   try {
     await whatsappService.desconectar(String(empresaId));
@@ -209,7 +212,8 @@ exports.desconectarWhatsapp = async (req, res) => {
  * Limpa sessão corrompida/expirada e reconecta (gera novo QR).
  */
 exports.resetarWhatsapp = async (req, res) => {
-  const empresaId = req.body.empresaId || 1;
+  const empresaId = req.user?.empresaId;
+  if (!empresaId) return res.status(403).json({ erro: "Empresa não identificada" });
 
   try {
     console.log(
@@ -233,7 +237,8 @@ exports.resetarWhatsapp = async (req, res) => {
  * Usado como fallback confiável ao SSE.
  */
 exports.obterQRStatus = (req, res) => {
-  const empresaId = req.query.empresaId || 1;
+  const empresaId = req.user?.empresaId;
+  if (!empresaId) return res.status(403).json({ erro: "Empresa não identificada" });
   const statusAtual = whatsappService.obterStatus(String(empresaId));
   return res.json(statusAtual);
 };
@@ -243,7 +248,8 @@ exports.obterQRStatus = (req, res) => {
  * Server-Sent Events: stream de atualizações de QR Code e status.
  */
 exports.eventoSSE = (req, res) => {
-  const empresaId = req.query.empresaId || 1;
+  const empresaId = req.user?.empresaId;
+  if (!empresaId) return res.status(403).json({ erro: "Empresa não identificada" });
 
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
@@ -286,7 +292,8 @@ exports.eventoSSE = (req, res) => {
  * Lista todas as mensagens (ativas e inativas).
  */
 exports.listarMensagens = async (req, res) => {
-  const empresaId = req.query.empresaId || 1;
+  const empresaId = req.user?.empresaId;
+  if (!empresaId) return res.status(403).json({ erro: "Empresa não identificada" });
 
   try {
     const { MensagemAutomatica } = require("../models");
@@ -481,12 +488,14 @@ exports.uploadImagem = async (req, res) => {
  * Lista envios agendados com filtros opcionais.
  */
 exports.listarEnvios = async (req, res) => {
-  const { status, empresaId, limite = 50 } = req.query;
+  const { status, limite = 50 } = req.query;
+  const empresaId = req.user?.empresaId;
   const { Op } = require("sequelize");
 
   try {
     const { EnvioAgendado } = require("../models");
-    const where = { empresaId: Number(empresaId || 1) };
+    if (!empresaId) return res.status(403).json({ erro: "Empresa não identificada" });
+    const where = { empresaId: Number(empresaId) };
 
     if (status) where.status = status;
 
@@ -507,12 +516,14 @@ exports.listarEnvios = async (req, res) => {
  * Lista logs de envio.
  */
 exports.listarLogs = async (req, res) => {
-  const { empresaId, limite = 100 } = req.query;
+  const { limite = 100 } = req.query;
+  const empresaId = req.user?.empresaId;
 
   try {
     const { LogEnvio } = require("../models");
+    if (!empresaId) return res.status(403).json({ erro: "Empresa não identificada" });
     const logs = await LogEnvio.findAll({
-      where: { empresaId: Number(empresaId || 1) },
+      where: { empresaId: Number(empresaId) },
       order: [["createdAt", "DESC"]],
       limit: Number(limite),
     });
@@ -528,28 +539,29 @@ exports.listarLogs = async (req, res) => {
  * Retorna contadores de mensagens para o dashboard.
  */
 exports.estatisticas = async (req, res) => {
-  const empresaId = req.query.empresaId || 1;
+  const empresaId = req.user?.empresaId;
+  if (!empresaId) return res.status(403).json({ erro: "Empresa não identificada" });
 
   try {
     const { EnvioAgendado, MensagemAutomatica } = require("../models");
 
     const [totalAtivas, totalInativas, enviados, pendentes, erros] =
       await Promise.all([
-        MensagemAutomatica.count({
-          where: { empresaId: Number(empresaId), ativo: true },
-        }),
-        MensagemAutomatica.count({
-          where: { empresaId: Number(empresaId), ativo: false },
-        }),
-        EnvioAgendado.count({
-          where: { empresaId: Number(empresaId), status: "enviado" },
-        }),
-        EnvioAgendado.count({
-          where: { empresaId: Number(empresaId), status: "pendente" },
-        }),
-        EnvioAgendado.count({
-          where: { empresaId: Number(empresaId), status: "erro" },
-        }),
+    MensagemAutomatica.count({
+      where: { empresaId: Number(empresaId), ativo: true },
+    }),
+    MensagemAutomatica.count({
+      where: { empresaId: Number(empresaId), ativo: false },
+    }),
+    EnvioAgendado.count({
+      where: { empresaId: Number(empresaId), status: "enviado" },
+    }),
+    EnvioAgendado.count({
+      where: { empresaId: Number(empresaId), status: "pendente" },
+    }),
+    EnvioAgendado.count({
+      where: { empresaId: Number(empresaId), status: "erro" },
+    }),
       ]);
 
     return res.json({ totalAtivas, totalInativas, enviados, pendentes, erros });

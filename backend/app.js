@@ -1090,7 +1090,7 @@ app.get("/api/test", (req, res) => {
 const petTagsRoutes = require("./routes/petTagsRoutes");
 // Rotas do módulo de Marketing/WhatsApp
 const marketingRoutes = require("./routes/marketingRoutes");
-app.use("/api/marketing", marketingRoutes);
+app.use("/api/marketing", authUser, marketingRoutes);
 
 app.use("/api/clientes", clienteRoutes);
 app.use("/api/pets", petRoutes);
@@ -1210,7 +1210,7 @@ app.use("/api/admin", adminRoutes);
 
 // Lembrete Automático de Produto Recorrente
 const produtoLembreteRoutes = require("./routes/produtoLembreteRoutes");
-app.use("/api/produto-lembrete", produtoLembreteRoutes);
+app.use("/api/produto-lembrete", authUser, produtoLembreteRoutes);
 
 // Endpoint compatível com frontend: buscar produtos com preço alterado
 app.get("/api/editar-produto", async (req, res) => {

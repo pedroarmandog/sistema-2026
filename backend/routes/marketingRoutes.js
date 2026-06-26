@@ -69,10 +69,13 @@ router.get("/estatisticas", marketingController.estatisticas);
 // ── Fila Pendente (controle manual) ───────────────
 router.get("/fila-pendente", async (req, res) => {
   try {
+    const empresaId = req.user?.empresaId;
+    if (!empresaId) return res.status(403).json({ erro: "Empresa não identificada" });
     const { EnvioAgendado } = require("../models");
     const { Op } = require("sequelize");
     const pendentes = await EnvioAgendado.findAll({
       where: {
+        empresaId: Number(empresaId),
         status: "pendente",
         dataAgendada: { [Op.lte]: new Date() },
       },
@@ -102,10 +105,13 @@ router.get("/fila-pendente", async (req, res) => {
 // Enviar um único envio pendente
 router.post("/fila-pendente/enviar-um", async (req, res) => {
   try {
+    const empresaId = req.user?.empresaId;
+    if (!empresaId) return res.status(403).json({ erro: "Empresa não identificada" });
     const { EnvioAgendado, LogEnvio } = require("../models");
     const { Op } = require("sequelize");
     const envio = await EnvioAgendado.findOne({
       where: {
+        empresaId: Number(empresaId),
         status: "pendente",
         dataAgendada: { [Op.lte]: new Date() },
       },
@@ -115,8 +121,8 @@ router.post("/fila-pendente/enviar-um", async (req, res) => {
       return res.json({ message: "Nenhum envio pendente", enviado: false });
     }
     const whatsappService = require("../services/whatsappService");
-    const empresaId = String(envio.empresaId || 1);
-    if (!whatsappService.isConectado(empresaId)) {
+    const empresaIdStr = String(envio.empresaId || 1);
+    if (!whatsappService.isConectado(empresaIdStr)) {
       return res.status(400).json({ error: "WhatsApp não conectado" });
     }
     // Processar o envio
@@ -125,7 +131,7 @@ router.post("/fila-pendente/enviar-um", async (req, res) => {
       tentativas: envio.tentativas + 1,
     });
     const resultado = await whatsappService.enviarMensagem(
-      empresaId,
+      empresaIdStr,
       envio.telefoneDestino,
       envio.conteudoFinal,
       envio.imagemPath || null,
@@ -158,8 +164,11 @@ router.post("/fila-pendente/enviar-um", async (req, res) => {
 // Enviar todos os pendentes
 router.post("/fila-pendente/enviar-todos", async (req, res) => {
   try {
+    const empresaId = req.user?.empresaId;
+    if (!empresaId) return res.status(403).json({ erro: "Empresa não identificada" });
     const { processarFila } = require("../services/whatsappQueue");
-    await processarFila();
+    // processarFila já filtra por empresaId atualmente (ver whatsappQueue)
+    await processarFila(empresaId);
     res.json({ message: "Fila processada" });
   } catch (err) {
     console.error("[Marketing] Erro ao enviar todos:", err.message);
@@ -170,12 +179,15 @@ router.post("/fila-pendente/enviar-todos", async (req, res) => {
 // Cancelar todos os pendentes
 router.post("/fila-pendente/cancelar-todos", async (req, res) => {
   try {
+    const empresaId = req.user?.empresaId;
+    if (!empresaId) return res.status(403).json({ erro: "Empresa não identificada" });
     const { EnvioAgendado } = require("../models");
     const { Op } = require("sequelize");
     const [count] = await EnvioAgendado.update(
       { status: "cancelado" },
       {
         where: {
+          empresaId: Number(empresaId),
           status: "pendente",
           dataAgendada: { [Op.lte]: new Date() },
         },
