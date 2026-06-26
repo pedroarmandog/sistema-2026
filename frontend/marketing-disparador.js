@@ -396,7 +396,7 @@
           escapeHtml(it.nome || "") +
           "</strong>" +
           '<br/><small style="color:#666">#' +
-          it.id +
+          (it.numeroOrdem || it.id) +
           " • " +
           escapeHtml(it.status || "desconectado") +
           (it.numero ? " • " + it.numero : "") +
@@ -763,7 +763,7 @@
           .map(function (i) {
             return (
               "#" +
-              i.id +
+              (i.numeroOrdem || i.id) +
               " - " +
               (i.nome || "Sem nome") +
               " (" +

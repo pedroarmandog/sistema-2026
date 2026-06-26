@@ -25,6 +25,12 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING(200),
         allowNull: true,
       },
+      // Número sequencial por empresa (ex: 1, 2, 3...) — resetado por empresa
+      numeroOrdem: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 1,
+      },
       // Número conectado (ex: 5527999104837)
       numero: {
         type: DataTypes.STRING(20),

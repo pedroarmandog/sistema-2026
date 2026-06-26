@@ -303,7 +303,7 @@ const contaReceberRoutes = require("./routes/contaReceberRoutes");
 // Disparador de Mensagens (Marketing)
 app.use("/api/disparador", disparadorRoutes);
 // Instâncias de WhatsApp (Puppeteer / sessões)
-app.use("/api/instancias", instanciaRoutes);
+app.use("/api/instancias", authUser, instanciaRoutes);
 // Integrar módulo Entrada de Mercadoria (Prisma + TypeScript)
 // entrada-mercadoria (compiled router)
 try {
