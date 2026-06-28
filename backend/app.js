@@ -1090,7 +1090,7 @@ app.get("/api/test", (req, res) => {
 const petTagsRoutes = require("./routes/petTagsRoutes");
 // Rotas do módulo de Marketing/WhatsApp
 const marketingRoutes = require("./routes/marketingRoutes");
-app.use("/api/marketing", marketingRoutes);
+app.use("/api/marketing", authUser, marketingRoutes);
 
 app.use("/api/clientes", clienteRoutes);
 app.use("/api/pets", petRoutes);
