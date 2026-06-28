@@ -1090,7 +1090,7 @@ app.get("/api/test", (req, res) => {
 const petTagsRoutes = require("./routes/petTagsRoutes");
 // Rotas do módulo de Marketing/WhatsApp
 const marketingRoutes = require("./routes/marketingRoutes");
-app.use("/api/marketing", authUser, marketingRoutes);
+app.use("/api/marketing", marketingRoutes);
 
 app.use("/api/clientes", clienteRoutes);
 app.use("/api/pets", petRoutes);
@@ -1316,6 +1316,39 @@ async function syncAllTables() {
       }
     } catch (e) {
       console.warn("  ⚠️ Migration encerrado_em:", e.message);
+    }
+
+    // 0d) Migration: numeroOrdem em whatsapp_sessions (numeração por empresa)
+    try {
+      const [colsOrd] = await sequelize.query(
+        "SHOW COLUMNS FROM whatsapp_sessions LIKE 'numeroOrdem'",
+      );
+      if (colsOrd.length === 0) {
+        await sequelize.query(
+          "ALTER TABLE whatsapp_sessions ADD COLUMN numeroOrdem INT NOT NULL DEFAULT 1 AFTER nome",
+        );
+        console.log(
+          "  ✅ Migration: numeroOrdem adicionado em whatsapp_sessions",
+        );
+        // Recalcular números existentes por empresa
+        await sequelize.query(`
+          UPDATE whatsapp_sessions t
+          JOIN (
+            SELECT id, empresaId,
+              ROW_NUMBER() OVER (PARTITION BY empresaId ORDER BY createdAt ASC) AS num
+            FROM whatsapp_sessions
+          ) sub ON t.id = sub.id
+          SET t.numeroOrdem = sub.num
+          WHERE t.createdAt IS NOT NULL
+        `);
+        console.log(
+          "  ✅ Migration: numeroOrdem recalculado para registros existentes",
+        );
+      } else {
+        console.log("  ℹ️ numeroOrdem já existe em whatsapp_sessions — ok");
+      }
+    } catch (e) {
+      console.warn("  ⚠️ Migration numeroOrdem:", e.message);
     }
 
     // 1) Sync principal: cobre Cliente + todos os factory models (Usuario, Empresa, etc.)
@@ -1652,6 +1685,33 @@ function startServer() {
       }
     } catch (e) {
       console.warn("⚠️ Migration encerrado_em no startup:", e.message);
+    }
+
+    // Migration: numeroOrdem em whatsapp_sessions (roda sempre no startup)
+    try {
+      const [colsOrd2] = await sequelize.query(
+        "SHOW COLUMNS FROM whatsapp_sessions LIKE 'numeroOrdem'",
+      );
+      if (colsOrd2.length === 0) {
+        await sequelize.query(
+          "ALTER TABLE whatsapp_sessions ADD COLUMN numeroOrdem INT NOT NULL DEFAULT 1 AFTER nome",
+        );
+        console.log("✅ Migration: numeroOrdem adicionado em whatsapp_sessions");
+        // Recalcular números existentes por empresa
+        await sequelize.query(`
+          UPDATE whatsapp_sessions t
+          JOIN (
+            SELECT id, empresaId,
+              ROW_NUMBER() OVER (PARTITION BY empresaId ORDER BY createdAt ASC) AS num
+            FROM whatsapp_sessions
+          ) sub ON t.id = sub.id
+          SET t.numeroOrdem = sub.num
+          WHERE t.createdAt IS NOT NULL
+        `);
+        console.log("✅ Migration: numeroOrdem recalculado");
+      }
+    } catch (e) {
+      console.warn("⚠️ Migration numeroOrdem no startup:", e.message);
     }
 
     // Garantir tabela produto_lembrete_recorrente

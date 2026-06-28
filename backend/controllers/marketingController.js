@@ -248,7 +248,11 @@ exports.obterQRStatus = (req, res) => {
  * Server-Sent Events: stream de atualizações de QR Code e status.
  */
 exports.eventoSSE = (req, res) => {
-  const empresaId = req.user?.empresaId;
+  // Aceitar empresaId do query param quando for instância do disparador (prefixo disp_)
+  // ou do JWT para marketing normal.
+  const empresaId = req.query.empresaId && String(req.query.empresaId).startsWith("disp_")
+    ? req.query.empresaId
+    : req.user?.empresaId;
   if (!empresaId) return res.status(403).json({ erro: "Empresa não identificada" });
 
   res.setHeader("Content-Type", "text/event-stream");
