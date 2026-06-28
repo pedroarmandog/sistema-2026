@@ -471,6 +471,8 @@
     } catch (e) {
       // Ignorar erro de rede — prosseguir com logout local
     }
+    // Limpar cores personalizadas do cache local ao sair
+    try { localStorage.removeItem("systemColors"); } catch (e) {}
     // Limpar cookies de sessão
     document.cookie =
       "usuarioLogadoId=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/";

@@ -1261,29 +1261,41 @@
 
         let currentColors = JSON.parse(JSON.stringify(DEFAULT_COLORS));
 
-        // Carregar cores salvas do localStorage ou servidor
-        function loadSavedColors() {
+        // Carregar cores salvas do servidor (prioridade) ou localStorage (fallback)
+        async function loadSavedColors() {
+            // Tentar servidor primeiro com timeout de 300ms
+            try {
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), 300);
+                const response = await fetch('/api/usuarios/preferencias', {
+                    credentials: 'include',
+                    signal: controller.signal
+                });
+                clearTimeout(timer);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data && data.systemColors) {
+                        currentColors = JSON.parse(JSON.stringify(data.systemColors));
+                        localStorage.setItem('systemColors', JSON.stringify(currentColors));
+                        applyColorsToSystem();
+                        renderColors();
+                        return; // servidor venceu
+                    }
+                }
+            } catch (_) {
+                // timeout ou erro de rede — continuar para fallback
+            }
+
+            // Fallback: localStorage (offline, timeout, erro)
             const saved = localStorage.getItem('systemColors');
             if (saved) {
                 try {
                     currentColors = JSON.parse(saved);
                     applyColorsToSystem();
                 } catch (e) {
-                    console.error('Erro ao carregar cores salvas:', e);
+                    console.error('Erro ao carregar cores do localStorage:', e);
                 }
             }
-            // Buscar do servidor se autenticado e sobrescrever
-            fetch('/api/usuarios/preferencias', { credentials: 'include' })
-                .then(r => r.json())
-                .then(data => {
-                    if (data && data.systemColors) {
-                        currentColors = JSON.parse(JSON.stringify(data.systemColors));
-                        localStorage.setItem('systemColors', JSON.stringify(currentColors));
-                        applyColorsToSystem();
-                        renderColors();
-                    }
-                })
-                .catch(() => {});
         }
 
         // Aplicar cores ao sistema (CSS Variables)
@@ -1327,13 +1339,22 @@
         }
 
         // Confirmar restauração
-        function confirmarRestauracao() {
+        async function confirmarRestauracao() {
             currentColors = JSON.parse(JSON.stringify(DEFAULT_COLORS));
             localStorage.removeItem('systemColors');
             applyColorsToSystem();
             renderColors();
             closeConfirmModal();
             showNotification('Cores padrão restauradas com sucesso!', 'success');
+            // Persistir restauração no servidor para refletir em outros dispositivos
+            try {
+                await fetch('/api/usuarios/preferencias', {
+                    method: 'PUT',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ systemColors: DEFAULT_COLORS })
+                });
+            } catch (_) {}
         }
 
         // Atualizar cor

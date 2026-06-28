@@ -1,4 +1,5 @@
 // Script global para aplicar cores personalizadas do sistema
+// PRIORIDADE: servidor > localStorage (fallback temporário)
 (function () {
   "use strict";
   try {
@@ -39,39 +40,79 @@
     }
   }
 
+  // Verificar se o usuário está autenticado (cookie JWT ou legado)
+  function isAuthenticated() {
+    return (
+      document.cookie.indexOf("pethub_token=") !== -1 ||
+      document.cookie.indexOf("usuarioLogadoId=") !== -1
+    );
+  }
+
+  // Buscar cores do servidor com timeout
+  async function fetchColorsFromServer(timeoutMs) {
+    return new Promise((resolve) => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+      fetch("/api/usuarios/preferencias", {
+        credentials: "include",
+        signal: controller.signal,
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          clearTimeout(timer);
+          if (data && data.systemColors) {
+            resolve(data.systemColors);
+          } else {
+            resolve(null);
+          }
+        })
+        .catch(() => {
+          clearTimeout(timer);
+          resolve(null);
+        });
+    });
+  }
+
   // Aplicar cores salvas ao carregar a página
-  function applyCustomColors() {
-    // 1. Tentar aplicar do localStorage imediatamente (funciona offline)
+  async function applyCustomColors() {
+    // Se autenticado, priorizar servidor com timeout de 300ms
+    if (isAuthenticated()) {
+      const serverColors = await fetchColorsFromServer(300);
+      if (serverColors) {
+        // Servidor respondeu dentro do timeout → usar dados do servidor
+        localStorage.setItem("systemColors", JSON.stringify(serverColors));
+        applyColorsFromObj(serverColors);
+        updateInlineStylesFromObj(serverColors);
+        console.log("✅ Cores carregadas do servidor (prioridade)");
+        return;
+      }
+    }
+
+    // Fallback: localStorage (offline, timeout, ou não autenticado)
     const savedColors = localStorage.getItem("systemColors");
     if (savedColors) {
       try {
         const colors = JSON.parse(savedColors);
         applyColorsFromObj(colors);
-        console.log("✅ Cores personalizadas aplicadas com sucesso!");
+        console.log("✅ Cores aplicadas do localStorage (fallback)");
       } catch (error) {
-        console.error("❌ Erro ao aplicar cores personalizadas:", error);
+        console.error("❌ Erro ao aplicar cores do localStorage:", error);
       }
     }
 
-    // 2. Em background, buscar do servidor se autenticado e sobrescrever
-    try {
-      if (document.cookie.indexOf("pethub_token=") !== -1 || document.cookie.indexOf("usuarioLogadoId=") !== -1) {
-        fetch("/api/usuarios/preferencias", { credentials: "include" })
-          .then((r) => r.json())
-          .then((data) => {
-            if (data && data.systemColors) {
-              localStorage.setItem(
-                "systemColors",
-                JSON.stringify(data.systemColors),
-              );
-              applyColorsFromObj(data.systemColors);
-              // também reaplicar estilos inline
-              updateInlineStylesFromObj(data.systemColors);
-            }
-          })
-          .catch(() => {});
-      }
-    } catch (_) {}
+    // Se autenticado mas o servidor não respondeu a tempo, tentar novamente em background
+    // para reaplicar quando a resposta chegar
+    if (isAuthenticated()) {
+      fetchColorsFromServer(10000).then((serverColors) => {
+        if (serverColors) {
+          localStorage.setItem("systemColors", JSON.stringify(serverColors));
+          applyColorsFromObj(serverColors);
+          updateInlineStylesFromObj(serverColors);
+          console.log("✅ Cores reaplicadas do servidor (resposta tardia)");
+        }
+      });
+    }
   }
 
   // Aplicar cores imediatamente

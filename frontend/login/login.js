@@ -165,9 +165,13 @@ document
         return;
       }
 
-      // Login ok — limpar flag de bloqueio (caso tenha sido reativada)
+      // Login ok — limpar flag de bloqueio e cores antigas de outro usuário
       try {
         sessionStorage.removeItem("empresa_bloqueada");
+      } catch (e) {}
+      // Remover cores do localStorage para garantir que o novo login carregue do servidor
+      try {
+        localStorage.removeItem("systemColors");
       } catch (e) {}
 
       // Salvar informações nos cookies (não no localStorage)

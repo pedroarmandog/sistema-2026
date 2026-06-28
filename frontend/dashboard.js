@@ -2423,6 +2423,8 @@ function escapeHtml(text) {
     } catch (e) {
       // Ignorar erro — prosseguir com logout local
     }
+    // Limpar cores personalizadas do cache local ao sair
+    try { localStorage.removeItem("systemColors"); } catch (e) {}
     deleteCookie("usuarioLogadoId");
     deleteCookie("usuarioLogadoNome");
     window.location.href = "/login/login.html";
