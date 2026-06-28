@@ -1696,7 +1696,9 @@ function startServer() {
         await sequelize.query(
           "ALTER TABLE whatsapp_sessions ADD COLUMN numeroOrdem INT NOT NULL DEFAULT 1 AFTER nome",
         );
-        console.log("✅ Migration: numeroOrdem adicionado em whatsapp_sessions");
+        console.log(
+          "✅ Migration: numeroOrdem adicionado em whatsapp_sessions",
+        );
         // Recalcular números existentes por empresa
         await sequelize.query(`
           UPDATE whatsapp_sessions t

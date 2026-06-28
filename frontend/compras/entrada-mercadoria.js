@@ -2115,7 +2115,42 @@ function configurarEventListenersEntrada() {
 
         // salvar no sessionStorage e redirecionar para entrada-manual com itens atualizados
         parsed.items = finalItems;
-        // tentar criar rascunho no servidor com os itens ajustados
+
+        // Se a entrada já existe (reabertura de modal), ATUALIZAR via PUT
+        const entradaExistenteId = parsed._entradaId;
+        if (entradaExistenteId) {
+          try {
+            // Atualizar entrada existente via PUT
+            const payload = Object.assign({}, parsed, {
+              itens: finalItems,
+              situacao: "pendente",
+            });
+            // Remover campos de controle interno
+            delete payload._entradaId;
+            delete payload.candidates;
+            const res = await fetch("/api/entrada/manual/" + encodeURIComponent(entradaExistenteId), {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+            if (res.ok) {
+              try {
+                sessionStorage.removeItem("mappingSelections");
+                console.log("🧹 Seleções limpas após atualizar");
+              } catch (e) {}
+              overlay.remove();
+              window.location.href =
+                "./entrada-manual.html?id=" + encodeURIComponent(entradaExistenteId);
+              return;
+            } else {
+              console.warn("Falha ao atualizar entrada existente:", res.status, res.statusText);
+            }
+          } catch (e) {
+            console.warn("Erro ao atualizar entrada existente:", e);
+          }
+        }
+
+        // Se não tem _entradaId ou falhou atualização, tentar criar novo rascunho
         try {
           const created = await criarRascunhoNoServidor(parsed);
           if (created && created.id) {
@@ -3012,9 +3047,16 @@ async function abrirRascunho(entrada) {
       return;
     }
 
-    // Se já temos um ID, preferir abrir pelo ID no servidor
+    // Se já temos um ID, verificar se é uma importação XML pendente
     const existingId = dadosParaEditar && (dadosParaEditar.id || entrada.id);
     if (existingId) {
+      // Verificar se a entrada veio de XML e possui itens pendentes de mapeamento
+      const xmlPendente = await verificarEntradaXmlPendente(existingId);
+      if (xmlPendente) {
+        return; // verificarEntradaXmlPendente já tratou o redirecionamento/modal
+      }
+
+      // Se não for XML pendente, segue fluxo normal
       window.location.href =
         "./entrada-manual.html?id=" + encodeURIComponent(existingId);
       return;
@@ -3042,6 +3084,72 @@ async function abrirRascunho(entrada) {
   } catch (e) {
     console.error("Erro ao abrir entrada:", e);
     alert("Erro ao abrir entrada: " + e.message);
+  }
+}
+
+/**
+ * Verifica se a entrada com o ID informado é uma importação XML pendente.
+ * Se for, reabre o modal de mapeamento e retorna true.
+ * Caso contrário, retorna false.
+ */
+async function verificarEntradaXmlPendente(entradaId) {
+  try {
+    // Buscar entrada completa no servidor
+    const res = await fetch("/api/entrada/manual/" + encodeURIComponent(entradaId));
+    if (!res.ok) return false;
+    const entradaCompleta = await res.json();
+    if (!entradaCompleta) return false;
+
+    // Critérios para identificar importação XML pendente:
+    // 1. Situação é "pendente"
+    // 2. Possui chaveAcesso (indica que veio de XML/NF-e)
+    // 3. Possui itens
+    const situacao = (entradaCompleta.situacao || entradaCompleta.status || "").toLowerCase();
+    const chaveAcesso = entradaCompleta.chaveAcesso || entradaCompleta.chNFe || "";
+    const itens = entradaCompleta.itens || entradaCompleta.items || [];
+
+    if (situacao !== "pendente" || !chaveAcesso || itens.length === 0) {
+      return false;
+    }
+
+    // Verificar se há itens NÃO mapeados (sem matchedId)
+    const itensNaoMapeados = itens.filter(function(it) {
+      return !it.matchedId && !it.produtoSistemaId;
+    });
+
+    if (itensNaoMapeados.length === 0) {
+      // Todos os itens já estão mapeados, pode seguir para entrada-manual
+      return false;
+    }
+
+    // Construir objeto parsed a partir dos dados do banco
+    const parsed = {
+      fornecedor: entradaCompleta.fornecedor || entradaCompleta.fornecedorNome || "",
+      numero: entradaCompleta.numero || "",
+      dataEmissao: entradaCompleta.dataEmissao || "",
+      chaveAcesso: chaveAcesso,
+      valorTotal: entradaCompleta.valorTotal || 0,
+      items: itens,
+      _entradaId: entradaId, // marcar para saber que é atualização, não criação
+    };
+
+    console.log("🔄 Reabrindo modal de mapeamento para entrada XML pendente:", parsed);
+
+    // Buscar candidatos para os itens não mapeados
+    try {
+      const candidates = await findCandidatesForItems(parsed.items);
+      // Abrir modal com os dados da entrada existente
+      showProductMappingModal(parsed, candidates || []);
+      return true;
+    } catch (e) {
+      console.warn("Erro ao buscar candidatos para reabertura:", e);
+      // Fallback: abrir modal sem candidatos
+      showProductMappingModal(parsed, []);
+      return true;
+    }
+  } catch (e) {
+    console.warn("Erro ao verificar entrada XML pendente:", e);
+    return false;
   }
 }
 
