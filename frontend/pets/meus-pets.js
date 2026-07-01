@@ -688,7 +688,7 @@ function renderPetsTable(pets) {
           const q = clienteId
             ? `?pet_id=${encodeURIComponent(petId)}&cliente_id=${encodeURIComponent(clienteId)}`
             : `?pet_id=${encodeURIComponent(petId)}`;
-          window.location.href = `/frontend/pets/cadastro-pet.html${q}`;
+          window.location.href = `/pets/pet-details.html${q}`;
         } else if (action === "reativar") {
           (async function doReativar(id) {
             try {
