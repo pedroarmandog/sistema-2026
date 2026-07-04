@@ -736,6 +736,97 @@ exports.contasAPagarHoje = async (req, res) => {
 };
 
 // Indicadores do atendimento (agendados, checkin, prontos)
+// Pets no estabelecimento agrupados por status (mobile dashboard)
+exports.petsNoEstabelecimento = async (req, res) => {
+  try {
+    const empresaId = req.user?.empresaId;
+    if (!empresaId) {
+      return res.status(403).json({ erro: "Empresa não identificada" });
+    }
+
+    const cacheKey = `dashboard:petsNoEstab:${empresaId}`;
+    const cached = cache.get(cacheKey);
+    if (cached) return res.json(cached);
+
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const amanha = new Date(hoje);
+    amanha.setDate(amanha.getDate() + 1);
+
+    const table =
+      typeof Agendamento.getTableName === "function"
+        ? Agendamento.getTableName()
+        : "agendamentos";
+
+    // Contagens por status
+    const sql = `SELECT 
+      SUM(CASE WHEN status='agendado'  THEN 1 ELSE 0 END) AS agendados,
+      SUM(CASE WHEN status='checkin'   THEN 1 ELSE 0 END) AS checkin,
+      SUM(CASE WHEN status='pronto'    THEN 1 ELSE 0 END) AS pronto,
+      SUM(CASE WHEN status='concluido' THEN 1 ELSE 0 END) AS concluido
+      FROM ${table}
+      WHERE dataAgendamento >= :hoje AND dataAgendamento < :amanha
+        AND empresa_id = :empresaId
+        AND status NOT IN ('cancelado')`;
+
+    const [rows] = await sequelize.query(sql, {
+      replacements: {
+        hoje: hoje.toISOString().slice(0, 19).replace("T", " "),
+        amanha: amanha.toISOString().slice(0, 19).replace("T", " "),
+        empresaId,
+      },
+      type: sequelize.QueryTypes.SELECT,
+    });
+
+    // Lista dos agendamentos ativos (checkin + pronto) com dados do pet
+    const agendamentosAtivos = await Agendamento.findAll({
+      where: {
+        dataAgendamento: { [Op.gte]: hoje, [Op.lt]: amanha },
+        empresa_id: empresaId,
+        status: { [Op.in]: ["checkin", "pronto"] },
+      },
+      include: [
+        {
+          model: Pet,
+          as: "pet",
+          attributes: ["id", "nome", "raca", "foto_url"],
+          required: false,
+        },
+      ],
+      attributes: ["id", "horario", "status", "tipoServico", "nomeCliente"],
+      order: [["horario", "ASC"]],
+      limit: 50,
+    });
+
+    const result = {
+      agendados: Number(rows?.agendados || 0),
+      checkin: Number(rows?.checkin || 0),
+      pronto: Number(rows?.pronto || 0),
+      concluido: Number(rows?.concluido || 0),
+      lista: agendamentosAtivos.map((ag) => ({
+        id: ag.id,
+        horario: ag.horario,
+        status: ag.status,
+        servico: ag.tipoServico,
+        cliente: ag.nomeCliente,
+        pet: ag.pet
+          ? {
+              id: ag.pet.id,
+              nome: ag.pet.nome,
+              raca: ag.pet.raca,
+              fotoUrl: ag.pet.foto_url,
+            }
+          : null,
+      })),
+    };
+
+    cache.set(cacheKey, result, 8); // cache curto: 8s para dados em tempo real
+    res.json(result);
+  } catch (error) {
+    return handleError(res, "Erro ao buscar pets no estabelecimento", error);
+  }
+};
+
 exports.indicadoresAtendimento = async (req, res) => {
   try {
     const hoje = new Date();

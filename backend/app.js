@@ -189,19 +189,25 @@ app.get("/favicon.ico", (req, res) => {
 
 // Middleware para injetar system-modal.js em todas as páginas HTML
 // (garante que o override de alert/confirm/prompt carregue antes de qualquer JS)
+// ⚠️ NÃO injetar scripts que possam quebrar o Mobile PWA (fetch-ratelimiter).
 const fs = require("fs");
 app.use((req, res, next) => {
   if (!req.path.endsWith(".html")) return next();
   const filePath = path.join(__dirname, "../frontend", req.path);
   fs.readFile(filePath, "utf8", (err, html) => {
     if (err) return next(); // arquivo não encontrado, deixa express.static ou 404 tratar
+
+    // Para o Mobile PWA, injetar APENAS system-modal (não fetch-ratelimiter)
+    // que interfere com o MobileApi e causa redirect loops.
+    const isMobile = req.path.startsWith("/mobile/");
     const tagsToInject = [];
     if (!html.includes("system-modal.js")) {
       tagsToInject.push(
         '<script src="/components/system-modal.js" data-system-modal="1"></script>',
       );
     }
-    if (!html.includes("fetch-ratelimiter.js")) {
+    // fetch-ratelimiter NÃO é injetado no Mobile PWA para não conflitar com o MobileApi
+    if (!isMobile && !html.includes("fetch-ratelimiter.js")) {
       tagsToInject.push(
         '<script src="/components/fetch-ratelimiter.js" data-fetch-ratelimiter="1"></script>',
       );
@@ -300,6 +306,8 @@ const fornecedorRoutes = require("./routes/fornecedorRoutes");
 const categoriaFinanceiraRoutes = require("./routes/categoriaFinanceiraRoutes");
 const periodicidadeRoutes = require("./routes/periodicidadeRoutes");
 const contaReceberRoutes = require("./routes/contaReceberRoutes");
+// PWA Mobile — Push Notifications
+const pushNotificationRoutes = require("./routes/pushNotificationRoutes");
 // Disparador de Mensagens (Marketing)
 app.use("/api/disparador", disparadorRoutes);
 // Instâncias de WhatsApp (Puppeteer / sessões)
@@ -1159,6 +1167,8 @@ const sessaoRoutes = require("./routes/sessaoRoutes");
 app.use("/api/sessoes", sessaoRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/dashboard/full", dashboardFullRoutes);
+// PWA Mobile — Push Notifications
+app.use("/api/push", pushNotificationRoutes);
 
 // Proxy público para busca de CEP via ViaCEP (sem autenticação)
 app.get("/api/cep/:cep", async (req, res) => {

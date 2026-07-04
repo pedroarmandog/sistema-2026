@@ -291,8 +291,14 @@ exports.login = async (req, res) => {
     }
 
     // Cookie HttpOnly (seguro) — enviado automaticamente pelo navegador
-    const _cookieDomain = process.env.COOKIE_DOMAIN || null;
-    const _cookieSecure = process.env.COOKIE_SECURE === "1";
+    // ⚠️ Em localhost (desenvolvimento), NÃO usar Secure nem Domain específico
+    // para que o cookie funcione corretamente em HTTP (não HTTPS).
+    const _isLocalhost =
+      req.headers.host?.includes("localhost") ||
+      req.headers.host?.includes("127.0.0.1") ||
+      req.headers.host?.includes("::1");
+    const _cookieDomain = !_isLocalhost ? (process.env.COOKIE_DOMAIN || null) : null;
+    const _cookieSecure = !_isLocalhost ? (process.env.COOKIE_SECURE === "1") : false;
     const _jwtCookieOptions = {
       httpOnly: true,
       sameSite: process.env.COOKIE_SAMESITE || "Lax",

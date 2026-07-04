@@ -293,6 +293,38 @@ exports.criarVenda = async (req, res) => {
     }
 
     res.status(201).json(venda);
+
+    // ── Push: pagamento_recebido ────────────────────────────────────
+    setImmediate(async () => {
+      try {
+        const pushService = require("../services/pushNotificationService");
+        const empresaId = venda.empresa_id || req.user?.empresaId;
+        if (empresaId) {
+          let valorTotal = 0;
+          try {
+            const totais = venda.totais
+              ? typeof venda.totais === "string"
+                ? JSON.parse(venda.totais)
+                : venda.totais
+              : null;
+            valorTotal =
+              totais?.final ||
+              totais?.totalFinal ||
+              totais?.total ||
+              venda.valor ||
+              0;
+          } catch (_) {}
+          await pushService.notificarEmpresa(empresaId, "pagamento_recebido", {
+            valor: valorTotal,
+          });
+        }
+      } catch (e) {
+        console.warn(
+          "[Push] Erro ao enviar push pagamento_recebido:",
+          e.message,
+        );
+      }
+    });
   } catch (error) {
     console.error("Erro ao criar venda:", error);
     res.status(500).json({ erro: "Erro ao criar venda" });

@@ -61,4 +61,10 @@ router.get(
   dashboardController.indicadoresAtendimento,
 );
 
+// Rota para pets no estabelecimento agrupados por status (mobile dashboard)
+router.get(
+  "/pets-no-estabelecimento",
+  dashboardController.petsNoEstabelecimento,
+);
+
 module.exports = router;

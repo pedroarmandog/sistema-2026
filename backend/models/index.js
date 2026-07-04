@@ -142,6 +142,11 @@ SessaoAtiva.belongsTo(EmpresaPainel, {
 });
 console.log("✅ Associações EmpresaPainel ↔ SessaoAtiva configuradas");
 
+// Push Notifications
+const PushSubscriptionFactory = require("./PushSubscription");
+const PushSubscription = PushSubscriptionFactory(sequelize);
+console.log("✅ Modelo PushSubscription inicializado");
+
 // Exportar todos os modelos
 module.exports = {
   Cliente,
@@ -191,5 +196,7 @@ module.exports = {
   BackupEmpresa,
   SessaoAtiva,
   ProdutoLembreteRecorrente,
+  // PWA Push Notifications
+  PushSubscription,
   sequelize,
 };

@@ -99,13 +99,7 @@ router.get("/", async (req, res) => {
         {
           model: Pet,
           as: "pet",
-          attributes: [
-            "id",
-            "nome",
-            "raca",
-            "observacao",
-            "cliente_id",
-          ],
+          attributes: ["id", "nome", "raca", "observacao", "cliente_id"],
           include: [
             {
               model: Cliente,
@@ -392,6 +386,23 @@ router.post("/", async (req, res) => {
         );
       }
     });
+
+    // ── Push: novo_agendamento ──────────────────────────────────────
+    setImmediate(async () => {
+      try {
+        const pushService = require("../services/pushNotificationService");
+        const empresaId = agendamentoCriado.empresa_id || req.user?.empresaId;
+        if (empresaId) {
+          await pushService.notificarEmpresa(empresaId, "novo_agendamento", {
+            petNome: agendamentoCriado.pet?.nome || "",
+            horario: agendamentoCriado.horario || "",
+            servico: agendamentoCriado.servico || "",
+          });
+        }
+      } catch (e) {
+        console.warn("[Push] Erro ao enviar push novo_agendamento:", e.message);
+      }
+    });
   } catch (error) {
     console.error("[AGENDAMENTOS ERROR] Erro ao criar agendamento:", error);
     res.status(500).json({ error: "Erro interno do servidor" });
@@ -673,6 +684,24 @@ router.post("/:id/cancelar", async (req, res) => {
       `🚫 Agendamento ${id} cancelado por: ${user.nome || user.email}`,
     );
     res.json({ message: "Agendamento cancelado com sucesso" });
+
+    // ── Push: cancelamento ──────────────────────────────────────────
+    setImmediate(async () => {
+      try {
+        const pushService = require("../services/pushNotificationService");
+        const empresaId = agendamento.empresa_id;
+        if (empresaId) {
+          const pet = agendamento.petId
+            ? await Pet.findByPk(agendamento.petId, { attributes: ["nome"] })
+            : null;
+          await pushService.notificarEmpresa(empresaId, "cancelamento", {
+            petNome: pet?.nome || "",
+          });
+        }
+      } catch (e) {
+        console.warn("[Push] Erro ao enviar push cancelamento:", e.message);
+      }
+    });
   } catch (error) {
     console.error("Erro ao cancelar agendamento:", error);
     res.status(500).json({ error: "Erro interno do servidor" });
@@ -834,6 +863,70 @@ router.patch("/:id/status", async (req, res) => {
             "[Marketing] Não foi possível disparar primeiro_banho:",
             e.message,
           );
+        }
+      });
+    }
+
+    // ── Push: checkin_pet ───────────────────────────────────────────
+    if (status === "checkin") {
+      setImmediate(async () => {
+        try {
+          const pushService = require("../services/pushNotificationService");
+          const ag = await Agendamento.findByPk(id, {
+            include: [{ model: Pet, as: "pet", required: false }],
+          });
+          const empresaId = ag?.empresa_id;
+          if (empresaId) {
+            await pushService.notificarEmpresa(empresaId, "checkin_pet", {
+              petNome: ag?.pet?.nome || "",
+              horario: ag?.horario || "",
+            });
+          }
+        } catch (e) {
+          console.warn("[Push] Erro ao enviar push checkin_pet:", e.message);
+        }
+      });
+    }
+
+    // ── Push: servico_concluido ─────────────────────────────────────
+    if (status === "pronto") {
+      setImmediate(async () => {
+        try {
+          const pushService = require("../services/pushNotificationService");
+          const ag = await Agendamento.findByPk(id, {
+            include: [{ model: Pet, as: "pet", required: false }],
+          });
+          const empresaId = ag?.empresa_id;
+          if (empresaId) {
+            await pushService.notificarEmpresa(empresaId, "servico_concluido", {
+              petNome: ag?.pet?.nome || "",
+            });
+          }
+        } catch (e) {
+          console.warn(
+            "[Push] Erro ao enviar push servico_concluido:",
+            e.message,
+          );
+        }
+      });
+    }
+
+    // ── Push: cancelamento ──────────────────────────────────────────
+    if (status === "cancelado") {
+      setImmediate(async () => {
+        try {
+          const pushService = require("../services/pushNotificationService");
+          const ag = await Agendamento.findByPk(id, {
+            include: [{ model: Pet, as: "pet", required: false }],
+          });
+          const empresaId = ag?.empresa_id;
+          if (empresaId) {
+            await pushService.notificarEmpresa(empresaId, "cancelamento", {
+              petNome: ag?.pet?.nome || "",
+            });
+          }
+        } catch (e) {
+          console.warn("[Push] Erro ao enviar push cancelamento:", e.message);
         }
       });
     }

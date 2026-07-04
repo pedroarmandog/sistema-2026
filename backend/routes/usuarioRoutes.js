@@ -194,6 +194,38 @@ router.put("/preferencias", authUser, async (req, res) => {
   }
 });
 
+// GET /api/usuarios/me — retorna dados do usuário autenticado (usado pelo PWA mobile)
+router.get("/me", authUser, async (req, res) => {
+  try {
+    const { Usuario, Empresa } = require("../models");
+    const u = await Usuario.findByPk(req.user.id, {
+      attributes: ["id", "nome", "usuario", "grupoUsuario"],
+    });
+    if (!u) return res.status(404).json({ mensagem: "Usuário não encontrado" });
+
+    let empresaNome = "";
+    if (req.user.empresaId) {
+      try {
+        const emp = await Empresa.findByPk(req.user.empresaId, {
+          attributes: ["nome"],
+        });
+        empresaNome = emp?.nome || "";
+      } catch (_) {}
+    }
+
+    return res.json({
+      id: u.id,
+      nome: u.nome || u.usuario || "Usuário",
+      empresaId: req.user.empresaId,
+      grupoUsuario: req.user.grupoUsuario,
+      empresaNome,
+    });
+  } catch (err) {
+    console.error("[/me] Erro:", err.message);
+    return res.status(500).json({ mensagem: "Erro interno" });
+  }
+});
+
 // Rotas de usuários
 router.get("/", authUser, usuarioController.listarUsuarios);
 router.get("/:id", usuarioController.buscarUsuario);
