@@ -10,6 +10,7 @@ window.PageAgenda = (function () {
   let _container = null;
   let _dataAtual = new Date();
   let _abortController = null;
+  let _isLoading = false;
 
   async function init(container) {
     _container = container;
@@ -101,6 +102,10 @@ window.PageAgenda = (function () {
   }
 
   async function _carregarAgendamentos(container) {
+    // Evitar múltiplas requisições simultâneas
+    if (_isLoading) return;
+    _isLoading = true;
+
     if (_abortController) _abortController.abort();
     _abortController = new AbortController();
 
@@ -154,10 +159,12 @@ window.PageAgenda = (function () {
             <div class="state-icon">⚠️</div>
             <div class="state-sub">${escapeHtml(err.message || "Erro ao carregar")}</div>
             <button class="btn btn-secondary" style="margin-top:12px;padding:8px 16px;font-size:13px"
-              onclick="MobileRouter.navigate('agenda')">Tentar novamente</button>
+              onclick="window.PageAgenda.refresh()">Tentar novamente</button>
           </div>
         `;
       }
+    } finally {
+      _isLoading = false;
     }
   }
 
