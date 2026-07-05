@@ -1554,9 +1554,11 @@ a {
 }
 
 /* ── Tablet / Desktop — centralizar o shell ──────────────── */
-@media (min-width: 768px) {
+/* 1024px: nenhum celular (nem em landscape) atinge esse CSS-width.
+   Apenas tablets e desktop terão o app centralizado. */
+@media (min-width: 1024px) {
   .app-shell {
-    max-width: 480px;
+    max-width: 520px;
     margin: 0 auto;
     box-shadow: 0 0 60px rgba(0, 0, 0, 0.5);
   }
