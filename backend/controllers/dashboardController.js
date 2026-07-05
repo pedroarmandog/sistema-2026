@@ -18,6 +18,21 @@ function handleError(res, context, error) {
     .json({ erro: context, mensagem: error?.message, stack: error?.stack });
 }
 
+/**
+ * Retorna o range de "hoje" no horário de Brasília (America/Sao_Paulo).
+ * Isso garante que os relatórios do dashboard usem o dia correto,
+ * independentemente do timezone UTC do servidor.
+ * @returns {{ inicio: Date, fim: Date }}
+ */
+function getDiaBrasil() {
+  const agoraBrasil = new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
+  const hojeBrasil = new Date(agoraBrasil);
+  hojeBrasil.setHours(0, 0, 0, 0);
+  const amanhaBrasil = new Date(hojeBrasil);
+  amanhaBrasil.setDate(amanhaBrasil.getDate() + 1);
+  return { inicio: hojeBrasil, fim: amanhaBrasil };
+}
+
 // Produtos com estoque baixo ou sem estoque
 exports.produtosEstoqueBaixo = async (req, res) => {
   try {
@@ -67,10 +82,7 @@ exports.resumo = async (req, res) => {
       : "agendamentos";
     const vendasTable = Venda.getTableName ? Venda.getTableName() : "vendas";
 
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    const amanha = new Date(hoje);
-    amanha.setDate(amanha.getDate() + 1);
+    const { inicio: hoje, fim: amanha } = getDiaBrasil();
 
     const empresaFilter = empresaId ? "AND empresa_id = :empresaId" : "";
 
@@ -129,8 +141,7 @@ exports.aniversariantes = async (req, res) => {
     const cached = cache.get(cacheKey);
     if (cached) return res.json(cached);
 
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
+    const { inicio: hoje } = getDiaBrasil();
 
     // montar lista de MM-DD para os próximos 7 dias
     const dias = [];
@@ -306,11 +317,7 @@ exports.levaTraz = async (req, res) => {
     const cached = cache.get(cacheKey);
     if (cached) return res.json(cached);
 
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-
-    const amanha = new Date(hoje);
-    amanha.setDate(amanha.getDate() + 1);
+    const { inicio: hoje, fim: amanha } = getDiaBrasil();
 
     // Buscar agendamentos do dia com atributos mínimos
     const agendamentos = await Agendamento.findAll({
@@ -432,7 +439,7 @@ exports.produtosVencimento = async (req, res) => {
     // Processar em batches para evitar carregar toda a tabela na memória
     const limitBatch = 2000;
     let offset = 0;
-    const hoje = new Date();
+    const { inicio: hoje } = getDiaBrasil();
     const candidatos = [];
     const maxCollect = 2000; // limite de segurança para não acumular milhões
 
@@ -489,11 +496,7 @@ exports.produtosVencimento = async (req, res) => {
 exports.vendasHoje = async (req, res) => {
   try {
     const empresaId = req.user?.empresaId;
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-
-    const amanha = new Date(hoje);
-    amanha.setDate(amanha.getDate() + 1);
+    const { inicio: hoje, fim: amanha } = getDiaBrasil();
 
     const where = {
       data: { [Op.gte]: hoje, [Op.lt]: amanha },
@@ -513,11 +516,7 @@ exports.vendasHoje = async (req, res) => {
 exports.ticketMedio = async (req, res) => {
   try {
     const empresaId = req.user?.empresaId;
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-
-    const amanha = new Date(hoje);
-    amanha.setDate(amanha.getDate() + 1);
+    const { inicio: hoje, fim: amanha } = getDiaBrasil();
 
     const where = {
       data: { [Op.gte]: hoje, [Op.lt]: amanha },
@@ -566,8 +565,7 @@ exports.ticketMedio = async (req, res) => {
 // Periódicos: pets com vacinas/vermífugos/antiparasitários a renovar nos próximos 7 dias
 exports.periodicos = async (req, res) => {
   try {
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
+    const { inicio: hoje } = getDiaBrasil();
     const em7Dias = new Date(hoje);
     em7Dias.setDate(em7Dias.getDate() + 7);
 
@@ -697,8 +695,8 @@ exports.periodicos = async (req, res) => {
 // Contas a pagar vencendo hoje
 exports.contasAPagarHoje = async (req, res) => {
   try {
-    const hoje = new Date();
-    const dataHoje = hoje.toISOString().split("T")[0];
+    const { inicio: dataInicio } = getDiaBrasil();
+    const dataHoje = dataInicio.toISOString().split("T")[0];
 
     const empresaId = req.user?.empresaId;
 
@@ -748,10 +746,7 @@ exports.petsNoEstabelecimento = async (req, res) => {
     const cached = cache.get(cacheKey);
     if (cached) return res.json(cached);
 
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    const amanha = new Date(hoje);
-    amanha.setDate(amanha.getDate() + 1);
+    const { inicio: hoje, fim: amanha } = getDiaBrasil();
 
     const table =
       typeof Agendamento.getTableName === "function"
@@ -836,10 +831,7 @@ exports.petsNoEstabelecimento = async (req, res) => {
 
 exports.indicadoresAtendimento = async (req, res) => {
   try {
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    const amanha = new Date(hoje);
-    amanha.setDate(amanha.getDate() + 1);
+    const { inicio: hoje, fim: amanha } = getDiaBrasil();
 
     const whereBase = Object.assign(
       { dataAgendamento: { [Op.gte]: hoje, [Op.lt]: amanha } },
