@@ -113,9 +113,10 @@ a {
   flex-direction: column;
   background: var(--bg);
   overflow: hidden;
-  /* Respeitar notch e barra inferior do iPhone */
+  /* Notch / câmera frontal (iOS / Android) */
   padding-top: var(--safe-top);
-  padding-bottom: var(--safe-bottom);
+  /* safe-bottom é gerenciado pelo .bottom-nav para que seu
+     background se estenda até a home bar sem deixar faixa escura */
 }
 
 /* ── Splash Screen ──────────────────────────────────────── */
@@ -341,7 +342,7 @@ a {
 
 /* ── Bottom Navigation ───────────────────────────────────── */
 .bottom-nav {
-  height: var(--nav-h);
+  /* height fica flexível para absorver a safe-area inferior */
   min-height: var(--nav-h);
   flex-shrink: 0;
   background: var(--surface);
@@ -350,6 +351,8 @@ a {
   align-items: flex-start;
   justify-content: space-around;
   padding-top: 8px;
+  /* Estende o fundo do nav até a home bar (iOS) ou gesture bar (Android) */
+  padding-bottom: var(--safe-bottom);
   z-index: 100;
 }
 
@@ -1490,18 +1493,77 @@ a {
   color: var(--muted);
 }
 
-/* ── Responsive / Desktop view ───────────────────────────── */
-@media (min-width: 600px) {
+/* ── Telas muito pequenas (< 360px) ─────────────────────── */
+@media (max-width: 359px) {
+  :root {
+    --nav-h: 62px;
+  }
+  .page-wrapper {
+    padding: 12px 14px 16px;
+  }
+  .stat-grid-3 {
+    gap: 6px;
+  }
+  .stat-card {
+    padding: 10px 8px;
+  }
+  .stat-value {
+    font-size: 18px;
+  }
+  .stat-label {
+    font-size: 9px;
+  }
+  .pill-tabs {
+    padding: 0 14px;
+  }
+  .faturamento-value {
+    font-size: 26px;
+  }
+  .hero-title {
+    font-size: 17px;
+  }
+}
+
+/* ── Celular em landscape ─────────────────────────────────── */
+@media (orientation: landscape) and (max-height: 500px) {
+  :root {
+    --header-h: 48px;
+    --nav-h: 54px;
+  }
+  .page-wrapper {
+    padding: 10px 16px 12px;
+  }
+  .stat-card {
+    padding: 10px 8px;
+  }
+  .stat-value {
+    font-size: 18px;
+  }
+  .dashboard-hero {
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  .faturamento-card {
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  .stat-grid,
+  .stat-grid-3 {
+    gap: 8px;
+  }
+}
+
+/* ── Tablet / Desktop — centralizar o shell ──────────────── */
+@media (min-width: 768px) {
   .app-shell {
-    max-width: 420px;
+    max-width: 480px;
     margin: 0 auto;
     box-shadow: 0 0 60px rgba(0, 0, 0, 0.5);
   }
 }
 
-/* ── Dark mode (always dark, reforçar) ───────────────────── */
+/* ── Dark mode (sempre escuro, mesmo no sistema claro) ───── */
 @media (prefers-color-scheme: light) {
-  /* Mantém dark mesmo se o sistema for light — é um app mobile */
   :root {
     color-scheme: dark;
   }
