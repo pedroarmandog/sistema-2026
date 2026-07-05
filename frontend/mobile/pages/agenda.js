@@ -195,12 +195,13 @@ window.PageAgenda = (function () {
     listaEl.innerHTML = ordenados
       .map((ag) => {
         const hora = _formatarHora(ag.horario || ag.horaInicio);
-        const petNome = ag.pet?.nome || ag.nomePet || "Pet";
+        const petNome = ag.pet?.nome || ag.nomePet || ag.petNome || "Pet";
         const petFoto = ag.pet?.fotoUrl || ag.fotoPet || null;
         const servico = _nomeServico(
           ag.servico || ag.tipoServico || ag.nomeServico,
         );
-        const cliente = ag.cliente?.nome || ag.nomeCliente || "";
+        const cliente =
+          ag.cliente?.nome || ag.nomeCliente || ag.clienteNome || "";
         const status = ag.status || "agendado";
         const profissional = ag.profissional?.nome || ag.nomeProfissional || "";
 
@@ -253,7 +254,10 @@ window.PageAgenda = (function () {
 
   /* ── Helpers ─────────────────────────────────────────────── */
   function _toISODate(d) {
-    return d.toISOString().split("T")[0];
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
   }
 
   function _formatarHora(horario) {

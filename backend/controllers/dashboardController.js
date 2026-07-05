@@ -791,9 +791,16 @@ exports.petsNoEstabelecimento = async (req, res) => {
           as: "pet",
           attributes: ["id", "nome", "raca", "foto_url"],
           required: false,
+          include: [
+            {
+              model: Cliente,
+              as: "cliente",
+              attributes: ["id", "nome"],
+            },
+          ],
         },
       ],
-      attributes: ["id", "horario", "status", "tipoServico", "nomeCliente"],
+      attributes: ["id", "horario", "status", "servico"],
       order: [["horario", "ASC"]],
       limit: 50,
     });
@@ -807,8 +814,8 @@ exports.petsNoEstabelecimento = async (req, res) => {
         id: ag.id,
         horario: ag.horario,
         status: ag.status,
-        servico: ag.tipoServico,
-        cliente: ag.nomeCliente,
+        servico: ag.servico,
+        cliente: ag.pet?.cliente?.nome || null,
         pet: ag.pet
           ? {
               id: ag.pet.id,
