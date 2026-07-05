@@ -693,8 +693,13 @@ class AgendamentosManager {
         )
           dateKey = agendamento.horario.split("T")[0];
         else if (agendamento.horario && typeof agendamento.horario === "number")
-          dateKey = new Date(agendamento.horario).toISOString().split("T")[0];
-        else dateKey = new Date(this.currentDate).toISOString().split("T")[0];
+          dateKey = new Date(agendamento.horario).toLocaleDateString("sv-SE", {
+            timeZone: "America/Sao_Paulo",
+          });
+        else
+          dateKey = new Date(this.currentDate).toLocaleDateString("sv-SE", {
+            timeZone: "America/Sao_Paulo",
+          });
 
         return `
             <div class="agendamento-row" data-date="${dateKey}" data-agendamento-id="${agendamento.id}" data-status="${agendamento.status}">
@@ -754,10 +759,14 @@ class AgendamentosManager {
         });
         const sortedDates = Object.keys(groups).sort();
         const now = new Date();
-        const todayKey = now.toISOString().split("T")[0];
+        const todayKey = now.toLocaleDateString("sv-SE", {
+          timeZone: "America/Sao_Paulo",
+        });
         const tomorrow = new Date(now);
         tomorrow.setDate(now.getDate() + 1);
-        const tomorrowKey = tomorrow.toISOString().split("T")[0];
+        const tomorrowKey = tomorrow.toLocaleDateString("sv-SE", {
+          timeZone: "America/Sao_Paulo",
+        });
 
         const newHtml = sortedDates
           .map((dateKey) => {
@@ -871,8 +880,11 @@ class AgendamentosManager {
         "horario:",
         a.horario,
       );
-      // Tentar extrair data de dataAgendamento primeiro
-      if (a.dataAgendamento) dateKey = String(a.dataAgendamento).split("T")[0];
+      // Tentar extrair data de dataAgendamento primeiro (converter para fuso Brasília)
+      if (a.dataAgendamento)
+        dateKey = new Date(a.dataAgendamento).toLocaleDateString("sv-SE", {
+          timeZone: "America/Sao_Paulo",
+        });
       else if (a.data) dateKey = String(a.data).split("T")[0];
       else if (
         a.horario &&
@@ -891,10 +903,14 @@ class AgendamentosManager {
 
     const sortedDates = Object.keys(groups).sort();
     const now = new Date();
-    const todayKey = now.toISOString().split("T")[0];
+    const todayKey = now.toLocaleDateString("sv-SE", {
+      timeZone: "America/Sao_Paulo",
+    });
     const tomorrow = new Date(now);
     tomorrow.setDate(now.getDate() + 1);
-    const tomorrowKey = tomorrow.toISOString().split("T")[0];
+    const tomorrowKey = tomorrow.toLocaleDateString("sv-SE", {
+      timeZone: "America/Sao_Paulo",
+    });
 
     let html = "";
     sortedDates.forEach((dateKey) => {

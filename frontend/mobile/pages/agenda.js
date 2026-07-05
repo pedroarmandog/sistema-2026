@@ -254,10 +254,8 @@ window.PageAgenda = (function () {
 
   /* ── Helpers ─────────────────────────────────────────────── */
   function _toISODate(d) {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
+    // Sempre usa fuso de Brasília (UTC-3, sem DST desde 2019)
+    return d.toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
   }
 
   function _formatarHora(horario) {
