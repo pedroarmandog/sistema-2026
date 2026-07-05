@@ -7,7 +7,7 @@
      - Páginas HTML: Network First com fallback offline
    ============================================================ */
 
-const CACHE_VERSION = "pethub-mobile-v4";
+const CACHE_VERSION = "pethub-mobile-v3";
 const CACHE_STATIC = `${CACHE_VERSION}-static`;
 const CACHE_API = `${CACHE_VERSION}-api`;
 
@@ -93,7 +93,7 @@ self.addEventListener("fetch", (event) => {
 
   // ── Chamadas de API → Network First (sem cache persistente)
   if (url.pathname.startsWith("/api/")) {
-    event.respondWith(networkFirstWithTimeout(request, 30000));
+    event.respondWith(networkFirstWithTimeout(request, 5000));
     return;
   }
 
@@ -225,17 +225,6 @@ async function networkFirstWithTimeout(request, timeoutMs) {
     return response;
   } catch (err) {
     clearTimeout(timeoutId);
-    // Se foi abort por timeout, retornar erro real de rede (não 503 falso)
-    if (err.name === 'AbortError') {
-      return new Response(
-        JSON.stringify({ erro: "Tempo limite excedido", offline: true, timeout: true }),
-        {
-          status: 504,
-          headers: { "Content-Type": "application/json" },
-        },
-      );
-    }
-    // Para outros erros de rede, tentar cache como fallback
     const cached = await caches.match(request);
     if (cached) return cached;
     return new Response(

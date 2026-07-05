@@ -33,6 +33,7 @@ window.MobileBottomNav = (function () {
    * @param {string} page
    */
   function navigate(page) {
+    if (page === _currentPage) return;
     _currentPage = page;
     _updateActiveState(page);
     if (_onNavigate) _onNavigate(page);
