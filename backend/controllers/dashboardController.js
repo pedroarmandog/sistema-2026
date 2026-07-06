@@ -21,17 +21,12 @@ function handleError(res, context, error) {
 /**
  * Retorna a data de hoje no horário de Brasília (America/Sao_Paulo)
  * como string no formato YYYY-MM-DD.
- * Isso garante que os relatórios do dashboard usem o dia correto,
- * independentemente do timezone UTC do servidor.
+ * Usa toLocaleDateString com timezone explícito para ser independente
+ * do timezone do servidor Node.js.
  * @returns {string} ex: "2026-07-05"
  */
 function getHojeBrasilStr() {
-  const now = new Date();
-  const brasilOffset = -180; // UTC-3 em minutos
-  const localOffset = now.getTimezoneOffset();
-  const diffMinutos = localOffset - brasilOffset;
-  const brasilNow = new Date(now.getTime() + diffMinutos * 60000);
-  return brasilNow.toISOString().split("T")[0];
+  return new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
 }
 
 // Produtos com estoque baixo ou sem estoque
@@ -88,9 +83,10 @@ exports.resumo = async (req, res) => {
     const empresaFilter = empresaId ? "AND empresa_id = :empresaId" : "";
 
     // Primeiro dia do mês (em Brasília) para contar clientes do mês
-    const hojeBrasil = new Date(dataBrasil + "T12:00:00-03:00"); // meio-dia Brasília para evitar ambiguidade
-    const inicioMesBrasil = new Date(hojeBrasil.getFullYear(), hojeBrasil.getMonth(), 1);
-    const inicioMesStr = inicioMesBrasil.toISOString().split("T")[0];
+    const hojeParts = dataBrasil.split("-");
+    const ano = parseInt(hojeParts[0], 10);
+    const mes = parseInt(hojeParts[1], 10);
+    const inicioMesStr = `${ano}-${String(mes).padStart(2, "0")}-01`;
 
     const sql = `SELECT
       (SELECT COUNT(*) FROM ${clientesTable} WHERE 1=1 ${empresaFilter}) AS clientes,
@@ -146,7 +142,8 @@ exports.aniversariantes = async (req, res) => {
     if (cached) return res.json(cached);
 
     const dataBrasil = getHojeBrasilStr();
-    const hoje = new Date(dataBrasil + "T12:00:00-03:00");
+    const hojeParts = dataBrasil.split("-");
+    const hoje = new Date(parseInt(hojeParts[0]), parseInt(hojeParts[1]) - 1, parseInt(hojeParts[2]));
 
     // montar lista de MM-DD para os próximos 7 dias
     const dias = [];
@@ -503,9 +500,7 @@ exports.vendasHoje = async (req, res) => {
     const empresaId = req.user?.empresaId;
     const dataBrasil = getHojeBrasilStr();
 
-    const where = literal(`DATE(data) = '${dataBrasil}' AND status <> 'cancelado'`);
     if (empresaId) {
-      // Precisamos combinar literal com objeto, então usamos raw query
       const sql = `SELECT COUNT(*) AS count FROM vendas WHERE DATE(data) = :dataBrasil AND status <> 'cancelado' AND empresa_id = :empresaId`;
       const [rows] = await sequelize.query(sql, {
         replacements: { dataBrasil, empresaId },
@@ -551,7 +546,6 @@ exports.ticketMedio = async (req, res) => {
       try {
         let total = 0;
         if (v.totais) {
-          // totais pode ser objeto JSON ou string
           const totaisObj =
             typeof v.totais === "string" ? JSON.parse(v.totais) : v.totais;
           total =
@@ -580,7 +574,8 @@ exports.ticketMedio = async (req, res) => {
 exports.periodicos = async (req, res) => {
   try {
     const dataBrasil = getHojeBrasilStr();
-    const hoje = new Date(dataBrasil + "T12:00:00-03:00");
+    const hojeParts = dataBrasil.split("-");
+    const hoje = new Date(parseInt(hojeParts[0]), parseInt(hojeParts[1]) - 1, parseInt(hojeParts[2]));
     const em7Dias = new Date(hoje);
     em7Dias.setDate(em7Dias.getDate() + 7);
 
@@ -628,19 +623,16 @@ exports.periodicos = async (req, res) => {
       if (!renovacaoLabel) return null;
       const label = renovacaoLabel.trim();
 
-      // Caso 1: renovacaoLabel é uma data direta no formato DD/MM/YYYY
       if (/^\d{2}\/\d{2}\/\d{4}$/.test(label)) {
         const [d, m, y] = label.split("/").map(Number);
         return new Date(y, m - 1, d);
       }
 
-      // Caso 2: renovacaoLabel é uma data ISO YYYY-MM-DD
       if (/^\d{4}-\d{2}-\d{2}$/.test(label)) {
         const [y, m, d] = label.split("-").map(Number);
         return new Date(y, m - 1, d);
       }
 
-      // Caso 3: renovacaoLabel é uma label de periodicidade (ex: "1 ano", "30 dias")
       if (!dataAplic) return null;
       const p = periodicidadesMap.get(label.toLowerCase());
       if (!p || !p.dias) return null;
@@ -654,7 +646,6 @@ exports.periodicos = async (req, res) => {
       return dt;
     }
 
-    // Mapear por pet+tipoEspecial+produto — manter apenas a renovação mais próxima dentro da janela
     const resultMap = new Map();
 
     agendamentos.forEach((ag) => {
@@ -673,13 +664,11 @@ exports.periodicos = async (req, res) => {
         const dataRenovacao = calcDataRenovacao(dataAplic, renovacaoLabel);
         if (!dataRenovacao) return;
 
-        // Só exibir se dentro dos próximos 7 dias
         if (dataRenovacao < hoje || dataRenovacao > em7Dias) return;
 
         const produtoNome = s.nome || meta.nome || meta.tipoEspecial;
         const key = `${ag.pet.id}-${meta.tipoEspecial}-${produtoNome}`;
 
-        // Se já existe uma entrada para este pet+produto, manter a mais próxima de hoje
         if (resultMap.has(key)) {
           const existing = resultMap.get(key);
           if (dataRenovacao > new Date(existing.dataRenovacao)) return;
@@ -714,7 +703,6 @@ exports.contasAPagarHoje = async (req, res) => {
 
     const empresaId = req.user?.empresaId;
 
-    // Inclui registros da empresa atual E registros antigos sem empresa_id (retrocompatibilidade)
     const whereEmpresa = empresaId
       ? { [Op.or]: [{ empresa_id: empresaId }, { empresa_id: null }] }
       : {};
@@ -834,7 +822,7 @@ exports.petsNoEstabelecimento = async (req, res) => {
       })),
     };
 
-    cache.set(cacheKey, result, 8); // cache curto: 8s para dados em tempo real
+    cache.set(cacheKey, result, 8);
     res.json(result);
   } catch (error) {
     return handleError(res, "Erro ao buscar pets no estabelecimento", error);
