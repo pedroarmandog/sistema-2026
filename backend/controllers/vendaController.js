@@ -17,14 +17,16 @@ exports.listarVendas = async (req, res) => {
       where.empresa_id = req.user.empresaId;
     }
 
-    // Filtro por data
+    // Filtro por data — usar DATE() do MySQL para ignorar timezone
     if (dataInicio && dataFim) {
-      where.data = {
-        [Op.between]: [
-          new Date(dataInicio + " 00:00:00"),
-          new Date(dataFim + " 23:59:59"),
-        ],
-      };
+      // As datas já vêm no formato YYYY-MM-DD do frontend.
+      // Em vez de converter para Date objects (que são interpretados em UTC),
+      // usamos literal com DATE() do MySQL para comparar apenas a data.
+      const { literal } = require("sequelize");
+      where[Op.and] = [
+        literal(`DATE(data) >= '${dataInicio}'`),
+        literal(`DATE(data) <= '${dataFim}'`),
+      ];
     }
 
     const limit = Math.min(parseInt(req.query.limit, 10) || 500, 5000);
