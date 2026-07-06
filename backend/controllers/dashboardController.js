@@ -19,18 +19,36 @@ function handleError(res, context, error) {
 }
 
 /**
- * Retorna o range de "hoje" no horário de Brasília (America/Sao_Paulo).
- * Isso garante que os relatórios do dashboard usem o dia correto,
- * independentemente do timezone UTC do servidor.
+ * Retorna o range de "hoje" no horário de Brasília (America/Sao_Paulo),
+ * convertido para UTC para comparação com as colunas DATETIME do MySQL
+ * (que estão em UTC). Isso garante que os relatórios do dashboard 
+ * considerem corretamente o dia do cliente, independentemente do timezone
+ * do servidor Node.js ou do MySQL.
  * @returns {{ inicio: Date, fim: Date }}
  */
 function getDiaBrasil() {
-  const agoraBrasil = new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
-  const hojeBrasil = new Date(agoraBrasil);
-  hojeBrasil.setHours(0, 0, 0, 0);
-  const amanhaBrasil = new Date(hojeBrasil);
-  amanhaBrasil.setDate(amanhaBrasil.getDate() + 1);
-  return { inicio: hojeBrasil, fim: amanhaBrasil };
+  const now = new Date();
+  // Offset de Brasília é -3h (UTC-3) = -180 minutos
+  const brasilOffset = -180;
+  const localOffset = now.getTimezoneOffset(); // ex: 0 se UTC, 180 se UTC-3
+  const diffMinutos = localOffset - brasilOffset; // diferença entre timezone local e Brasília
+  
+  // Agora em Brasília
+  const brasilNow = new Date(now.getTime() + diffMinutos * 60000);
+  
+  // Meia-noite em Brasília (hoje)
+  const brasilMidnight = new Date(brasilNow);
+  brasilMidnight.setHours(0, 0, 0, 0);
+  
+  // Meia-noite em Brasília (amanhã)
+  const brasilNextMidnight = new Date(brasilMidnight);
+  brasilNextMidnight.setDate(brasilNextMidnight.getDate() + 1);
+  
+  // Converter de volta para UTC (removendo o offset de Brasília)
+  const utcStart = new Date(brasilMidnight.getTime() - brasilOffset * 60000);
+  const utcEnd = new Date(brasilNextMidnight.getTime() - brasilOffset * 60000);
+  
+  return { inicio: utcStart, fim: utcEnd };
 }
 
 // Produtos com estoque baixo ou sem estoque
