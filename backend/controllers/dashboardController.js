@@ -19,36 +19,19 @@ function handleError(res, context, error) {
 }
 
 /**
- * Retorna o range de "hoje" no horário de Brasília (America/Sao_Paulo),
- * convertido para UTC para comparação com as colunas DATETIME do MySQL
- * (que estão em UTC). Isso garante que os relatórios do dashboard 
- * considerem corretamente o dia do cliente, independentemente do timezone
- * do servidor Node.js ou do MySQL.
- * @returns {{ inicio: Date, fim: Date }}
+ * Retorna a data de hoje no horário de Brasília (America/Sao_Paulo)
+ * como string no formato YYYY-MM-DD.
+ * Isso garante que os relatórios do dashboard usem o dia correto,
+ * independentemente do timezone UTC do servidor.
+ * @returns {string} ex: "2026-07-05"
  */
-function getDiaBrasil() {
+function getHojeBrasilStr() {
   const now = new Date();
-  // Offset de Brasília é -3h (UTC-3) = -180 minutos
-  const brasilOffset = -180;
-  const localOffset = now.getTimezoneOffset(); // ex: 0 se UTC, 180 se UTC-3
-  const diffMinutos = localOffset - brasilOffset; // diferença entre timezone local e Brasília
-  
-  // Agora em Brasília
+  const brasilOffset = -180; // UTC-3 em minutos
+  const localOffset = now.getTimezoneOffset();
+  const diffMinutos = localOffset - brasilOffset;
   const brasilNow = new Date(now.getTime() + diffMinutos * 60000);
-  
-  // Meia-noite em Brasília (hoje)
-  const brasilMidnight = new Date(brasilNow);
-  brasilMidnight.setHours(0, 0, 0, 0);
-  
-  // Meia-noite em Brasília (amanhã)
-  const brasilNextMidnight = new Date(brasilMidnight);
-  brasilNextMidnight.setDate(brasilNextMidnight.getDate() + 1);
-  
-  // Converter de volta para UTC (removendo o offset de Brasília)
-  const utcStart = new Date(brasilMidnight.getTime() - brasilOffset * 60000);
-  const utcEnd = new Date(brasilNextMidnight.getTime() - brasilOffset * 60000);
-  
-  return { inicio: utcStart, fim: utcEnd };
+  return brasilNow.toISOString().split("T")[0];
 }
 
 // Produtos com estoque baixo ou sem estoque
@@ -100,27 +83,30 @@ exports.resumo = async (req, res) => {
       : "agendamentos";
     const vendasTable = Venda.getTableName ? Venda.getTableName() : "vendas";
 
-    const { inicio: hoje, fim: amanha } = getDiaBrasil();
+    const dataBrasil = getHojeBrasilStr();
 
     const empresaFilter = empresaId ? "AND empresa_id = :empresaId" : "";
 
-    const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    // Primeiro dia do mês (em Brasília) para contar clientes do mês
+    const hojeBrasil = new Date(dataBrasil + "T12:00:00-03:00"); // meio-dia Brasília para evitar ambiguidade
+    const inicioMesBrasil = new Date(hojeBrasil.getFullYear(), hojeBrasil.getMonth(), 1);
+    const inicioMesStr = inicioMesBrasil.toISOString().split("T")[0];
+
     const sql = `SELECT
       (SELECT COUNT(*) FROM ${clientesTable} WHERE 1=1 ${empresaFilter}) AS clientes,
-      (SELECT COUNT(*) FROM ${clientesTable} WHERE createdAt >= :inicioMes AND createdAt < :amanha ${empresaFilter}) AS clientesMes,
-      (SELECT COUNT(*) FROM ${agTable} WHERE dataAgendamento >= :hoje AND dataAgendamento < :amanha ${empresaFilter}) AS agendamentosHoje,
-      (SELECT COUNT(*) FROM ${vendasTable} WHERE data >= :hoje AND data < :amanha AND status <> 'cancelado' ${empresaFilter}) AS vendasHoje,
+      (SELECT COUNT(*) FROM ${clientesTable} WHERE DATE(createdAt) >= :inicioMes AND DATE(createdAt) <= :dataBrasil ${empresaFilter}) AS clientesMes,
+      (SELECT COUNT(*) FROM ${agTable} WHERE DATE(dataAgendamento) = :dataBrasil ${empresaFilter}) AS agendamentosHoje,
+      (SELECT COUNT(*) FROM ${vendasTable} WHERE DATE(data) = :dataBrasil AND status <> 'cancelado' ${empresaFilter}) AS vendasHoje,
       (SELECT COALESCE(SUM(COALESCE(
         CAST(JSON_UNQUOTE(JSON_EXTRACT(totais, '$.final')) AS DECIMAL(15,2)),
         CAST(JSON_UNQUOTE(JSON_EXTRACT(totais, '$.totalFinal')) AS DECIMAL(15,2)),
         CAST(JSON_UNQUOTE(JSON_EXTRACT(totais, '$.total')) AS DECIMAL(15,2)),
         0
-      )),0) FROM ${vendasTable} WHERE data >= :hoje AND data < :amanha AND status <> 'cancelado' ${empresaFilter}) AS vendasTotal`;
+      )),0) FROM ${vendasTable} WHERE DATE(data) = :dataBrasil AND status <> 'cancelado' ${empresaFilter}) AS vendasTotal`;
 
     const replacements = {
-      inicioMes: inicioMes.toISOString().slice(0, 19).replace("T", " "),
-      hoje: hoje.toISOString().slice(0, 19).replace("T", " "),
-      amanha: amanha.toISOString().slice(0, 19).replace("T", " "),
+      dataBrasil,
+      inicioMes: inicioMesStr,
     };
     if (empresaId) replacements.empresaId = empresaId;
 
@@ -159,7 +145,8 @@ exports.aniversariantes = async (req, res) => {
     const cached = cache.get(cacheKey);
     if (cached) return res.json(cached);
 
-    const { inicio: hoje } = getDiaBrasil();
+    const dataBrasil = getHojeBrasilStr();
+    const hoje = new Date(dataBrasil + "T12:00:00-03:00");
 
     // montar lista de MM-DD para os próximos 7 dias
     const dias = [];
@@ -335,7 +322,7 @@ exports.levaTraz = async (req, res) => {
     const cached = cache.get(cacheKey);
     if (cached) return res.json(cached);
 
-    const { inicio: hoje, fim: amanha } = getDiaBrasil();
+    const dataBrasil = getHojeBrasilStr();
 
     // Buscar agendamentos do dia com atributos mínimos
     const agendamentos = await Agendamento.findAll({
@@ -349,7 +336,7 @@ exports.levaTraz = async (req, res) => {
         "taxidog",
       ],
       where: Object.assign(
-        { dataAgendamento: { [Op.gte]: hoje, [Op.lt]: amanha } },
+        literal(`DATE(dataAgendamento) = '${dataBrasil}'`),
         empresaId ? { empresa_id: empresaId } : {},
       ),
       include: [
@@ -457,7 +444,7 @@ exports.produtosVencimento = async (req, res) => {
     // Processar em batches para evitar carregar toda a tabela na memória
     const limitBatch = 2000;
     let offset = 0;
-    const { inicio: hoje } = getDiaBrasil();
+    const hoje = new Date();
     const candidatos = [];
     const maxCollect = 2000; // limite de segurança para não acumular milhões
 
@@ -514,17 +501,24 @@ exports.produtosVencimento = async (req, res) => {
 exports.vendasHoje = async (req, res) => {
   try {
     const empresaId = req.user?.empresaId;
-    const { inicio: hoje, fim: amanha } = getDiaBrasil();
+    const dataBrasil = getHojeBrasilStr();
 
-    const where = {
-      data: { [Op.gte]: hoje, [Op.lt]: amanha },
-      status: { [Op.ne]: "cancelado" },
-    };
-    if (empresaId) where.empresa_id = empresaId;
+    const where = literal(`DATE(data) = '${dataBrasil}' AND status <> 'cancelado'`);
+    if (empresaId) {
+      // Precisamos combinar literal com objeto, então usamos raw query
+      const sql = `SELECT COUNT(*) AS count FROM vendas WHERE DATE(data) = :dataBrasil AND status <> 'cancelado' AND empresa_id = :empresaId`;
+      const [rows] = await sequelize.query(sql, {
+        replacements: { dataBrasil, empresaId },
+        type: sequelize.QueryTypes.SELECT,
+      });
+      return res.json({ count: Number(rows?.count || 0) });
+    }
 
-    const count = await Venda.count({ where });
-
-    res.json({ count });
+    const [rows] = await sequelize.query(
+      `SELECT COUNT(*) AS count FROM vendas WHERE DATE(data) = :dataBrasil AND status <> 'cancelado'`,
+      { replacements: { dataBrasil }, type: sequelize.QueryTypes.SELECT },
+    );
+    res.json({ count: Number(rows?.count || 0) });
   } catch (error) {
     return handleError(res, "Erro ao buscar contagem de vendas hoje", error);
   }
@@ -534,15 +528,17 @@ exports.vendasHoje = async (req, res) => {
 exports.ticketMedio = async (req, res) => {
   try {
     const empresaId = req.user?.empresaId;
-    const { inicio: hoje, fim: amanha } = getDiaBrasil();
+    const dataBrasil = getHojeBrasilStr();
+    const vendasTable = Venda.getTableName ? Venda.getTableName() : "vendas";
 
-    const where = {
-      data: { [Op.gte]: hoje, [Op.lt]: amanha },
-      status: { [Op.ne]: "cancelado" },
-    };
-    if (empresaId) where.empresa_id = empresaId;
+    const sql = `SELECT totais FROM ${vendasTable} WHERE DATE(data) = :dataBrasil AND status <> 'cancelado' ${empresaId ? "AND empresa_id = :empresaId" : ""}`;
+    const replacements = { dataBrasil };
+    if (empresaId) replacements.empresaId = empresaId;
 
-    const vendas = await Venda.findAll({ where, attributes: ["totais"] });
+    const vendas = await sequelize.query(sql, {
+      replacements,
+      type: sequelize.QueryTypes.SELECT,
+    });
 
     if (!vendas || vendas.length === 0) {
       return res.json({ ticketMedio: 0 });
@@ -583,7 +579,8 @@ exports.ticketMedio = async (req, res) => {
 // Periódicos: pets com vacinas/vermífugos/antiparasitários a renovar nos próximos 7 dias
 exports.periodicos = async (req, res) => {
   try {
-    const { inicio: hoje } = getDiaBrasil();
+    const dataBrasil = getHojeBrasilStr();
+    const hoje = new Date(dataBrasil + "T12:00:00-03:00");
     const em7Dias = new Date(hoje);
     em7Dias.setDate(em7Dias.getDate() + 7);
 
@@ -713,8 +710,7 @@ exports.periodicos = async (req, res) => {
 // Contas a pagar vencendo hoje
 exports.contasAPagarHoje = async (req, res) => {
   try {
-    const { inicio: dataInicio } = getDiaBrasil();
-    const dataHoje = dataInicio.toISOString().split("T")[0];
+    const dataBrasil = getHojeBrasilStr();
 
     const empresaId = req.user?.empresaId;
 
@@ -727,7 +723,7 @@ exports.contasAPagarHoje = async (req, res) => {
       where: Object.assign(
         {
           situacao: { [Op.in]: ["pendente", "concluido"] },
-          dataEntrada: dataHoje,
+          dataEntrada: dataBrasil,
         },
         whereEmpresa,
       ),
@@ -764,7 +760,7 @@ exports.petsNoEstabelecimento = async (req, res) => {
     const cached = cache.get(cacheKey);
     if (cached) return res.json(cached);
 
-    const { inicio: hoje, fim: amanha } = getDiaBrasil();
+    const dataBrasil = getHojeBrasilStr();
 
     const table =
       typeof Agendamento.getTableName === "function"
@@ -778,26 +774,24 @@ exports.petsNoEstabelecimento = async (req, res) => {
       SUM(CASE WHEN status='pronto'    THEN 1 ELSE 0 END) AS pronto,
       SUM(CASE WHEN status='concluido' THEN 1 ELSE 0 END) AS concluido
       FROM ${table}
-      WHERE dataAgendamento >= :hoje AND dataAgendamento < :amanha
+      WHERE DATE(dataAgendamento) = :dataBrasil
         AND empresa_id = :empresaId
         AND status NOT IN ('cancelado')`;
 
     const [rows] = await sequelize.query(sql, {
-      replacements: {
-        hoje: hoje.toISOString().slice(0, 19).replace("T", " "),
-        amanha: amanha.toISOString().slice(0, 19).replace("T", " "),
-        empresaId,
-      },
+      replacements: { dataBrasil, empresaId },
       type: sequelize.QueryTypes.SELECT,
     });
 
     // Lista dos agendamentos ativos (checkin + pronto) com dados do pet
     const agendamentosAtivos = await Agendamento.findAll({
-      where: {
-        dataAgendamento: { [Op.gte]: hoje, [Op.lt]: amanha },
-        empresa_id: empresaId,
-        status: { [Op.in]: ["checkin", "pronto"] },
-      },
+      where: Object.assign(
+        literal(`DATE(dataAgendamento) = '${dataBrasil}'`),
+        {
+          empresa_id: empresaId,
+          status: { [Op.in]: ["checkin", "pronto"] },
+        },
+      ),
       include: [
         {
           model: Pet,
@@ -849,12 +843,11 @@ exports.petsNoEstabelecimento = async (req, res) => {
 
 exports.indicadoresAtendimento = async (req, res) => {
   try {
-    const { inicio: hoje, fim: amanha } = getDiaBrasil();
+    const dataBrasil = getHojeBrasilStr();
 
-    const whereBase = Object.assign(
-      { dataAgendamento: { [Op.gte]: hoje, [Op.lt]: amanha } },
-      req.user?.empresaId ? { empresa_id: req.user.empresaId } : {},
-    );
+    const empresaFilter = req.user?.empresaId
+      ? "AND empresa_id = :empresaId"
+      : "";
 
     // Agregação em uma única query para reduzir número de queries
     const table =
@@ -866,12 +859,9 @@ exports.indicadoresAtendimento = async (req, res) => {
       SUM(CASE WHEN status='checkin' THEN 1 ELSE 0 END) AS checkin,
       SUM(CASE WHEN status='pronto' THEN 1 ELSE 0 END) AS prontos
       FROM ${table}
-      WHERE dataAgendamento >= :hoje AND dataAgendamento < :amanha ${req.user?.empresaId ? "AND empresa_id = :empresaId" : ""}`;
+      WHERE DATE(dataAgendamento) = :dataBrasil ${empresaFilter}`;
 
-    const replacements = {
-      hoje: hoje.toISOString().slice(0, 19).replace("T", " "),
-      amanha: amanha.toISOString().slice(0, 19).replace("T", " "),
-    };
+    const replacements = { dataBrasil };
     if (req.user?.empresaId) replacements.empresaId = req.user.empresaId;
 
     const [rows] = await sequelize.query(sql, {
