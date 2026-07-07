@@ -323,6 +323,12 @@ exports.levaTraz = async (req, res) => {
 
     const dataBrasil = getHojeBrasilStr();
 
+    // Usar range com offset -03:00 (mesma estratégia do GET /api/agendamentos)
+    // para evitar problemas de timezone quando o MySQL está em UTC.
+    const start = new Date(`${dataBrasil}T00:00:00-03:00`);
+    const next = new Date(start);
+    next.setDate(start.getDate() + 1);
+
     // Buscar agendamentos do dia com atributos mínimos
     const agendamentos = await Agendamento.findAll({
       attributes: [
@@ -335,7 +341,9 @@ exports.levaTraz = async (req, res) => {
         "taxidog",
       ],
       where: Object.assign(
-        literal(`DATE(dataAgendamento) = '${dataBrasil}'`),
+        {
+          dataAgendamento: { [Op.gte]: start, [Op.lt]: next },
+        },
         empresaId ? { empresa_id: empresaId } : {},
       ),
       include: [
