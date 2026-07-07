@@ -105,17 +105,17 @@ window.PageDashboard = (function () {
 
     try {
       // Carregar tudo em paralelo para máxima performance
-      const [resumo, indicadores, petsEstab, financeiro] =
+      const [resumo, indicadores, petsEstab, faturamento] =
         await Promise.allSettled([
           MobileApi.get("/api/dashboard/resumo"),
           MobileApi.get("/api/dashboard/indicadores-atendimento"),
           MobileApi.get("/api/dashboard/pets-no-estabelecimento"),
-          MobileApi.get("/api/painel-financeiro/resumo"),
+          MobileApi.get("/api/dashboard/faturamento-periodos"),
         ]);
 
       if (!_container) return; // componente destruído durante o await
 
-      _atualizarFaturamento(container, resumo, financeiro);
+      _atualizarFaturamento(container, resumo, faturamento);
       _atualizarPets(container, petsEstab, indicadores);
       _atualizarAgendamentos(container, resumo, indicadores);
       _atualizarProximos(container, indicadores);
@@ -142,7 +142,7 @@ window.PageDashboard = (function () {
     }
   }
 
-  function _atualizarFaturamento(container, resumoResult, financeiroResult) {
+  function _atualizarFaturamento(container, resumoResult, faturamentoResult) {
     const elDia = container.querySelector("#fat-dia");
     const elSem = container.querySelector("#fat-semana");
     const elMes = container.querySelector("#fat-mes");
@@ -151,27 +151,22 @@ window.PageDashboard = (function () {
 
     const resumo =
       resumoResult.status === "fulfilled" ? resumoResult.value : null;
-    const fin =
-      financeiroResult.status === "fulfilled" ? financeiroResult.value : null;
+    const fat =
+      faturamentoResult.status === "fulfilled" ? faturamentoResult.value : null;
 
-    const valDia = resumo?.vendasTotal || resumo?.faturamentoHoje || 0;
+    // Priorizar faturamento do novo endpoint (soma de vendas + agendamentos concluídos)
+    // Fallback para resumo antigo
+    const valDia = fat?.faturamentoHoje ?? resumo?.vendasTotal ?? 0;
     elDia.textContent = _formatarDinheiro(valDia);
 
-    if (fin) {
-      const semana =
-        fin.semana?.recebido ||
-        fin.essaSemana?.total ||
-        fin.faturamento?.semana ||
-        0;
-      const mes =
-        fin.mes?.recebido || fin.esseMes?.total || fin.faturamento?.mes || 0;
-      elSem.textContent = _formatarDinheiro(semana);
-      elMes.textContent = _formatarDinheiro(mes);
+    if (fat) {
+      elSem.textContent = _formatarDinheiro(fat.faturamentoSemana || 0);
+      elMes.textContent = _formatarDinheiro(fat.faturamentoMes || 0);
     }
 
-    // Comparativo ontem (se disponível)
-    const ontem = resumo?.faturamentoOntem || null;
-    if (ontem !== null && ontem !== undefined) {
+    // Comparativo ontem (usar do novo endpoint)
+    const ontem = fat?.faturamentoOntem ?? null;
+    if (ontem !== null && ontem !== undefined && valDia > 0) {
       const diff = valDia - ontem;
       const pct = ontem > 0 ? ((diff / ontem) * 100).toFixed(0) : null;
       let html = "";

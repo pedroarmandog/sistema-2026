@@ -55,6 +55,12 @@ router.get("/periodicos", dashboardController.periodicos);
 // Rota para contas a pagar vencendo hoje
 router.get("/contas-a-pagar-hoje", dashboardController.contasAPagarHoje);
 
+// Rota para faturamento por períodos (dia, semana, mês) - usado pelo Mobile Dashboard
+router.get(
+  "/faturamento-periodos",
+  dashboardController.faturamentoPeriodos,
+);
+
 // Rota para indicadores do atendimento (agendados, checkin, prontos)
 router.get(
   "/indicadores-atendimento",

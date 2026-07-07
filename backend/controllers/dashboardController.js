@@ -846,6 +846,87 @@ exports.petsNoEstabelecimento = async (req, res) => {
   }
 };
 
+// Faturamento por períodos (dia, semana, mês) - usado pelo Mobile Dashboard
+// Soma de vendas pagas + agendamentos concluídos (serviços de agendamento-detalhes)
+exports.faturamentoPeriodos = async (req, res) => {
+  try {
+    const empresaId = req.user?.empresaId;
+    if (!empresaId) {
+      return res.status(403).json({ erro: "Empresa não identificada" });
+    }
+
+    const dataBrasil = getHojeBrasilStr();
+    const hojeParts = dataBrasil.split("-").map(Number);
+    const ano = hojeParts[0];
+    const mes = hojeParts[1];
+    const dia = hojeParts[2];
+
+    // Range do dia de hoje (offset -03:00)
+    const hojeStart = new Date(`${dataBrasil}T00:00:00-03:00`);
+    const hojeNext = new Date(hojeStart);
+    hojeNext.setDate(hojeStart.getDate() + 1);
+
+    // Range de ontem
+    const ontemDate = new Date(hojeStart);
+    ontemDate.setDate(hojeStart.getDate() - 1);
+    const ontemNext = new Date(hojeStart); // mesmo que hojeStart
+
+    // Range da semana (domingo a sábado)
+    const diaSemana = hojeStart.getDay(); // 0=dom
+    const semanaStart = new Date(hojeStart);
+    semanaStart.setDate(hojeStart.getDate() - diaSemana);
+    const semanaNext = new Date(semanaStart);
+    semanaNext.setDate(semanaStart.getDate() + 7);
+
+    // Range do mês
+    const mesStart = new Date(ano, mes - 1, 1, 0, 0, 0, 0);
+    // Ajustar para -03:00 subtraindo 3h
+    mesStart.setHours(mesStart.getHours() - 3);
+    const mesNext = new Date(ano, mes, 1, 0, 0, 0, 0);
+    mesNext.setHours(mesNext.getHours() - 3);
+
+    const eW = { empresa_id: empresaId };
+
+    // Função auxiliar para somar faturamento de vendas + agendamentos em um range
+    async function somarFaturamento(inicio, fim) {
+      const [vendas, agendamentos] = await Promise.all([
+        Venda.sum("totalPago", {
+          where: {
+            ...eW,
+            data: { [Op.gte]: inicio, [Op.lt]: fim },
+            status: { [Op.in]: ["pago", "parcial"] },
+          },
+        }),
+        Agendamento.sum("totalPago", {
+          where: {
+            ...eW,
+            dataAgendamento: { [Op.gte]: inicio, [Op.lt]: fim },
+            status: "concluido",
+          },
+        }),
+      ]);
+      return parseFloat((vendas || 0)) + parseFloat((agendamentos || 0));
+    }
+
+    const [faturamentoHoje, faturamentoOntem, faturamentoSemana, faturamentoMes] =
+      await Promise.all([
+        somarFaturamento(hojeStart, hojeNext),
+        somarFaturamento(ontemDate, ontemNext),
+        somarFaturamento(semanaStart, semanaNext),
+        somarFaturamento(mesStart, mesNext),
+      ]);
+
+    res.json({
+      faturamentoHoje,
+      faturamentoOntem,
+      faturamentoSemana,
+      faturamentoMes,
+    });
+  } catch (error) {
+    return handleError(res, "Erro ao buscar faturamento por períodos", error);
+  }
+};
+
 exports.indicadoresAtendimento = async (req, res) => {
   try {
     const dataBrasil = getHojeBrasilStr();
