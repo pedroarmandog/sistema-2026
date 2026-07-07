@@ -752,6 +752,14 @@ exports.petsNoEstabelecimento = async (req, res) => {
 
     const dataBrasil = getHojeBrasilStr();
 
+    // Usar range com offset -03:00 (mesma estratégia do GET /api/agendamentos)
+    // para evitar problemas de timezone quando o MySQL está em UTC.
+    const start = new Date(`${dataBrasil}T00:00:00-03:00`);
+    const next = new Date(start);
+    next.setDate(start.getDate() + 1);
+    const startStr = start.toISOString().slice(0, 19).replace("T", " ");
+    const nextStr = next.toISOString().slice(0, 19).replace("T", " ");
+
     const table =
       typeof Agendamento.getTableName === "function"
         ? Agendamento.getTableName()
@@ -764,24 +772,23 @@ exports.petsNoEstabelecimento = async (req, res) => {
       SUM(CASE WHEN status='pronto'    THEN 1 ELSE 0 END) AS pronto,
       SUM(CASE WHEN status='concluido' THEN 1 ELSE 0 END) AS concluido
       FROM ${table}
-      WHERE DATE(dataAgendamento) = :dataBrasil
+      WHERE dataAgendamento >= :start
+        AND dataAgendamento < :next
         AND empresa_id = :empresaId
         AND status NOT IN ('cancelado')`;
 
     const [rows] = await sequelize.query(sql, {
-      replacements: { dataBrasil, empresaId },
+      replacements: { start: startStr, next: nextStr, empresaId },
       type: sequelize.QueryTypes.SELECT,
     });
 
     // Lista dos agendamentos ativos (checkin + pronto) com dados do pet
     const agendamentosAtivos = await Agendamento.findAll({
-      where: Object.assign(
-        literal(`DATE(dataAgendamento) = '${dataBrasil}'`),
-        {
-          empresa_id: empresaId,
-          status: { [Op.in]: ["checkin", "pronto"] },
-        },
-      ),
+      where: {
+        dataAgendamento: { [Op.gte]: start, [Op.lt]: next },
+        empresa_id: empresaId,
+        status: { [Op.in]: ["checkin", "pronto"] },
+      },
       include: [
         {
           model: Pet,
@@ -839,7 +846,12 @@ exports.indicadoresAtendimento = async (req, res) => {
       ? "AND empresa_id = :empresaId"
       : "";
 
-    // Agregação em uma única query para reduzir número de queries
+    // Usar range com offset -03:00 (mesma estratégia do GET /api/agendamentos)
+    // para evitar problemas de timezone quando o MySQL está em UTC.
+    const start = new Date(`${dataBrasil}T00:00:00-03:00`);
+    const next = new Date(start);
+    next.setDate(start.getDate() + 1);
+
     const table =
       typeof Agendamento.getTableName === "function"
         ? Agendamento.getTableName()
@@ -849,11 +861,15 @@ exports.indicadoresAtendimento = async (req, res) => {
       SUM(CASE WHEN status='checkin' THEN 1 ELSE 0 END) AS checkin,
       SUM(CASE WHEN status='pronto' THEN 1 ELSE 0 END) AS prontos
       FROM ${table}
-      WHERE DATE(dataAgendamento) = :dataBrasil
+      WHERE dataAgendamento >= :start
+        AND dataAgendamento < :next
         AND status NOT IN ('cancelado')
         ${empresaFilter}`;
 
-    const replacements = { dataBrasil };
+    const replacements = {
+      start: start.toISOString().slice(0, 19).replace("T", " "),
+      next: next.toISOString().slice(0, 19).replace("T", " "),
+    };
     if (req.user?.empresaId) replacements.empresaId = req.user.empresaId;
 
     const [rows] = await sequelize.query(sql, {
