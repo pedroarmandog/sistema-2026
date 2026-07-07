@@ -113,6 +113,7 @@ exports.resumo = async (req, res) => {
 
     const r = rows && rows[0] ? rows[0] : {};
     const clientes = Number(r.clientes || 0);
+    const clientesMes = Number(r.clientesMes || 0);
     const agendamentosHoje = Number(r.agendamentosHoje || 0);
     const vendasHoje = Number(r.vendasHoje || 0);
     const vendasTotal = parseFloat(Number(r.vendasTotal || 0));
@@ -121,6 +122,7 @@ exports.resumo = async (req, res) => {
 
     const out = {
       clientes,
+      clientesMes,
       agendamentosHoje,
       vendasHoje,
       vendasTotal,
