@@ -650,17 +650,33 @@ const DashboardApp = {
   },
 
   // === INDICADORES DO ATENDIMENTO ===
+  // Usa o mesmo endpoint do Mobile (pets-no-estabelecimento) que possui a lógica
+  // correta com filtro de cancelados e obrigatoriedade de empresaId.
+  // Fallback para indicadores-atendimento caso o endpoint principal falhe.
   async loadIndicadores() {
     try {
-      const data = await this.apiFetch("/dashboard/indicadores-atendimento");
+      // Tenta primeiro o endpoint usado pelo Mobile (já tem cache e filtro de cancelados)
+      const data = await this.apiFetch("/dashboard/pets-no-estabelecimento");
       const indA = document.getElementById("indAgendados");
       if (indA) indA.textContent = data.agendados || 0;
       const indC = document.getElementById("indCheckin");
       if (indC) indC.textContent = data.checkin || 0;
       const indP = document.getElementById("indProntos");
-      if (indP) indP.textContent = data.prontos || 0;
+      if (indP) indP.textContent = data.pronto || 0;
     } catch (err) {
-      console.error("Erro indicadores:", err);
+      // Fallback: se o endpoint principal falhar (ex: empresa não identificada),
+      // usa o endpoint secundário que também foi corrigido
+      try {
+        const data = await this.apiFetch("/dashboard/indicadores-atendimento");
+        const indA = document.getElementById("indAgendados");
+        if (indA) indA.textContent = data.agendados || 0;
+        const indC = document.getElementById("indCheckin");
+        if (indC) indC.textContent = data.checkin || 0;
+        const indP = document.getElementById("indProntos");
+        if (indP) indP.textContent = data.prontos || 0;
+      } catch (err2) {
+        console.error("Erro indicadores (ambos endpoints):", err2);
+      }
     }
   },
 

@@ -849,7 +849,9 @@ exports.indicadoresAtendimento = async (req, res) => {
       SUM(CASE WHEN status='checkin' THEN 1 ELSE 0 END) AS checkin,
       SUM(CASE WHEN status='pronto' THEN 1 ELSE 0 END) AS prontos
       FROM ${table}
-      WHERE DATE(dataAgendamento) = :dataBrasil ${empresaFilter}`;
+      WHERE DATE(dataAgendamento) = :dataBrasil
+        AND status NOT IN ('cancelado')
+        ${empresaFilter}`;
 
     const replacements = { dataBrasil };
     if (req.user?.empresaId) replacements.empresaId = req.user.empresaId;
