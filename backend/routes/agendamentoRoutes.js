@@ -819,6 +819,27 @@ router.patch("/:id/status", async (req, res) => {
       });
     }
 
+    // ── Push: checkout ─────────────────────────────────────────────
+    if (status === "concluido") {
+      setImmediate(async () => {
+        try {
+          const pushService = require("../services/pushNotificationService");
+          const ag = await Agendamento.findByPk(id, {
+            include: [{ model: Pet, as: "pet", required: false }],
+          });
+          const empresaId = ag?.empresa_id;
+          if (empresaId) {
+            await pushService.notificarEmpresa(empresaId, "checkout", {
+              petNome: ag?.pet?.nome || "",
+              horario: ag?.horario || "",
+            });
+          }
+        } catch (e) {
+          console.warn("[Push] Erro ao enviar push checkout:", e.message);
+        }
+      });
+    }
+
     // ── Trigger: primeiro_banho ─────────────────────────────────────
     if (status === "concluido") {
       setImmediate(async () => {

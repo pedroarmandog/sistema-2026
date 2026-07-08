@@ -327,6 +327,39 @@ exports.criarVenda = async (req, res) => {
         );
       }
     });
+
+    // ── Push: nova_venda ──────────────────────────────────────────
+    setImmediate(async () => {
+      try {
+        const pushService = require("../services/pushNotificationService");
+        const empresaId = venda.empresa_id || req.user?.empresaId;
+        if (empresaId) {
+          const pagamentos = Array.isArray(venda.pagamentos) ? venda.pagamentos : [];
+          const formaPag = pagamentos.length > 0
+            ? pagamentos.map(p => p.forma || p.tipo || "").filter(Boolean).join(", ")
+            : "—";
+          const itens = Array.isArray(venda.itens) ? venda.itens : [];
+          const qtdItens = itens.reduce((acc, i) => acc + (parseInt(i.quantidade) || 1), 0);
+          let valorTotal = 0;
+          try {
+            const totais = venda.totais
+              ? typeof venda.totais === "string" ? JSON.parse(venda.totais) : venda.totais
+              : null;
+            valorTotal = totais?.final || totais?.totalFinal || totais?.total || venda.valor || 0;
+          } catch (_) {}
+          const horario = venda.data ? new Date(venda.data).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
+          await pushService.notificarEmpresa(empresaId, "nova_venda", {
+            clienteNome: venda.cliente || "",
+            total: valorTotal,
+            pagamento: formaPag,
+            horario,
+            itens: qtdItens,
+          });
+        }
+      } catch (e) {
+        console.warn("[Push] Erro ao enviar push nova_venda:", e.message);
+      }
+    });
   } catch (error) {
     console.error("Erro ao criar venda:", error);
     res.status(500).json({ erro: "Erro ao criar venda" });

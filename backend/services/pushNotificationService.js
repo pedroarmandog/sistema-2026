@@ -64,6 +64,15 @@ const PAYLOADS = {
     data: { page: "pets" },
   }),
 
+  checkout: (dados) => ({
+    title: "✅ Check-out Realizado",
+    body: dados.petNome
+      ? `${dados.petNome} realizou check-out${dados.horario ? " às " + dados.horario : ""}`
+      : "Um pet realizou check-out",
+    tag: "checkout",
+    data: { page: "agenda" },
+  }),
+
   servico_concluido: (dados) => ({
     title: "✅ Serviço Concluído",
     body: dados.petNome
@@ -71,6 +80,15 @@ const PAYLOADS = {
       : "Um serviço foi finalizado",
     tag: "servico_concluido",
     data: { page: "agenda" },
+  }),
+
+  nova_venda: (dados) => ({
+    title: "💰 Nova Venda Realizada",
+    body: dados.clienteNome
+      ? `Cliente: ${dados.clienteNome} • Total: R$ ${Number(dados.total || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}${dados.pagamento ? " • Pagamento: " + dados.pagamento : ""}${dados.horario ? " • " + dados.horario : ""}`
+      : "Uma nova venda foi realizada",
+    tag: "nova_venda",
+    data: { page: "financeiro" },
   }),
 
   pagamento_recebido: (dados) => ({
