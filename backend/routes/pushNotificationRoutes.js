@@ -10,14 +10,79 @@ router.use(authUser);
 // Retorna a chave pública VAPID para uso no frontend.
 // Não é informação sensível — a chave pública pode ser exposta.
 router.get("/vapid-public-key", (req, res) => {
+  console.log("[Push] GET /vapid-public-key - Solicitada chave pública VAPID");
   const key = pushService.getVapidPublicKey();
   if (!key) {
+    console.warn("[Push] ⚠️ VAPID key não disponível");
     return res.status(503).json({
       erro: "Push notifications não configuradas",
       code: "VAPID_NOT_CONFIGURED",
     });
   }
+  console.log("[Push] ✅ VAPID key retornada com sucesso");
   res.json({ vapidPublicKey: key });
+});
+
+// ── POST /api/push/test ────────────────────────────────────
+// Endpoint de teste para enviar notificação de debug
+router.post("/test", authUser, async (req, res) => {
+  try {
+    const { evento, mensagem } = req.body;
+    const empresaId = req.user.empresaId;
+    const usuarioId = req.user.id;
+
+    console.log(`[Push] 🧪 TESTE DE NOTIFICAÇÃO`);
+    console.log(`[Push]    Usuário: ${usuarioId}, Empresa: ${empresaId}`);
+    console.log(`[Push]    Evento: ${evento}, Mensagem: ${mensagem}`);
+
+    if (!empresaId) {
+      return res.status(400).json({
+        sucesso: false,
+        mensagem: "Usuário não possui empresa_id",
+      });
+    }
+
+    // Buscar subscriptions ativas
+    const { PushSubscription } = require("../models");
+    const subscriptions = await PushSubscription.findAll({
+      where: { empresa_id: empresaId, ativo: true },
+    });
+
+    console.log(`[Push]    Subscriptions encontradas: ${subscriptions.length}`);
+
+    if (subscriptions.length === 0) {
+      return res.json({
+        sucesso: false,
+        mensagem: "Nenhuma subscription ativa para esta empresa",
+        empresaId,
+        totalSubscriptions: 0,
+      });
+    }
+
+    // Enviar notificação de teste
+    await pushService.notificarEmpresa(empresaId, evento || "novo_agendamento", {
+      petNome: mensagem || "Teste",
+      horario: new Date().toLocaleTimeString("pt-BR", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      servico: "Teste de notificação",
+    });
+
+    res.json({
+      sucesso: true,
+      mensagem: "Notificação de teste enviada",
+      empresaId,
+      totalSubscriptions: subscriptions.length,
+    });
+  } catch (err) {
+    console.error("[Push] ❌ Erro no teste:", err);
+    res.status(500).json({
+      sucesso: false,
+      mensagem: "Erro ao enviar notificação de teste",
+      erro: err.message,
+    });
+  }
 });
 
 // ── POST /api/push/subscribe ──────────────────────────────

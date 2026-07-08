@@ -149,36 +149,81 @@ const PAYLOADS = {
  * @param {object} dados  — dados do evento para montar o payload
  */
 async function notificarEmpresa(empresaId, evento, dados = {}) {
-  if (!webpush || !_vapidConfigurado) return;
-  if (!PushSubscription) return;
+  // Log inicial
+  console.log(`[Push] ========== INÍCIO notificarEmpresa ==========`);
+  console.log(`[Push] Evento: ${evento}, Empresa: ${empresaId}`);
+  console.log(`[Push] Dados:`, JSON.stringify(dados));
 
+  // Verificar pré-requisitos
+  if (!webpush) {
+    console.error("[Push] ❌ web-push NÃO está instalado/importado");
+    return;
+  }
+  console.log("[Push] ✅ web-push disponível");
+
+  if (!_vapidConfigurado) {
+    console.error("[Push] ❌ VAPID NÃO está configurado");
+    return;
+  }
+  console.log("[Push] ✅ VAPID configurado");
+
+  if (!PushSubscription) {
+    console.error("[Push] ❌ Modelo PushSubscription NÃO encontrado");
+    return;
+  }
+  console.log("[Push] ✅ Modelo PushSubscription disponível");
+
+  // Buscar subscriptions
   let subscriptions;
   try {
     subscriptions = await PushSubscription.findAll({
       where: { empresa_id: empresaId, ativo: true },
     });
+    console.log(`[Push] ✅ Encontradas ${subscriptions.length} subscription(s) ativa(s) para empresa ${empresaId}`);
   } catch (err) {
-    console.error("[Push] Erro ao buscar subscriptions:", err?.message);
+    console.error(`[Push] ❌ Erro ao buscar subscriptions:`, err?.message);
+    console.error(err?.stack);
     return;
   }
 
-  if (!subscriptions.length) return;
+  if (!subscriptions.length) {
+    console.log(`[Push] ⚠️ Nenhuma subscription ativa para empresa ${empresaId} - não há nada para notificar`);
+    return;
+  }
 
+  // Verificar se o evento é válido
   const payloadFactory = PAYLOADS[evento];
   if (!payloadFactory) {
-    console.warn("[Push] Evento desconhecido:", evento);
+    console.error(`[Push] ❌ Evento desconhecido: "${evento}". Eventos disponíveis:`, Object.keys(PAYLOADS));
     return;
   }
+  console.log(`[Push] ✅ Evento "${evento}" é válido`);
 
+  // Montar payload
   const payload = payloadFactory(dados);
   const payloadStr = JSON.stringify(payload);
-  const expiradas = [];
+  console.log(`[Push] Payload montado:`, payload);
 
+  const expiradas = [];
+  let sucesso = 0;
+  let falhas = 0;
+  let ignoradas = 0;
+
+  // Enviar para cada subscription
+  console.log(`[Push] Iniciando envio para ${subscriptions.length} dispositivo(s)...`);
+  
   await Promise.allSettled(
-    subscriptions.map(async (sub) => {
-      // Verificar se o usuário quer este tipo de notificação
+    subscriptions.map(async (sub, index) => {
       const prefs = sub.preferencias || {};
-      if (prefs[evento] === false) return;
+      
+      // Verificar preferências do usuário
+      if (prefs[evento] === false) {
+        console.log(`[Push] ⏭️  [${index + 1}/${subscriptions.length}] Usuário ${sub.usuario_id} desativou notificações para "${evento}"`);
+        ignoradas++;
+        return;
+      }
+
+      console.log(`[Push] 📤 [${index + 1}/${subscriptions.length}] Enviando para usuário ${sub.usuario_id} (endpoint: ${sub.endpoint?.substring(0, 50)}...)`);
 
       const subscriptionData = {
         endpoint: sub.endpoint,
@@ -187,33 +232,45 @@ async function notificarEmpresa(empresaId, evento, dados = {}) {
 
       try {
         await webpush.sendNotification(subscriptionData, payloadStr);
-        // Atualizar último uso em background (não aguardar)
-        sub.update({ ultimo_uso: new Date() }).catch(() => {});
+        console.log(`[Push] ✅ [${index + 1}/${subscriptions.length}] Notificação enviada com sucesso para usuário ${sub.usuario_id}`);
+        sucesso++;
+        
+        // Atualizar último uso em background
+        sub.update({ ultimo_uso: new Date() }).catch((err) => {
+          console.warn(`[Push] ⚠️ Erro ao atualizar ultimo_uso:`, err?.message);
+        });
       } catch (err) {
+        console.error(`[Push] ❌ [${index + 1}/${subscriptions.length}] Falha ao enviar para usuário ${sub.usuario_id}:`, err?.message);
+        console.error(`[Push]    Status Code: ${err?.statusCode}`);
+        console.error(`[Push]    Endpoint: ${sub.endpoint}`);
+        
         if (err.statusCode === 410 || err.statusCode === 404) {
-          // Subscription expirada — marcar para remoção
+          console.log(`[Push] 🗑️  Subscription expirada (${err.statusCode}) - marcando para remoção`);
           expiradas.push(sub.id);
         } else {
-          console.error(
-            `[Push] Falha ao enviar para sub ${sub.id}:`,
-            err?.message,
-            err?.statusCode,
-          );
+          falhas++;
         }
       }
     }),
   );
 
+  // Log final
+  console.log(`[Push] ========== RESUMO DO ENVIO ==========`);
+  console.log(`[Push] Total: ${subscriptions.length} | Sucesso: ${sucesso} | Falhas: ${falhas} | Ignoradas: ${ignoradas} | Expiradas: ${expiradas.length}`);
+
   // Remover subscriptions expiradas
   if (expiradas.length) {
+    console.log(`[Push] Removendo ${expiradas.length} subscription(s) expirada(s)...`);
     await PushSubscription.update(
       { ativo: false },
       { where: { id: { [Op.in]: expiradas } } },
-    ).catch(() => {});
-    console.log(
-      `[Push] ${expiradas.length} subscription(s) expirada(s) marcadas como inativas`,
-    );
+    ).catch((err) => {
+      console.error(`[Push] ❌ Erro ao remover subscriptions expiradas:`, err?.message);
+    });
+    console.log(`[Push] ✅ ${expiradas.length} subscription(s) removidas`);
   }
+
+  console.log(`[Push] ========== FIM notificarEmpresa ==========\n`);
 }
 
 /**

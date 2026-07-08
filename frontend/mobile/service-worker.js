@@ -109,12 +109,21 @@ self.addEventListener("fetch", (event) => {
 
 // ─── PUSH NOTIFICATIONS ───────────────────────────────────
 self.addEventListener("push", (event) => {
-  if (!event.data) return;
+  console.log("[SW] 📬 Evento PUSH recebido!");
+  console.log("[SW]    event.data:", event.data);
+  console.log("[SW]    event.data.text():", event.data?.text());
+  
+  if (!event.data) {
+    console.log("[SW] ⚠️ Evento push sem dados - ignorando");
+    return;
+  }
 
   let payload;
   try {
     payload = event.data.json();
+    console.log("[SW] ✅ Payload JSON:", payload);
   } catch (e) {
+    console.log("[SW] ⚠️ Payload não é JSON, usando texto");
     payload = {
       title: "PetHub",
       body: event.data.text(),
@@ -134,16 +143,30 @@ self.addEventListener("push", (event) => {
     requireInteraction: payload.requireInteraction || false,
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  console.log("[SW] 📢 Exibindo notificação:", title, options);
+
+  event.waitUntil(
+    self.registration.showNotification(title, options)
+      .then(() => {
+        console.log("[SW] ✅ Notificação exibida com sucesso");
+      })
+      .catch((err) => {
+        console.error("[SW] ❌ Erro ao exibir notificação:", err);
+      })
+  );
 });
 
 // ─── NOTIFICATION CLICK ───────────────────────────────────
 self.addEventListener("notificationclick", (event) => {
+  console.log("[SW] 🖱️  Notificação clicada:", event.notification);
+  
   event.notification.close();
 
   const data = event.notification.data || {};
   const targetPage = data.page || "dashboard";
   const targetUrl = `/mobile/app.html?page=${targetPage}`;
+
+  console.log("[SW]    Navegando para:", targetUrl);
 
   event.waitUntil(
     clients
@@ -152,15 +175,20 @@ self.addEventListener("notificationclick", (event) => {
         // Se já existe uma aba do app aberta, focar nela
         for (const client of clientList) {
           if (client.url.includes("/mobile/") && "focus" in client) {
+            console.log("[SW] ✅ Focando em aba existente");
             client.navigate(targetUrl);
             return client.focus();
           }
         }
         // Caso contrário, abrir nova aba
         if (clients.openWindow) {
+          console.log("[SW] ✅ Abrindo nova aba");
           return clients.openWindow(targetUrl);
         }
-      }),
+      })
+      .catch((err) => {
+        console.error("[SW] ❌ Erro ao abrir notificação:", err);
+      })
   );
 });
 
