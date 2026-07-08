@@ -23,6 +23,7 @@ window.PagePets = (function () {
     _renderShell(container);
     await _carregarDados(container);
     _startAutoRefresh(container);
+    _setupSyncListeners();
   }
 
   function _renderShell(container) {
@@ -308,6 +309,7 @@ window.PagePets = (function () {
     _stopAutoRefresh();
     _container = null;
     _todosPets = [];
+    _removeSyncListeners();
   }
 
   /* ── Helpers ─────────────────────────────────────────────── */
@@ -352,9 +354,41 @@ window.PagePets = (function () {
 
   function escapeHtml(str) {
     return String(str || "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
+      .replace(/&/g, "&")
+      .replace(/</g, "<")
+      .replace(/>/g, ">");
+  }
+
+  /* ── Sincronização ─────────────────────────────────────────── */
+  let _syncUnsubscribers = [];
+
+  function _setupSyncListeners() {
+    if (typeof MobileSync === "undefined" || !MobileSync.on) return;
+
+    // Cliente atualizado/criado/removido → recarregar lista de pets
+    const unsub1 = MobileSync.on("cliente-atualizado", () => {
+      console.log("[Pets] Sincronizando: cliente-atualizado");
+      refresh();
+    });
+    const unsub2 = MobileSync.on("cliente-criado", () => {
+      console.log("[Pets] Sincronizando: cliente-criado");
+      refresh();
+    });
+    const unsub3 = MobileSync.on("cliente-removido", () => {
+      console.log("[Pets] Sincronizando: cliente-removido");
+      refresh();
+    });
+
+    _syncUnsubscribers = [unsub1, unsub2, unsub3];
+  }
+
+  function _removeSyncListeners() {
+    _syncUnsubscribers.forEach((unsub) => {
+      try {
+        unsub();
+      } catch (e) {}
+    });
+    _syncUnsubscribers = [];
   }
 
   return { init, refresh, destroy };

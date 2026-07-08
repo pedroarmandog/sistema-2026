@@ -7,7 +7,7 @@ const JWT_EXPIRES_IN = "30d"; // JWT de longa duração — a validade real é c
 
 // Cache simples em memória para usuários e status de empresa
 const USER_CACHE = new Map(); // key: userId -> { user, expiresAt }
-const USER_CACHE_TTL = Number(process.env.USER_CACHE_TTL_MS) || 60 * 1000; // 60s default
+const USER_CACHE_TTL = Number(process.env.USER_CACHE_TTL_MS) || 10 * 1000; // 10s default (reduzido de 60s para garantir sincronização)
 
 const EMPRESA_BLOCKED_CACHE = new Map(); // key: empresaId -> { blocked, expiresAt }
 const EMPRESA_CACHE_TTL =

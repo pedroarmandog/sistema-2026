@@ -16,6 +16,7 @@ window.PageAgenda = (function () {
     _dataAtual = new Date();
     _renderShell(container);
     await _carregarAgendamentos(container);
+    _setupSyncListeners();
   }
 
   function _renderShell(container) {
@@ -250,6 +251,7 @@ window.PageAgenda = (function () {
   function destroy() {
     if (_abortController) _abortController.abort();
     _container = null;
+    _removeSyncListeners();
   }
 
   /* ── Helpers ─────────────────────────────────────────────── */
@@ -295,6 +297,37 @@ window.PageAgenda = (function () {
       .replace(/&/g, "&")
       .replace(/</g, "<")
       .replace(/>/g, ">");
+  }
+
+  /* ── Sincronização ─────────────────────────────────────────── */
+  let _syncUnsubscribers = [];
+
+  function _setupSyncListeners() {
+    if (typeof MobileSync === "undefined" || !MobileSync.on) return;
+
+    const unsub1 = MobileSync.on("agendamento-atualizado", () => {
+      console.log("[Agenda] Sincronizando: agendamento-atualizado");
+      refresh();
+    });
+    const unsub2 = MobileSync.on("agendamento-criado", () => {
+      console.log("[Agenda] Sincronizando: agendamento-criado");
+      refresh();
+    });
+    const unsub3 = MobileSync.on("agendamento-cancelado", () => {
+      console.log("[Agenda] Sincronizando: agendamento-cancelado");
+      refresh();
+    });
+
+    _syncUnsubscribers = [unsub1, unsub2, unsub3];
+  }
+
+  function _removeSyncListeners() {
+    _syncUnsubscribers.forEach((unsub) => {
+      try {
+        unsub();
+      } catch (e) {}
+    });
+    _syncUnsubscribers = [];
   }
 
   return { init, refresh, destroy };

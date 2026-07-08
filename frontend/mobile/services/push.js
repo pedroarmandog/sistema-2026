@@ -52,6 +52,14 @@ window.MobilePush = (function () {
       return { ok: false, message: "Service Worker não inicializado" };
     }
 
+    // Verificar se o Service Worker está ativo (controlador da página)
+    if (!navigator.serviceWorker.controller) {
+      return {
+        ok: false,
+        message: "Service Worker não está ativo. Recarregue o app e tente novamente.",
+      };
+    }
+
     // Solicitar permissão ao usuário
     const permission = await Notification.requestPermission();
     if (permission !== "granted") {

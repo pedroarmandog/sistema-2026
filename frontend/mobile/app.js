@@ -118,6 +118,24 @@
       MobilePush.setRegistration(reg);
       console.log("[App] Service Worker registrado (scope:", reg.scope, ")");
 
+      // Aguardar SW estar ativo antes de continuar
+      if (reg.active) {
+        console.log("[App] SW já está ativo");
+      } else {
+        console.log("[App] Aguardando SW ficar ativo...");
+        await new Promise((resolve) => {
+          const checkController = () => {
+            if (navigator.serviceWorker.controller) {
+              console.log("[App] SW ativado com sucesso");
+              resolve();
+            } else {
+              setTimeout(checkController, 100);
+            }
+          };
+          checkController();
+        });
+      }
+
       // Detectar atualizações do SW
       reg.addEventListener("updatefound", () => {
         const newWorker = reg.installing;
@@ -153,6 +171,11 @@
 
     // Iniciar heartbeat de sessão
     MobileAuth.iniciarHeartbeat();
+
+    // Iniciar sincronização em tempo real
+    if (typeof MobileSync !== "undefined" && MobileSync.init) {
+      MobileSync.init();
+    }
 
     // Ocultar splash
     _hideSplash();
