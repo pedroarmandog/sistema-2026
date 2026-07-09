@@ -3604,11 +3604,11 @@ function limparFormulario() {
   // Limpar campos
   __safeSetValue("pesquisarCliente", "");
   __safeSetValue("pesquisarProfissional", "");
-  document.getElementById("pesquisarProduto").value = "";
-  document.getElementById("quantidade").value = "1";
-  document.getElementById("valorUnitario").value = "";
-  document.getElementById("desconto").value = "0";
-  document.getElementById("acrescimo").value = "0";
+  __safeSetValue("pesquisarProduto", "");
+  __safeSetValue("quantidade", "1");
+  __safeSetValue("valorUnitario", "");
+  __safeSetValue("desconto", "0");
+  __safeSetValue("acrescimo", "0");
 
   // Limpar campos específicos do produto se existirem
   const observacaoField = document.getElementById("observacao");
