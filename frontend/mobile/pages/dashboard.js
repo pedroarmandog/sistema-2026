@@ -17,6 +17,7 @@ window.PageDashboard = (function () {
 
   async function init(container) {
     console.log("[Dashboard] init() chamado");
+    _isRefreshing = false; // Resetar flag para permitir carregamento
     _container = container;
     _render(container);
     console.log("[Dashboard] Chamando _loadData...");
