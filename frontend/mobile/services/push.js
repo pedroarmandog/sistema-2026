@@ -67,33 +67,49 @@ window.MobilePush = (function () {
     }
 
     try {
+      console.log("[Push Front] ✅ Permissão concedida");
+      console.log("[Push Front] ✅ Service Worker ativo");
+      
       // Buscar chave pública VAPID do servidor
+      console.log("[Push Front] 🔄 Buscando VAPID key...");
       const { vapidPublicKey } = await MobileApi.get(
         "/api/push/vapid-public-key",
       );
       if (!vapidPublicKey) throw new Error("VAPID key não disponível");
+      console.log("[Push Front] ✅ VAPID key recebida:", vapidPublicKey.substring(0, 20) + "...");
 
       // Converter chave VAPID de Base64 para Uint8Array
+      console.log("[Push Front] 🔄 Convertendo VAPID key...");
       const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
+      console.log("[Push Front] ✅ VAPID convertida:", applicationServerKey.length, "bytes");
 
       // Criar subscription
+      console.log("[Push Front] 🔄 Chamando pushManager.subscribe()...");
       const subscription = await _swRegistration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey,
       });
+      console.log("[Push Front] ✅ Subscription criada:", subscription.endpoint.substring(0, 60) + "...");
 
       // Detectar plataforma
       const plataforma = detectarPlataforma();
+      console.log("[Push Front] ✅ Plataforma:", plataforma);
 
       // Enviar subscription para o backend
+      console.log("[Push Front] 🔄 Enviando subscription para backend...");
       await MobileApi.post("/api/push/subscribe", {
         ...subscription.toJSON(),
         plataforma,
       });
+      console.log("[Push Front] ✅ Subscription salva no backend");
 
       return { ok: true, message: "Notificações ativadas com sucesso" };
     } catch (err) {
-      console.error("[Push] Erro ao ativar notificações:", err);
+      console.error("[Push Front] ❌ Erro ao ativar notificações:", err);
+      console.error("[Push Front] ❌ Nome do erro:", err.name);
+      console.error("[Push Front] ❌ Mensagem:", err.message);
+      console.error("[Push Front] ❌ Stack:", err.stack);
+      console.error("[Push Front] ❌ Objeto completo:", err);
       return {
         ok: false,
         message: err.message || "Erro ao ativar notificações",
