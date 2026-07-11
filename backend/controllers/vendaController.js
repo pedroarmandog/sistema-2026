@@ -374,7 +374,50 @@ exports.atualizarVenda = async (req, res) => {
       return res.status(404).json({ erro: "Venda não encontrada" });
     }
     await venda.update(req.body);
-    res.json(venda);
+
+    // Recarregar venda com dados atualizados para o push
+    const vendaAtualizada = await Venda.findByPk(req.params.id);
+    
+    // ── Push: notificar após atualizar venda (finalização com pagamento) ──
+    setImmediate(async () => {
+      try {
+        const pushService = require("../services/pushNotificationService");
+        const empresaId = vendaAtualizada.empresa_id || req.user?.empresaId;
+        if (empresaId) {
+          // Enviar push de nova_venda
+          const pagamentos = Array.isArray(vendaAtualizada.pagamentos) ? vendaAtualizada.pagamentos : [];
+          const formaPag = pagamentos.length > 0
+            ? pagamentos.map(p => p.forma || p.tipo || "").filter(Boolean).join(", ")
+            : "—";
+          const itens = Array.isArray(vendaAtualizada.itens) ? vendaAtualizada.itens : [];
+          const qtdItens = itens.reduce((acc, i) => acc + (parseInt(i.quantidade) || 1), 0);
+          let valorTotal = 0;
+          try {
+            const totais = vendaAtualizada.totais
+              ? typeof vendaAtualizada.totais === "string" ? JSON.parse(vendaAtualizada.totais) : vendaAtualizada.totais
+              : null;
+            valorTotal = totais?.final || totais?.totalFinal || totais?.total || vendaAtualizada.valor || 0;
+          } catch (_) {}
+          const horario = vendaAtualizada.data ? new Date(vendaAtualizada.data).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
+          await pushService.notificarEmpresa(empresaId, "nova_venda", {
+            clienteNome: vendaAtualizada.cliente || "",
+            total: valorTotal,
+            pagamento: formaPag,
+            horario,
+            itens: qtdItens,
+          });
+
+          // Enviar push de pagamento_recebido
+          await pushService.notificarEmpresa(empresaId, "pagamento_recebido", {
+            valor: valorTotal,
+          });
+        }
+      } catch (e) {
+        console.warn("[Push] Erro ao enviar push ao atualizar venda:", e.message);
+      }
+    });
+
+    res.json(vendaAtualizada);
   } catch (error) {
     console.error("Erro ao atualizar venda:", error);
     res.status(500).json({ erro: "Erro ao atualizar venda" });

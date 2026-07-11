@@ -3633,7 +3633,9 @@ function limparFormulario() {
   };
 
   // Atualizar display
-  atualizarTotais();
+  if (typeof window.atualizarTotaisGerais === "function") {
+    window.atualizarTotaisGerais();
+  }
   renderizarItens();
 
   console.log("🧹 Formulário limpo - Pronto para nova venda");
