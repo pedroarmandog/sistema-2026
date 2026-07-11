@@ -11,6 +11,8 @@
   "lang": "pt-BR",
   "dir": "ltr",
   "categories": ["business", "productivity"],
+  "gcm_sender_id": "103953800507",
+  "gcm_user_visible_only": true,
   "icons": [
     {
       "src": "/mobile/icons/icon-192.png",
