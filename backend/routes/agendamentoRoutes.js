@@ -583,9 +583,13 @@ router.post("/:id/cancelar", async (req, res) => {
     }
 
     const bcrypt = require("bcryptjs");
-    const { Admin } = require("../models");
-    // Buscar primeiro como Admin (painel)
-    let user = await Admin.findOne({ where: { email: usuarioLogin } });
+    const { Admin, Op } = require("../models");
+    // Buscar primeiro como Admin (painel) - aceitar email OU usuário
+    let user = await Admin.findOne({
+      where: {
+        [Op.or]: [{ email: usuarioLogin }, { usuario: usuarioLogin }],
+      },
+    });
     let tipo = "Admin";
     if (user) {
       console.log(
