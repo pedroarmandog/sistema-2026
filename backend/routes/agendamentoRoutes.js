@@ -614,10 +614,22 @@ router.post("/:id/cancelar", async (req, res) => {
     }
 
     let senhaValida = false;
-    if (tipo === "Usuario") {
-      senhaValida = await bcrypt.compare(senha, user.senha);
-    } else if (tipo === "Admin" && typeof user.validarSenha === "function") {
-      senhaValida = await user.validarSenha(senha);
+    try {
+      if (tipo === "Usuario") {
+        senhaValida = await bcrypt.compare(senha, user.senha);
+      } else if (tipo === "Admin") {
+        if (typeof user.validarSenha === "function") {
+          senhaValida = await user.validarSenha(senha);
+        } else if (user.senha && senha === user.senha) {
+          senhaValida = true;
+        }
+      }
+    } catch (e) {
+      console.error("[CANCELAMENTO] Erro na validação de senha:", e);
+      return res.status(500).json({
+        error: "Erro ao validar credenciais",
+        message: e.message,
+      });
     }
     if (!senhaValida) {
       return res.status(401).json({ error: "Credenciais inválidas" });
@@ -708,7 +720,12 @@ router.post("/:id/cancelar", async (req, res) => {
     });
   } catch (error) {
     console.error("Erro ao cancelar agendamento:", error);
-    res.status(500).json({ error: "Erro interno do servidor" });
+    console.error("Stack:", error.stack);
+    res.status(500).json({
+      error: "Erro interno do servidor",
+      message: error.message,
+      details: process.env.NODE_ENV === "development" ? error.stack : undefined,
+    });
   }
 });
 
