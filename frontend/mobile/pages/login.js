@@ -16,7 +16,7 @@ window.PageLogin = (function () {
 
         <div class="login-logo">
           <div class="login-logo-img">
-            <img src="/mobile/icons/icon.svg" alt="PetHub" onerror="this.style.display='none'">
+            <img src="/mobile/icons/icon-lampada.svg" alt="PetHub" onerror="this.style.display='none'">
           </div>
           <h1 class="login-title">PetHub</h1>
           <p class="login-subtitle">Gestão na palma da mão</p>
