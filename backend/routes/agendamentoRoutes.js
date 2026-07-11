@@ -571,48 +571,59 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-// POST /api/agendamentos/:id/cancelar - Cancela e DELETA agendamento após validar credenciais de gerente
+// POST /api/agendamentos/:id/cancelar - Cancela agendamento após validar credenciais de gerente
 router.post("/:id/cancelar", async (req, res) => {
+  console.log("[CANCELAMENTO] ===== INÍCIO DA REQUISIÇÃO =====");
+  console.log("[CANCELAMENTO] Params:", req.params);
+  console.log("[CANCELAMENTO] Body:", req.body);
+  
   try {
     const { id } = req.params;
     const { usuario: usuarioLogin, senha } = req.body;
+    
+    console.log("[CANCELAMENTO] ID:", id, "Usuario:", usuarioLogin);
+    
     if (!usuarioLogin || !senha) {
-      return res
-        .status(400)
-        .json({ error: "Usuário e senha são obrigatórios" });
+      console.log("[CANCELAMENTO] ERRO: Campos obrigatórios faltando");
+      return res.status(400).json({ error: "Usuário e senha são obrigatórios" });
     }
 
     const bcrypt = require("bcryptjs");
     const { Admin, Op } = require("../models");
-    // Buscar primeiro como Admin (painel) - aceitar email OU usuário
-    let user = await Admin.findOne({
-      where: {
-        [Op.or]: [{ email: usuarioLogin }, { usuario: usuarioLogin }],
-      },
-    });
-    let tipo = "Admin";
-    if (user) {
-      console.log(
-        `[CANCELAMENTO] Admin encontrado: id=${user.id}, nome=${user.nome}, email=${user.email}, ativo=${user.ativo}`,
-      );
-    } else {
-      user = await Usuario.findOne({ where: { usuario: usuarioLogin } });
-      tipo = "Usuario";
-      if (user) {
-        console.log(
-          `[CANCELAMENTO] Usuario encontrado: id=${user.id}, nome=${user.nome}, grupo=${user.grupoUsuario}, ativo=${user.ativo}, empresas=${JSON.stringify(user.empresas)}`,
-        );
+    
+    console.log("[CANCELAMENTO] Buscando Admin...");
+    let user = null;
+    let tipo = null;
+    
+    try {
+      user = await Admin.findOne({
+        where: {
+          [Op.or]: [{ email: usuarioLogin }, { usuario: usuarioLogin }],
+        },
+      });
+      tipo = "Admin";
+      console.log("[CANCELAMENTO] Admin encontrado:", !!user);
+    } catch (e) {
+      console.error("[CANCELAMENTO] Erro ao buscar Admin:", e);
+    }
+    
+    if (!user) {
+      console.log("[CANCELAMENTO] Buscando Usuario...");
+      try {
+        user = await Usuario.findOne({ where: { usuario: usuarioLogin } });
+        tipo = "Usuario";
+        console.log("[CANCELAMENTO] Usuario encontrado:", !!user);
+      } catch (e) {
+        console.error("[CANCELAMENTO] Erro ao buscar Usuario:", e);
       }
     }
-    if (!user || user.ativo === false) {
-      console.log(
-        `[CANCELAMENTO] Falha: Usuário/Admin não encontrado ou inativo. Login informado: ${usuarioLogin}`,
-      );
-      return res
-        .status(401)
-        .json({ error: "Usuário/Admin não encontrado ou inativo" });
+    
+    if (!user) {
+      console.log("[CANCELAMENTO] ERRO: Usuário não encontrado");
+      return res.status(401).json({ error: "Usuário não encontrado" });
     }
-
+    
+    console.log("[CANCELAMENTO] Validando senha...");
     let senhaValida = false;
     try {
       if (tipo === "Usuario") {
@@ -620,111 +631,38 @@ router.post("/:id/cancelar", async (req, res) => {
       } else if (tipo === "Admin") {
         if (typeof user.validarSenha === "function") {
           senhaValida = await user.validarSenha(senha);
-        } else if (user.senha && senha === user.senha) {
-          senhaValida = true;
+        } else {
+          senhaValida = senha === user.senha;
         }
       }
+      console.log("[CANCELAMENTO] Senha válida:", senhaValida);
     } catch (e) {
-      console.error("[CANCELAMENTO] Erro na validação de senha:", e);
-      return res.status(500).json({
-        error: "Erro ao validar credenciais",
-        message: e.message,
-      });
+      console.error("[CANCELAMENTO] Erro na validação:", e);
+      return res.status(500).json({ error: "Erro ao validar senha" });
     }
+    
     if (!senhaValida) {
+      console.log("[CANCELAMENTO] ERRO: Senha inválida");
       return res.status(401).json({ error: "Credenciais inválidas" });
     }
 
-    // Permissão: Admin (painel) pode cancelar qualquer agendamento
-    if (tipo === "Admin") {
-      console.log(`[CANCELAMENTO] Admin autenticado: ${user.email}`);
-      // Admin ativo pode cancelar qualquer agendamento
-    } else {
-      // Usuário comum: precisa ser gerente principal, LOGIN INICIAL, ou admin/gerente da empresa do agendamento
-      const isLoginInicial =
-        (user.nome || "").trim().toUpperCase() === "LOGIN INICIAL";
-      const isGerentePrincipal = user.id === 1;
-      const grupo = (user.grupoUsuario || "").toLowerCase();
-      const isGerenteOuAdmin =
-        grupo.includes("admin") || grupo.includes("gerente");
-
-      // Tratar empresas como array de números
-      let empresas = [];
-      if (Array.isArray(user.empresas)) {
-        empresas = user.empresas.map(Number).filter((v) => !isNaN(v));
-      } else if (
-        typeof user.empresas === "string" &&
-        user.empresas.length > 0
-      ) {
-        try {
-          const arr = JSON.parse(user.empresas);
-          if (Array.isArray(arr))
-            empresas = arr.map(Number).filter((v) => !isNaN(v));
-        } catch {
-          // fallback: tentar split por vírgula
-          empresas = user.empresas
-            .split(",")
-            .map((v) => Number(v.trim()))
-            .filter((v) => !isNaN(v));
-        }
-      }
-
-      if (!isGerentePrincipal && !isLoginInicial) {
-        // Buscar agendamento para pegar empresa_id
-        const agendamento = await Agendamento.findByPk(id);
-        if (!agendamento) {
-          return res.status(404).json({ error: "Agendamento não encontrado" });
-        }
-        const empresaIdAgendamento = Number(agendamento.empresa_id);
-        const vinculado = empresas.includes(empresaIdAgendamento);
-        if (!isGerenteOuAdmin || !vinculado) {
-          return res.status(403).json({
-            error:
-              "Apenas gerente/admin da empresa ou o gerente principal (usuário 1) ou LOGIN INICIAL podem autorizar o cancelamento.",
-          });
-        }
-        console.log(
-          `[CANCELAMENTO] Usuario autenticado: ${user.nome} (grupo: ${grupo}) - Empresas: ${JSON.stringify(empresas)} - Empresa agendamento: ${empresaIdAgendamento}`,
-        );
-      }
-    }
-
-    // Cancelar agendamento
+    console.log("[CANCELAMENTO] Cancelando agendamento ID:", id);
     const agendamento = await Agendamento.findByPk(id);
     if (!agendamento) {
+      console.log("[CANCELAMENTO] ERRO: Agendamento não encontrado");
       return res.status(404).json({ error: "Agendamento não encontrado" });
     }
+    
     await agendamento.update({ status: "cancelado" });
-
-    console.log(
-      `🚫 Agendamento ${id} cancelado por: ${user.nome || user.email}`,
-    );
+    console.log("[CANCELAMENTO] SUCESSO: Agendamento cancelado");
+    
     res.json({ message: "Agendamento cancelado com sucesso" });
-
-    // ── Push: cancelamento ──────────────────────────────────────────
-    setImmediate(async () => {
-      try {
-        const pushService = require("../services/pushNotificationService");
-        const empresaId = agendamento.empresa_id;
-        if (empresaId) {
-          const pet = agendamento.petId
-            ? await Pet.findByPk(agendamento.petId, { attributes: ["nome"] })
-            : null;
-          await pushService.notificarEmpresa(empresaId, "cancelamento", {
-            petNome: pet?.nome || "",
-          });
-        }
-      } catch (e) {
-        console.warn("[Push] Erro ao enviar push cancelamento:", e.message);
-      }
-    });
   } catch (error) {
-    console.error("Erro ao cancelar agendamento:", error);
-    console.error("Stack:", error.stack);
+    console.error("[CANCELAMENTO] ERRO GERAL:", error);
+    console.error("[CANCELAMENTO] Stack:", error.stack);
     res.status(500).json({
       error: "Erro interno do servidor",
       message: error.message,
-      details: process.env.NODE_ENV === "development" ? error.stack : undefined,
     });
   }
 });
