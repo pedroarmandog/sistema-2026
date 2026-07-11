@@ -149,36 +149,44 @@ window.PageDashboard = (function () {
     const elComp = container.querySelector("#fat-comparativo");
     if (!elDia) return;
 
-    const resumo =
-      resumoResult.status === "fulfilled" ? resumoResult.value : null;
-    const fat =
-      faturamentoResult.status === "fulfilled" ? faturamentoResult.value : null;
+    try {
+      const resumo =
+        resumoResult.status === "fulfilled" ? resumoResult.value : null;
+      const fat =
+        faturamentoResult.status === "fulfilled" ? faturamentoResult.value : null;
 
-    // Priorizar faturamento do novo endpoint (soma de vendas + agendamentos concluídos)
-    // Fallback para resumo antigo
-    const valDia = fat?.faturamentoHoje ?? resumo?.vendasTotal ?? 0;
-    elDia.textContent = _formatarDinheiro(valDia);
+      // Priorizar faturamento do novo endpoint (soma de vendas + agendamentos concluídos)
+      // Fallback para resumo antigo
+      const valDia = fat?.faturamentoHoje ?? resumo?.vendasTotal ?? 0;
+      elDia.textContent = _formatarDinheiro(valDia);
 
-    if (fat) {
-      elSem.textContent = _formatarDinheiro(fat.faturamentoSemana || 0);
-      elMes.textContent = _formatarDinheiro(fat.faturamentoMes || 0);
-    }
-
-    // Comparativo ontem (usar do novo endpoint)
-    const ontem = fat?.faturamentoOntem ?? null;
-    if (ontem !== null && ontem !== undefined && valDia > 0) {
-      const diff = valDia - ontem;
-      const pct = ontem > 0 ? ((diff / ontem) * 100).toFixed(0) : null;
-      let html = "";
-      if (diff > 0) {
-        html = `<span class="comparativo up">▲ ${pct ? pct + "%" : _formatarDinheiro(diff)}</span>`;
-      } else if (diff < 0) {
-        html = `<span class="comparativo down">▼ ${pct ? Math.abs(pct) + "%" : _formatarDinheiro(Math.abs(diff))}</span>`;
-      } else {
-        html = `<span class="comparativo flat">= igual</span>`;
+      if (fat) {
+        elSem.textContent = _formatarDinheiro(fat.faturamentoSemana || 0);
+        elMes.textContent = _formatarDinheiro(fat.faturamentoMes || 0);
       }
-      elComp.innerHTML = html;
-    } else {
+
+      // Comparativo ontem (usar do novo endpoint)
+      const ontem = fat?.faturamentoOntem ?? null;
+      if (ontem !== null && ontem !== undefined && valDia > 0) {
+        const diff = valDia - ontem;
+        const pct = ontem > 0 ? ((diff / ontem) * 100).toFixed(0) : null;
+        let html = "";
+        if (diff > 0) {
+          html = `<span class="comparativo up">▲ ${pct ? pct + "%" : _formatarDinheiro(diff)}</span>`;
+        } else if (diff < 0) {
+          html = `<span class="comparativo down">▼ ${pct ? Math.abs(pct) + "%" : _formatarDinheiro(Math.abs(diff))}</span>`;
+        } else {
+          html = `<span class="comparativo flat">= igual</span>`;
+        }
+        elComp.innerHTML = html;
+      } else {
+        elComp.textContent = "—";
+      }
+    } catch (e) {
+      console.error("[Dashboard] Erro ao atualizar faturamento:", e);
+      elDia.textContent = "R$ 0,00";
+      elSem.textContent = "—";
+      elMes.textContent = "—";
       elComp.textContent = "—";
     }
   }
@@ -187,61 +195,98 @@ window.PageDashboard = (function () {
     const el = container.querySelector("#pets-stats");
     if (!el) return;
 
-    const pets =
-      petsEstabResult.status === "fulfilled" ? petsEstabResult.value : null;
-    const ind =
-      indicadoresResult.status === "fulfilled" ? indicadoresResult.value : null;
+    try {
+      const pets =
+        petsEstabResult.status === "fulfilled" ? petsEstabResult.value : null;
+      const ind =
+        indicadoresResult.status === "fulfilled" ? indicadoresResult.value : null;
 
-    const checkin = pets?.checkin ?? ind?.checkin ?? 0;
-    const pronto = pets?.pronto ?? ind?.pronto ?? 0;
-    const concluido = pets?.concluido ?? ind?.concluido ?? 0;
+      const checkin = pets?.checkin ?? ind?.checkin ?? 0;
+      const pronto = pets?.pronto ?? ind?.pronto ?? 0;
+      const concluido = pets?.concluido ?? ind?.concluido ?? 0;
 
-    el.innerHTML = `
-      <div class="stat-card orange">
-        <div class="stat-icon">🛁</div>
-        <div class="stat-value">${checkin}</div>
-        <div class="stat-label">Em atend.</div>
-      </div>
-      <div class="stat-card green">
-        <div class="stat-icon">✅</div>
-        <div class="stat-value">${pronto}</div>
-        <div class="stat-label">Prontos</div>
-      </div>
-      <div class="stat-card blue">
-        <div class="stat-icon">🏠</div>
-        <div class="stat-value">${concluido}</div>
-        <div class="stat-label">Entregues</div>
-      </div>
-    `;
+      el.innerHTML = `
+        <div class="stat-card orange">
+          <div class="stat-icon">🛁</div>
+          <div class="stat-value">${checkin}</div>
+          <div class="stat-label">Em atend.</div>
+        </div>
+        <div class="stat-card green">
+          <div class="stat-icon">✅</div>
+          <div class="stat-value">${pronto}</div>
+          <div class="stat-label">Prontos</div>
+        </div>
+        <div class="stat-card blue">
+          <div class="stat-icon">🏠</div>
+          <div class="stat-value">${concluido}</div>
+          <div class="stat-label">Entregues</div>
+        </div>
+      `;
+    } catch (e) {
+      console.error("[Dashboard] Erro ao atualizar pets:", e);
+      el.innerHTML = `
+        <div class="stat-card orange">
+          <div class="stat-icon">🛁</div>
+          <div class="stat-value">0</div>
+          <div class="stat-label">Em atend.</div>
+        </div>
+        <div class="stat-card green">
+          <div class="stat-icon">✅</div>
+          <div class="stat-value">0</div>
+          <div class="stat-label">Prontos</div>
+        </div>
+        <div class="stat-card blue">
+          <div class="stat-icon">🏠</div>
+          <div class="stat-value">0</div>
+          <div class="stat-label">Entregues</div>
+        </div>
+      `;
+    }
   }
 
   function _atualizarAgendamentos(container, resumoResult, indicadoresResult) {
     const el = container.querySelector("#agend-stats");
     if (!el) return;
 
-    const resumo =
-      resumoResult.status === "fulfilled" ? resumoResult.value : null;
-    const ind =
-      indicadoresResult.status === "fulfilled" ? indicadoresResult.value : null;
+    try {
+      const resumo =
+        resumoResult.status === "fulfilled" ? resumoResult.value : null;
+      const ind =
+        indicadoresResult.status === "fulfilled" ? indicadoresResult.value : null;
 
-    const total =
-      resumo?.agendamentosHoje ??
-      ind?.total ??
-      (ind ? ind.agendados + ind.checkin + ind.pronto + ind.concluido : 0);
-    const agendados = ind?.agendados ?? 0;
+      const total =
+        resumo?.agendamentosHoje ??
+        ind?.total ??
+        (ind ? ind.agendados + ind.checkin + ind.pronto + ind.concluido : 0);
+      const agendados = ind?.agendados ?? 0;
 
-    el.innerHTML = `
-      <div class="stat-card blue">
-        <div class="stat-icon">📅</div>
-        <div class="stat-value">${total}</div>
-        <div class="stat-label">Total hoje</div>
-      </div>
-      <div class="stat-card green">
-        <div class="stat-icon">⏳</div>
-        <div class="stat-value">${agendados}</div>
-        <div class="stat-label">Aguardando</div>
-      </div>
-    `;
+      el.innerHTML = `
+        <div class="stat-card blue">
+          <div class="stat-icon">📅</div>
+          <div class="stat-value">${total}</div>
+          <div class="stat-label">Total hoje</div>
+        </div>
+        <div class="stat-card green">
+          <div class="stat-icon">⏳</div>
+          <div class="stat-value">${agendados}</div>
+          <div class="stat-label">Aguardando</div>
+        </div>
+      `;
+    } catch (e) {
+      console.error("[Dashboard] Erro ao atualizar agendamentos:", e);
+      el.innerHTML = `
+        <div class="stat-card blue">
+          <div class="stat-icon">📅</div>
+          <div class="stat-value">0</div>
+          <div class="stat-label">Total hoje</div>
+        </div>
+        <div class="stat-card green">
+          <div class="stat-icon">⏳</div>
+          <div class="stat-value">0</div>
+          <div class="stat-label">Aguardando</div>
+        </div>
+      `;
+    }
   }
 
   async function _atualizarProximos(container, indicadoresResult) {
@@ -306,29 +351,45 @@ window.PageDashboard = (function () {
     const el = container.querySelector("#metricas-stats");
     if (!el) return;
 
-    const resumo =
-      resumoResult.status === "fulfilled" ? resumoResult.value : null;
+    try {
+      const resumo =
+        resumoResult.status === "fulfilled" ? resumoResult.value : null;
 
-    const clientes = resumo?.clientes ?? "—";
-    const ticketMed =
-      resumo?.ticketMedio != null
-        ? resumo.ticketMedio
-        : resumo?.vendasTotal && resumo?.vendasHoje
-          ? (resumo.vendasTotal / resumo.vendasHoje).toFixed(2)
-          : null;
+      const clientes = resumo?.clientes ?? "—";
+      const ticketMed =
+        resumo?.ticketMedio != null
+          ? resumo.ticketMedio
+          : resumo?.vendasTotal && resumo?.vendasHoje
+            ? (resumo.vendasTotal / resumo.vendasHoje).toFixed(2)
+            : null;
 
-    el.innerHTML = `
-      <div class="stat-card blue">
-        <div class="stat-icon">👥</div>
-        <div class="stat-value">${clientes}</div>
-        <div class="stat-label">Clientes ativos</div>
-      </div>
-      <div class="stat-card green">
-        <div class="stat-icon">🎯</div>
-        <div class="stat-value">${ticketMed ? _formatarDinheiro(ticketMed) : "—"}</div>
-        <div class="stat-label">Ticket médio</div>
-      </div>
-    `;
+      el.innerHTML = `
+        <div class="stat-card blue">
+          <div class="stat-icon">👥</div>
+          <div class="stat-value">${clientes}</div>
+          <div class="stat-label">Clientes ativos</div>
+        </div>
+        <div class="stat-card green">
+          <div class="stat-icon">🎯</div>
+          <div class="stat-value">${ticketMed ? _formatarDinheiro(ticketMed) : "—"}</div>
+          <div class="stat-label">Ticket médio</div>
+        </div>
+      `;
+    } catch (e) {
+      console.error("[Dashboard] Erro ao atualizar métricas:", e);
+      el.innerHTML = `
+        <div class="stat-card blue">
+          <div class="stat-icon">👥</div>
+          <div class="stat-value">0</div>
+          <div class="stat-label">Clientes ativos</div>
+        </div>
+        <div class="stat-card green">
+          <div class="stat-icon">🎯</div>
+          <div class="stat-value">R$ 0,00</div>
+          <div class="stat-label">Ticket médio</div>
+        </div>
+      `;
+    }
   }
 
   function _startAutoRefresh(container) {
