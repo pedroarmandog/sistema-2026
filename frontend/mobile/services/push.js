@@ -110,6 +110,11 @@ window.MobilePush = (function () {
       console.error("[Push Front] ❌ Mensagem:", err.message);
       console.error("[Push Front] ❌ Stack:", err.stack);
       console.error("[Push Front] ❌ Objeto completo:", err);
+      
+      // Mostrar erro detalhado para diagnóstico
+      const erroCompleto = `Erro: ${err.name}\nMensagem: ${err.message}\n\nVerifique o console do navegador para mais detalhes.`;
+      alert(erroCompleto);
+      
       return {
         ok: false,
         message: err.message || "Erro ao ativar notificações",
