@@ -8,12 +8,16 @@
    ============================================================ */
 
 let webpush;
+
 try {
   webpush = require("web-push");
+  console.log("[Push] ✅ web-push carregado");
 } catch (err) {
-  console.warn(
-    "[Push] Pacote 'web-push' não instalado. Execute: npm install web-push",
-  );
+  console.error("========== ERRO AO IMPORTAR WEB-PUSH ==========");
+  console.error(err);
+  console.error(err.stack);
+  console.error("===============================================");
+
   webpush = null;
 }
 
