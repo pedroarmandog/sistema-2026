@@ -16,9 +16,12 @@ window.PageDashboard = (function () {
   let _isRefreshing = false;
 
   async function init(container) {
+    console.log("[Dashboard] init() chamado");
     _container = container;
     _render(container);
+    console.log("[Dashboard] Chamando _loadData...");
     await _loadData(container);
+    console.log("[Dashboard] _loadData concluído, iniciando auto-refresh");
     _startAutoRefresh(container);
   }
 
@@ -100,21 +103,52 @@ window.PageDashboard = (function () {
   }
 
   async function _loadData(container) {
-    if (_isRefreshing) return;
+    console.log("[Dashboard] _loadData() chamado, _isRefreshing:", _isRefreshing);
+    if (_isRefreshing) {
+      console.log("[Dashboard] Já está carregando, saindo...");
+      return;
+    }
     _isRefreshing = true;
 
     try {
+      console.log("[Dashboard] Iniciando carregamento de dados...");
+      console.log("[Dashboard] Container:", container);
+      console.log("[Dashboard] _container:", _container);
+      
       // Carregar tudo em paralelo para máxima performance
       const [resumo, indicadores, petsEstab, faturamento] =
         await Promise.allSettled([
-          MobileApi.get("/api/dashboard/resumo"),
-          MobileApi.get("/api/dashboard/indicadores-atendimento"),
-          MobileApi.get("/api/dashboard/pets-no-estabelecimento"),
-          MobileApi.get("/api/dashboard/faturamento-periodos"),
+          MobileApi.get("/api/dashboard/resumo").catch(err => {
+            console.error("[Dashboard] Erro em /api/dashboard/resumo:", err);
+            return { status: "rejected", reason: err };
+          }),
+          MobileApi.get("/api/dashboard/indicadores-atendimento").catch(err => {
+            console.error("[Dashboard] Erro em /api/dashboard/indicadores-atendimento:", err);
+            return { status: "rejected", reason: err };
+          }),
+          MobileApi.get("/api/dashboard/pets-no-estabelecimento").catch(err => {
+            console.error("[Dashboard] Erro em /api/dashboard/pets-no-estabelecimento:", err);
+            return { status: "rejected", reason: err };
+          }),
+          MobileApi.get("/api/dashboard/faturamento-periodos").catch(err => {
+            console.error("[Dashboard] Erro em /api/dashboard/faturamento-periodos:", err);
+            return { status: "rejected", reason: err };
+          }),
         ]);
 
-      if (!_container) return; // componente destruído durante o await
+      console.log("[Dashboard] Resultado das APIs:", {
+        resumo: resumo.status,
+        indicadores: indicadores.status,
+        petsEstab: petsEstab.status,
+        faturamento: faturamento.status
+      });
 
+      if (!_container) {
+        console.log("[Dashboard] _container é null, saindo...");
+        return; // componente destruído durante o await
+      }
+
+      console.log("[Dashboard] Atualizando UI...");
       _atualizarFaturamento(container, resumo, faturamento);
       _atualizarPets(container, petsEstab, indicadores);
       _atualizarAgendamentos(container, resumo, indicadores);
@@ -135,12 +169,24 @@ window.PageDashboard = (function () {
           (indData.checkin || 0) + (indData.pronto || 0) || null,
         );
       }
+      
+      console.log("[Dashboard] Dados carregados com sucesso");
     } catch (err) {
       console.error("[Dashboard] Erro ao carregar dados:", err);
     } finally {
       _isRefreshing = false;
+      console.log("[Dashboard] _isRefreshing definido como false");
     }
   }
+
+  // Timeout de segurança: se após 5 segundos os dados não carregaram, forçar atualização
+  setTimeout(() => {
+    if (_container && _isRefreshing) {
+      console.warn("[Dashboard] Timeout de 5s atingido, forçando atualização...");
+      _isRefreshing = false;
+      _loadData(_container);
+    }
+  }, 5000);
 
   function _atualizarFaturamento(container, resumoResult, faturamentoResult) {
     const elDia = container.querySelector("#fat-dia");

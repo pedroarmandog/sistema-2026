@@ -156,7 +156,11 @@
 
   /* ── Inicializar App Autenticado ────────────────────────── */
   async function _initApp(usuario, targetPage) {
+    console.log("[App] ===== _initApp() INICIADO =====", targetPage);
+    console.log("[App] Tipo de usuario:", typeof usuario, usuario?.nome);
+    
     // Configurar cabeçalho
+    console.log("[App] Chamando MobileHeader.render()...");
     MobileHeader.render(usuario);
     MobileHeader.show({
       onRefresh: () => {
@@ -164,24 +168,31 @@
         if (page?.refresh) page.refresh();
       },
     });
+    console.log("[App] Header configurado");
 
     // Configurar navegação inferior
     MobileBottomNav.show();
     MobileBottomNav.init((page) => _loadPage(page));
+    console.log("[App] Bottom nav configurada");
 
     // Iniciar heartbeat de sessão
     MobileAuth.iniciarHeartbeat();
+    console.log("[App] Heartbeat iniciado");
 
     // Iniciar sincronização em tempo real
     if (typeof MobileSync !== "undefined" && MobileSync.init) {
       MobileSync.init();
+      console.log("[App] MobileSync iniciado");
     }
 
     // Ocultar splash
     _hideSplash();
+    console.log("[App] Splash ocultado");
 
     // Navegar para a página de destino
-    _loadPage(targetPage);
+    console.log("[App] Chamando _loadPage('" + targetPage + "')...");
+    await _loadPage(targetPage);
+    console.log("[App] _loadPage() concluído");
   }
 
   /* ── Tela de Login ──────────────────────────────────────── */
@@ -194,6 +205,7 @@
 
   /* ── Carregar Página ────────────────────────────────────── */
   async function _loadPage(pageName) {
+    console.log("[App] _loadPage() chamado com:", pageName);
     const pageFactory = PAGES[pageName];
     if (!pageFactory) {
       console.warn("[App] Página desconhecida:", pageName);
@@ -201,6 +213,7 @@
     }
 
     const pageObj = pageFactory();
+    console.log("[App] pageObj para", pageName, ":", !!pageObj);
     if (!pageObj) {
       console.warn("[App] Módulo de página não carregado:", pageName);
       return;
@@ -221,6 +234,7 @@
 
     // Renderizar página
     const container = document.getElementById("page-content");
+    console.log("[App] Container encontrado:", !!container);
     if (!container) return;
 
     container.innerHTML = "";
@@ -228,9 +242,11 @@
     const wrapper = document.createElement("div");
     wrapper.className = "page-enter page-scroll";
     container.appendChild(wrapper);
+    console.log("[App] Wrapper criado, chamando pageObj.init()...");
 
     try {
       await pageObj.init(wrapper);
+      console.log("[App] pageObj.init() concluído com sucesso");
     } catch (err) {
       console.error(`[App] Erro ao inicializar página "${pageName}":`, err);
       wrapper.innerHTML = `
