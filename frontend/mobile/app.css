@@ -429,6 +429,13 @@ a {
   border: 2px solid var(--surface);
 }
 
+/* O atributo [hidden] deve vencer o display:flex acima.
+   Sem isto, a bolinha vermelha permanece visível mesmo quando a
+   contagem é 0/null/undefined (setBadge define hidden=true). */
+.nav-badge[hidden] {
+  display: none;
+}
+
 /* ── Toast Notifications ─────────────────────────────────── */
 .toast-container {
   position: fixed;
