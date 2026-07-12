@@ -7,7 +7,7 @@
      - Páginas HTML: Network First com fallback offline
    ============================================================ */
 
-const CACHE_VERSION = "pethub-mobile-v3";
+const CACHE_VERSION = "pethub-mobile-v4";
 const CACHE_STATIC = `${CACHE_VERSION}-static`;
 const CACHE_API = `${CACHE_VERSION}-api`;
 
@@ -29,7 +29,7 @@ const PRECACHE_ASSETS = [
   "/mobile/pages/pets.js",
   "/mobile/pages/financeiro.js",
   "/mobile/pages/configuracoes.js",
-  "/mobile/icons/icon.svg",
+  "/mobile/icons/launchericon-192x192.png",
   "/api-config.js",
 ];
 
@@ -127,15 +127,15 @@ self.addEventListener("push", (event) => {
     payload = {
       title: "PetHub",
       body: event.data.text(),
-      icon: "/mobile/icons/icon-192.png",
+      icon: "/mobile/icons/launchericon-192x192.png",
     };
   }
 
   const title = payload.title || "PetHub";
   const options = {
     body: payload.body || "",
-    icon: payload.icon || "/mobile/icons/icon-192.png",
-    badge: "/mobile/icons/badge-72.png",
+    icon: payload.icon || "/mobile/icons/launchericon-192x192.png",
+    badge: "/mobile/icons/launchericon-72x72.png",
     tag: payload.tag || "pethub-default",
     data: payload.data || {},
     actions: payload.actions || [],
