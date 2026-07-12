@@ -30,6 +30,11 @@ const ContaReceber = require("../models/ContaReceber");
 // Instância do sequelize compartilhada
 const { sequelize } = require("../models/Cliente");
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function getHojeBrasilStr() {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+}
+
 // ── Utilitários ───────────────────────────────────────────────────────────────
 
 /**
@@ -187,14 +192,19 @@ router.get("/resumo", async (req, res) => {
       ? parseInt(req.user.empresaId, 10)
       : null;
     const eW = empresaId ? { empresa_id: empresaId } : {};
-    const agora = new Date();
-    const hoje0 = new Date(agora);
-    hoje0.setHours(0, 0, 0, 0);
-    const hoje23 = new Date(agora);
-    hoje23.setHours(23, 59, 59, 999);
+    const dataBrasil = getHojeBrasilStr();
 
-    // Semana atual (dom–sáb)
-    const semana = semanaContendo(agora);
+    // Range do dia de hoje (offset -03:00) para evitar problemas de timezone
+    const hojeStart = new Date(`${dataBrasil}T00:00:00-03:00`);
+    const hojeNext = new Date(hojeStart);
+    hojeNext.setDate(hojeStart.getDate() + 1);
+    const hojeStartStr = hojeStart.toISOString().slice(0, 19).replace("T", " ");
+    const hojeNextStr = hojeNext.toISOString().slice(0, 19).replace("T", " ");
+
+    // Semana atual (dom–sáb) - usar dataBrasil para calcular
+    const hojeParts = dataBrasil.split("-").map(Number);
+    const hojeDate = new Date(hojeParts[0], hojeParts[1] - 1, hojeParts[2]);
+    const semana = semanaContendo(hojeDate);
     // Próxima semana
     const proxSemIni = new Date(semana.fim);
     proxSemIni.setDate(proxSemIni.getDate() + 1);
@@ -205,8 +215,8 @@ router.get("/resumo", async (req, res) => {
 
     // Mês atual
     const mesMesIni = new Date(
-      agora.getFullYear(),
-      agora.getMonth(),
+      hojeParts[0],
+      hojeParts[1] - 1,
       1,
       0,
       0,
@@ -214,8 +224,8 @@ router.get("/resumo", async (req, res) => {
       0,
     );
     const mesMesFim = new Date(
-      agora.getFullYear(),
-      agora.getMonth() + 1,
+      hojeParts[0],
+      hojeParts[1],
       0,
       23,
       59,
@@ -225,8 +235,8 @@ router.get("/resumo", async (req, res) => {
 
     // Próximo mês
     const proxMesIni = new Date(
-      agora.getFullYear(),
-      agora.getMonth() + 1,
+      hojeParts[0],
+      hojeParts[1],
       1,
       0,
       0,
@@ -234,8 +244,8 @@ router.get("/resumo", async (req, res) => {
       0,
     );
     const proxMesFim = new Date(
-      agora.getFullYear(),
-      agora.getMonth() + 2,
+      hojeParts[0],
+      hojeParts[1] + 1,
       0,
       23,
       59,
@@ -255,11 +265,11 @@ router.get("/resumo", async (req, res) => {
 
     const [recHoje, recSemana, recProxSem, recMes, recProxMes, recAtrasado] =
       await Promise.all([
-        // Hoje
+        // Hoje - usa range com offset -03:00
         Venda.findAll({
           where: {
             ...eW,
-            data: { [Op.between]: [hoje0, hoje23] },
+            data: { [Op.gte]: hojeStartStr, [Op.lt]: hojeNextStr },
             status: { [Op.in]: ["pendente", "parcial"] },
           },
           attributes: ["totais", "totalPago"],
@@ -304,7 +314,7 @@ router.get("/resumo", async (req, res) => {
         Venda.findAll({
           where: {
             ...eW,
-            data: { [Op.lt]: hoje0 },
+            data: { [Op.lt]: hojeStartStr },
             status: { [Op.in]: ["pendente", "parcial"] },
           },
           attributes: ["totais", "totalPago"],
@@ -345,14 +355,16 @@ router.get("/resumo", async (req, res) => {
       const empresaWhere = eW;
       const [crHoje, crSem, crProxSem, crMes, crProxMes, crAtr] =
         await Promise.all([
+          // Hoje - usa range com offset -03:00
           ContaReceber.findAll({
             where: {
               ...empresaWhere,
               status: statusPend,
-              dataVencimento: { [Op.between]: [hoje0, hoje23] },
+              dataVencimento: { [Op.gte]: hojeStartStr, [Op.lt]: hojeNextStr },
             },
             attributes: ["valor", "valorPago"],
           }),
+          // Esta semana
           ContaReceber.findAll({
             where: {
               ...empresaWhere,
@@ -361,6 +373,7 @@ router.get("/resumo", async (req, res) => {
             },
             attributes: ["valor", "valorPago"],
           }),
+          // Próxima semana
           ContaReceber.findAll({
             where: {
               ...empresaWhere,
@@ -369,6 +382,7 @@ router.get("/resumo", async (req, res) => {
             },
             attributes: ["valor", "valorPago"],
           }),
+          // Este mês
           ContaReceber.findAll({
             where: {
               ...empresaWhere,
@@ -377,6 +391,7 @@ router.get("/resumo", async (req, res) => {
             },
             attributes: ["valor", "valorPago"],
           }),
+          // Próximo mês
           ContaReceber.findAll({
             where: {
               ...empresaWhere,
@@ -385,11 +400,12 @@ router.get("/resumo", async (req, res) => {
             },
             attributes: ["valor", "valorPago"],
           }),
+          // Atrasadas
           ContaReceber.findAll({
             where: {
               ...empresaWhere,
               status: statusPend,
-              dataVencimento: { [Op.lt]: hoje0 },
+              dataVencimento: { [Op.lt]: hojeStartStr },
             },
             attributes: ["valor", "valorPago"],
           }),
@@ -430,11 +446,11 @@ router.get("/resumo", async (req, res) => {
       pagAtrasado,
       pagGeral,
     ] = await Promise.all([
-      // Vencimento hoje
+      // Vencimento hoje - usa range com offset -03:00
       Entrada.findAll({
         where: {
           ...eW,
-          dataEntrada: { [Op.between]: [hoje0, hoje23] },
+          dataEntrada: { [Op.gte]: hojeStartStr, [Op.lt]: hojeNextStr },
           situacao: "concluido",
         },
         attributes: ["valorTotal"],
@@ -479,7 +495,7 @@ router.get("/resumo", async (req, res) => {
       Entrada.findAll({
         where: {
           ...eW,
-          dataEntrada: { [Op.lt]: hoje0 },
+          dataEntrada: { [Op.lt]: hojeStartStr },
           situacao: "concluido",
         },
         attributes: ["valorTotal"],
