@@ -112,6 +112,20 @@ exports.createCliente = async (req, res) => {
       cliente: cliente,
     });
 
+    // Push Notification: Novo cliente cadastrado
+    const { notificarEmpresa } = require("../services/pushNotificationService");
+    if (cliente.empresa_id) {
+      setImmediate(async () => {
+        try {
+          await notificarEmpresa(cliente.empresa_id, "novo_cliente", {
+            nome: cliente.nome,
+          });
+        } catch (err) {
+          console.error("[Push] Erro ao notificar novo cliente:", err);
+        }
+      });
+    }
+
     // Nota: boas_vindas é disparado no cadastro do primeiro pet (petController)
   } catch (err) {
     console.error("Erro ao criar cliente:", err);
