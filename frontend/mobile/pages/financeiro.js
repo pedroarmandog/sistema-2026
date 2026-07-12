@@ -26,13 +26,13 @@ window.PageFinanceiro = (function () {
           <span id="fin-ultima-atualizacao" style="font-size:11px;color:var(--muted)"></span>
         </div>
 
-        <!-- Faturamento principal -->
+        <!-- Faturamento do Ano -->
         <div class="faturamento-card" id="fin-fat-card">
-          <div class="faturamento-label">Faturamento</div>
+          <div class="faturamento-label">💰 Faturamento do ano</div>
           <div id="fin-fat-dia" style="font-family:'Poppins',sans-serif;font-size:36px;font-weight:800;color:var(--green);line-height:1;margin-bottom:8px">
             <div class="spinner"></div>
           </div>
-          <p style="font-size:12px;color:var(--muted)">Hoje</p>
+          <p style="font-size:12px;color:var(--muted)">Até o momento</p>
           <div class="faturamento-row" style="margin-top:12px">
             <div class="faturamento-item">
               <div class="faturamento-item-label">Semana</div>
@@ -75,9 +75,10 @@ window.PageFinanceiro = (function () {
 
   async function _carregarDados(container) {
     try {
-      const [finResult, resumoResult] = await Promise.allSettled([
+      const [finResult, resumoResult, fatPeriodosResult] = await Promise.allSettled([
         MobileApi.get("/api/painel-financeiro/resumo"),
         MobileApi.get("/api/dashboard/resumo"),
+        MobileApi.get("/api/dashboard/faturamento-periodos"),
       ]);
 
       if (!_container) return;
@@ -85,6 +86,8 @@ window.PageFinanceiro = (function () {
       const fin = finResult.status === "fulfilled" ? finResult.value : null;
       const resumo =
         resumoResult.status === "fulfilled" ? resumoResult.value : null;
+      const fatPeriodos =
+        fatPeriodosResult.status === "fulfilled" ? fatPeriodosResult.value : null;
 
       // Atualizar timestamp
       const tsEl = container.querySelector("#fin-ultima-atualizacao");
@@ -96,13 +99,15 @@ window.PageFinanceiro = (function () {
             minute: "2-digit",
           });
 
-      // Faturamento principal
-      const fatDia = resumo?.vendasTotal || fin?.hoje?.recebido || 0;
-      const fatSem = fin?.semana?.recebido || fin?.essaSemana?.total || 0;
-      const fatMes = fin?.mes?.recebido || fin?.esseMes?.total || 0;
+      // Faturamento principal: usar faturamentoAno do endpoint de períodos
+      const valAno = fatPeriodos?.faturamentoAno ?? 0;
+      // Fallback: se não tiver faturamentoAno, usa o faturamento do dia
+      const fatAno = valAno || resumo?.vendasTotal || fin?.hoje?.recebido || 0;
+      const fatSem = fatPeriodos?.faturamentoSemana || fin?.semana?.recebido || fin?.essaSemana?.total || 0;
+      const fatMes = fatPeriodos?.faturamentoMes || fin?.mes?.recebido || fin?.esseMes?.total || 0;
 
       const elDia = container.querySelector("#fin-fat-dia");
-      if (elDia) elDia.textContent = _fmt(fatDia);
+      if (elDia) elDia.textContent = _fmt(fatAno);
       const elSem = container.querySelector("#fin-fat-semana");
       if (elSem) elSem.textContent = _fmt(fatSem);
       const elMes = container.querySelector("#fin-fat-mes");
@@ -112,7 +117,8 @@ window.PageFinanceiro = (function () {
       const metEl = container.querySelector("#fin-metricas");
       if (metEl) {
         const numVendas = resumo?.vendasHoje || 0;
-        const ticketMedio = numVendas > 0 ? fatDia / numVendas : 0;
+        const faturamentoHoje = fatPeriodos?.faturamentoHoje || resumo?.vendasTotal || 0;
+        const ticketMedio = numVendas > 0 ? faturamentoHoje / numVendas : 0;
         metEl.innerHTML = `
           <div class="stat-card blue">
             <div class="stat-icon">🛒</div>
@@ -183,13 +189,16 @@ window.PageFinanceiro = (function () {
           const cliente =
             v.cliente?.nome || v.nomeCliente || v.Cliente?.nome || "Cliente";
           const valor = _extrairTotal(v);
-          const hora =
-            v.data || v.createdAt
-              ? new Date(v.data || v.createdAt).toLocaleTimeString("pt-BR", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })
-              : "--:--";
+          const dataObj = v.data || v.createdAt ? new Date(v.data || v.createdAt) : null;
+          const dataFormatada = dataObj
+            ? dataObj.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })
+            : "";
+          const hora = dataObj
+            ? dataObj.toLocaleTimeString("pt-BR", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })
+            : "--:--";
           const status = v.status || "pago";
 
           const statusClass =
@@ -206,7 +215,7 @@ window.PageFinanceiro = (function () {
             </div>
             <div class="list-item-info">
               <div class="list-item-title">${escapeHtml(cliente)}</div>
-              <div class="list-item-sub">${hora}</div>
+              <div class="list-item-sub">${dataFormatada} ${hora}</div>
             </div>
             <div class="list-item-right">
               <div style="font-weight:700;font-size:14px;color:var(--green)">${_fmt(valor)}</div>

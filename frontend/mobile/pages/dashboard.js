@@ -41,35 +41,25 @@ window.PageDashboard = (function () {
           <div class="hero-sub" id="dash-hoje">${hoje}</div>
         </div>
 
-        <!-- Faturamento do Ano -->
+        <!-- Faturamento do Dia -->
         <div class="faturamento-card" id="fat-card">
-          <div class="faturamento-label">💰 Faturamento do ano</div>
+          <div class="faturamento-label">💰 Faturamento do dia</div>
           <div class="faturamento-value" id="fat-dia">
             <div class="spinner"></div>
           </div>
           <div class="faturamento-row">
             <div class="faturamento-item">
-              <div class="faturamento-item-label">Hoje</div>
-              <div class="faturamento-item-value" id="fat-semana">—</div>
-            </div>
-            <div class="faturamento-item">
               <div class="faturamento-item-label">Esta semana</div>
-              <div class="faturamento-item-value" id="fat-semana-semana">—</div>
+              <div class="faturamento-item-value" id="fat-semana">—</div>
             </div>
             <div class="faturamento-item">
               <div class="faturamento-item-label">Este mês</div>
               <div class="faturamento-item-value" id="fat-mes">—</div>
             </div>
-          </div>
-        </div>
-
-        <!-- Últimas Movimentações -->
-        <div class="section-header">
-          <span class="section-title">🔄 Últimas movimentações</span>
-        </div>
-        <div class="card" style="margin-bottom:20px">
-          <div id="ultimas-movimentacoes-list">
-            <div class="state-loading"><div class="spinner"></div></div>
+            <div class="faturamento-item">
+              <div class="faturamento-item-label">vs. ontem</div>
+              <div class="faturamento-item-value" id="fat-comparativo">—</div>
+            </div>
           </div>
         </div>
 
@@ -200,73 +190,51 @@ window.PageDashboard = (function () {
   }, 5000);
 
   function _atualizarFaturamento(container, resumoResult, faturamentoResult) {
-    const elAno = container.querySelector("#fat-dia");
-    const elHoje = container.querySelector("#fat-semana");
-    const elSem = container.querySelector("#fat-semana-semana");
+    const elDia = container.querySelector("#fat-dia");
+    const elSem = container.querySelector("#fat-semana");
     const elMes = container.querySelector("#fat-mes");
-    if (!elAno) return;
+    const elComp = container.querySelector("#fat-comparativo");
+    if (!elDia) return;
 
     try {
+      const resumo =
+        resumoResult.status === "fulfilled" ? resumoResult.value : null;
       const fat =
         faturamentoResult.status === "fulfilled" ? faturamentoResult.value : null;
 
-      // Valor principal: Faturamento do ano
-      const valAno = fat?.faturamentoAno ?? 0;
-      elAno.textContent = _formatarDinheiro(valAno);
+      // Priorizar faturamento do novo endpoint (soma de vendas + agendamentos concluídos)
+      // Fallback para resumo antigo
+      const valDia = fat?.faturamentoHoje ?? resumo?.vendasTotal ?? 0;
+      elDia.textContent = _formatarDinheiro(valDia);
 
-      // Sub-itens: Hoje, Semana, Mês
       if (fat) {
-        elHoje.textContent = _formatarDinheiro(fat.faturamentoHoje || 0);
         elSem.textContent = _formatarDinheiro(fat.faturamentoSemana || 0);
         elMes.textContent = _formatarDinheiro(fat.faturamentoMes || 0);
       }
+
+      // Comparativo ontem (usar do novo endpoint)
+      const ontem = fat?.faturamentoOntem ?? null;
+      if (ontem !== null && ontem !== undefined && valDia > 0) {
+        const diff = valDia - ontem;
+        const pct = ontem > 0 ? ((diff / ontem) * 100).toFixed(0) : null;
+        let html = "";
+        if (diff > 0) {
+          html = `<span class="comparativo up">▲ ${pct ? pct + "%" : _formatarDinheiro(diff)}</span>`;
+        } else if (diff < 0) {
+          html = `<span class="comparativo down">▼ ${pct ? Math.abs(pct) + "%" : _formatarDinheiro(Math.abs(diff))}</span>`;
+        } else {
+          html = `<span class="comparativo flat">= igual</span>`;
+        }
+        elComp.innerHTML = html;
+      } else {
+        elComp.textContent = "—";
+      }
     } catch (e) {
       console.error("[Dashboard] Erro ao atualizar faturamento:", e);
-      elAno.textContent = "R$ 0,00";
-      elHoje.textContent = "—";
+      elDia.textContent = "R$ 0,00";
       elSem.textContent = "—";
       elMes.textContent = "—";
-    }
-
-    // Atualizar últimas movimentações
-    _atualizarUltimasMovimentacoes(container, faturamentoResult);
-  }
-
-  function _atualizarUltimasMovimentacoes(container, faturamentoResult) {
-    const el = container.querySelector("#ultimas-movimentacoes-list");
-    if (!el) return;
-
-    try {
-      const fat =
-        faturamentoResult.status === "fulfilled" ? faturamentoResult.value : null;
-      const movs = fat?.ultimasMovimentacoes;
-
-      if (!movs || !Array.isArray(movs) || movs.length === 0) {
-        el.innerHTML = `<div class="state-empty" style="padding:20px">
-          <div class="state-icon">📭</div>
-          <div class="state-sub">Nenhuma movimentação recente</div>
-        </div>`;
-        return;
-      }
-
-      el.innerHTML = movs
-        .map((m) => `
-          <div class="movimentacao-item">
-            <div class="movimentacao-left">
-              <div class="movimentacao-cliente">${escapeHtml(m.cliente)}</div>
-              <div class="movimentacao-data">${m.data || ""}</div>
-            </div>
-            <div class="movimentacao-right">
-              <div class="movimentacao-valor">${_formatarDinheiro(m.valor)}</div>
-            </div>
-          </div>
-        `)
-        .join("");
-    } catch (e) {
-      console.error("[Dashboard] Erro ao atualizar últimas movimentações:", e);
-      el.innerHTML = `<div class="state-empty" style="padding:20px">
-        <div class="state-sub">Erro ao carregar movimentações</div>
-      </div>`;
+      elComp.textContent = "—";
     }
   }
 
