@@ -959,7 +959,7 @@ a {
 
 /* ── Login Page ──────────────────────────────────────────── */
 .login-page {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -967,6 +967,12 @@ a {
   padding: 32px 24px;
   background: var(--bg);
   gap: 0;
+}
+
+/* Sem scroll na tela de login: o container de conteúdo não deve
+   rolar enquanto a página de login estiver ativa (mobile/desktop/PWA) */
+.page-content:has(.login-page) {
+  overflow: hidden;
 }
 
 .login-logo {
