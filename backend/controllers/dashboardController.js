@@ -82,27 +82,40 @@ exports.resumo = async (req, res) => {
 
     const empresaFilter = empresaId ? "AND empresa_id = :empresaId" : "";
 
+    // Range do dia de hoje (offset -03:00) para evitar problemas de timezone
+    const hojeStart = new Date(`${dataBrasil}T00:00:00-03:00`);
+    const hojeNext = new Date(hojeStart);
+    hojeNext.setDate(hojeStart.getDate() + 1);
+    const hojeStartStr = hojeStart.toISOString().slice(0, 19).replace("T", " ");
+    const hojeNextStr = hojeNext.toISOString().slice(0, 19).replace("T", " ");
+
     // Primeiro dia do mês (em Brasília) para contar clientes do mês
     const hojeParts = dataBrasil.split("-");
     const ano = parseInt(hojeParts[0], 10);
     const mes = parseInt(hojeParts[1], 10);
     const inicioMesStr = `${ano}-${String(mes).padStart(2, "0")}-01`;
+    // Range do mês (offset -03:00)
+    const mesStart = new Date(`${inicioMesStr}T00:00:00-03:00`);
+    const mesEnd = new Date(hojeNext); // até o final do dia de hoje
+    const mesStartStr = mesStart.toISOString().slice(0, 19).replace("T", " ");
+    const mesEndStr = mesEnd.toISOString().slice(0, 19).replace("T", " ");
 
     const sql = `SELECT
       (SELECT COUNT(*) FROM ${clientesTable} WHERE 1=1 ${empresaFilter}) AS clientes,
-      (SELECT COUNT(*) FROM ${clientesTable} WHERE DATE(createdAt) >= :inicioMes AND DATE(createdAt) <= :dataBrasil ${empresaFilter}) AS clientesMes,
-      (SELECT COUNT(*) FROM ${agTable} WHERE DATE(dataAgendamento) = :dataBrasil ${empresaFilter}) AS agendamentosHoje,
-      (SELECT COUNT(*) FROM ${vendasTable} WHERE DATE(data) = :dataBrasil AND status <> 'cancelado' ${empresaFilter}) AS vendasHoje,
+      (SELECT COUNT(*) FROM ${clientesTable} WHERE createdAt >= :inicioMes AND createdAt < :hojeNext ${empresaFilter}) AS clientesMes,
+      (SELECT COUNT(*) FROM ${agTable} WHERE dataAgendamento >= :hojeStart AND dataAgendamento < :hojeNext ${empresaFilter}) AS agendamentosHoje,
+      (SELECT COUNT(*) FROM ${vendasTable} WHERE data >= :hojeStart AND data < :hojeNext AND status <> 'cancelado' ${empresaFilter}) AS vendasHoje,
       (SELECT COALESCE(SUM(COALESCE(
         CAST(JSON_UNQUOTE(JSON_EXTRACT(totais, '$.final')) AS DECIMAL(15,2)),
         CAST(JSON_UNQUOTE(JSON_EXTRACT(totais, '$.totalFinal')) AS DECIMAL(15,2)),
         CAST(JSON_UNQUOTE(JSON_EXTRACT(totais, '$.total')) AS DECIMAL(15,2)),
         0
-      )),0) FROM ${vendasTable} WHERE DATE(data) = :dataBrasil AND status <> 'cancelado' ${empresaFilter}) AS vendasTotal`;
+      )),0) FROM ${vendasTable} WHERE data >= :hojeStart AND data < :hojeNext AND status <> 'cancelado' ${empresaFilter}) AS vendasTotal`;
 
     const replacements = {
-      dataBrasil,
-      inicioMes: inicioMesStr,
+      hojeStart: hojeStartStr,
+      hojeNext: hojeNextStr,
+      inicioMes: mesStartStr,
     };
     if (empresaId) replacements.empresaId = empresaId;
 

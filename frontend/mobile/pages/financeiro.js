@@ -136,8 +136,9 @@ window.PageFinanceiro = (function () {
       // A Receber
       const recEl = container.querySelector("#fin-receber");
       if (recEl) {
-        const receberHoje = fin?.hoje?.aReceber || fin?.aReceber?.hoje || 0;
-        const receberMes = fin?.mes?.aReceber || fin?.aReceber?.mes || 0;
+        // A API /api/painel-financeiro/resumo retorna { receber: { hoje, essaSemana, esseMes, ... }, pagar: {...} }
+        const receberHoje = fin?.receber?.hoje || 0;
+        const receberMes = fin?.receber?.esseMes || 0;
         recEl.innerHTML = `
           <div class="stat-card orange">
             <div class="stat-icon">📅</div>
