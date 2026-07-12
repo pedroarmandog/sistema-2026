@@ -356,6 +356,12 @@ a {
   z-index: 100;
 }
 
+/* Respeita o atributo [hidden] — sem isso, o display:flex acima
+   sempre vence o hidden nativo do HTML e a barra aparece no login */
+.bottom-nav[hidden] {
+  display: none;
+}
+
 .nav-item {
   flex: 1;
   display: flex;
