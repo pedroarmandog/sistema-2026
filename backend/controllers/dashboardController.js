@@ -885,42 +885,103 @@ exports.faturamentoPeriodos = async (req, res) => {
     const mesNext = new Date(ano, mes, 1, 0, 0, 0, 0);
     mesNext.setHours(mesNext.getHours() - 3);
 
-    const eW = { empresa_id: empresaId };
+    const vendasTable = Venda.getTableName ? Venda.getTableName() : "vendas";
+    const agendamentosTable = Agendamento.getTableName ? Agendamento.getTableName() : "agendamentos";
 
     // Função auxiliar para somar faturamento de vendas + agendamentos em um range
+    // Usa JSON_EXTRACT do total dos totais em vez de totalPago (que pode estar zerado)
     async function somarFaturamento(inicio, fim) {
-      const [vendas, agendamentos] = await Promise.all([
-        Venda.sum("totalPago", {
-          where: {
-            ...eW,
-            data: { [Op.gte]: inicio, [Op.lt]: fim },
-            status: { [Op.in]: ["pago", "parcial"] },
-          },
-        }),
-        Agendamento.sum("totalPago", {
-          where: {
-            ...eW,
-            dataAgendamento: { [Op.gte]: inicio, [Op.lt]: fim },
-            status: "concluido",
-          },
-        }),
+      // Somar vendas com status pago/parcial
+      const sqlVendas = `SELECT COALESCE(SUM(COALESCE(
+        CAST(JSON_UNQUOTE(JSON_EXTRACT(totais, '$.final')) AS DECIMAL(15,2)),
+        CAST(JSON_UNQUOTE(JSON_EXTRACT(totais, '$.totalFinal')) AS DECIMAL(15,2)),
+        CAST(JSON_UNQUOTE(JSON_EXTRACT(totais, '$.total')) AS DECIMAL(15,2)),
+        0
+      )),0) AS total FROM ${vendasTable}
+      WHERE empresa_id = :empresaId
+        AND data >= :inicio
+        AND data < :fim
+        AND status IN ('pago', 'parcial')`;
+
+      // Somar agendamentos concluídos (usar totalPago como fallback, ou valor)
+      const sqlAgendamentos = `SELECT COALESCE(SUM(COALESCE(totalPago, 0)),0) AS total FROM ${agendamentosTable}
+      WHERE empresa_id = :empresaId
+        AND dataAgendamento >= :inicio
+        AND dataAgendamento < :fim
+        AND status = 'concluido'`;
+
+      const replacements = { empresaId, inicio: inicio.toISOString().slice(0, 19).replace("T", " "), fim: fim.toISOString().slice(0, 19).replace("T", " ") };
+
+      const [vendasResult, agendamentosResult] = await Promise.all([
+        sequelize.query(sqlVendas, { replacements, type: sequelize.QueryTypes.SELECT }),
+        sequelize.query(sqlAgendamentos, { replacements, type: sequelize.QueryTypes.SELECT }),
       ]);
-      return parseFloat((vendas || 0)) + parseFloat((agendamentos || 0));
+
+      const vendasTotal = parseFloat(vendasResult[0]?.total || 0);
+      const agendamentosTotal = parseFloat(agendamentosResult[0]?.total || 0);
+      return vendasTotal + agendamentosTotal;
     }
 
-    const [faturamentoHoje, faturamentoOntem, faturamentoSemana, faturamentoMes] =
+    // Range do ano (01/01 até hoje)
+    const anoStart = new Date(ano, 0, 1, 0, 0, 0, 0);
+    anoStart.setHours(anoStart.getHours() - 3);
+    const anoEnd = new Date(hojeStart);
+    anoEnd.setDate(anoEnd.getDate() + 1); // até o final do dia de hoje
+
+    const [faturamentoHoje, faturamentoOntem, faturamentoSemana, faturamentoMes, faturamentoAno] =
       await Promise.all([
         somarFaturamento(hojeStart, hojeNext),
         somarFaturamento(ontemDate, ontemNext),
         somarFaturamento(semanaStart, semanaNext),
         somarFaturamento(mesStart, mesNext),
+        somarFaturamento(anoStart, anoEnd),
       ]);
+
+    // Buscar últimas 5 movimentações (vendas pagas) com cliente e valor
+    const sqlUltimas = `SELECT id, cliente, totalPago, totais, data FROM ${vendasTable}
+      WHERE empresa_id = :empresaId
+        AND status = 'pago'
+      ORDER BY data DESC
+      LIMIT 5`;
+
+    const ultimasRows = await sequelize.query(sqlUltimas, {
+      replacements: { empresaId },
+      type: sequelize.QueryTypes.SELECT,
+    });
+
+    const ultimasMovimentacoes = ultimasRows.map((v) => {
+      let valor = parseFloat(v.totalPago || 0);
+      if (!valor && v.totais) {
+        try {
+          const totaisObj = typeof v.totais === "string" ? JSON.parse(v.totais) : v.totais;
+          valor = parseFloat(totaisObj.final || totaisObj.totalFinal || totaisObj.total || 0) || 0;
+        } catch (_) {}
+      }
+      // Formatar data no padrão brasileiro
+      let dataStr = "";
+      if (v.data) {
+        try {
+          const d = new Date(v.data);
+          dataStr = d.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+        } catch (_) {
+          dataStr = String(v.data).slice(0, 10);
+        }
+      }
+      return {
+        id: v.id,
+        cliente: v.cliente || "Cliente",
+        valor,
+        data: dataStr,
+      };
+    });
 
     res.json({
       faturamentoHoje,
       faturamentoOntem,
       faturamentoSemana,
       faturamentoMes,
+      faturamentoAno,
+      ultimasMovimentacoes,
     });
   } catch (error) {
     return handleError(res, "Erro ao buscar faturamento por períodos", error);

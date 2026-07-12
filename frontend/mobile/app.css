@@ -1197,6 +1197,54 @@ a {
   margin-top: 2px;
 }
 
+/* ── Movimentações (últimas vendas) ────────────────────────── */
+.movimentacao-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.movimentacao-item:last-child {
+  border-bottom: none;
+}
+
+.movimentacao-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.movimentacao-cliente {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.movimentacao-data {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.movimentacao-right {
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+
+.movimentacao-valor {
+  font-family: "Poppins", sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--green);
+  white-space: nowrap;
+}
+
 .comparativo {
   font-size: 12px;
   font-weight: 600;
