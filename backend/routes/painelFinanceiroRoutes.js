@@ -343,6 +343,10 @@ router.get("/resumo", async (req, res) => {
       atrasado: calcReceber(recAtrasado),
     };
 
+    // DEBUG: Log do resultado final
+    console.log("[painel-financeiro/resumo DEBUG] receber:", JSON.stringify(receber));
+    console.log("[painel-financeiro/resumo DEBUG] recHoje count:", recHoje.length, "recMes count:", recMes.length);
+
     // ── ACRESCENTAR DocumentosAReceber (ContaReceber) ─────────────────────────
     try {
       const calcCR = (rows) =>
