@@ -346,6 +346,8 @@ router.get("/resumo", async (req, res) => {
     // DEBUG: Log do resultado final
     console.log("[painel-financeiro/resumo DEBUG] receber:", JSON.stringify(receber));
     console.log("[painel-financeiro/resumo DEBUG] recHoje count:", recHoje.length, "recMes count:", recMes.length);
+    console.log("[painel-financeiro/resumo DEBUG] empresaId:", empresaId, "eW:", JSON.stringify(eW));
+    console.log("[painel-financeiro/resumo DEBUG] hojeStartStr:", hojeStartStr, "hojeNextStr:", hojeNextStr);
 
     // ── ACRESCENTAR DocumentosAReceber (ContaReceber) ─────────────────────────
     try {
@@ -357,14 +359,19 @@ router.get("/resumo", async (req, res) => {
       const statusPend = { [Op.in]: ["pendente", "parcial"] };
       // Isolamento estrito por empresa_id
       const empresaWhere = eW;
+      
+      // dataVencimento é DATEONLY, então usamos apenas datas puras YYYY-MM-DD
+      const hojeDateStr = dataBrasil; // "2026-07-12"
+      const amanhaDateStr = new Date(hojeStart).toISOString().slice(0, 10); // "2026-07-13"
+      
       const [crHoje, crSem, crProxSem, crMes, crProxMes, crAtr] =
         await Promise.all([
-          // Hoje - usa range com offset -03:00
+          // Hoje - usa data pura (DATEONLY)
           ContaReceber.findAll({
             where: {
               ...empresaWhere,
               status: statusPend,
-              dataVencimento: { [Op.gte]: hojeStartStr, [Op.lt]: hojeNextStr },
+              dataVencimento: { [Op.gte]: hojeDateStr, [Op.lt]: amanhaDateStr },
             },
             attributes: ["valor", "valorPago"],
           }),
@@ -373,7 +380,7 @@ router.get("/resumo", async (req, res) => {
             where: {
               ...empresaWhere,
               status: statusPend,
-              dataVencimento: { [Op.between]: [semana.inicio, semana.fim] },
+              dataVencimento: { [Op.between]: [semana.inicio.toISOString().slice(0, 10), semana.fim.toISOString().slice(0, 10)] },
             },
             attributes: ["valor", "valorPago"],
           }),
@@ -382,7 +389,7 @@ router.get("/resumo", async (req, res) => {
             where: {
               ...empresaWhere,
               status: statusPend,
-              dataVencimento: { [Op.between]: [proxSemIni, proxSemFim] },
+              dataVencimento: { [Op.between]: [proxSemIni.toISOString().slice(0, 10), proxSemFim.toISOString().slice(0, 10)] },
             },
             attributes: ["valor", "valorPago"],
           }),
@@ -391,7 +398,7 @@ router.get("/resumo", async (req, res) => {
             where: {
               ...empresaWhere,
               status: statusPend,
-              dataVencimento: { [Op.between]: [mesMesIni, mesMesFim] },
+              dataVencimento: { [Op.between]: [mesMesIni.toISOString().slice(0, 10), mesMesFim.toISOString().slice(0, 10)] },
             },
             attributes: ["valor", "valorPago"],
           }),
@@ -400,7 +407,7 @@ router.get("/resumo", async (req, res) => {
             where: {
               ...empresaWhere,
               status: statusPend,
-              dataVencimento: { [Op.between]: [proxMesIni, proxMesFim] },
+              dataVencimento: { [Op.between]: [proxMesIni.toISOString().slice(0, 10), proxMesFim.toISOString().slice(0, 10)] },
             },
             attributes: ["valor", "valorPago"],
           }),
@@ -409,7 +416,7 @@ router.get("/resumo", async (req, res) => {
             where: {
               ...empresaWhere,
               status: statusPend,
-              dataVencimento: { [Op.lt]: hojeStartStr },
+              dataVencimento: { [Op.lt]: hojeDateStr },
             },
             attributes: ["valor", "valorPago"],
           }),

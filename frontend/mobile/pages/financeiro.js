@@ -136,15 +136,9 @@ window.PageFinanceiro = (function () {
       // A Receber
       const recEl = container.querySelector("#fin-receber");
       if (recEl) {
-        // DEBUG: Log completo da resposta da API
-        console.log("[Financeiro DEBUG] fin recebido:", JSON.stringify(fin, null, 2));
-        
         // A API /api/painel-financeiro/resumo retorna { receber: { hoje, essaSemana, esseMes, ... }, pagar: {...} }
         const receberHoje = fin?.receber?.hoje || 0;
         const receberMes = fin?.receber?.esseMes || 0;
-        
-        console.log("[Financeiro DEBUG] receberHoje:", receberHoje, "receberMes:", receberMes);
-        
         recEl.innerHTML = `
           <div class="stat-card orange">
             <div class="stat-icon">📅</div>
