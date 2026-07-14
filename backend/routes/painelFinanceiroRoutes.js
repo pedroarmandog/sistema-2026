@@ -427,10 +427,17 @@ router.get("/resumo", async (req, res) => {
       receber.esseMes += calcCR(crMes);
       receber.proximoMes += calcCR(crProxMes);
       receber.atrasado += calcCR(crAtr);
+      // Novo debug: registrar quantos registros de ContaReceber foram encontrados por período
+      console.log(
+        "[painel-financeiro/resumo DEBUG] ContaReceber counts:",
+        { hoje: crHoje.length, semana: crSem.length, proxSem: crProxSem.length, mes: crMes.length, proxMes: crProxMes.length, atrasado: crAtr.length }
+      );
     } catch (crErr) {
-      console.warn(
-        "[painel-financeiro/resumo] Aviso ao somar ContaReceber:",
+      console.error(
+        "[painel-financeiro/resumo] ERRO ao somar ContaReceber:",
         crErr.message,
+        "\nStack:",
+        crErr.stack,
       );
     }
 

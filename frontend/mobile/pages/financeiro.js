@@ -75,10 +75,11 @@ window.PageFinanceiro = (function () {
 
   async function _carregarDados(container) {
     try {
-      const [finResult, resumoResult, fatPeriodosResult] = await Promise.allSettled([
+      const [finResult, resumoResult, fatPeriodosResult, contasPeriodoResult] = await Promise.allSettled([
         MobileApi.get("/api/painel-financeiro/resumo"),
         MobileApi.get("/api/dashboard/resumo"),
         MobileApi.get("/api/dashboard/faturamento-periodos"),
+        MobileApi.get("/api/contas-receber/resumo/periodo"),
       ]);
 
       if (!_container) return;
@@ -88,6 +89,8 @@ window.PageFinanceiro = (function () {
         resumoResult.status === "fulfilled" ? resumoResult.value : null;
       const fatPeriodos =
         fatPeriodosResult.status === "fulfilled" ? fatPeriodosResult.value : null;
+      const contasPeriodo =
+        contasPeriodoResult.status === "fulfilled" ? contasPeriodoResult.value : null;
 
       // Atualizar timestamp
       const tsEl = container.querySelector("#fin-ultima-atualizacao");
@@ -137,8 +140,9 @@ window.PageFinanceiro = (function () {
       const recEl = container.querySelector("#fin-receber");
       if (recEl) {
         // A API /api/painel-financeiro/resumo retorna { receber: { hoje, essaSemana, esseMes, ... }, pagar: {...} }
-        const receberHoje = fin?.receber?.hoje || 0;
-        const receberMes = fin?.receber?.esseMes || 0;
+        // O endpoint /api/contas-receber/resumo/periodo retorna { hoje, essaSemana, ... } específico de contas_receber
+        const receberHoje = (fin?.receber?.hoje || 0) + (contasPeriodo?.hoje || 0);
+        const receberMes = (fin?.receber?.esseMes || 0) + (contasPeriodo?.esseMes || 0);
         recEl.innerHTML = `
           <div class="stat-card orange">
             <div class="stat-icon">📅</div>
