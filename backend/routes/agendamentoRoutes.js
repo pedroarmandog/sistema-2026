@@ -657,6 +657,26 @@ router.post("/:id/cancelar", async (req, res) => {
     console.log("[CANCELAMENTO] SUCESSO: Agendamento cancelado");
     
     res.json({ message: "Agendamento cancelado com sucesso" });
+
+    // ── Push: cancelamento ──────────────────────────────────────────
+    setImmediate(async () => {
+      try {
+        const pushService = require("../services/pushNotificationService");
+        const ag = await Agendamento.findByPk(id, {
+          include: [{ model: Pet, as: "pet", required: false }],
+        });
+        const empresaId = ag?.empresa_id || req.user?.empresaId;
+        if (empresaId) {
+          console.log("[CANCELAMENTO] 📤 Enviando push notification de cancelamento");
+          await pushService.notificarEmpresa(empresaId, "cancelamento", {
+            petNome: ag?.pet?.nome || "",
+            horario: ag?.horario || "",
+          });
+        }
+      } catch (e) {
+        console.warn("[CANCELAMENTO] ⚠️ Erro ao enviar push cancelamento:", e.message);
+      }
+    });
   } catch (error) {
     console.error("[CANCELAMENTO] ERRO GERAL:", error);
     console.error("[CANCELAMENTO] Stack:", error.stack);
