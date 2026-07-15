@@ -57,6 +57,7 @@ const PAYLOADS = {
       : "Um novo agendamento foi criado",
     tag: "novo_agendamento",
     data: { page: "agenda" },
+    requireInteraction: true,
   }),
 
   checkin_pet: (dados) => ({
@@ -66,6 +67,7 @@ const PAYLOADS = {
       : "Um pet fez check-in",
     tag: "checkin_pet",
     data: { page: "pets" },
+    requireInteraction: true,
   }),
 
   checkout: (dados) => ({
@@ -75,6 +77,7 @@ const PAYLOADS = {
       : "Um pet realizou check-out",
     tag: "checkout",
     data: { page: "agenda" },
+    requireInteraction: true,
   }),
 
   servico_concluido: (dados) => ({
@@ -84,6 +87,7 @@ const PAYLOADS = {
       : "Um serviço foi finalizado",
     tag: "servico_concluido",
     data: { page: "agenda" },
+    requireInteraction: true,
   }),
 
   nova_venda: (dados) => ({
@@ -93,6 +97,7 @@ const PAYLOADS = {
       : "Uma nova venda foi realizada",
     tag: "nova_venda",
     data: { page: "financeiro" },
+    requireInteraction: true,
   }),
 
   pagamento_recebido: (dados) => ({
@@ -102,6 +107,7 @@ const PAYLOADS = {
       : "Um pagamento foi registrado",
     tag: "pagamento_recebido",
     data: { page: "financeiro" },
+    requireInteraction: true,
   }),
 
   cancelamento: (dados) => ({
@@ -111,6 +117,7 @@ const PAYLOADS = {
       : "Um agendamento foi cancelado",
     tag: "cancelamento",
     data: { page: "agenda" },
+    requireInteraction: true,
   }),
 
   meta_atingida: (dados) => ({
@@ -130,6 +137,7 @@ const PAYLOADS = {
       : "Produtos com estoque baixo detectados",
     tag: "estoque_baixo",
     data: { page: "dashboard" },
+    requireInteraction: true,
   }),
 
   novo_cliente: (dados) => ({
@@ -139,6 +147,7 @@ const PAYLOADS = {
       : "Um novo cliente foi cadastrado",
     tag: "novo_cliente",
     data: { page: "dashboard" },
+    requireInteraction: true,
   }),
 };
 
@@ -235,7 +244,10 @@ async function notificarEmpresa(empresaId, evento, dados = {}) {
       };
 
       try {
-        await webpush.sendNotification(subscriptionData, payloadStr);
+        await webpush.sendNotification(subscriptionData, payloadStr, {
+          TTL: 0,
+          urgency: "high",
+        });
         console.log(`[Push] ✅ [${index + 1}/${subscriptions.length}] Notificação enviada com sucesso para usuário ${sub.usuario_id}`);
         sucesso++;
         

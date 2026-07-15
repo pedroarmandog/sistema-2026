@@ -139,8 +139,10 @@ self.addEventListener("push", (event) => {
     tag: payload.tag || "pethub-default",
     data: payload.data || {},
     actions: payload.actions || [],
-    vibrate: [100, 50, 100],
-    requireInteraction: payload.requireInteraction || false,
+    vibrate: [200, 100, 200],
+    silent: false,
+    renotify: true,
+    requireInteraction: payload.requireInteraction !== undefined ? payload.requireInteraction : true,
   };
 
   console.log("[SW] 📢 Exibindo notificação:", title, options);
