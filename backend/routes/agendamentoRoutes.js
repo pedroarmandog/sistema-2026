@@ -393,8 +393,20 @@ router.post("/", async (req, res) => {
         const pushService = require("../services/pushNotificationService");
         const empresaId = agendamentoCriado.empresa_id || req.user?.empresaId;
         if (empresaId) {
+          // Formatar data para exibição (DD/MM/YYYY)
+          let dataFormatada = "";
+          try {
+            if (agendamentoCriado.dataAgendamento) {
+              const dt = new Date(agendamentoCriado.dataAgendamento);
+              if (!isNaN(dt.getTime())) {
+                dataFormatada = dt.toLocaleDateString("pt-BR");
+              }
+            }
+          } catch (_) {}
           await pushService.notificarEmpresa(empresaId, "novo_agendamento", {
             petNome: agendamentoCriado.pet?.nome || "",
+            clienteNome: agendamentoCriado.pet?.cliente?.nome || "",
+            dataAgendamento: dataFormatada,
             horario: agendamentoCriado.horario || "",
             servico: agendamentoCriado.servico || "",
           });

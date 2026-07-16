@@ -53,7 +53,7 @@ const PAYLOADS = {
   novo_agendamento: (dados) => ({
     title: "📅 Novo Agendamento",
     body: dados.petNome
-      ? `${dados.petNome}${dados.horario ? " às " + dados.horario : ""}${dados.servico ? " — " + dados.servico : ""}`
+      ? `Pet: ${dados.petNome}${dados.clienteNome ? "\nTutor: " + dados.clienteNome : ""}${dados.dataAgendamento ? "\nData: " + dados.dataAgendamento : ""}${dados.horario ? "\nHorário: " + dados.horario : ""}${dados.servico ? "\nServiço: " + dados.servico : ""}`
       : "Um novo agendamento foi criado",
     tag: "novo_agendamento",
     data: { page: "agenda" },
@@ -93,7 +93,7 @@ const PAYLOADS = {
   nova_venda: (dados) => ({
     title: "💰 Nova Venda Realizada",
     body: dados.clienteNome
-      ? `Cliente: ${dados.clienteNome} • Total: R$ ${Number(dados.total || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}${dados.pagamento ? " • Pagamento: " + dados.pagamento : ""}${dados.horario ? " • " + dados.horario : ""}`
+      ? `Cliente: ${dados.clienteNome}\nValor: R$ ${Number(dados.total || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}${dados.pagamento ? "\nPagamento: " + dados.pagamento : ""}${dados.horario ? "\nHorário: " + dados.horario : ""}`
       : "Uma nova venda foi realizada",
     tag: "nova_venda",
     data: { page: "financeiro" },
