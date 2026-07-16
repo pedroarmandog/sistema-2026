@@ -83,6 +83,18 @@ window.MobilePush = (function () {
       const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
       console.log("[Push Front] ✅ VAPID convertida:", applicationServerKey.length, "bytes");
 
+      // Limpar subscription anterior se existir (evita "push service error" no Chrome Android)
+      try {
+        const oldSub = await _swRegistration.pushManager.getSubscription();
+        if (oldSub) {
+          console.log("[Push Front] 🗑️ Removendo subscription antiga...");
+          await oldSub.unsubscribe();
+          console.log("[Push Front] ✅ Subscription antiga removida");
+        }
+      } catch (cleanErr) {
+        console.warn("[Push Front] ⚠️ Aviso ao limpar subscription antiga:", cleanErr.message);
+      }
+
       // Criar subscription
       console.log("[Push Front] 🔄 Chamando pushManager.subscribe()...");
       const subscription = await _swRegistration.pushManager.subscribe({
