@@ -236,7 +236,16 @@ window.PageConfiguracoes = (function () {
     const btnSair = container.querySelector("#btn-sair");
     if (btnSair) {
       btnSair.addEventListener("click", async () => {
-        if (confirm("Tem certeza que deseja sair?")) {
+        const confirmado = await _mostrarModalConfirmacao({
+          icone: "🚪",
+          titulo: "Sair da conta",
+          mensagem: "Tem certeza que deseja sair?",
+          textoConfirmar: "Sair",
+          textoCancelar: "Cancelar",
+          perigo: true,
+        });
+
+        if (confirmado) {
           await MobileAuth.logout();
         }
       });
@@ -249,6 +258,68 @@ window.PageConfiguracoes = (function () {
       const el = container.querySelector(`[data-pref="${key}"]`);
       if (el) el.checked = !!value;
     });
+  }
+
+  function _mostrarModalConfirmacao({ icone, titulo, mensagem, textoConfirmar, textoCancelar, perigo }) {
+    return new Promise((resolve) => {
+      // Criar overlay
+      const overlay = document.createElement("div");
+      overlay.className = "modal-overlay";
+      overlay.innerHTML = `
+        <div class="modal-dialog">
+          <div class="modal-icon">${icone}</div>
+          <div class="modal-title">${escapeHtml(titulo)}</div>
+          <div class="modal-message">${escapeHtml(mensagem)}</div>
+          <div class="modal-actions">
+            <button class="btn modal-btn-cancel" id="modal-cancelar">${escapeHtml(textoCancelar)}</button>
+            <button class="btn modal-btn-confirm" id="modal-confirmar">${escapeHtml(textoConfirmar)}</button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(overlay);
+
+      // Animar entrada
+      requestAnimationFrame(() => {
+        overlay.classList.add("modal-visible");
+      });
+
+      // Fechar ao clicar no overlay
+      overlay.addEventListener("click", (e) => {
+        if (e.target === overlay) {
+          _fecharModal(overlay, false);
+        }
+      });
+
+      // Botões
+      const btnCancelar = overlay.querySelector("#modal-cancelar");
+      const btnConfirmar = overlay.querySelector("#modal-confirmar");
+
+      btnCancelar.addEventListener("click", () => {
+        _fecharModal(overlay, false);
+      });
+
+      btnConfirmar.addEventListener("click", () => {
+        _fecharModal(overlay, true);
+      });
+
+      // Teclado ESC
+      const handleEsc = (e) => {
+        if (e.key === "Escape") {
+          _fecharModal(overlay, false);
+          document.removeEventListener("keydown", handleEsc);
+        }
+      };
+      document.addEventListener("keydown", handleEsc);
+    });
+
+    function _fecharModal(overlay, resultado) {
+      overlay.classList.remove("modal-visible");
+      setTimeout(() => {
+        overlay.remove();
+        resolve(resultado);
+      }, 250);
+    }
   }
 
   function refresh() {}
