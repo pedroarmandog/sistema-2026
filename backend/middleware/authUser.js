@@ -82,6 +82,8 @@ async function authUser(req, res, next) {
       : null;
   const tokenFromCookie = req.cookies?.pethub_token || null;
 
+  console.log(`[authUser] 🔍 Verificando auth: path=${req.path}, tokenFromCookie=${!!tokenFromCookie}, tokenFromHeader=${!!tokenFromHeader}`);
+
   if (REQUIRE_HEADER && !tokenFromHeader) {
     return res
       .status(401)
@@ -95,6 +97,7 @@ async function authUser(req, res, next) {
       const decoded = jwt.verify(token, JWT_SECRET);
 
       const userId = decoded && decoded.id ? Number(decoded.id) : null;
+      console.log(`[authUser] Token decodificado: userId=${userId}, empresaId=${decoded.empresaId}, grupoUsuario=${decoded.grupoUsuario}`);
       if (!userId) {
         if (REQUIRE_HEADER)
           return res.status(401).json({ mensagem: "Token inválido" });
@@ -151,6 +154,7 @@ async function authUser(req, res, next) {
             `Isolamento multi-tenant não é possível sem empresa_id. ` +
             `Token pode estar corrompido ou usuário não pertence a nenhuma empresa.`
           );
+          console.error(`[authUser] Decoded completo do token:`, JSON.stringify(decoded));
           return res.status(403).json({
             mensagem: "Usuário não associado a uma empresa. Contate o suporte.",
             semEmpresa: true,

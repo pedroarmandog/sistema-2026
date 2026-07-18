@@ -2,9 +2,13 @@ const express = require("express");
 const router = express.Router();
 const { Op } = require("sequelize");
 const ContaReceber = require("../models/ContaReceber");
+const { authUser } = require("../middleware/authUser");
 
 // Helpers
 const toNum = (v) => (isNaN(Number(v)) ? 0 : Number(v));
+
+// CRÍTICO: Proteger TODAS as rotas com middleware de autenticação
+router.use(authUser);
 
 // ── GET /api/contas-receber ───────────────────────────────────────────────────
 // Parâmetros de query: clienteId, clienteNome, status, dataVencimentoInicio, dataVencimentoFim, previsao, limit, offset
