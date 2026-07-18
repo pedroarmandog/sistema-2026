@@ -248,7 +248,7 @@ exports.login = async (req, res) => {
 
     // Gerar JWT com empresaId (se encontrado) e configurar cookie
     const payloadUsuario = { ...usuarioEncontrado.toJSON() };
-    if (empresaIdParaToken) payloadUsuario.empresa_id = empresaIdParaToken;
+    if (empresaIdParaToken) payloadUsuario.empresaId = empresaIdParaToken;
     const token = gerarTokenUsuario(payloadUsuario);
 
     // Registrar sessão ativa no banco
