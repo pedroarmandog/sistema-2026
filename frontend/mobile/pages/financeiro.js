@@ -141,8 +141,9 @@ window.PageFinanceiro = (function () {
       if (recEl) {
         // A API /api/painel-financeiro/resumo retorna { receber: { hoje, essaSemana, esseMes, ... }, pagar: {...} }
         // O endpoint /api/contas-receber/resumo/periodo retorna { hoje, essaSemana, ... } específico de contas_receber
-        const receberHoje = (fin?.receber?.hoje || 0) + (contasPeriodo?.hoje || 0);
-        const receberMes = (fin?.receber?.esseMes || 0) + (contasPeriodo?.esseMes || 0);
+        // NOTA: NÃO somar os dois, pois ambos já incluem contas_receber. Usar apenas contasPeriodo que é mais específico
+        const receberHoje = contasPeriodo?.hoje || 0;
+        const receberMes = contasPeriodo?.esseMes || 0;
         recEl.innerHTML = `
           <div class="stat-card orange">
             <div class="stat-icon">📅</div>
