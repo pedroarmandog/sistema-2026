@@ -100,9 +100,13 @@ async function authUser(req, res, next) {
           return res.status(401).json({ mensagem: "Token inválido" });
         // continuar para fallback
       } else {
+        // Construir usuário baseado no token
+        let resolvedEmpresaId = decoded.empresaId || null;
+        
         const now = Date.now();
-        // Checar cache de usuário
-        const cached = USER_CACHE.get(userId);
+        // Checar cache de usuário (incluir empresaId na chave para evitar retornar dados antigos)
+        const cacheKey = `${userId}:${resolvedEmpresaId || "null"}`;
+        const cached = USER_CACHE.get(cacheKey);
         if (cached && cached.expiresAt > now) {
           req.user = cached.user;
           // Atualizar atividade em background
@@ -118,9 +122,6 @@ async function authUser(req, res, next) {
           } catch (_) {}
           return next();
         }
-
-        // Construir usuário baseado no token
-        let resolvedEmpresaId = decoded.empresaId || null;
 
         // Se empresaId ausente no JWT (token antigo ou usuário sem empresa no array),
         // buscar direto no DB uma vez — resultado é cacheado por 60s
@@ -250,8 +251,9 @@ async function authUser(req, res, next) {
           // Não bloquear em caso de falha na verificação de inatividade
         }
 
-        // Cachear resultado e seguir
-        USER_CACHE.set(userId, {
+        // Cachear resultado e seguir (usar empresaId na chave)
+        const finalCacheKey = `${userId}:${resolvedEmpresaId || "null"}`;
+        USER_CACHE.set(finalCacheKey, {
           user: userFromToken,
           expiresAt: now + USER_CACHE_TTL,
         });
