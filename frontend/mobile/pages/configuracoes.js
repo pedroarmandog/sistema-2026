@@ -287,7 +287,7 @@ window.PageConfiguracoes = (function () {
       // Fechar ao clicar no overlay
       overlay.addEventListener("click", (e) => {
         if (e.target === overlay) {
-          _fecharModal(overlay, false);
+          _fecharModal(overlay, false, resolve);
         }
       });
 
@@ -296,30 +296,30 @@ window.PageConfiguracoes = (function () {
       const btnConfirmar = overlay.querySelector("#modal-confirmar");
 
       btnCancelar.addEventListener("click", () => {
-        _fecharModal(overlay, false);
+        _fecharModal(overlay, false, resolve);
       });
 
       btnConfirmar.addEventListener("click", () => {
-        _fecharModal(overlay, true);
+        _fecharModal(overlay, true, resolve);
       });
 
       // Teclado ESC
       const handleEsc = (e) => {
         if (e.key === "Escape") {
-          _fecharModal(overlay, false);
+          _fecharModal(overlay, false, resolve);
           document.removeEventListener("keydown", handleEsc);
         }
       };
       document.addEventListener("keydown", handleEsc);
     });
+  }
 
-    function _fecharModal(overlay, resultado) {
-      overlay.classList.remove("modal-visible");
-      setTimeout(() => {
-        overlay.remove();
-        resolve(resultado);
-      }, 250);
-    }
+  function _fecharModal(overlay, resultado, resolve) {
+    overlay.classList.remove("modal-visible");
+    setTimeout(() => {
+      overlay.remove();
+      resolve(resultado);
+    }, 250);
   }
 
   function refresh() {}
