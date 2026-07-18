@@ -188,10 +188,19 @@ async function somaSaidas(inicio, fim, empresaId) {
  */
 router.get("/resumo", async (req, res) => {
   try {
-    const empresaId = req.user?.empresaId
-      ? parseInt(req.user.empresaId, 10)
-      : null;
-    const eW = empresaId ? { empresa_id: empresaId } : {};
+    // CRÍTICO: Verificar empresaId antes de qualquer consulta
+    if (!req.user?.empresaId) {
+      console.error(
+        `[GET /api/painel-financeiro/resumo] BLOQUEIO: empresaId ausente no req.user.`
+      );
+      return res.status(403).json({
+        error: "Acesso negado: empresa não identificada.",
+        semEmpresa: true,
+      });
+    }
+
+    const empresaId = parseInt(req.user.empresaId, 10);
+    const eW = { empresa_id: empresaId };
     const dataBrasil = getHojeBrasilStr();
 
     // Range do dia de hoje (offset -03:00) para evitar problemas de timezone
@@ -553,19 +562,26 @@ router.get("/resumo", async (req, res) => {
  */
 router.get("/calendario", async (req, res) => {
   try {
-    const empresaId = req.user?.empresaId
-      ? parseInt(req.user.empresaId, 10)
-      : null;
-    const eW = empresaId ? { empresa_id: empresaId } : {};
-    const movW = empresaId
-      ? {
-          [Op.and]: [
-            sequelize.literal(
-              `caixaId IN (SELECT id FROM caixas WHERE empresa_id = ${empresaId})`,
-            ),
-          ],
-        }
-      : {};
+    // CRÍTICO: Verificar empresaId antes de qualquer consulta
+    if (!req.user?.empresaId) {
+      console.error(
+        `[GET /api/painel-financeiro/calendario] BLOQUEIO: empresaId ausente no req.user.`
+      );
+      return res.status(403).json({
+        error: "Acesso negado: empresa não identificada.",
+        semEmpresa: true,
+      });
+    }
+
+    const empresaId = parseInt(req.user.empresaId, 10);
+    const eW = { empresa_id: empresaId };
+    const movW = {
+      [Op.and]: [
+        sequelize.literal(
+          `caixaId IN (SELECT id FROM caixas WHERE empresa_id = ${empresaId})`,
+        ),
+      ],
+    };
     // Validar e sanitizar parâmetros
     const hoje = new Date();
     const mes = parseInt(req.query.mes) || hoje.getMonth() + 1;
@@ -708,19 +724,26 @@ router.get("/calendario", async (req, res) => {
  */
 router.get("/grafico", async (req, res) => {
   try {
-    const empresaId = req.user?.empresaId
-      ? parseInt(req.user.empresaId, 10)
-      : null;
-    const eW = empresaId ? { empresa_id: empresaId } : {};
-    const movW = empresaId
-      ? {
-          [Op.and]: [
-            sequelize.literal(
-              `caixaId IN (SELECT id FROM caixas WHERE empresa_id = ${empresaId})`,
-            ),
-          ],
-        }
-      : {};
+    // CRÍTICO: Verificar empresaId antes de qualquer consulta
+    if (!req.user?.empresaId) {
+      console.error(
+        `[GET /api/painel-financeiro/grafico] BLOQUEIO: empresaId ausente no req.user.`
+      );
+      return res.status(403).json({
+        error: "Acesso negado: empresa não identificada.",
+        semEmpresa: true,
+      });
+    }
+
+    const empresaId = parseInt(req.user.empresaId, 10);
+    const eW = { empresa_id: empresaId };
+    const movW = {
+      [Op.and]: [
+        sequelize.literal(
+          `caixaId IN (SELECT id FROM caixas WHERE empresa_id = ${empresaId})`,
+        ),
+      ],
+    };
     const hoje = new Date();
     const mes = parseInt(req.query.mes) || hoje.getMonth() + 1;
     const ano = parseInt(req.query.ano) || hoje.getFullYear();
@@ -945,19 +968,26 @@ router.get("/grafico", async (req, res) => {
  */
 router.get("/fluxo-caixa", async (req, res) => {
   try {
-    const empresaId = req.user?.empresaId
-      ? parseInt(req.user.empresaId, 10)
-      : null;
-    const eW = empresaId ? { empresa_id: empresaId } : {};
-    const movW = empresaId
-      ? {
-          [Op.and]: [
-            sequelize.literal(
-              `caixaId IN (SELECT id FROM caixas WHERE empresa_id = ${empresaId})`,
-            ),
-          ],
-        }
-      : {};
+    // CRÍTICO: Verificar empresaId antes de qualquer consulta
+    if (!req.user?.empresaId) {
+      console.error(
+        `[GET /api/painel-financeiro/fluxo-caixa] BLOQUEIO: empresaId ausente no req.user.`
+      );
+      return res.status(403).json({
+        error: "Acesso negado: empresa não identificada.",
+        semEmpresa: true,
+      });
+    }
+
+    const empresaId = parseInt(req.user.empresaId, 10);
+    const eW = { empresa_id: empresaId };
+    const movW = {
+      [Op.and]: [
+        sequelize.literal(
+          `caixaId IN (SELECT id FROM caixas WHERE empresa_id = ${empresaId})`,
+        ),
+      ],
+    };
     const hoje = new Date();
     const periodo = ["mensal", "semanal", "diario"].includes(req.query.periodo)
       ? req.query.periodo
@@ -1199,19 +1229,26 @@ router.get("/fluxo-caixa", async (req, res) => {
  */
 router.get("/pagamentos-recebimentos", async (req, res) => {
   try {
-    const empresaId = req.user?.empresaId
-      ? parseInt(req.user.empresaId, 10)
-      : null;
-    const eW = empresaId ? { empresa_id: empresaId } : {};
-    const movW = empresaId
-      ? {
-          [Op.and]: [
-            sequelize.literal(
-              `caixaId IN (SELECT id FROM caixas WHERE empresa_id = ${empresaId})`,
-            ),
-          ],
-        }
-      : {};
+    // CRÍTICO: Verificar empresaId antes de qualquer consulta
+    if (!req.user?.empresaId) {
+      console.error(
+        `[GET /api/painel-financeiro/pagamentos-recebimentos] BLOQUEIO: empresaId ausente no req.user.`
+      );
+      return res.status(403).json({
+        error: "Acesso negado: empresa não identificada.",
+        semEmpresa: true,
+      });
+    }
+
+    const empresaId = parseInt(req.user.empresaId, 10);
+    const eW = { empresa_id: empresaId };
+    const movW = {
+      [Op.and]: [
+        sequelize.literal(
+          `caixaId IN (SELECT id FROM caixas WHERE empresa_id = ${empresaId})`,
+        ),
+      ],
+    };
     const hoje = new Date();
     const periodo = ["mensal", "semanal", "diario"].includes(req.query.periodo)
       ? req.query.periodo

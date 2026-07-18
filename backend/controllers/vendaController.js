@@ -60,10 +60,32 @@ exports.listarVendas = async (req, res) => {
 // Buscar venda por ID
 exports.buscarVenda = async (req, res) => {
   try {
+    // CRÍTICO: Verificar empresaId antes de qualquer consulta
+    if (!req.user?.empresaId) {
+      console.error(
+        `[buscarVenda] BLOQUEIO: empresaId ausente no req.user.`
+      );
+      return res.status(403).json({
+        erro: "Acesso negado: empresa não identificada.",
+        semEmpresa: true,
+      });
+    }
+
     const venda = await Venda.findByPk(req.params.id);
     if (!venda) {
       return res.status(404).json({ erro: "Venda não encontrada" });
     }
+
+    // Isolamento multi-tenant: verificar que a venda pertence à empresa logada
+    if (venda.empresa_id !== req.user.empresaId) {
+      console.warn(
+        `[buscarVenda] TENTATIVA DE ACESSO CRUZADO: ` +
+        `usuario=${req.user.id} empresa=${req.user.empresaId} ` +
+        `tentou acessar venda=${req.params.id} empresa=${venda.empresa_id}`
+      );
+      return res.status(403).json({ erro: "Acesso negado" });
+    }
+
     res.json(venda);
   } catch (error) {
     console.error("Erro ao buscar venda:", error);
@@ -369,10 +391,32 @@ exports.criarVenda = async (req, res) => {
 // Atualizar venda
 exports.atualizarVenda = async (req, res) => {
   try {
+    // CRÍTICO: Verificar empresaId antes de qualquer operação
+    if (!req.user?.empresaId) {
+      console.error(
+        `[atualizarVenda] BLOQUEIO: empresaId ausente no req.user.`
+      );
+      return res.status(403).json({
+        erro: "Acesso negado: empresa não identificada.",
+        semEmpresa: true,
+      });
+    }
+
     const venda = await Venda.findByPk(req.params.id);
     if (!venda) {
       return res.status(404).json({ erro: "Venda não encontrada" });
     }
+
+    // Isolamento multi-tenant: verificar que a venda pertence à empresa logada
+    if (venda.empresa_id !== req.user.empresaId) {
+      console.warn(
+        `[atualizarVenda] TENTATIVA DE ACESSO CRUZADO: ` +
+        `usuario=${req.user.id} empresa=${req.user.empresaId} ` +
+        `tentou editar venda=${req.params.id} empresa=${venda.empresa_id}`
+      );
+      return res.status(403).json({ erro: "Acesso negado" });
+    }
+
     await venda.update(req.body);
 
     // Recarregar venda com dados atualizados para o push
@@ -427,10 +471,32 @@ exports.atualizarVenda = async (req, res) => {
 // Deletar venda
 exports.deletarVenda = async (req, res) => {
   try {
+    // CRÍTICO: Verificar empresaId antes de qualquer operação
+    if (!req.user?.empresaId) {
+      console.error(
+        `[deletarVenda] BLOQUEIO: empresaId ausente no req.user.`
+      );
+      return res.status(403).json({
+        erro: "Acesso negado: empresa não identificada.",
+        semEmpresa: true,
+      });
+    }
+
     const venda = await Venda.findByPk(req.params.id);
     if (!venda) {
       return res.status(404).json({ erro: "Venda não encontrada" });
     }
+
+    // Isolamento multi-tenant: verificar que a venda pertence à empresa logada
+    if (venda.empresa_id !== req.user.empresaId) {
+      console.warn(
+        `[deletarVenda] TENTATIVA DE ACESSO CRUZADO: ` +
+        `usuario=${req.user.id} empresa=${req.user.empresaId} ` +
+        `tentou deletar venda=${req.params.id} empresa=${venda.empresa_id}`
+      );
+      return res.status(403).json({ erro: "Acesso negado" });
+    }
+
     await venda.destroy();
     res.json({ mensagem: "Venda deletada com sucesso" });
   } catch (error) {

@@ -143,6 +143,19 @@ async function authUser(req, res, next) {
           }
         }
 
+        // CRÍTICO: Garantir que empresaId sempre esteja presente para isolamento multi-tenant
+        if (!resolvedEmpresaId) {
+          console.error(
+            `[authUser] BLOQUEIO: usuario=${userId} sem empresa_id associada. ` +
+            `Isolamento multi-tenant não é possível sem empresa_id. ` +
+            `Token pode estar corrompido ou usuário não pertence a nenhuma empresa.`
+          );
+          return res.status(403).json({
+            mensagem: "Usuário não associado a uma empresa. Contate o suporte.",
+            semEmpresa: true,
+          });
+        }
+
         const userFromToken = {
           id: userId,
           empresaId: resolvedEmpresaId,
@@ -151,6 +164,19 @@ async function authUser(req, res, next) {
 
         // Verificação crítica: empresa bloqueada (usar cache para reduzir queries)
         const empresaId = userFromToken.empresaId;
+        
+        // CRÍTICO: Verificação obrigatória de empresa (não pode ser null/undefined)
+        if (!empresaId) {
+          console.error(
+            `[authUser] ERRO CRÍTICO: empresaId é null/undefined para usuario=${userId}. ` +
+            `Isolamento multi-tenant violado.`
+          );
+          return res.status(403).json({
+            mensagem: "Acesso negado: empresa não identificada.",
+            semEmpresa: true,
+          });
+        }
+        
         if (empresaId) {
           const eb = EMPRESA_BLOCKED_CACHE.get(String(empresaId));
           if (eb && eb.expiresAt > now) {
@@ -279,6 +305,18 @@ async function authUser(req, res, next) {
         const empresaId =
           (usuario.empresa_id ? Number(usuario.empresa_id) : null) ||
           extractEmpresaId(empresas);
+        
+        // CRÍTICO: Garantir que empresaId sempre esteja presente
+        if (!empresaId) {
+          console.error(
+            `[authUser] BLOQUEIO (fallback): usuario=${usuario.id} sem empresa_id.`
+          );
+          return res.status(403).json({
+            mensagem: "Usuário não associado a uma empresa. Contate o suporte.",
+            semEmpresa: true,
+          });
+        }
+        
         // Verificar se empresa está bloqueada
         if (await isEmpresaBloqueada(empresaId)) {
           console.warn(`[authUser] empresa ${empresaId} bloqueada (fallback)`);

@@ -23,10 +23,19 @@ router.get("/", async (req, res) => {
 
     const where = {};
 
-    // Filtro de empresa (multi-tenant) — isolamento estrito por empresa_id
-    if (req.user?.empresaId) {
-      where.empresa_id = req.user.empresaId;
+    // CRÍTICO: Filtro de empresa OBRIGATÓRIO (multi-tenant)
+    // Se não houver empresaId, negar acesso para evitar vazamento de dados
+    if (!req.user?.empresaId) {
+      console.error(
+        `[GET /api/contas-receber] BLOQUEIO: empresaId ausente no req.user. ` +
+        `Tentativa de acesso sem isolamento multi-tenant.`
+      );
+      return res.status(403).json({
+        error: "Acesso negado: empresa não identificada.",
+        semEmpresa: true,
+      });
     }
+    where.empresa_id = req.user.empresaId;
 
     if (clienteId) where.clienteId = Number(clienteId);
     if (clienteNome) where.clienteNome = { [Op.like]: `%${clienteNome}%` };
@@ -99,10 +108,17 @@ router.get("/todos", async (req, res) => {
     const { clienteId, clienteNome, limit: lim, offset: off } = req.query;
     const where = {};
 
-    // Filtro de empresa (multi-tenant) — isolamento estrito por empresa_id
-    if (req.user?.empresaId) {
-      where.empresa_id = req.user.empresaId;
+    // CRÍTICO: Filtro de empresa OBRIGATÓRIO (multi-tenant)
+    if (!req.user?.empresaId) {
+      console.error(
+        `[GET /api/contas-receber/todos] BLOQUEIO: empresaId ausente no req.user.`
+      );
+      return res.status(403).json({
+        error: "Acesso negado: empresa não identificada.",
+        semEmpresa: true,
+      });
     }
+    where.empresa_id = req.user.empresaId;
     if (clienteId) where.clienteId = Number(clienteId);
     if (clienteNome) where.clienteNome = { [Op.like]: `%${clienteNome}%` };
 
@@ -125,13 +141,27 @@ router.get("/todos", async (req, res) => {
 // ── GET /api/contas-receber/:id ───────────────────────────────────────────────
 router.get("/:id", async (req, res) => {
   try {
+    // CRÍTICO: Verificar empresaId antes de qualquer consulta
+    if (!req.user?.empresaId) {
+      console.error(
+        `[GET /api/contas-receber/:id] BLOQUEIO: empresaId ausente no req.user.`
+      );
+      return res.status(403).json({
+        error: "Acesso negado: empresa não identificada.",
+        semEmpresa: true,
+      });
+    }
+
     const row = await ContaReceber.findByPk(req.params.id);
-    if (!row) return res.status(404).json({ error: "Registro não encontrado" }); // Isolamento multi-tenant: verificar que o registro pertence à empresa logada
-    if (
-      req.user?.empresaId &&
-      row.empresa_id &&
-      row.empresa_id !== req.user.empresaId
-    ) {
+    if (!row) return res.status(404).json({ error: "Registro não encontrado" });
+
+    // Isolamento multi-tenant: verificar que o registro pertence à empresa logada
+    if (row.empresa_id !== req.user.empresaId) {
+      console.warn(
+        `[GET /api/contas-receber/:id] TENTATIVA DE ACESSO CRUZADO: ` +
+        `usuario=${req.user.id} empresa=${req.user.empresaId} ` +
+        `tentou acessar registro=${req.params.id} empresa=${row.empresa_id}`
+      );
       return res.status(403).json({ error: "Acesso negado" });
     }
     return res.json(row.toJSON());
@@ -144,6 +174,17 @@ router.get("/:id", async (req, res) => {
 // ── POST /api/contas-receber ──────────────────────────────────────────────────
 router.post("/", async (req, res) => {
   try {
+    // CRÍTICO: Verificar empresaId antes de criar
+    if (!req.user?.empresaId) {
+      console.error(
+        `[POST /api/contas-receber] BLOQUEIO: empresaId ausente no req.user.`
+      );
+      return res.status(403).json({
+        error: "Acesso negado: empresa não identificada.",
+        semEmpresa: true,
+      });
+    }
+
     const body = req.body || {};
 
     // Validações básicas
@@ -160,8 +201,8 @@ router.post("/", async (req, res) => {
     const valorTotal = toNum(body.valor);
     const valorParcela = valorTotal / parcelas;
 
-    // Auto-assign empresa_id
-    const empresa_id = body.empresa_id || req.user?.empresaId || null;
+    // Auto-assign empresa_id (SEMPRE usar o da sessão, ignorar body)
+    const empresa_id = req.user.empresaId;
 
     const hoje = new Date().toISOString().split("T")[0];
     const created = [];
@@ -208,13 +249,27 @@ router.post("/", async (req, res) => {
 // ── PUT /api/contas-receber/:id ───────────────────────────────────────────────
 router.put("/:id", async (req, res) => {
   try {
+    // CRÍTICO: Verificar empresaId antes de qualquer operação
+    if (!req.user?.empresaId) {
+      console.error(
+        `[PUT /api/contas-receber/:id] BLOQUEIO: empresaId ausente no req.user.`
+      );
+      return res.status(403).json({
+        error: "Acesso negado: empresa não identificada.",
+        semEmpresa: true,
+      });
+    }
+
     const row = await ContaReceber.findByPk(req.params.id);
-    if (!row) return res.status(404).json({ error: "Registro não encontrado" }); // Isolamento multi-tenant
-    if (
-      req.user?.empresaId &&
-      row.empresa_id &&
-      row.empresa_id !== req.user.empresaId
-    ) {
+    if (!row) return res.status(404).json({ error: "Registro não encontrado" });
+
+    // Isolamento multi-tenant: verificar que o registro pertence à empresa logada
+    if (row.empresa_id !== req.user.empresaId) {
+      console.warn(
+        `[PUT /api/contas-receber/:id] TENTATIVA DE ACESSO CRUZADO: ` +
+        `usuario=${req.user.id} empresa=${req.user.empresaId} ` +
+        `tentou editar registro=${req.params.id} empresa=${row.empresa_id}`
+      );
       return res.status(403).json({ error: "Acesso negado" });
     }
     const body = req.body || {};
@@ -266,13 +321,27 @@ router.put("/:id", async (req, res) => {
 // Registra recebimento total ou parcial de um documento
 router.patch("/:id/receber", async (req, res) => {
   try {
+    // CRÍTICO: Verificar empresaId antes de qualquer operação
+    if (!req.user?.empresaId) {
+      console.error(
+        `[PATCH /api/contas-receber/:id/receber] BLOQUEIO: empresaId ausente no req.user.`
+      );
+      return res.status(403).json({
+        error: "Acesso negado: empresa não identificada.",
+        semEmpresa: true,
+      });
+    }
+
     const row = await ContaReceber.findByPk(req.params.id);
-    if (!row) return res.status(404).json({ error: "Registro não encontrado" }); // Isolamento multi-tenant
-    if (
-      req.user?.empresaId &&
-      row.empresa_id &&
-      row.empresa_id !== req.user.empresaId
-    ) {
+    if (!row) return res.status(404).json({ error: "Registro não encontrado" });
+
+    // Isolamento multi-tenant: verificar que o registro pertence à empresa logada
+    if (row.empresa_id !== req.user.empresaId) {
+      console.warn(
+        `[PATCH /api/contas-receber/:id/receber] TENTATIVA DE ACESSO CRUZADO: ` +
+        `usuario=${req.user.id} empresa=${req.user.empresaId} ` +
+        `tentou receber registro=${req.params.id} empresa=${row.empresa_id}`
+      );
       return res.status(403).json({ error: "Acesso negado" });
     }
     const { valorRecebido, dataPagamento, formaPagamento } = req.body || {};
@@ -302,13 +371,27 @@ router.patch("/:id/receber", async (req, res) => {
 // ── DELETE /api/contas-receber/:id ───────────────────────────────────────────
 router.delete("/:id", async (req, res) => {
   try {
+    // CRÍTICO: Verificar empresaId antes de qualquer operação
+    if (!req.user?.empresaId) {
+      console.error(
+        `[DELETE /api/contas-receber/:id] BLOQUEIO: empresaId ausente no req.user.`
+      );
+      return res.status(403).json({
+        error: "Acesso negado: empresa não identificada.",
+        semEmpresa: true,
+      });
+    }
+
     const row = await ContaReceber.findByPk(req.params.id);
-    if (!row) return res.status(404).json({ error: "Registro não encontrado" }); // Isolamento multi-tenant
-    if (
-      req.user?.empresaId &&
-      row.empresa_id &&
-      row.empresa_id !== req.user.empresaId
-    ) {
+    if (!row) return res.status(404).json({ error: "Registro não encontrado" });
+
+    // Isolamento multi-tenant: verificar que o registro pertence à empresa logada
+    if (row.empresa_id !== req.user.empresaId) {
+      console.warn(
+        `[DELETE /api/contas-receber/:id] TENTATIVA DE ACESSO CRUZADO: ` +
+        `usuario=${req.user.id} empresa=${req.user.empresaId} ` +
+        `tentou deletar registro=${req.params.id} empresa=${row.empresa_id}`
+      );
       return res.status(403).json({ error: "Acesso negado" });
     }
     await row.destroy();
@@ -324,16 +407,25 @@ router.delete("/:id", async (req, res) => {
 // Totais por período (usado pelo painel financeiro)
 router.get("/resumo/periodo", async (req, res) => {
   try {
+    // CRÍTICO: Verificar empresaId antes de qualquer consulta
+    if (!req.user?.empresaId) {
+      console.error(
+        `[GET /api/contas-receber/resumo/periodo] BLOQUEIO: empresaId ausente no req.user.`
+      );
+      return res.status(403).json({
+        error: "Acesso negado: empresa não identificada.",
+        semEmpresa: true,
+      });
+    }
+
     const agora = new Date();
     const hoje0 = new Date(agora);
     hoje0.setHours(0, 0, 0, 0);
     const hoje23 = new Date(agora);
     hoje23.setHours(23, 59, 59, 999);
 
-    // Isolamento estrito por empresa_id — sem fallback para null
-    const baseWhere = req.user?.empresaId
-      ? { empresa_id: req.user.empresaId }
-      : {};
+    // Isolamento estrito por empresa_id
+    const baseWhere = { empresa_id: req.user.empresaId };
 
     const statusPendentes = { [Op.in]: ["pendente", "parcial"] };
 
