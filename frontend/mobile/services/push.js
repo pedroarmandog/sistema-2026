@@ -48,19 +48,6 @@ window.MobilePush = (function () {
       };
     }
 
-    // Aguardar Service Worker estar pronto (mais confiável que a referência salva)
-    let reg;
-    try {
-      reg = await navigator.serviceWorker.ready;
-      if (!reg) {
-        return { ok: false, message: "Service Worker não está pronto" };
-      }
-      _swRegistration = reg; // Atualizar referência
-    } catch (swErr) {
-      console.error("[Push Front] ❌ Service Worker não está pronto:", swErr);
-      return { ok: false, message: "Service Worker não está pronto: " + swErr.message };
-    }
-
     if (!_swRegistration) {
       return { ok: false, message: "Service Worker não inicializado" };
     }
@@ -96,51 +83,13 @@ window.MobilePush = (function () {
       const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
       console.log("[Push Front] ✅ VAPID convertida:", applicationServerKey.length, "bytes");
 
-      // Limpar subscription anterior se existir
-      try {
-        const oldSub = await reg.pushManager.getSubscription();
-        if (oldSub) {
-          console.log("[Push Front] 🗑️ Removendo subscription antiga...");
-          await oldSub.unsubscribe();
-          console.log("[Push Front] ✅ Subscription antiga removida");
-          await new Promise(r => setTimeout(r, 500));
-        }
-      } catch (cleanErr) {
-        console.warn("[Push Front] ⚠️ Aviso ao limpar subscription antiga:", cleanErr.message);
-      }
-
-      // Delay inicial para garantir que o push service esteja pronto no Android
-      console.log("[Push Front] ⏳ Aguardando push service ficar disponível...");
-      await new Promise(r => setTimeout(r, 2000));
-
-      // Verificar se o pushManager está disponível antes de tentar
-      if (!reg.pushManager) {
-        throw new Error("PushManager não disponível no Service Worker");
-      }
-
-      // Tentar criar subscription com retry (Android precisa de mais tempo)
-      let subscription = null;
-      const maxRetries = 5;
-      for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-          console.log(`[Push Front] 🔄 Tentativa ${attempt}/${maxRetries}: pushManager.subscribe()...`);
-          subscription = await reg.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey,
-          });
-          console.log("[Push Front] ✅ Subscription criada:", subscription.endpoint.substring(0, 60) + "...");
-          break;
-        } catch (subErr) {
-          console.warn(`[Push Front] ⚠️ Tentativa ${attempt}/${maxRetries} falhou:`, subErr.message);
-          if (attempt < maxRetries) {
-            const delayMs = attempt * 2000;
-            console.log(`[Push Front] ⏳ Aguardando ${delayMs}ms...`);
-            await new Promise(r => setTimeout(r, delayMs));
-          } else {
-            throw subErr;
-          }
-        }
-      }
+      // Criar subscription
+      console.log("[Push Front] 🔄 Chamando pushManager.subscribe()...");
+      const subscription = await _swRegistration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey,
+      });
+      console.log("[Push Front] ✅ Subscription criada:", subscription.endpoint.substring(0, 60) + "...");
 
       // Detectar plataforma
       const plataforma = detectarPlataforma();
