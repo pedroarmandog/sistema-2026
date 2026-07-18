@@ -4,33 +4,49 @@ const { gerarToken, CADASTRO_TOKEN } = require("../middleware/authAdmin");
 // POST /api/admin/login
 async function login(req, res) {
   try {
+    console.log("[admin/login] Tentativa de login:", { email: req.body?.email });
+    
     const { email, senha } = req.body;
     if (!email || !senha) {
+      console.warn("[admin/login] Campos faltando");
       return res.status(400).json({ error: "Email e senha são obrigatórios" });
     }
 
+    console.log("[admin/login] Buscando admin no banco...");
     const admin = await Admin.findOne({ where: { email } });
     if (!admin) {
+      console.warn("[admin/login] Admin não encontrado:", email);
       return res.status(401).json({ error: "Credenciais inválidas" });
     }
 
+    console.log("[admin/login] Admin encontrado:", { id: admin.id, nome: admin.nome, ativo: admin.ativo });
+
     if (!admin.ativo) {
+      console.warn("[admin/login] Conta desativada:", admin.id);
       return res.status(403).json({ error: "Conta desativada" });
     }
 
+    console.log("[admin/login] Validando senha...");
     const senhaValida = await admin.validarSenha(senha);
     if (!senhaValida) {
+      console.warn("[admin/login] Senha inválida para:", admin.id);
       return res.status(401).json({ error: "Credenciais inválidas" });
     }
 
+    console.log("[admin/login] Gerando token...");
     const token = gerarToken(admin);
     const adminData = admin.toJSON();
     delete adminData.senha;
 
+    console.log("[admin/login] Login bem-sucedido:", { id: admin.id, email: admin.email });
     return res.json({ token, admin: adminData });
   } catch (err) {
-    console.error("[admin/login] Erro:", err);
-    return res.status(500).json({ error: "Erro interno do servidor" });
+    console.error("[admin/login] Erro COMPLETO:", err);
+    console.error("[admin/login] Stack:", err.stack);
+    return res.status(500).json({ 
+      error: "Erro interno do servidor",
+      detalhe: process.env.NODE_ENV === "development" ? err.message : undefined
+    });
   }
 }
 
