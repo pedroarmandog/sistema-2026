@@ -96,23 +96,31 @@ window.MobilePush = (function () {
       const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
       console.log("[Push Front] ✅ VAPID convertida:", applicationServerKey.length, "bytes");
 
-      // Limpar subscription anterior se existir (evita "push service error" no Chrome Android)
+      // Limpar subscription anterior se existir
       try {
         const oldSub = await reg.pushManager.getSubscription();
         if (oldSub) {
           console.log("[Push Front] 🗑️ Removendo subscription antiga...");
           await oldSub.unsubscribe();
           console.log("[Push Front] ✅ Subscription antiga removida");
-          // Pequena pausa para garantir que o unsubscribe propagate
-          await new Promise(r => setTimeout(r, 300));
+          await new Promise(r => setTimeout(r, 500));
         }
       } catch (cleanErr) {
         console.warn("[Push Front] ⚠️ Aviso ao limpar subscription antiga:", cleanErr.message);
       }
 
-      // Tentar criar subscription com retry (no Chrome Android o push service pode demorar)
+      // Delay inicial para garantir que o push service esteja pronto no Android
+      console.log("[Push Front] ⏳ Aguardando push service ficar disponível...");
+      await new Promise(r => setTimeout(r, 2000));
+
+      // Verificar se o pushManager está disponível antes de tentar
+      if (!reg.pushManager) {
+        throw new Error("PushManager não disponível no Service Worker");
+      }
+
+      // Tentar criar subscription com retry (Android precisa de mais tempo)
       let subscription = null;
-      const maxRetries = 3;
+      const maxRetries = 5;
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
           console.log(`[Push Front] 🔄 Tentativa ${attempt}/${maxRetries}: pushManager.subscribe()...`);
@@ -121,16 +129,15 @@ window.MobilePush = (function () {
             applicationServerKey,
           });
           console.log("[Push Front] ✅ Subscription criada:", subscription.endpoint.substring(0, 60) + "...");
-          break; // Sucesso, sair do loop
+          break;
         } catch (subErr) {
           console.warn(`[Push Front] ⚠️ Tentativa ${attempt}/${maxRetries} falhou:`, subErr.message);
           if (attempt < maxRetries) {
-            // Aguardar um pouco antes de tentar novamente
-            const delayMs = attempt * 1000;
-            console.log(`[Push Front] ⏳ Aguardando ${delayMs}ms para tentar novamente...`);
+            const delayMs = attempt * 2000;
+            console.log(`[Push Front] ⏳ Aguardando ${delayMs}ms...`);
             await new Promise(r => setTimeout(r, delayMs));
           } else {
-            throw subErr; // Última tentativa falhou, propaga o erro
+            throw subErr;
           }
         }
       }
