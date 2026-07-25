@@ -1098,6 +1098,17 @@ app.get("/api/test", (req, res) => {
 const petTagsRoutes = require("./routes/petTagsRoutes");
 // Rotas do módulo de Marketing/WhatsApp
 const marketingRoutes = require("./routes/marketingRoutes");
+// Rota SSE para disparador de mensagens (bypass authUser quando empresaId começa com "disp_")
+// O EventSource não envia cookies cross-origin, então o authUser falharia com 401.
+// O controller eventoSSE já valida o empresaId internamente.
+const marketingController = require("./controllers/marketingController");
+app.get("/api/marketing/whatsapp/eventos", (req, res, next) => {
+  const q = req.query.empresaId;
+  if (q && typeof q === "string" && q.startsWith("disp_")) {
+    return marketingController.eventoSSE(req, res);
+  }
+  next();
+});
 app.use("/api/marketing", authUser, marketingRoutes);
 
 app.use("/api/clientes", clienteRoutes);

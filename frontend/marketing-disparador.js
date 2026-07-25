@@ -501,6 +501,7 @@
     var chaveWpp = "disp_" + instanciaId;
     qrEventSource = new EventSource(
       VPS_URL + "/api/marketing/whatsapp/eventos?empresaId=" + chaveWpp,
+      { withCredentials: true },
     );
 
     qrEventSource.onmessage = function (event) {
