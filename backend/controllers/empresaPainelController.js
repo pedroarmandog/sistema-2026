@@ -211,6 +211,23 @@ async function bloquear(req, res) {
     }
 
     await empresa.update({ status: "BLOQUEADO" });
+
+    // Invalidar cache da empresa no middleware authUser para bloqueio imediato
+    try {
+      const { invalidateEmpresaCache } = require("../middleware/authUser");
+      // Buscar empresa do sistema pelo CNPJ para obter o empresaId
+      if (empresa.cnpj) {
+        const cnpjLimpo = empresa.cnpj.replace(/\D/g, "");
+        const { Empresa } = require("../models");
+        const empresaSistema = await Empresa.findOne({ where: { cnpj: cnpjLimpo }, attributes: ["id"] });
+        if (empresaSistema) {
+          invalidateEmpresaCache(empresaSistema.id);
+        }
+      }
+    } catch (cacheErr) {
+      console.warn("[admin/empresas] Erro ao invalidar cache:", cacheErr && cacheErr.message);
+    }
+
     return res.json({ message: "Empresa bloqueada com sucesso", empresa });
   } catch (err) {
     console.error("[admin/empresas] Erro ao bloquear:", err);
@@ -241,6 +258,21 @@ async function reativar(req, res) {
       status: "PAGO",
       observacao: "Reativação pelo painel admin",
     });
+
+    // Invalidar cache da empresa no middleware authUser para desbloqueio imediato
+    try {
+      const { invalidateEmpresaCache } = require("../middleware/authUser");
+      if (empresa.cnpj) {
+        const cnpjLimpo = empresa.cnpj.replace(/\D/g, "");
+        const { Empresa } = require("../models");
+        const empresaSistema = await Empresa.findOne({ where: { cnpj: cnpjLimpo }, attributes: ["id"] });
+        if (empresaSistema) {
+          invalidateEmpresaCache(empresaSistema.id);
+        }
+      }
+    } catch (cacheErr) {
+      console.warn("[admin/empresas] Erro ao invalidar cache na reativação:", cacheErr && cacheErr.message);
+    }
 
     return res.json({ message: "Empresa reativada com sucesso", empresa });
   } catch (err) {
@@ -637,6 +669,21 @@ async function registrarPagamento(req, res) {
       status: "ATIVO",
       data_vencimento: novaData.toISOString().split("T")[0],
     });
+
+    // Invalidar cache da empresa no middleware authUser para liberar acesso imediato
+    try {
+      const { invalidateEmpresaCache } = require("../middleware/authUser");
+      if (empresa.cnpj) {
+        const cnpjLimpo = empresa.cnpj.replace(/\D/g, "");
+        const { Empresa } = require("../models");
+        const empresaSistema = await Empresa.findOne({ where: { cnpj: cnpjLimpo }, attributes: ["id"] });
+        if (empresaSistema) {
+          invalidateEmpresaCache(empresaSistema.id);
+        }
+      }
+    } catch (cacheErr) {
+      console.warn("[admin/pagamento] Erro ao invalidar cache:", cacheErr && cacheErr.message);
+    }
 
     return res.status(201).json({ pagamento, empresa });
   } catch (err) {

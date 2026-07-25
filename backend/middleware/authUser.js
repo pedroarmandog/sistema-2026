@@ -11,25 +11,93 @@ const USER_CACHE_TTL = Number(process.env.USER_CACHE_TTL_MS) || 10 * 1000; // 10
 
 const EMPRESA_BLOCKED_CACHE = new Map(); // key: empresaId -> { blocked, expiresAt }
 const EMPRESA_CACHE_TTL =
-  Number(process.env.EMPRESA_CACHE_TTL_MS) || 5 * 60 * 1000; // 5min default
+  Number(process.env.EMPRESA_CACHE_TTL_MS) || 10 * 1000; // 10s default (reduzido de 5min para garantir bloqueio/desbloqueio imediato)
+
+/** Exportado para permitir invalidação externa (ex: ao bloquear/reativar pelo painel) */
+function invalidateEmpresaCache(empresaId) {
+  if (empresaId != null) {
+    EMPRESA_BLOCKED_CACHE.delete(String(empresaId));
+    console.log(`[authUser] Cache de empresa ${empresaId} invalidado manualmente`);
+  }
+}
 
 /**
- * Verifica se a empresa do usuário está BLOQUEADA na tabela empresas_painel.
- * Retorna true se bloqueada, false caso contrário.
+ * Verifica se a empresa do usuário está BLOQUEADA ou VENCIDA na tabela empresas_painel.
+ * Retorna true se bloqueada/vencida, false caso contrário.
+ * CORREÇÃO CRÍTICA: Se CNPJ não estiver cadastrado na tabela empresas_painel,
+ * faz fallback para o campo `ativa` da tabela empresas (bloqueio manual pelo sistema).
+ * Também verifica vencimento em tempo real (não depende apenas do cron).
  */
 async function isEmpresaBloqueada(empresaId) {
   if (!empresaId) return false;
   try {
-    const { Empresa, EmpresaPainel } = require("../models");
-    const empresa = await Empresa.findByPk(empresaId, { attributes: ["cnpj"] });
-    if (!empresa || !empresa.cnpj) return false;
-    const cnpjLimpo = empresa.cnpj.replace(/\D/g, "");
-    if (!cnpjLimpo) return false;
-    const painel = await EmpresaPainel.findOne({
-      where: { cnpj: cnpjLimpo },
-      attributes: ["status"],
-    });
-    return painel && painel.status === "BLOQUEADO";
+    const { Empresa, EmpresaPainel, sequelize } = require("../models");
+    
+    // Buscar empresa do sistema e seu CNPJ
+    const empresa = await Empresa.findByPk(empresaId, { attributes: ["cnpj", "ativa", "ativo"] });
+    if (!empresa) return false;
+
+    // Se a empresa tem os campos ativa/ativo como false, já bloqueia direto
+    if (empresa.ativa === false || empresa.ativo === false) {
+      console.log(`[authUser] isEmpresaBloqueada: empresa ${empresaId} bloqueada via campos ativa/ativo`);
+      return true;
+    }
+
+    // Verificar na tabela empresas_painel pelo CNPJ
+    if (empresa.cnpj) {
+      const cnpjLimpo = empresa.cnpj.replace(/\D/g, "");
+      if (cnpjLimpo) {
+        const painel = await EmpresaPainel.findOne({
+          where: { cnpj: cnpjLimpo },
+          attributes: ["status", "data_vencimento"],
+        });
+        
+        if (painel) {
+          // Verificação 1: Status explícito BLOQUEADO
+          if (painel.status === "BLOQUEADO") return true;
+          
+          // Verificação 2: Vencimento em tempo real (independente do cron!)
+          // Se a data de vencimento já passou e o status não é ATIVO (está VENCIDO)
+          if (painel.data_vencimento) {
+            const hoje = new Date().toISOString().split("T")[0];
+            if (painel.data_vencimento < hoje && painel.status !== "ATIVO") {
+              // Marcar como bloqueado em tempo real no banco
+              await EmpresaPainel.update(
+                { status: "BLOQUEADO" },
+                { where: { id: painel.id, status: { [require("sequelize").Op.in]: ["VENCIDO", "ATIVO"] } } }
+              );
+              console.log(`[authUser] isEmpresaBloqueada: empresa ${empresaId} BLOQUEADA automaticamente por vencimento (${painel.data_vencimento})`);
+              return true;
+            }
+          }
+          
+          // Status VENCIDO também bloqueia
+          if (painel.status === "VENCIDO") return true;
+          
+          return false;
+        }
+      }
+    }
+    
+    // Fallback: não encontrou na empresas_painel, verificar pelo nome/outros campos
+    // Tenta buscar na empresas_painel pelo nome da empresa
+    try {
+      const empresaNome = await Empresa.findByPk(empresaId, { attributes: ["nome"] });
+      if (empresaNome && empresaNome.nome) {
+        const painelPorNome = await EmpresaPainel.findOne({
+          where: { nome_fantasia: empresaNome.nome },
+          attributes: ["status"],
+        });
+        if (painelPorNome && painelPorNome.status === "BLOQUEADO") return true;
+      }
+    } catch (nomeErr) {
+      // silencioso
+    }
+
+    // Fallback final: campos ativa/ativo da tabela empresas
+    if (empresa.ativa === false || empresa.ativo === false) return true;
+    
+    return false;
   } catch (e) {
     console.warn("[authUser] Erro ao verificar bloqueio:", e && e.message);
     return false;
@@ -391,5 +459,6 @@ module.exports = {
   isEmpresaBloqueada,
   extractEmpresaId,
   invalidateUserCache,
+  invalidateEmpresaCache,
   JWT_SECRET,
 };
