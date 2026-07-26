@@ -322,8 +322,10 @@
         if (!resp.ok) throw new Error("HTTP " + resp.status);
         const mdText = await resp.text();
 
+        // Remover frontmatter YAML (metadados entre ---) antes de renderizar
+        const mdContent = this.stripFrontmatter(mdText);
         // Renderizar markdown
-        const html = marked.parse(mdText, { breaks: true, gfm: true });
+        const html = marked.parse(mdContent, { breaks: true, gfm: true });
 
         // Encontrar artigos relacionados (mesma categoria, excluindo o atual)
         const relacionados = artigos
@@ -567,6 +569,13 @@
     },
 
     // ── Utilitários ───────────────────────────────────────────
+
+    // Remove frontmatter YAML (bloco entre ---) do markdown
+    stripFrontmatter(md) {
+      if (!md) return "";
+      return md.replace(/^---[\s\S]*?---\s*/m, "");
+    },
+
     esc(str) {
       if (!str) return "";
       return String(str)
