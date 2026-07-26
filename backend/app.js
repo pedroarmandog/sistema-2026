@@ -164,6 +164,7 @@ app.use(bodyParser.urlencoded({ limit: "10mb", extended: true }));
 app.use(cookieParser());
 app.use("/uploads", express.static(path.join(__dirname, "../uploads"))); // imagens públicas
 app.use("/logos", express.static(path.join(__dirname, "../logos"))); // logos SVG do sistema
+app.use("/base-conhecimento", express.static(path.join(__dirname, "../frontend/base-conhecimento"))); // Base de Conhecimento
 
 // Global API rate limiter (proteger contra flood de requisições do frontend)
 try {

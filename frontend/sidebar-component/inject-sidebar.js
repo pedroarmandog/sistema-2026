@@ -74,6 +74,9 @@
   ensureJs("/config/help-center-config.js");
   setTimeout(() => ensureJs("/components/global-help-center.js"), 150);
 
+  // ── Base de Conhecimento — assets compartilhados ────────────
+  ensureCss("/base-conhecimento/base-conhecimento.css");
+
   // --- Helpers locais: detectar submenus abertos e aplicar overflow-x:hidden ---
   function setupSidebarOverflowGuard() {
     // Evitar múltiplas configurações
