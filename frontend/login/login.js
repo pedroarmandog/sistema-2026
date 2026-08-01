@@ -195,32 +195,6 @@ document
     }
   });
 
-// Verificar se já está logado ao carregar a página
-window.addEventListener("DOMContentLoaded", function () {
-  const usuarioLogadoId = getCookie("usuarioLogadoId");
-
-  if (usuarioLogadoId) {
-    // Verificar se a sessão ainda é válida (cookie + DB + 8h de inatividade)
-    const _base = window.VPS_URL || window.API_URL || "";
-    fetch(_base + "/api/usuarios/sessao-ativa", {
-      method: "GET",
-      credentials: "include",
-    })
-      .then(function (r) {
-        return r.ok ? r.json() : { ativa: false };
-      })
-      .then(function (data) {
-        if (data && data.ativa !== false) {
-          window.location.href = "/dashboard.html";
-        }
-        // Se ativa === false: sessão inválida ou expirada por inatividade → mostrar login
-      })
-      .catch(function () {
-        // Erro de rede: manter na tela de login (não redirecionar)
-      });
-  }
-});
-
 // Prevenir ataques XSS nos inputs
 document.querySelectorAll(".form-input").forEach((input) => {
   input.addEventListener("input", function () {
