@@ -164,7 +164,10 @@ app.use(bodyParser.urlencoded({ limit: "10mb", extended: true }));
 app.use(cookieParser());
 app.use("/uploads", express.static(path.join(__dirname, "../uploads"))); // imagens públicas
 app.use("/logos", express.static(path.join(__dirname, "../logos"))); // logos SVG do sistema
-app.use("/base-conhecimento", express.static(path.join(__dirname, "../frontend/base-conhecimento"))); // Base de Conhecimento
+app.use(
+  "/base-conhecimento",
+  express.static(path.join(__dirname, "../frontend/base-conhecimento")),
+); // Base de Conhecimento
 
 // Global API rate limiter (proteger contra flood de requisições do frontend)
 try {
@@ -1221,6 +1224,15 @@ const haverRoutes = require("./routes/haverRoutes");
 const crediarioRoutes = require("./routes/crediarioRoutes");
 app.use("/api/haver", haverRoutes);
 app.use("/api/crediario", crediarioRoutes);
+
+// ── Módulo Fiscal (preparação 2026-08-01) ─────────────────────────────────
+// Configuração fiscal por empresa e Central Fiscal (registro de NFs).
+// Nenhuma emissão real — apenas estrutura preparatória.
+const configuracaoFiscalRoutes = require("./routes/configuracaoFiscalRoutes");
+const notaFiscalRoutes = require("./routes/notaFiscalRoutes");
+app.use("/api/fiscal", configuracaoFiscalRoutes);
+app.use("/api/notas-fiscais", notaFiscalRoutes);
+// ─────────────────────────────────────────────────────────────────────────
 
 // Painel Financeiro – dados reais do banco
 const painelFinanceiroRoutes = require("./routes/painelFinanceiroRoutes");

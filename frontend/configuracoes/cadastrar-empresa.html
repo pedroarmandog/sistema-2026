@@ -880,6 +880,31 @@
                                     </div>
                                 </div>
 
+                                <!-- Campos fiscais adicionados em 2026-08-01 -->
+                                <div class="form-row" style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;">
+                                    <div style="flex:1;min-width:160px;">
+                                        <label class="form-label">CNAE</label>
+                                        <input class="form-control" type="text" id="cnae" maxlength="7" placeholder="0000000">
+                                    </div>
+                                    <div style="flex:1;min-width:220px;">
+                                        <label class="form-label">CRT (Regime Tributário NF-e)</label>
+                                        <select id="crt" class="form-control">
+                                            <option value="">— Selecione —</option>
+                                            <option value="1">1 - Simples Nacional</option>
+                                            <option value="2">2 - Simples Nacional – Excesso de Sublimite</option>
+                                            <option value="3">3 - Regime Normal</option>
+                                        </select>
+                                    </div>
+                                    <div style="flex:1;min-width:160px;">
+                                        <label class="form-label">Código IBGE do Município</label>
+                                        <input class="form-control" type="text" id="codigo_ibge_municipio" maxlength="7" placeholder="0000000">
+                                    </div>
+                                    <div style="flex:1;min-width:160px;">
+                                        <label class="form-label">País</label>
+                                        <input class="form-control" type="text" id="pais" value="Brasil" placeholder="Brasil">
+                                    </div>
+                                </div>
+
                                 <div class="form-row" style="display:flex;gap:12px;margin-top:12px;">
                                     <div style="width:220px;">
                                         <label class="form-label">Telefone 1 *</label>

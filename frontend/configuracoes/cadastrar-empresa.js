@@ -1000,6 +1000,19 @@ document.addEventListener("DOMContentLoaded", function () {
               const regimeInput = document.getElementById("regime");
               if (regimeInput) regimeInput.value = empresa.regime;
             }
+            // Campos fiscais
+            const camposFiscais = [
+              "cnae",
+              "crt",
+              "codigo_ibge_municipio",
+              "pais",
+            ];
+            camposFiscais.forEach(function (campo) {
+              if (empresa[campo] !== undefined && empresa[campo] !== null) {
+                const el = document.getElementById(campo);
+                if (el) el.value = empresa[campo];
+              }
+            });
             if (empresa.ativo !== undefined && empresa.ativo !== null) {
               const ativoInput = document.getElementById("ativo");
               if (ativoInput) ativoInput.value = empresa.ativo ? "Sim" : "Não";
@@ -1294,13 +1307,22 @@ function salvarEmpresa() {
     nome: (document.getElementById("nomeFantasia") || {}).value || "", // Backend espera 'nome'
     razaoSocial: (document.getElementById("razaoSocial") || {}).value || "",
     cnpj: (document.getElementById("cnpj") || {}).value || "",
-    inscricaoEstadual: (document.getElementById("inscricaoEstadual") || {}).value || "",
-    inscricaoMunicipal: (document.getElementById("inscricaoMunicipal") || {}).value || "",
-    credenciamento: (document.getElementById("credenciamento") || {}).value || "",
+    inscricaoEstadual:
+      (document.getElementById("inscricaoEstadual") || {}).value || "",
+    inscricaoMunicipal:
+      (document.getElementById("inscricaoMunicipal") || {}).value || "",
+    credenciamento:
+      (document.getElementById("credenciamento") || {}).value || "",
     regime: (document.getElementById("regime") || {}).value || "",
+    cnae: (document.getElementById("cnae") || {}).value || "",
+    crt: (document.getElementById("crt") || {}).value || "",
+    codigo_ibge_municipio:
+      (document.getElementById("codigo_ibge_municipio") || {}).value || "",
+    pais: (document.getElementById("pais") || {}).value || "Brasil",
     telefone: (document.getElementById("telefone1") || {}).value || "",
     telefone2: (document.getElementById("telefone2") || {}).value || "",
-    telefonePlantao: (document.getElementById("telefonePlantao") || {}).value || "",
+    telefonePlantao:
+      (document.getElementById("telefonePlantao") || {}).value || "",
     email: (document.getElementById("email") || {}).value || "",
     endereco: {
       rua: (document.getElementById("endereco") || {}).value || "",

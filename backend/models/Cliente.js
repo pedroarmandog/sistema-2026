@@ -238,6 +238,49 @@ const Cliente = sequelize.define(
 
     // Imagem
     imagem_perfil: { type: DataTypes.STRING },
+
+    // ── Campos Fiscais ─────────────────────────────────────────────────────
+    // Adicionados em 2026-08-01 para preparação do módulo fiscal.
+    // tipoPessoa já existia no frontend (novo-cliente.html) — esta adição
+    // sincroniza o banco com o que o frontend já envia.
+    // Todos allowNull: true — retrocompatível com clientes já cadastrados.
+    tipo_pessoa: {
+      type: DataTypes.CHAR(1),
+      allowNull: true,
+      comment: "F = Pessoa Física, J = Pessoa Jurídica",
+    },
+    cnpj: {
+      type: DataTypes.STRING(18),
+      allowNull: true,
+      comment: "CNPJ para clientes Pessoa Jurídica",
+    },
+    inscricao_estadual: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+      comment: "Inscrição Estadual (IE) para clientes PJ",
+    },
+    indicador_ie: {
+      type: DataTypes.TINYINT,
+      allowNull: true,
+      defaultValue: 9,
+      comment: "1=Contribuinte ICMS, 2=Contribuinte isento, 9=Não contribuinte",
+    },
+    codigo_ibge_municipio: {
+      type: DataTypes.STRING(7),
+      allowNull: true,
+      comment: "Código IBGE do município do cliente",
+    },
+    pais: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+      defaultValue: "Brasil",
+    },
+    codigo_pais: {
+      type: DataTypes.CHAR(4),
+      allowNull: true,
+      defaultValue: "1058",
+      comment: "Código do país conforme tabela SEFAZ (1058 = Brasil)",
+    },
   },
   {
     tableName: "clientes",

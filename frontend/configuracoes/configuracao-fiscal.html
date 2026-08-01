@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>PetHub — Configuração Fiscal</title>
+    <script src="../custom-colors.js"></script>
+    <link
+      rel="icon"
+      href="/fivecon/Design sem nome (17).png"
+      type="image/png"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <link rel="stylesheet" href="./configuracoes-gerais.css" />
+    <link rel="stylesheet" href="../colors.css" />
+    <link rel="stylesheet" href="../dashboard.css" />
+    <style>
+      .fiscal-section {
+        background: #fff;
+        border-radius: 8px;
+        border: 1px solid #e3e8ee;
+        padding: 20px 24px;
+        margin-bottom: 18px;
+      }
+      .fiscal-section h3 {
+        font-size: 14px;
+        font-weight: 700;
+        color: #333;
+        margin: 0 0 14px;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 8px;
+      }
+      .fiscal-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 14px;
+      }
+      .fiscal-field label {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        color: #555;
+        margin-bottom: 4px;
+      }
+      .fiscal-field input,
+      .fiscal-field select {
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid #d0d7de;
+        border-radius: 6px;
+        font-size: 13px;
+      }
+      .fiscal-field input:focus,
+      .fiscal-field select:focus {
+        outline: none;
+        border-color: #0066cc;
+        box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.12);
+      }
+      .badge-homolog {
+        background: #fff3cd;
+        color: #856404;
+        border: 1px solid #ffc107;
+        border-radius: 4px;
+        padding: 2px 8px;
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .badge-producao {
+        background: #d1f5d3;
+        color: #155724;
+        border: 1px solid #28a745;
+        border-radius: 4px;
+        padding: 2px 8px;
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .btn-salvar-fiscal {
+        background: #0066cc;
+        color: #fff;
+        border: none;
+        padding: 10px 24px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .btn-salvar-fiscal:hover {
+        background: #0052a3;
+      }
+      .info-box {
+        background: #e8f4fd;
+        border: 1px solid #bee3f8;
+        border-radius: 6px;
+        padding: 12px 16px;
+        margin-bottom: 14px;
+        font-size: 13px;
+        color: #1a6ea8;
+      }
+      .aviso-box {
+        background: #fff8e1;
+        border: 1px solid #ffe082;
+        border-radius: 6px;
+        padding: 12px 16px;
+        margin-bottom: 14px;
+        font-size: 13px;
+        color: #795548;
+      }
+      .status-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .dot-on {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #28a745;
+        display: inline-block;
+      }
+      .dot-off {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #ccc;
+        display: inline-block;
+      }
+    </style>
+  </head>
+  <body>
+    <script src="../inject-sidebar.js"></script>
+
+    <div class="main-content">
+      <div
+        class="page-header"
+        style="
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 20px;
+        "
+      >
+        <div>
+          <h1
+            style="font-size: 20px; font-weight: 700; color: #1a202c; margin: 0"
+          >
+            <i
+              class="fas fa-file-invoice"
+              style="color: #0066cc; margin-right: 8px"
+            ></i
+            >Configuração Fiscal
+          </h1>
+          <p style="font-size: 13px; color: #666; margin: 4px 0 0">
+            Configure os parâmetros para futura emissão de NF-e, NFC-e e NFS-e.
+          </p>
+        </div>
+        <button class="btn-salvar-fiscal" id="btnSalvarFiscal">
+          <i class="fas fa-save"></i> Salvar Configurações
+        </button>
+      </div>
+
+      <div class="info-box">
+        <i class="fas fa-info-circle"></i>
+        <strong>Módulo fiscal em preparação.</strong> Nenhuma nota será emitida
+        enquanto o módulo não estiver ativado. Preencha os dados abaixo para
+        quando a integração com o provedor for contratada.
+      </div>
+
+      <!-- Seção: Certificado Digital e Provedor -->
+      <div class="fiscal-section">
+        <h3>
+          <i class="fas fa-certificate"></i> Certificado Digital e Provedor
+        </h3>
+        <div class="aviso-box">
+          <i class="fas fa-lock"></i>
+          O <strong>certificado digital</strong> e o
+          <strong>token da API</strong> serão criptografados antes de armazenar.
+          Nunca serão exibidos em texto puro nas respostas da API.
+        </div>
+        <div class="fiscal-grid">
+          <div class="fiscal-field" style="grid-column: span 2">
+            <label>Provedor de Emissão Fiscal</label>
+            <select id="provedor_api">
+              <option value="">— Selecione um provedor —</option>
+              <option value="plugnotas">PlugNotas</option>
+              <option value="focusnfe">Focus NFe</option>
+              <option value="enotas">eNotas</option>
+              <option value="tecnospeed">Tecnospeed</option>
+            </select>
+          </div>
+          <div class="fiscal-field" style="grid-column: span 2">
+            <label>Token / API Key do Provedor</label>
+            <input
+              type="password"
+              id="token_api"
+              placeholder="Cole o token fornecido pelo provedor"
+            />
+          </div>
+          <div class="fiscal-field" style="grid-column: span 2">
+            <label>Certificado Digital (A1) — Base64</label>
+            <input
+              type="file"
+              id="certificado_arquivo"
+              accept=".pfx,.p12"
+              style="padding: 5px"
+            />
+            <div style="font-size: 11px; color: #888; margin-top: 3px">
+              Arquivo .pfx ou .p12 — será convertido para base64
+            </div>
+          </div>
+          <div class="fiscal-field">
+            <label>Senha do Certificado</label>
+            <input
+              type="password"
+              id="senha_certificado_hash"
+              placeholder="Senha do certificado"
+            />
+          </div>
+          <div class="fiscal-field">
+            <label>Ambiente</label>
+            <select id="ambiente">
+              <option value="homologacao" selected>
+                🧪 Homologação (Testes)
+              </option>
+              <option value="producao">🚀 Produção</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Seção: Fluxo de Emissão -->
+      <div class="fiscal-section">
+        <h3><i class="fas fa-cogs"></i> Fluxo de Emissão</h3>
+        <div class="fiscal-grid">
+          <div class="fiscal-field" style="grid-column: span 2">
+            <label>Modo de Emissão Padrão</label>
+            <select id="modo_emissao">
+              <option value="manual" selected>
+                Manual — usuário decide quando emitir
+              </option>
+              <option value="automatico">
+                Automático — emite ao finalizar a venda
+              </option>
+              <option value="confirmacao">
+                Confirmação — solicita confirmação antes de emitir
+              </option>
+              <option value="lote">Lote — emissão em lote (manual)</option>
+            </select>
+          </div>
+        </div>
+        <div
+          style="display: flex; gap: 20px; flex-wrap: wrap; margin-top: 14px"
+        >
+          <label
+            style="
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              cursor: pointer;
+              font-size: 13px;
+            "
+          >
+            <input
+              type="checkbox"
+              id="emitir_nfe"
+              style="width: 16px; height: 16px"
+            />
+            <strong>Habilitar NF-e</strong> (Nota Fiscal Eletrônica — produtos)
+          </label>
+          <label
+            style="
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              cursor: pointer;
+              font-size: 13px;
+            "
+          >
+            <input
+              type="checkbox"
+              id="emitir_nfce"
+              style="width: 16px; height: 16px"
+            />
+            <strong>Habilitar NFC-e</strong> (Nota Fiscal de Consumidor
+            Eletrônica)
+          </label>
+          <label
+            style="
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              cursor: pointer;
+              font-size: 13px;
+            "
+          >
+            <input
+              type="checkbox"
+              id="emitir_nfse"
+              style="width: 16px; height: 16px"
+            />
+            <strong>Habilitar NFS-e</strong> (Nota Fiscal de Serviços
+            Eletrônica)
+          </label>
+        </div>
+      </div>
+
+      <!-- Seção: Numeração -->
+      <div class="fiscal-section">
+        <h3><i class="fas fa-hashtag"></i> Numeração</h3>
+        <div class="fiscal-grid">
+          <div class="fiscal-field">
+            <label>Série NF-e</label>
+            <input
+              type="text"
+              id="serie_nfe"
+              maxlength="3"
+              value="001"
+              placeholder="001"
+            />
+          </div>
+          <div class="fiscal-field">
+            <label>Próximo Número NF-e</label>
+            <input type="number" id="proximo_numero_nfe" min="1" value="1" />
+          </div>
+          <div class="fiscal-field">
+            <label>Série NFC-e</label>
+            <input
+              type="text"
+              id="serie_nfce"
+              maxlength="3"
+              value="001"
+              placeholder="001"
+            />
+          </div>
+          <div class="fiscal-field">
+            <label>Próximo Número NFC-e</label>
+            <input type="number" id="proximo_numero_nfce" min="1" value="1" />
+          </div>
+          <div class="fiscal-field">
+            <label>Série NFS-e</label>
+            <input
+              type="text"
+              id="serie_nfse"
+              maxlength="3"
+              value="001"
+              placeholder="001"
+            />
+          </div>
+          <div class="fiscal-field">
+            <label>Próximo Número NFS-e</label>
+            <input type="number" id="proximo_numero_nfse" min="1" value="1" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Seção: Padrões Fiscais -->
+      <div class="fiscal-section">
+        <h3><i class="fas fa-sliders-h"></i> Padrões Fiscais</h3>
+        <div class="fiscal-grid">
+          <div class="fiscal-field" style="grid-column: span 2">
+            <label>Natureza da Operação Padrão</label>
+            <input
+              type="text"
+              id="natureza_operacao_padrao"
+              value="VENDA DE MERCADORIA"
+              maxlength="60"
+            />
+          </div>
+          <div class="fiscal-field">
+            <label>CFOP Padrão — Saída Produto</label>
+            <input
+              type="text"
+              id="cfop_padrao_saida"
+              maxlength="5"
+              value="5102"
+              placeholder="5102"
+            />
+          </div>
+          <div class="fiscal-field">
+            <label>CFOP Padrão — Serviço</label>
+            <input
+              type="text"
+              id="cfop_padrao_servico"
+              maxlength="5"
+              value="5933"
+              placeholder="5933"
+            />
+          </div>
+          <div class="fiscal-field">
+            <label>Código IBGE do Município</label>
+            <input
+              type="text"
+              id="municipio_ibge"
+              maxlength="7"
+              placeholder="0000000"
+            />
+          </div>
+          <div class="fiscal-field">
+            <label>Regime Tributário (NF-e)</label>
+            <select id="regime_tributario">
+              <option value="">— Selecione —</option>
+              <option value="1">1 — Simples Nacional</option>
+              <option value="2">
+                2 — Simples Nacional – Excesso de Sublimite
+              </option>
+              <option value="3">3 — Regime Normal</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div
+        id="msgStatus"
+        style="
+          display: none;
+          padding: 12px 16px;
+          border-radius: 6px;
+          margin-top: 14px;
+          font-size: 13px;
+        "
+      ></div>
+    </div>
+
+    <script>
+      const API = window.API_BASE_URL || "";
+
+      async function carregarConfiguracao() {
+        try {
+          const resp = await fetch(API + "/api/fiscal/configuracao", {
+            credentials: "include",
+          });
+          if (!resp.ok) return;
+          const data = await resp.json();
+          const campos = [
+            "provedor_api",
+            "token_api",
+            "senha_certificado_hash",
+            "ambiente",
+            "modo_emissao",
+            "serie_nfe",
+            "proximo_numero_nfe",
+            "serie_nfce",
+            "proximo_numero_nfce",
+            "serie_nfse",
+            "proximo_numero_nfse",
+            "natureza_operacao_padrao",
+            "cfop_padrao_saida",
+            "cfop_padrao_servico",
+            "municipio_ibge",
+            "regime_tributario",
+          ];
+          campos.forEach(function (id) {
+            const el = document.getElementById(id);
+            if (
+              el &&
+              data[id] !== undefined &&
+              data[id] !== null &&
+              data[id] !== "***"
+            ) {
+              el.value = data[id];
+            }
+          });
+          ["emitir_nfe", "emitir_nfce", "emitir_nfse"].forEach(function (id) {
+            const el = document.getElementById(id);
+            if (el) el.checked = !!data[id];
+          });
+        } catch (e) {
+          console.warn("Erro ao carregar configuração fiscal:", e);
+        }
+      }
+
+      document
+        .getElementById("btnSalvarFiscal")
+        .addEventListener("click", async function () {
+          const btn = this;
+          btn.disabled = true;
+          btn.textContent = "Salvando...";
+          const msg = document.getElementById("msgStatus");
+
+          const payload = {};
+          const campos = [
+            "provedor_api",
+            "token_api",
+            "senha_certificado_hash",
+            "ambiente",
+            "modo_emissao",
+            "serie_nfe",
+            "proximo_numero_nfe",
+            "serie_nfce",
+            "proximo_numero_nfce",
+            "serie_nfse",
+            "proximo_numero_nfse",
+            "natureza_operacao_padrao",
+            "cfop_padrao_saida",
+            "cfop_padrao_servico",
+            "municipio_ibge",
+            "regime_tributario",
+          ];
+          campos.forEach(function (id) {
+            const el = document.getElementById(id);
+            if (el) payload[id] = el.value;
+          });
+          ["emitir_nfe", "emitir_nfce", "emitir_nfse"].forEach(function (id) {
+            const el = document.getElementById(id);
+            if (el) payload[id] = el.checked;
+          });
+
+          // Não enviar token/senha em branco (usuário não alterou)
+          if (!payload.token_api) delete payload.token_api;
+          if (!payload.senha_certificado_hash)
+            delete payload.senha_certificado_hash;
+
+          try {
+            const resp = await fetch(API + "/api/fiscal/configuracao", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify(payload),
+            });
+            const data = await resp.json();
+            if (resp.ok) {
+              msg.style.cssText =
+                "display:block;background:#d4edda;border:1px solid #c3e6cb;color:#155724;";
+              msg.textContent = "✅ " + data.mensagem;
+            } else {
+              msg.style.cssText =
+                "display:block;background:#f8d7da;border:1px solid #f5c6cb;color:#721c24;";
+              msg.textContent = "❌ Erro: " + (data.erro || "Falha ao salvar");
+            }
+          } catch (e) {
+            msg.style.cssText =
+              "display:block;background:#f8d7da;border:1px solid #f5c6cb;color:#721c24;";
+            msg.textContent = "❌ Erro de conexão: " + e.message;
+          } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save"></i> Salvar Configurações';
+            setTimeout(function () {
+              msg.style.display = "none";
+            }, 5000);
+          }
+        });
+
+      document.addEventListener("DOMContentLoaded", carregarConfiguracao);
+    </script>
+  </body>
+</html>

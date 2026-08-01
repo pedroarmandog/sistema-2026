@@ -1354,6 +1354,27 @@ function inicializarFormulario() {
     formEditarProduto.addEventListener("submit", salvarProduto);
   }
 
+  // Toggle do painel de Dados Fiscais
+  const btnToggleFiscal = document.getElementById("btnToggleFiscal");
+  if (btnToggleFiscal) {
+    btnToggleFiscal.addEventListener("click", function () {
+      const painel = document.getElementById("painelDadosFiscais");
+      const icon = document.getElementById("iconToggleFiscal");
+      if (!painel) return;
+      if (painel.style.display === "none" || painel.style.display === "") {
+        painel.style.display = "block";
+        if (icon) icon.className = "fas fa-chevron-up";
+        btnToggleFiscal.innerHTML =
+          '<i class="fas fa-chevron-up" id="iconToggleFiscal"></i> Recolher';
+      } else {
+        painel.style.display = "none";
+        if (icon) icon.className = "fas fa-chevron-down";
+        btnToggleFiscal.innerHTML =
+          '<i class="fas fa-chevron-down" id="iconToggleFiscal"></i> Expandir';
+      }
+    });
+  }
+
   // Configurar botão Novo
   const btnNovo = document.getElementById("btnNovo");
   if (btnNovo) {
@@ -3736,6 +3757,12 @@ function alternarCamposPorTipo(tipo) {
     if (secaoTextoContrato) secaoTextoContrato.style.display = "none";
     if (detalhesTitle) detalhesTitle.textContent = "Detalhes do Serviço";
 
+    // Mostrar campos fiscais específicos de serviço (NFS-e)
+    const camposFiscaisServico = document.getElementById(
+      "camposFiscaisServico",
+    );
+    if (camposFiscaisServico) camposFiscaisServico.style.display = "block";
+
     // Ocultar Validade
     if (secaoValidade) {
       secaoValidade.style.display = "none";
@@ -3894,6 +3921,51 @@ function preencherFormulario(dados) {
     document.getElementById("codigoBarras").value = dados.codigoBarras;
   if (dados.ncm) document.getElementById("ncm").value = dados.ncm;
   if (dados.cest) document.getElementById("cest").value = dados.cest;
+
+  // Campos fiscais
+  const camposFiscaisIds = [
+    "sku",
+    "gtin",
+    "peso",
+    "origem",
+    "cfop_padrao",
+    "cst_icms",
+    "csosn",
+    "cst_pis",
+    "cst_cofins",
+    "cst_ipi",
+    "aliq_icms",
+    "aliq_pis",
+    "aliq_cofins",
+    "aliq_ipi",
+    "item_lista_servico",
+    "municipio_incidencia_iss",
+    "natureza_operacao_iss",
+    "cnae_servico",
+  ];
+  camposFiscaisIds.forEach(function (id) {
+    const el = document.getElementById(id);
+    if (el && dados[id] !== undefined && dados[id] !== null) {
+      el.value = dados[id];
+    }
+  });
+  // Se algum campo fiscal está preenchido, expandir o painel
+  if (
+    camposFiscaisIds.some(function (id) {
+      return dados[id];
+    })
+  ) {
+    const painel = document.getElementById("painelDadosFiscais");
+    const icon = document.getElementById("iconToggleFiscal");
+    const btn = document.getElementById("btnToggleFiscal");
+    if (painel) painel.style.display = "block";
+    if (icon) {
+      icon.className = "fas fa-chevron-up";
+    }
+    if (btn)
+      btn.innerHTML =
+        '<i class="fas fa-chevron-up" id="iconToggleFiscal"></i> Recolher';
+  }
 
   // Precificação (coerção de tipos para evitar TypeError ao chamar toFixed)
   try {
@@ -4810,6 +4882,31 @@ async function salvarProduto(e) {
         produtoAtual && produtoAtual.createdAt
           ? produtoAtual.createdAt
           : new Date().toISOString(),
+
+      // Campos fiscais
+      sku: (dados.sku || "").toString(),
+      gtin: (dados.gtin || "").toString(),
+      peso: dados.peso ? Number(dados.peso) : null,
+      origem:
+        dados.origem !== undefined && dados.origem !== ""
+          ? Number(dados.origem)
+          : null,
+      cfop_padrao: (dados.cfop_padrao || "").toString(),
+      cst_icms: (dados.cst_icms || "").toString(),
+      csosn: (dados.csosn || "").toString(),
+      cst_pis: (dados.cst_pis || "").toString(),
+      cst_cofins: (dados.cst_cofins || "").toString(),
+      cst_ipi: (dados.cst_ipi || "").toString(),
+      aliq_icms: dados.aliq_icms ? Number(dados.aliq_icms) : 0,
+      aliq_pis: dados.aliq_pis ? Number(dados.aliq_pis) : 0,
+      aliq_cofins: dados.aliq_cofins ? Number(dados.aliq_cofins) : 0,
+      aliq_ipi: dados.aliq_ipi ? Number(dados.aliq_ipi) : 0,
+      item_lista_servico: (dados.item_lista_servico || "").toString(),
+      municipio_incidencia_iss: (
+        dados.municipio_incidencia_iss || ""
+      ).toString(),
+      natureza_operacao_iss: (dados.natureza_operacao_iss || "").toString(),
+      cnae_servico: (dados.cnae_servico || "").toString(),
     };
 
     // Anexar lista completa de códigos de barras (frontend-only field); backend precisa suportar para persistir

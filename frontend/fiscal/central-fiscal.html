@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>PetHub — Central Fiscal</title>
+    <script src="../custom-colors.js"></script>
+    <link
+      rel="icon"
+      href="/fivecon/Design sem nome (17).png"
+      type="image/png"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <link rel="stylesheet" href="../colors.css" />
+    <link rel="stylesheet" href="../dashboard.css" />
+    <style>
+      .cf-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+      .cf-title {
+        font-size: 20px;
+        font-weight: 700;
+        color: #1a202c;
+        margin: 0;
+      }
+      .cf-subtitle {
+        font-size: 13px;
+        color: #666;
+        margin: 4px 0 0;
+      }
+
+      .cf-cards {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+      }
+      .cf-card {
+        background: #fff;
+        border: 1px solid #e3e8ee;
+        border-radius: 8px;
+        padding: 14px 18px;
+        min-width: 130px;
+        flex: 1;
+      }
+      .cf-card .label {
+        font-size: 11px;
+        color: #888;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .cf-card .value {
+        font-size: 24px;
+        font-weight: 700;
+        color: #1a202c;
+        margin-top: 4px;
+      }
+      .cf-card.pendente .value {
+        color: #d97706;
+      }
+      .cf-card.emitida .value {
+        color: #16a34a;
+      }
+      .cf-card.erro .value {
+        color: #dc2626;
+      }
+      .cf-card.cancelada .value {
+        color: #6b7280;
+      }
+
+      .cf-filtros {
+        background: #fff;
+        border: 1px solid #e3e8ee;
+        border-radius: 8px;
+        padding: 14px 18px;
+        margin-bottom: 16px;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: flex-end;
+      }
+      .cf-filtros label {
+        display: block;
+        font-size: 11px;
+        font-weight: 600;
+        color: #555;
+        margin-bottom: 3px;
+      }
+      .cf-filtros input,
+      .cf-filtros select {
+        padding: 7px 10px;
+        border: 1px solid #d0d7de;
+        border-radius: 6px;
+        font-size: 13px;
+      }
+      .cf-filtros .btn-filtrar {
+        background: #0066cc;
+        color: #fff;
+        border: none;
+        padding: 8px 18px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        align-self: flex-end;
+      }
+      .cf-filtros .btn-limpar {
+        background: #f5f5f5;
+        color: #444;
+        border: 1px solid #d0d7de;
+        padding: 8px 14px;
+        border-radius: 6px;
+        font-size: 13px;
+        cursor: pointer;
+        align-self: flex-end;
+      }
+
+      .cf-table-wrap {
+        background: #fff;
+        border: 1px solid #e3e8ee;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .cf-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      .cf-table thead {
+        background: #f8fafc;
+      }
+      .cf-table th {
+        padding: 10px 14px;
+        text-align: left;
+        font-size: 11px;
+        font-weight: 700;
+        color: #888;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border-bottom: 1px solid #e3e8ee;
+      }
+      .cf-table td {
+        padding: 10px 14px;
+        border-bottom: 1px solid #f0f4f8;
+        vertical-align: middle;
+      }
+      .cf-table tr:last-child td {
+        border-bottom: none;
+      }
+      .cf-table tr:hover td {
+        background: #f8fafc;
+      }
+
+      .badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .badge-pendente {
+        background: #fef3c7;
+        color: #92400e;
+      }
+      .badge-emitida {
+        background: #d1fae5;
+        color: #065f46;
+      }
+      .badge-cancelada {
+        background: #f3f4f6;
+        color: #374151;
+      }
+      .badge-erro {
+        background: #fee2e2;
+        color: #991b1b;
+      }
+      .badge-aguardando {
+        background: #dbeafe;
+        color: #1e40af;
+      }
+      .badge-aguardando_correcao {
+        background: #fde68a;
+        color: #92400e;
+      }
+      .badge-nao_aplicavel {
+        background: #f3f4f6;
+        color: #9ca3af;
+      }
+      .badge-rascunho {
+        background: #ede9fe;
+        color: #5b21b6;
+      }
+      .badge-autorizada {
+        background: #d1fae5;
+        color: #065f46;
+      }
+      .badge-inutilizada {
+        background: #f3f4f6;
+        color: #6b7280;
+      }
+      .badge-denegada {
+        background: #fee2e2;
+        color: #991b1b;
+      }
+
+      .cf-actions {
+        display: flex;
+        gap: 6px;
+      }
+      .cf-btn {
+        background: none;
+        border: 1px solid #d0d7de;
+        border-radius: 4px;
+        padding: 4px 10px;
+        font-size: 12px;
+        cursor: pointer;
+        color: #444;
+      }
+      .cf-btn:hover {
+        background: #f5f5f5;
+      }
+      .cf-btn.disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+
+      .cf-empty {
+        text-align: center;
+        padding: 60px 20px;
+        color: #888;
+      }
+      .cf-empty i {
+        font-size: 40px;
+        margin-bottom: 12px;
+        color: #ccc;
+      }
+
+      .pagination {
+        display: flex;
+        gap: 6px;
+        justify-content: center;
+        margin-top: 16px;
+      }
+      .pagination button {
+        background: #fff;
+        border: 1px solid #d0d7de;
+        border-radius: 4px;
+        padding: 6px 12px;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      .pagination button.active {
+        background: #0066cc;
+        color: #fff;
+        border-color: #0066cc;
+      }
+      .pagination button:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+    </style>
+  </head>
+  <body>
+    <script src="../inject-sidebar.js"></script>
+
+    <div class="main-content">
+      <div class="cf-header">
+        <div>
+          <div class="cf-title">
+            <i
+              class="fas fa-file-invoice"
+              style="color: #0066cc; margin-right: 8px"
+            ></i
+            >Central Fiscal
+          </div>
+          <div class="cf-subtitle">
+            Acompanhe o status fiscal de todas as vendas e serviços
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px">
+          <a
+            href="../configuracoes/configuracao-fiscal.html"
+            class="cf-btn"
+            style="
+              padding: 8px 14px;
+              text-decoration: none;
+              display: flex;
+              align-items: center;
+              gap: 6px;
+            "
+          >
+            <i class="fas fa-cog"></i> Configurações Fiscais
+          </a>
+        </div>
+      </div>
+
+      <!-- Cards de resumo -->
+      <div class="cf-cards" id="cfCards">
+        <div class="cf-card pendente">
+          <div class="label">Pendentes</div>
+          <div class="value" id="cnt-pendente">—</div>
+        </div>
+        <div class="cf-card emitida">
+          <div class="label">Emitidas</div>
+          <div class="value" id="cnt-autorizada">—</div>
+        </div>
+        <div class="cf-card erro">
+          <div class="label">Erro</div>
+          <div class="value" id="cnt-erro">—</div>
+        </div>
+        <div class="cf-card cancelada">
+          <div class="label">Canceladas</div>
+          <div class="value" id="cnt-cancelada">—</div>
+        </div>
+        <div class="cf-card" style="border-color: #dbeafe">
+          <div class="label">Aguardando</div>
+          <div class="value" id="cnt-aguardando" style="color: #1e40af">—</div>
+        </div>
+        <div class="cf-card" style="border-color: #ede9fe">
+          <div class="label">Rascunhos</div>
+          <div class="value" id="cnt-rascunho" style="color: #5b21b6">—</div>
+        </div>
+      </div>
+
+      <!-- Filtros -->
+      <div class="cf-filtros">
+        <div>
+          <label>Tipo</label>
+          <select id="filtro-tipo">
+            <option value="">Todos</option>
+            <option value="nfe">NF-e</option>
+            <option value="nfce">NFC-e</option>
+            <option value="nfse">NFS-e</option>
+          </select>
+        </div>
+        <div>
+          <label>Status</label>
+          <select id="filtro-status">
+            <option value="">Todos</option>
+            <option value="pendente">Pendente</option>
+            <option value="rascunho">Rascunho</option>
+            <option value="aguardando">Aguardando</option>
+            <option value="autorizada">Autorizada</option>
+            <option value="cancelada">Cancelada</option>
+            <option value="inutilizada">Inutilizada</option>
+            <option value="erro">Erro</option>
+            <option value="denegada">Denegada</option>
+          </select>
+        </div>
+        <div>
+          <label>Data Início</label>
+          <input type="date" id="filtro-inicio" />
+        </div>
+        <div>
+          <label>Data Fim</label>
+          <input type="date" id="filtro-fim" />
+        </div>
+        <div>
+          <label>Busca (nome, doc, chave)</label>
+          <input
+            type="text"
+            id="filtro-busca"
+            placeholder="Digite..."
+            style="min-width: 180px"
+          />
+        </div>
+        <button class="btn-filtrar" id="btnFiltrar">
+          <i class="fas fa-search"></i> Filtrar
+        </button>
+        <button class="btn-limpar" id="btnLimpar">Limpar</button>
+      </div>
+
+      <!-- Tabela -->
+      <div class="cf-table-wrap">
+        <table class="cf-table">
+          <thead>
+            <tr>
+              <th>Tipo</th>
+              <th>Número / Série</th>
+              <th>Emissão</th>
+              <th>Destinatário</th>
+              <th>Valor</th>
+              <th>Status Fiscal</th>
+              <th>Ambiente</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="cfTableBody">
+            <tr>
+              <td colspan="8" class="cf-empty">
+                <div>
+                  <i class="fas fa-file-invoice"></i><br />Carregando...
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="pagination" id="paginacao"></div>
+    </div>
+
+    <script>
+      const API = window.API_BASE_URL || "";
+      let paginaAtual = 1;
+
+      function badgeStatus(status) {
+        const labels = {
+          pendente: "Pendente",
+          rascunho: "Rascunho",
+          aguardando: "Aguardando",
+          autorizada: "Autorizada",
+          cancelada: "Cancelada",
+          inutilizada: "Inutilizada",
+          erro: "Erro",
+          denegada: "Denegada",
+        };
+        return (
+          '<span class="badge badge-' +
+          status +
+          '">' +
+          (labels[status] || status) +
+          "</span>"
+        );
+      }
+
+      function badgeTipo(tipo) {
+        const cores = { nfe: "#1e40af", nfce: "#065f46", nfse: "#7c3aed" };
+        return (
+          '<span style="background:#f0f4ff;color:' +
+          (cores[tipo] || "#333") +
+          ';border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700;">' +
+          (tipo || "").toUpperCase() +
+          "</span>"
+        );
+      }
+
+      function formatMoeda(v) {
+        if (!v && v !== 0) return "—";
+        return (
+          "R$ " +
+          Number(v)
+            .toFixed(2)
+            .replace(".", ",")
+            .replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+        );
+      }
+
+      function formatData(d) {
+        if (!d) return "—";
+        return new Date(d).toLocaleDateString("pt-BR");
+      }
+
+      async function carregarResumo() {
+        try {
+          const r = await fetch(API + "/api/notas-fiscais/resumo", {
+            credentials: "include",
+          });
+          if (!r.ok) return;
+          const data = await r.json();
+          const c = data.contagens || {};
+          document.getElementById("cnt-pendente").textContent = c.pendente ?? 0;
+          document.getElementById("cnt-autorizada").textContent =
+            c.autorizada ?? 0;
+          document.getElementById("cnt-erro").textContent = c.erro ?? 0;
+          document.getElementById("cnt-cancelada").textContent =
+            c.cancelada ?? 0;
+          document.getElementById("cnt-aguardando").textContent =
+            c.aguardando ?? 0;
+          document.getElementById("cnt-rascunho").textContent = c.rascunho ?? 0;
+        } catch (e) {}
+      }
+
+      async function carregarNotas(pagina) {
+        paginaAtual = pagina || 1;
+        const tipo = document.getElementById("filtro-tipo").value;
+        const status = document.getElementById("filtro-status").value;
+        const inicio = document.getElementById("filtro-inicio").value;
+        const fim = document.getElementById("filtro-fim").value;
+        const busca = document.getElementById("filtro-busca").value;
+
+        const params = new URLSearchParams({ page: paginaAtual, limit: 30 });
+        if (tipo) params.set("tipo", tipo);
+        if (status) params.set("status", status);
+        if (inicio) params.set("dataInicio", inicio);
+        if (fim) params.set("dataFim", fim);
+        if (busca) params.set("busca", busca);
+
+        const tbody = document.getElementById("cfTableBody");
+        tbody.innerHTML =
+          '<tr><td colspan="8" class="cf-empty"><div>Carregando...</div></td></tr>';
+
+        try {
+          const r = await fetch(
+            API + "/api/notas-fiscais?" + params.toString(),
+            { credentials: "include" },
+          );
+          if (!r.ok) throw new Error("Erro " + r.status);
+          const data = await r.json();
+
+          if (!data.notas || data.notas.length === 0) {
+            tbody.innerHTML =
+              '<tr><td colspan="8" class="cf-empty"><div><i class="fas fa-file-invoice"></i><br>Nenhuma nota fiscal encontrada.</div></td></tr>';
+            document.getElementById("paginacao").innerHTML = "";
+            return;
+          }
+
+          tbody.innerHTML = data.notas
+            .map(function (n) {
+              return (
+                "<tr>" +
+                "<td>" +
+                badgeTipo(n.tipo) +
+                "</td>" +
+                "<td>" +
+                (n.numero ? n.numero + " / " + (n.serie || "001") : "—") +
+                "</td>" +
+                "<td>" +
+                formatData(n.data_emissao) +
+                "</td>" +
+                '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' +
+                (n.destinatario_nome || "—") +
+                "</td>" +
+                "<td>" +
+                formatMoeda(n.valor_total) +
+                "</td>" +
+                "<td>" +
+                badgeStatus(n.status) +
+                "</td>" +
+                '<td><span style="font-size:11px;color:#888;">' +
+                (n.ambiente === "producao" ? "🚀 Prod" : "🧪 Homol") +
+                "</span></td>" +
+                '<td><div class="cf-actions">' +
+                '<button class="cf-btn disabled" title="Emitir (disponível futuramente)"><i class="fas fa-paper-plane"></i></button>' +
+                '<button class="cf-btn disabled" title="Download XML (disponível futuramente)"><i class="fas fa-code"></i></button>' +
+                '<button class="cf-btn disabled" title="Download DANFE (disponível futuramente)"><i class="fas fa-file-pdf"></i></button>' +
+                "</div></td>" +
+                "</tr>"
+              );
+            })
+            .join("");
+
+          // Paginação
+          const total = data.totalPaginas || 1;
+          let pag = "";
+          pag +=
+            "<button " +
+            (paginaAtual <= 1 ? "disabled" : "") +
+            ' onclick="carregarNotas(' +
+            (paginaAtual - 1) +
+            ')">‹</button>';
+          for (let i = 1; i <= total; i++) {
+            if (i === 1 || i === total || Math.abs(i - paginaAtual) <= 2) {
+              pag +=
+                '<button class="' +
+                (i === paginaAtual ? "active" : "") +
+                '" onclick="carregarNotas(' +
+                i +
+                ')">' +
+                i +
+                "</button>";
+            } else if (Math.abs(i - paginaAtual) === 3) {
+              pag += '<span style="padding:6px 4px;color:#888;">...</span>';
+            }
+          }
+          pag +=
+            "<button " +
+            (paginaAtual >= total ? "disabled" : "") +
+            ' onclick="carregarNotas(' +
+            (paginaAtual + 1) +
+            ')">›</button>';
+          document.getElementById("paginacao").innerHTML = pag;
+        } catch (e) {
+          tbody.innerHTML =
+            '<tr><td colspan="8" class="cf-empty"><div style="color:#dc2626;"><i class="fas fa-exclamation-circle"></i><br>Erro ao carregar: ' +
+            e.message +
+            "</div></td></tr>";
+        }
+      }
+
+      document
+        .getElementById("btnFiltrar")
+        .addEventListener("click", function () {
+          carregarNotas(1);
+        });
+      document
+        .getElementById("btnLimpar")
+        .addEventListener("click", function () {
+          [
+            "filtro-tipo",
+            "filtro-status",
+            "filtro-inicio",
+            "filtro-fim",
+            "filtro-busca",
+          ].forEach(function (id) {
+            document.getElementById(id).value = "";
+          });
+          carregarNotas(1);
+        });
+
+      document.addEventListener("DOMContentLoaded", function () {
+        carregarResumo();
+        carregarNotas(1);
+      });
+    </script>
+  </body>
+</html>

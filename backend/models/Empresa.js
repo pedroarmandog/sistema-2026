@@ -75,6 +75,37 @@ module.exports = (sequelize) => {
         allowNull: false,
         defaultValue: true,
       },
+
+      // ── Campos Fiscais ─────────────────────────────────────────────────────
+      // Adicionados em 2026-08-01 para preparação do módulo fiscal.
+      // Todos allowNull: true — retrocompatível com registros existentes.
+      cnae: {
+        type: DataTypes.STRING(7),
+        allowNull: true,
+        comment: "Classificação Nacional de Atividades Econômicas (7 dígitos)",
+      },
+      crt: {
+        type: DataTypes.CHAR(1),
+        allowNull: true,
+        comment:
+          "Código de Regime Tributário: 1=Simples Nacional, 2=Simples Excesso, 3=Normal",
+      },
+      codigo_ibge_municipio: {
+        type: DataTypes.STRING(7),
+        allowNull: true,
+        comment: "Código IBGE do município — obrigatório para NF-e e NFS-e",
+      },
+      pais: {
+        type: DataTypes.STRING(50),
+        allowNull: true,
+        defaultValue: "Brasil",
+      },
+      codigo_pais: {
+        type: DataTypes.CHAR(4),
+        allowNull: true,
+        defaultValue: "1058",
+        comment: "Código do país conforme tabela SEFAZ (1058 = Brasil)",
+      },
     },
     {
       tableName: "empresas",

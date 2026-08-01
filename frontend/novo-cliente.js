@@ -225,6 +225,42 @@
   setupFieldFormatting() {
     console.log("📝 Configurando formatação de campos...");
 
+    // Alternância de campos PF/PJ ao trocar Tipo Pessoa
+    const tipoPessoaField = document.getElementById("tipoPessoa");
+    if (tipoPessoaField) {
+      const toggleCamposPJ = () => {
+        const isPJ = tipoPessoaField.value === "juridica";
+        const grupoCnpj = document.getElementById("grupo-cnpj");
+        const grupoFiscalPJ = document.getElementById("grupo-fiscal-pj");
+        const grupoCpf = document.getElementById("cpf");
+        if (grupoCnpj) grupoCnpj.style.display = isPJ ? "" : "none";
+        if (grupoFiscalPJ) grupoFiscalPJ.style.display = isPJ ? "" : "none";
+        // CPF não é obrigatório para PJ
+        if (grupoCpf) grupoCpf.required = !isPJ;
+      };
+      tipoPessoaField.addEventListener("change", toggleCamposPJ);
+      toggleCamposPJ(); // inicializar ao carregar
+    }
+
+    // Formatação do CNPJ
+    const cnpjField = document.getElementById("cnpj");
+    if (cnpjField) {
+      cnpjField.addEventListener("input", (e) => {
+        let value = e.target.value.replace(/\D/g, "").slice(0, 14);
+        if (value.length >= 13) {
+          value = value.replace(
+            /(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,
+            "$1.$2.$3/$4-$5",
+          );
+        } else if (value.length >= 9) {
+          value = value.replace(/(\d{2})(\d{3})(\d{3})(\d+)/, "$1.$2.$3/$4");
+        } else if (value.length >= 6) {
+          value = value.replace(/(\d{2})(\d{3})(\d+)/, "$1.$2.$3");
+        }
+        e.target.value = value;
+      });
+    }
+
     // Formatação do CPF
     const cpfField = document.getElementById("cpf");
     if (cpfField) {
@@ -1103,6 +1139,13 @@
         observacoes: "observacao",
         proximidade: "proximidade",
         ativo: "ativo",
+        // Campos fiscais
+        tipo_pessoa: "tipoPessoa",
+        cnpj: "cnpj",
+        inscricao_estadual: "inscricao_estadual",
+        indicador_ie: "indicador_ie",
+        codigo_ibge_municipio: "codigo_ibge_municipio",
+        pais: "pais",
       };
 
       // Adicionar campos ao FormData
