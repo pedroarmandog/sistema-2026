@@ -311,7 +311,9 @@ exports.login = async (req, res) => {
       : false;
     const _jwtCookieOptions = {
       httpOnly: true,
-      sameSite: process.env.COOKIE_SAMESITE || "Lax",
+      // Quando Secure=true (HTTPS), usar SameSite=None para garantir envio do cookie
+      // Quando Secure=false (localhost), usar Lax para segurança
+      sameSite: _cookieSecure ? "None" : (process.env.COOKIE_SAMESITE || "Lax"),
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 dias — persistente (sobrevive ao fechar o navegador)
       path: "/",
     };
