@@ -283,7 +283,8 @@ const Cliente = sequelize.define(
     },
   },
   {
-    tableName: "clientes",
+    tableName: "Clientes",
+    freezeTableName: true,
     // Definir índices de forma controlada
     indexes: [
       {
