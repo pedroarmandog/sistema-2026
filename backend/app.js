@@ -1629,7 +1629,10 @@ if (shouldAutoSync) {
     );
   }
   // SEMPRE executar migrações fiscais inline, independente do ambiente
-  runFiscalMigrations().then(() => startServer());
+  // .catch() garante que startServer() execute mesmo se a migração falhar
+  runFiscalMigrations()
+    .then(() => startServer())
+    .catch(() => startServer());
 }
 
 // Endpoints para selecionar/obter impressora
