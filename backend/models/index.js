@@ -147,6 +147,11 @@ const PushSubscriptionFactory = require("./PushSubscription");
 const PushSubscription = PushSubscriptionFactory(sequelize);
 console.log("✅ Modelo PushSubscription inicializado");
 
+// Módulo Fiscal
+const ConfiguracaoFiscal = require("./ConfiguracaoFiscal");
+const NotaFiscal = require("./NotaFiscal");
+console.log("✅ Modelos fiscais inicializados");
+
 // Exportar todos os modelos
 module.exports = {
   Cliente,
@@ -198,5 +203,8 @@ module.exports = {
   ProdutoLembreteRecorrente,
   // PWA Push Notifications
   PushSubscription,
+  // Módulo Fiscal
+  ConfiguracaoFiscal,
+  NotaFiscal,
   sequelize,
 };

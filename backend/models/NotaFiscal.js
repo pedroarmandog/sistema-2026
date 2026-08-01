@@ -1,5 +1,5 @@
 const { DataTypes } = require("sequelize");
-const sequelize = require("./Cliente");
+const { sequelize } = require("./Cliente");
 
 /**
  * Model: NotaFiscal
