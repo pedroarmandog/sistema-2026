@@ -1088,28 +1088,60 @@ function closeDropdown() {
 }
 
 // Configurar submenu lateral para Caixa
+// ⚠️ Elementos opcionais — algumas páginas não possuem o submenu lateral.
+// A função agora silencia silenciosamente quando os elementos não existem
+// (em vez de logar erros que poluem o console).
 function configurarSubmenuLateralCaixa() {
-  console.log("🔍 Iniciando configuração do submenu lateral Caixa...");
-
-  const caixaSubmenuItem = document.getElementById("caixaSubmenuItem");
-  const caixaLateralSubmenu = document.getElementById("caixaLateralSubmenu");
+  // Buscar elementos com fallback para os IDs reais usados nas páginas.
+  const caixaSubmenuItem =
+    document.getElementById("caixaSubmenuItem") ||
+    document.getElementById("attBtnCaixa");
+  const caixaLateralSubmenu =
+    document.getElementById("caixaLateralSubmenu") ||
+    document.getElementById("attSubCaixa");
   const submenuItemWithLateral = document.querySelector(
     ".submenu-item-with-lateral",
   );
 
-  console.log("🔍 Elementos encontrados:");
-  console.log("- caixaSubmenuItem:", caixaSubmenuItem);
-  console.log("- caixaLateralSubmenu:", caixaLateralSubmenu);
-  console.log("- submenuItemWithLateral:", submenuItemWithLateral);
+  // Se os elementos não existem (página sem o submenu lateral), sair silenciosamente.
+  if (!caixaSubmenuItem || !caixaLateralSubmenu) return;
+  if (caixaLateralSubmenu.id !== "caixaLateralSubmenu" && !submenuItemWithLateral) {
+    // Fallback: usar o próprio botão como trigger de hover se não houver container lateral.
+    const trigger =
+      submenuItemWithLateral || caixaSubmenuItem;
 
+    let isSubmenuVisible = false;
+
+    // Configurar hover no trigger
+    trigger.addEventListener("mouseenter", function () {
+      caixaLateralSubmenu.style.display = "block";
+      isSubmenuVisible = true;
+    });
+    trigger.addEventListener("mouseleave", function () {
+      setTimeout(() => {
+        if (!caixaLateralSubmenu.matches(":hover")) {
+          caixaLateralSubmenu.style.display = "none";
+          isSubmenuVisible = false;
+        }
+      }, 100);
+    });
+    caixaLateralSubmenu.addEventListener("mouseenter", function () {
+      caixaLateralSubmenu.style.display = "block";
+      isSubmenuVisible = true;
+    });
+    caixaLateralSubmenu.addEventListener("mouseleave", function () {
+      caixaLateralSubmenu.style.display = "none";
+      isSubmenuVisible = false;
+    });
+    return;
+  }
+
+  // Configuração completa (com submenuItemWithLateral presente)
   if (caixaSubmenuItem && caixaLateralSubmenu && submenuItemWithLateral) {
-    console.log("✅ Configurando submenu lateral do Caixa...");
-
     let isSubmenuVisible = false;
 
     // Função para mostrar submenu
     const showSubmenu = () => {
-      console.log("📤 Mostrando submenu lateral");
       caixaLateralSubmenu.style.opacity = "1";
       caixaLateralSubmenu.style.visibility = "visible";
       caixaLateralSubmenu.style.transform = "translateX(0)";
@@ -1118,7 +1150,6 @@ function configurarSubmenuLateralCaixa() {
 
     // Função para esconder submenu
     const hideSubmenu = () => {
-      console.log("📥 Escondendo submenu lateral");
       caixaLateralSubmenu.style.opacity = "0";
       caixaLateralSubmenu.style.visibility = "hidden";
       caixaLateralSubmenu.style.transform = "translateX(-10px)";
@@ -1127,23 +1158,17 @@ function configurarSubmenuLateralCaixa() {
 
     // Configurar hover no container principal
     submenuItemWithLateral.addEventListener("mouseenter", function () {
-      console.log("🎯 Mouse entrou no container do Caixa");
       showSubmenu();
     });
-
     submenuItemWithLateral.addEventListener("mouseleave", function () {
-      console.log("🎯 Mouse saiu do container do Caixa");
       setTimeout(hideSubmenu, 100);
     });
 
     // Configurar hover no submenu lateral
     caixaLateralSubmenu.addEventListener("mouseenter", function () {
-      console.log("🎯 Mouse entrou no submenu lateral");
       showSubmenu();
     });
-
     caixaLateralSubmenu.addEventListener("mouseleave", function () {
-      console.log("🎯 Mouse saiu do submenu lateral");
       hideSubmenu();
     });
 
@@ -1151,50 +1176,29 @@ function configurarSubmenuLateralCaixa() {
     const lateralItems = caixaLateralSubmenu.querySelectorAll(
       ".lateral-submenu-item",
     );
-    console.log(
-      `🔍 Encontrados ${lateralItems.length} itens no submenu lateral`,
-    );
-
-    lateralItems.forEach((item, index) => {
+    lateralItems.forEach((item) => {
       item.addEventListener("click", function (e) {
         e.preventDefault();
         const texto = this.textContent.trim();
-        console.log(`🚀 Clique em: ${texto}`);
 
         // Aqui você pode adicionar navegação específica para cada item
         switch (texto) {
           case "Abertura/Fechamento":
-            alert("Navegando para Abertura/Fechamento de Caixa");
-            // window.location.href = '/caixa/abertura-fechamento.html';
+            window.location.href = "/Caixa/abertura-fechamento.html";
             break;
           case "Suprimento/Sangria":
-            alert("Navegando para Suprimento/Sangria");
-            // window.location.href = '/caixa/suprimento-sangria.html';
+            window.location.href = "/Caixa/suprimento-sangria.html";
             break;
           case "Rel. Demonstrativo de caixa":
-            alert("Navegando para Relatório Demonstrativo de Caixa");
-            // window.location.href = '/caixa/relatorio-demonstrativo.html';
+            // Sem página definida ainda
             break;
         }
 
         hideSubmenu();
       });
-
-      console.log(
-        `✅ Configurado evento click para item ${index + 1}: ${item.textContent.trim()}`,
-      );
     });
-
-    console.log("✅ Submenu lateral do Caixa configurado com sucesso!");
-  } else {
-    console.error("❌ Elementos do submenu lateral Caixa não encontrados");
-    console.log(
-      "- Verifique se os IDs caixaSubmenuItem e caixaLateralSubmenu existem no HTML",
-    );
-    console.log(
-      "- Verifique se a classe .submenu-item-with-lateral existe no HTML",
-    );
   }
+  // Se não houver todos os elementos, não logar nada (silencioso).
 }
 
 // Adicionar configuração do submenu lateral ao DOMContentLoaded

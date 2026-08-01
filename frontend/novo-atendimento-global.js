@@ -3,6 +3,15 @@
 // Funciona em todas as páginas do sistema
 // =============================================
 
+// Guard: evita que o script seja executado duas vezes na mesma página
+// (ex: quando o sidebar é injetado dinamicamente e também carrega este script).
+// Sem este guard, a segunda execução lança:
+//   Uncaught SyntaxError: Identifier 'calendarioCompactoAtual' has already been declared
+if (window.__novoAtendimentoGlobalLoaded) {
+  console.log("🌐 novo-atendimento-global.js já carregado — ignorando segunda execução");
+} else {
+  window.__novoAtendimentoGlobalLoaded = true;
+
 console.log("🌐 Sistema Global de Novo Atendimento carregado!");
 
 // Função simples de notificação (toast) para erros/sucesso
@@ -3953,3 +3962,5 @@ window.iniciarFluxoCancelamento = function (agendamentoId, onSuccess) {
 };
 
 console.log("🌟 Sistema Global de Novo Atendimento configurado!");
+
+} // fim do guard (else) — fecha o bloco iniciado no topo do arquivo
