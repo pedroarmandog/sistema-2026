@@ -3,20 +3,6 @@
    DASHBOARD JS - PET CRIA
    ======================================== */
 
-// Verificação SÍNCRONA imediata: se o cookie de sessão não existir, redireciona
-// antes de qualquer renderização. Evita que o botão "voltar" do navegador
-// mostre o dashboard após logout (conteúdo cacheado).
-(function () {
-  function _hasCookie(name) {
-    return document.cookie.split(";").some(function (c) {
-      return c.trim().indexOf(name + "=") === 0;
-    });
-  }
-  if (!_hasCookie("usuarioLogadoId")) {
-    window.location.replace("/login/login.html");
-  }
-})();
-
 // Verificação periódica de sessão — detecta encerramento pelo admin
 // SÓ redireciona quando motivo === "sessao_encerrada" (admin encerrou explicitamente)
 // Erros de rede, DB, inatividade ou 401 transientes NÃO causam redirect
