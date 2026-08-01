@@ -1512,6 +1512,95 @@ async function syncAllTables() {
   }
 }
 
+// ── Migrações fiscais inline (sempre executadas no startup) ────────────────
+// Garante que as colunas fiscais existam no banco, independente de NODE_ENV.
+// Idempotente: verifica com SHOW COLUMNS antes de cada ALTER TABLE.
+async function runFiscalMigrations() {
+  try {
+    await sequelize.authenticate();
+    console.log("🔄 Verificando migrações fiscais...");
+
+    const COLS = {
+      itens: [
+        ["sku", "VARCHAR(50) NULL"],
+        ["gtin", "VARCHAR(14) NULL"],
+        ["peso", "DECIMAL(10,3) NULL"],
+        ["origem", "TINYINT NULL"],
+        ["cfop_padrao", "VARCHAR(5) NULL"],
+        ["cst_icms", "VARCHAR(3) NULL"],
+        ["csosn", "VARCHAR(3) NULL"],
+        ["cst_pis", "VARCHAR(2) NULL"],
+        ["cst_cofins", "VARCHAR(2) NULL"],
+        ["cst_ipi", "VARCHAR(2) NULL"],
+        ["aliq_icms", "DECIMAL(6,2) NULL DEFAULT 0.00"],
+        ["aliq_pis", "DECIMAL(6,2) NULL DEFAULT 0.00"],
+        ["aliq_cofins", "DECIMAL(6,2) NULL DEFAULT 0.00"],
+        ["aliq_ipi", "DECIMAL(6,2) NULL DEFAULT 0.00"],
+        ["item_lista_servico", "VARCHAR(10) NULL"],
+        ["municipio_incidencia_iss", "VARCHAR(7) NULL"],
+        ["natureza_operacao_iss", "VARCHAR(100) NULL"],
+        ["cnae_servico", "VARCHAR(7) NULL"],
+      ],
+      clientes: [
+        ["tipo_pessoa", "CHAR(1) NULL"],
+        ["cnpj", "VARCHAR(18) NULL"],
+        ["inscricao_estadual", "VARCHAR(20) NULL"],
+        ["indicador_ie", "TINYINT NULL DEFAULT 9"],
+        ["codigo_ibge_municipio", "VARCHAR(7) NULL"],
+        ["pais", "VARCHAR(50) NULL DEFAULT 'Brasil'"],
+        ["codigo_pais", "CHAR(4) NULL DEFAULT '1058'"],
+      ],
+      empresas: [
+        ["cnae", "VARCHAR(7) NULL"],
+        ["crt", "CHAR(1) NULL"],
+        ["codigo_ibge_municipio", "VARCHAR(7) NULL"],
+        ["pais", "VARCHAR(50) NULL DEFAULT 'Brasil'"],
+        ["codigo_pais", "CHAR(4) NULL DEFAULT '1058'"],
+      ],
+      vendas: [
+        ["numero_nfe", "INT NULL"],
+        ["serie_nfe", "VARCHAR(3) NULL"],
+        ["chave_acesso_nfe", "VARCHAR(44) NULL"],
+        ["data_emissao_nfe", "DATETIME NULL"],
+        ["natureza_operacao", "VARCHAR(60) NULL"],
+        ["protocolo_nfe", "VARCHAR(15) NULL"],
+        ["xml_nfe", "LONGTEXT NULL"],
+        ["indicador_presenca", "TINYINT NULL DEFAULT 1"],
+        ["status_fiscal", "ENUM('pendente','emitida','cancelada','erro','aguardando_correcao','nao_aplicavel') NULL DEFAULT 'pendente'"],
+        ["modo_emissao", "ENUM('automatico','manual','lote','confirmacao') NULL"],
+      ],
+    };
+
+    for (const [tabela, colunas] of Object.entries(COLS)) {
+      for (const [nome, sqlType] of colunas) {
+        try {
+          const [rows] = await sequelize.query(
+            `SHOW COLUMNS FROM \`${tabela}\` LIKE '${nome}'`,
+          );
+          if (rows.length > 0) continue;
+          await sequelize.query(
+            `ALTER TABLE \`${tabela}\` ADD COLUMN \`${nome}\` ${sqlType}`,
+          );
+          console.log(`  ✅ ${tabela}.${nome} adicionada`);
+        } catch (e) {
+          // tabela pode não existir ainda — ignorar
+        }
+      }
+    }
+
+    // Garantir tabelas novas do módulo fiscal
+    try {
+      const { ConfiguracaoFiscal, NotaFiscal } = require("./models");
+      if (ConfiguracaoFiscal?.sync) await ConfiguracaoFiscal.sync();
+      if (NotaFiscal?.sync) await NotaFiscal.sync();
+    } catch (e) {}
+
+    console.log("✅ Migrações fiscais verificadas!");
+  } catch (err) {
+    console.warn("⚠️ Migrações fiscais:", err.message);
+  }
+}
+
 // Executar sync somente quando explicitamente habilitado via env `AUTO_SYNC=1`.
 // Por padrão, NÃO rodar sync automático para evitar queries massivas na inicialização.
 const shouldAutoSync =
@@ -1522,11 +1611,12 @@ if (shouldAutoSync) {
     "🔁 AUTO_SYNC=1 — executando syncAllTables antes de iniciar o servidor",
   );
   syncAllTables()
+    .then(() => runFiscalMigrations())
     .then(() => startServer())
     .catch((err) => {
       console.error("❌ syncAllTables falhou:", err && err.message);
       // iniciar servidor mesmo em caso de falha de sync para não bloquear dev
-      startServer();
+      runFiscalMigrations().then(() => startServer());
     });
 } else {
   if (process.env.NODE_ENV === "production") {
@@ -1538,7 +1628,8 @@ if (shouldAutoSync) {
       "⚠️ Auto-sync desabilitado (defina AUTO_SYNC=1 para habilitar). Iniciando servidor sem sync.",
     );
   }
-  startServer();
+  // SEMPRE executar migrações fiscais inline, independente do ambiente
+  runFiscalMigrations().then(() => startServer());
 }
 
 // Endpoints para selecionar/obter impressora
