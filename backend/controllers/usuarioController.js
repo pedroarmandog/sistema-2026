@@ -146,7 +146,7 @@ exports.login = async (req, res) => {
       }
       // Usar setDataValue para garantir que o Sequelize internalize o valor corrigido
       try {
-        usuarioEncontrado.setDataValue('permissoes', rawPermissoes);
+        usuarioEncontrado.setDataValue("permissoes", rawPermissoes);
       } catch (_) {
         usuarioEncontrado.permissoes = rawPermissoes;
       }
@@ -297,8 +297,18 @@ exports.login = async (req, res) => {
       req.headers.host?.includes("localhost") ||
       req.headers.host?.includes("127.0.0.1") ||
       req.headers.host?.includes("::1");
-    const _cookieDomain = !_isLocalhost ? (process.env.COOKIE_DOMAIN || null) : null;
-    const _cookieSecure = !_isLocalhost ? (process.env.COOKIE_SECURE === "1") : false;
+    // Se COOKIE_DOMAIN não estiver configurado no .env, deriva o domínio raiz
+    // automaticamente (ex: "api.pethubflow.com.br" → ".pethubflow.com.br")
+    // para que o cookie seja válido em todos os subdomínios.
+    const _hostParts = (req.hostname || "").split(".");
+    const _rootDomain =
+      _hostParts.length >= 3 ? "." + _hostParts.slice(-2).join(".") : null;
+    const _cookieDomain = !_isLocalhost
+      ? process.env.COOKIE_DOMAIN || _rootDomain
+      : null;
+    const _cookieSecure = !_isLocalhost
+      ? process.env.COOKIE_SECURE === "1"
+      : false;
     const _jwtCookieOptions = {
       httpOnly: true,
       sameSite: process.env.COOKIE_SAMESITE || "Lax",
