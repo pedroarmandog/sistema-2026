@@ -1,9 +1,10 @@
 const jwt = require("jsonwebtoken");
 
-// Chave secreta para JWT — obrigatoriamente via variável de ambiente
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET)
-  throw new Error("JWT_SECRET não definido nas variáveis de ambiente");
+// Chave secreta para JWT — via variável de ambiente (com fallback para não crashar o servidor)
+const JWT_SECRET = process.env.JWT_SECRET || "pethub_admin_secret_2026_!@#$%";
+if (!process.env.JWT_SECRET) {
+  console.warn("⚠️ JWT_SECRET não definido no .env — usando valor padrão (definir em produção!)");
+}
 const JWT_EXPIRES_IN = "24h";
 
 // Token para acesso à página de cadastro de admin
