@@ -224,26 +224,13 @@ exports.login = async (req, res) => {
       }
     }
 
-    // Se não temos empresaId a partir de usuario.empresas, tentar ler coluna usuarios.empresa_id (migração)
+    // Se não temos empresaId a partir de usuario.empresas, não há como buscar (coluna empresa_id não existe)
+    // O sistema usa apenas o campo JSON 'empresas' para armazenar as empresas
     let empresaIdParaToken = _empresaId || null;
     if (!empresaIdParaToken) {
-      try {
-        const rows = await sequelize.query(
-          "SELECT empresa_id FROM usuarios WHERE id = :id LIMIT 1",
-          {
-            replacements: { id: usuarioEncontrado.id },
-            type: QueryTypes.SELECT,
-          },
-        );
-        if (rows && rows.length > 0 && rows[0].empresa_id) {
-          empresaIdParaToken = Number(rows[0].empresa_id) || null;
-          console.log(
-            `[login] empresaId derivado de usuarios.empresa_id -> ${empresaIdParaToken}`,
-          );
-        }
-      } catch (e) {
-        // silencioso
-      }
+      console.log(
+        `[login] empresaId não encontrado no array empresas para usuario=${usuarioEncontrado.id}`,
+      );
     }
 
     // Gerar JWT com empresaId (se encontrado) e configurar cookie
@@ -393,22 +380,10 @@ exports.buscarUsuario = async (req, res) => {
     const usuarioData = usuario.toJSON();
     delete usuarioData.senha;
 
-    // Fallback: se Usuario.empresas estiver vazio, tentar ler coluna usuarios.empresa_id
-    try {
-      if (!usuarioData.empresas || usuarioData.empresas.length === 0) {
-        const rows = await sequelize.query(
-          "SELECT empresa_id FROM usuarios WHERE id = :id LIMIT 1",
-          { replacements: { id: usuario.id }, type: QueryTypes.SELECT },
-        );
-        if (rows && rows.length > 0 && rows[0].empresa_id) {
-          usuarioData.empresas = [{ id: Number(rows[0].empresa_id) }];
-          console.log(
-            `[buscarUsuario] preenchendo usuario.empresas a partir de usuarios.empresa_id -> ${rows[0].empresa_id}`,
-          );
-        }
-      }
-    } catch (e) {
-      // silencioso - não falhar a resposta por causa desse fallback
+    // Fallback: se Usuario.empresas estiver vazio, não há como buscar (coluna empresa_id não existe)
+    // O sistema usa apenas o campo JSON 'empresas' para armazenar as empresas
+    if (!usuarioData.empresas || usuarioData.empresas.length === 0) {
+      usuarioData.empresas = [];
     }
 
     // Normalizar campo `empresas` garantindo formato consistente

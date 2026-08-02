@@ -362,9 +362,9 @@ async function authUser(req, res, next) {
     try {
       const { sequelize: seq } = require("../models");
       const { QueryTypes } = require("sequelize");
-      // Query raw: inclui empresa_id que não está no modelo Sequelize de Usuário
+      // Query raw: buscar dados do usuário (não inclui empresa_id pois não existe na tabela)
       const rows = await seq.query(
-        "SELECT id, grupoUsuario, empresas, empresa_id, ativo FROM usuarios WHERE id = :id LIMIT 1",
+        "SELECT id, grupoUsuario, empresas, ativo FROM usuarios WHERE id = :id LIMIT 1",
         {
           replacements: { id: parseInt(usuarioLegadoId) },
           type: QueryTypes.SELECT,
