@@ -78,9 +78,18 @@
       window.history.replaceState({}, "", window.location.pathname);
     }
 
-    // 4. Se veio de logout, ir direto para login
+    // 4. Se veio de logout, verificar se a sessão REALMENTE foi encerrada.
+    //    O parâmetro ?logout=1 pode estar preso na URL do PWA (cache do SW)
+    //    mesmo com o cookie ainda válido. Nesse caso, seguir direto para o app.
     if (forceLogout) {
-      console.log("[App] forceLogout=true — indo para login");
+      console.log("[App] forceLogout=true — verificando sessão real antes de mostrar login");
+      const usuarioLogout = await MobileAuth.verificarSessao();
+      if (usuarioLogout) {
+        console.log("[App] Sessão ainda válida apesar do ?logout=1 — iniciando app:", usuarioLogout.nome);
+        await _initApp(usuarioLogout, targetPage);
+        return;
+      }
+      console.log("[App] forceLogout=true e sessão realmente encerrada — indo para login");
       _showLogin();
       return;
     }

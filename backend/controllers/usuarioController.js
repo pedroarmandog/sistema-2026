@@ -296,11 +296,16 @@ exports.login = async (req, res) => {
     const _cookieSecure = !_isLocalhost
       ? process.env.COOKIE_SECURE === "1"
       : false;
+    // IMPORTANTE: o frontend (desktop e mobile) usa same-origin (window.VPS_URL = "").
+    // Por isso, o cookie é SEMPRE first-party e SameSite=Lax é suficiente e mais
+    // compatível com PWA/iOS onde SameSite=None causa problemas de envio de cookie.
+    // SameSite=None só é necessário se a API for chamada de outra origem (cross-site),
+    // o que não é o caso — api.pethubflow.com.br é mesmo registrable domain (same-site).
     const _jwtCookieOptions = {
       httpOnly: true,
-      // Quando Secure=true (HTTPS), usar SameSite=None para garantir envio do cookie
-      // Quando Secure=false (localhost), usar Lax para segurança
-      sameSite: _cookieSecure ? "None" : (process.env.COOKIE_SAMESITE || "Lax"),
+      // Quando Secure=true (HTTPS), usar Lax (first-party). Se o .env definir
+      // COOKIE_SAMESITE explicitamente (ex: "None"), respeitar.
+      sameSite: process.env.COOKIE_SAMESITE || "Lax",
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 dias — persistente (sobrevive ao fechar o navegador)
       path: "/",
     };

@@ -140,8 +140,21 @@ window.PageLogin = (function () {
     errorEl.style.display = "none";
 
     try {
+      console.log("[Login] Enviando credenciais...");
       const user = await MobileAuth.login(usuario, senha);
+      console.log("[Login] Login retornou:", user ? `OK: ${user.nome}` : "NULL (redirecionado)");
       if (!user) return; // redirecionado (empresa bloqueada)
+
+      // Diagnóstico: verificar se o cookie JWT foi setado e se está sendo enviado
+      console.log("[Login] Cookies após login:", document.cookie);
+      console.log("[Login] Cookie pethub_token presente:", document.cookie.includes("pethub_token"));
+      try {
+        // Verificar se a sessão é reconhecida pelo backend (mesmo endpoint do boot)
+        const me = await MobileApi.request("/api/usuarios/me", { noAutoRedirect: true });
+        console.log("[Login] /api/usuarios/me reconheceu sessão:", me ? `OK: ${me.nome}` : "FALHOU");
+      } catch (meErr) {
+        console.warn("[Login] /api/usuarios/me NÃO reconheceu sessão:", meErr.message);
+      }
 
       // Sucesso — iniciar app
       MobileHeader.render(user);
