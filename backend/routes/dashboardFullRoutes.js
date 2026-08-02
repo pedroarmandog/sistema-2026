@@ -73,15 +73,13 @@ router.get("/", async (req, res) => {
       req,
     );
 
-    // Sessão ativa: extrair token (mesma lógica de /api/usuarios/sessao-ativa)
-    const token =
-      req.cookies?.pethub_token ||
-      (req.headers.authorization &&
-      req.headers.authorization.startsWith("Bearer ")
-        ? req.headers.authorization.split(" ")[1]
-        : null);
-
+    // Sessão ativa: usar req.user populado pelo middleware authUser
     const sessaoP = (async () => {
+      if (!req.user)
+        return { status: 200, body: { ativa: false, motivo: "sem_usuario" } };
+      
+      // Extrair token do cookie para verificar sessão no banco
+      const token = req.cookies?.pethub_token || null;
       if (!token)
         return { status: 200, body: { ativa: false, motivo: "sem_token" } };
       const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
