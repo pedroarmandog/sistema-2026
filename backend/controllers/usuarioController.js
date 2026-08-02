@@ -319,6 +319,15 @@ exports.login = async (req, res) => {
     };
     if (_cookieDomain) _jwtCookieOptions.domain = _cookieDomain;
     if (_cookieSecure) _jwtCookieOptions.secure = true;
+    
+    // DEBUG: Log das opções do cookie
+    console.log(`[login] 🍪 Definindo cookie pethub_token:`);
+    console.log(`[login]   Domain: ${_jwtCookieOptions.domain || 'não definido'}`);
+    console.log(`[login]   Secure: ${_jwtCookieOptions.secure || false}`);
+    console.log(`[login]   SameSite: ${_jwtCookieOptions.sameSite}`);
+    console.log(`[login]   Path: ${_jwtCookieOptions.path}`);
+    console.log(`[login]   MaxAge: ${_jwtCookieOptions.maxAge}ms (${_jwtCookieOptions.maxAge / 1000 / 60 / 60 / 24} dias)`);
+    
     res.cookie("pethub_token", token, _jwtCookieOptions);
 
     // Remover senha antes de retornar

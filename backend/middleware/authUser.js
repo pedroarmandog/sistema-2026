@@ -150,7 +150,12 @@ async function authUser(req, res, next) {
       : null;
   const tokenFromCookie = req.cookies?.pethub_token || null;
 
-  console.log(`[authUser] 🔍 Verificando auth: path=${req.path}, tokenFromCookie=${!!tokenFromCookie}, tokenFromHeader=${!!tokenFromHeader}`);
+  // DEBUG: Log detalhado de cookies recebidos
+  console.log(`[authUser] 🔍 Auth check: ${req.method} ${req.path}`);
+  console.log(`[authUser]   Origin: ${req.headers.origin || 'none'}`);
+  console.log(`[authUser]   Cookies recebidos: ${Object.keys(req.cookies || {}).join(', ') || 'NENHUM'}`);
+  console.log(`[authUser]   tokenFromCookie: ${tokenFromCookie ? 'SIM (' + tokenFromCookie.substring(0, 20) + '...)' : 'NÃO'}`);
+  console.log(`[authUser]   tokenFromHeader: ${tokenFromHeader ? 'SIM' : 'NÃO'}`);
 
   if (REQUIRE_HEADER && !tokenFromHeader) {
     return res
