@@ -67,15 +67,29 @@ window.MobileApi = (function () {
   async function request(endpoint, options = {}) {
     const url = getBase() + endpoint;
 
+    // Adicionar Authorization header com o token JWT (se disponível).
+    // Isso contorna o problema do cookie HttpOnly não ser enviado em PWA/iOS.
+    // O backend (authUser) já aceita o token via header como fallback.
+    let authHeaders = {};
+    try {
+      if (window.MobileAuth && typeof window.MobileAuth.getToken === "function") {
+        const token = window.MobileAuth.getToken();
+        if (token) {
+          authHeaders = { Authorization: "Bearer " + token };
+        }
+      }
+    } catch (_) {}
+
     const config = {
       // Começar com options para que os defaults NÃO sobrescrevam as configurações
       // importantes como credentials e headers
       ...options,
       method: options.method || "GET",
-      credentials: "include", // envia cookies HttpOnly JWT
+      credentials: "include", // envia cookies HttpOnly JWT (fallback)
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
+        ...authHeaders,
         ...(options.headers || {}),
       },
     };

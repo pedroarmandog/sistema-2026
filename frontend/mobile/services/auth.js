@@ -1,7 +1,8 @@
 /* ============================================================
    PetHub Mobile — Auth Service
    Gerenciamento de sessão, heartbeat e estado do usuário.
-   Reutiliza o mesmo JWT cookie (pethub_token) do sistema desktop.
+   Usa o token JWT via Authorization header (mais confiável que
+   cookie HttpOnly em PWA/iOS, que tem bugs de envio de cookie).
    ============================================================ */
 
 window.MobileAuth = (function () {
@@ -9,20 +10,52 @@ window.MobileAuth = (function () {
 
   // Estado em memória (NÃO usar localStorage para dados sensíveis)
   let _currentUser = null;
+  let _token = null; // JWT guardado em memória
   let _heartbeatTimer = null;
   let _heartbeatFalhas = 0;
   const HEARTBEAT_INTERVAL = 60_000; // 60s — igual ao desktop
   const MAX_FALHAS_HEARTBEAT = 2; // desloga apenas após 2 falhas consecutivas
+  const TOKEN_STORAGE_KEY = "pethub_mobile_token";
+
+  /**
+   * Guarda o token em memória e sessionStorage (sobrevive a recargas).
+   */
+  function _setToken(token) {
+    _token = token || null;
+    try {
+      if (token) {
+        sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
+      } else {
+        sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+      }
+    } catch (_) {}
+  }
+
+  /**
+   * Recupera o token (memória primeiro, depois sessionStorage).
+   */
+  function _getToken() {
+    if (_token) return _token;
+    try {
+      _token = sessionStorage.getItem(TOKEN_STORAGE_KEY) || null;
+    } catch (_) {
+      _token = null;
+    }
+    return _token;
+  }
 
   /**
    * Verifica se há sessão ativa no servidor.
+   * Usa o token JWT via Authorization header (se disponível).
    * @returns {Promise<{id, nome, empresaId, grupoUsuario} | null>}
    */
   async function verificarSessao() {
+    const token = _getToken();
     try {
       // Usa noAutoRedirect para não redirecionar a página ao verificar a sessão
       const data = await MobileApi.request("/api/usuarios/me", {
         noAutoRedirect: true,
+        headers: token ? { Authorization: "Bearer " + token } : {},
       });
       _currentUser = {
         id: data.id,
@@ -44,6 +77,7 @@ window.MobileAuth = (function () {
   /**
    * Realiza o login.
    * Usa o mesmo endpoint do sistema desktop — sem alteração no backend.
+   * Guarda o token JWT retornado para usar via Authorization header.
    * @param {string} usuario
    * @param {string} senha
    * @returns {Promise<{nome, empresaId, ...}>}
@@ -72,6 +106,15 @@ window.MobileAuth = (function () {
       return;
     }
 
+    // Guardar o token JWT retornado pelo backend
+    const token = data.token || data.usuario?.token || null;
+    if (token) {
+      _setToken(token);
+      console.log("[MobileAuth] Token JWT guardado para Authorization header");
+    } else {
+      console.warn("[MobileAuth] Login não retornou token — dependendo do cookie");
+    }
+
     _currentUser = {
       id: data.id || data.usuario?.id,
       nome: data.nome || data.usuario?.nome || "Usuário",
@@ -92,13 +135,16 @@ window.MobileAuth = (function () {
     pararHeartbeat();
     _currentUser = null;
     _heartbeatFalhas = 0;
+    const token = _getToken();
     try {
       await MobileApi.post("/api/usuarios/logout", {
         device_id: _getDeviceId(),
+        headers: token ? { Authorization: "Bearer " + token } : {},
       });
     } catch (_) {
       // Ignorar erros de rede no logout
     }
+    _setToken(null); // limpar token
     window.location.href = "/mobile/app.html?logout=1";
   }
 
@@ -118,6 +164,13 @@ window.MobileAuth = (function () {
   }
 
   /**
+   * Retorna o token JWT atual (usado pelo MobileApi para Authorization header).
+   */
+  function getToken() {
+    return _getToken();
+  }
+
+  /**
    * Inicia o heartbeat — mantém a sessão ativa a cada 60s.
    * IMPORTANTE: não desloga em 401/erro transiente.
    * Só desloga após 2 falhas CONSECUTIVAS explícitas.
@@ -126,11 +179,13 @@ window.MobileAuth = (function () {
     pararHeartbeat();
     _heartbeatFalhas = 0;
     _heartbeatTimer = setInterval(async () => {
+      const token = _getToken();
       try {
         const resp = await MobileApi.request("/api/usuarios/heartbeat", {
           method: "POST",
           body: { device_id: _getDeviceId() },
           noAutoRedirect: true, // controlamos o redirect aqui
+          headers: token ? { Authorization: "Bearer " + token } : {},
         });
 
         // Servidor sinalizou sessão encerrada (HTTP 200 com ativa:false)
@@ -194,6 +249,7 @@ window.MobileAuth = (function () {
   function _handleSessaoEncerrada() {
     pararHeartbeat();
     _currentUser = null;
+    _setToken(null);
     window.location.href = "/mobile/app.html?logout=1";
   }
 
@@ -203,6 +259,7 @@ window.MobileAuth = (function () {
     logout,
     getUsuario,
     setUsuario,
+    getToken,
     iniciarHeartbeat,
     pararHeartbeat,
   };
