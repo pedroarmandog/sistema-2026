@@ -1245,7 +1245,10 @@
           window.location.href = `client-details.html?id=${clienteId}`;
         }, 2000);
       } else {
-        throw new Error(data.error || "Erro ao salvar cliente");
+        // Incluir details (mensagem técnica) quando disponível para diagnóstico
+        const msgErro = data.error || "Erro ao salvar cliente";
+        const detalhe = data.details ? ` (${data.details})` : "";
+        throw new Error(msgErro + detalhe);
       }
     } catch (error) {
       console.error("Erro ao salvar cliente:", error);

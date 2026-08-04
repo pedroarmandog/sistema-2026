@@ -29,6 +29,14 @@ exports.createCliente = async (req, res) => {
       emails_adicionais,
       lembrete_automatico_ativo,
       lembrete_automatico_dias,
+      // Campos fiscais (2026-08-01)
+      tipo_pessoa,
+      cnpj,
+      inscricao_estadual,
+      indicador_ie,
+      codigo_ibge_municipio,
+      pais,
+      codigo_pais,
     } = req.body;
 
     const imagem_perfil = req.file ? req.file.filename : null;
@@ -104,6 +112,16 @@ exports.createCliente = async (req, res) => {
       lembrete_automatico_dias: lembrete_automatico_dias
         ? parseInt(lembrete_automatico_dias, 10) || 30
         : 30,
+      // Campos fiscais
+      tipo_pessoa: tipo_pessoa || null,
+      cnpj: cnpj || null,
+      inscricao_estadual: inscricao_estadual || null,
+      indicador_ie: indicador_ie !== undefined && indicador_ie !== ""
+        ? parseInt(indicador_ie, 10)
+        : 9,
+      codigo_ibge_municipio: codigo_ibge_municipio || null,
+      pais: pais || "Brasil",
+      codigo_pais: codigo_pais || "1058",
     });
 
     res.status(201).json({
@@ -129,6 +147,23 @@ exports.createCliente = async (req, res) => {
     // Nota: boas_vindas é disparado no cadastro do primeiro pet (petController)
   } catch (err) {
     console.error("Erro ao criar cliente:", err);
+
+    // Tratar erros de duplicidade (CPF/email já cadastrados)
+    if (err.name === "SequelizeUniqueConstraintError") {
+      const campos = (err.errors || []).map((e) => e.path);
+      let mensagem = "Já existe um cliente com esses dados.";
+      if (campos.includes("cpf")) {
+        mensagem = "Já existe um cliente com este CPF.";
+      } else if (campos.includes("email")) {
+        mensagem = "Já existe um cliente com este e-mail.";
+      }
+      return res.status(409).json({
+        success: false,
+        error: mensagem,
+        details: err.message,
+      });
+    }
+
     res.status(500).json({
       success: false,
       error: "Erro ao criar o cliente",
