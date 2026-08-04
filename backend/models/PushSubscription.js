@@ -23,8 +23,9 @@ module.exports = (sequelize) => {
         allowNull: false,
       },
       // Endpoint da subscription (URL do push service)
+      // VARCHAR(500) em vez de TEXT para permitir índice único no MySQL
       endpoint: {
-        type: DataTypes.TEXT,
+        type: DataTypes.STRING(500),
         allowNull: false,
       },
       // Chaves de criptografia (auth + p256dh) — armazenadas como JSON

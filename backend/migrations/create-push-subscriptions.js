@@ -40,7 +40,7 @@ async function run() {
       allowNull: false,
     },
     endpoint: {
-      type: DataTypes.TEXT,
+      type: DataTypes.STRING(500),
       allowNull: false,
     },
     keys: {
