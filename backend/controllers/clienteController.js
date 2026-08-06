@@ -317,6 +317,27 @@ exports.updateCliente = async (req, res) => {
     const { id } = req.params;
     const updates = req.body;
 
+    // Converter tipo_pessoa: "fisica" → "F", "juridica" → "J"
+    if ("tipo_pessoa" in updates && updates.tipo_pessoa) {
+      const tp = String(updates.tipo_pessoa).toLowerCase();
+      if (tp === "fisica" || tp === "f") updates.tipo_pessoa = "F";
+      else if (tp === "juridica" || tp === "j") updates.tipo_pessoa = "J";
+    }
+
+    // Converter campos vazios para null (campos opcionais)
+    const camposOpcionais = [
+      "cpf", "rg", "sexo", "telefone", "email",
+      "cep", "endereco", "numero", "complemento", "bairro",
+      "cidade", "estado", "cnpj", "inscricao_estadual",
+      "codigo_ibge_municipio", "grupo_cliente", "perfil_desconto",
+      "como_nos_conheceu", "observacoes", "proximidade",
+    ];
+    for (const campo of camposOpcionais) {
+      if (campo in updates && (updates[campo] === "" || updates[campo] === null)) {
+        updates[campo] = null;
+      }
+    }
+
     // Processar telefones e emails adicionais
     if (updates.telefones_adicionais) {
       try {
@@ -391,6 +412,7 @@ exports.updateCliente = async (req, res) => {
     res.status(500).json({
       success: false,
       error: "Erro ao atualizar o cliente",
+      details: err.message,
     });
   }
 };

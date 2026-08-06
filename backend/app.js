@@ -1895,6 +1895,49 @@ function startServer() {
       console.warn("⚠️ Migration empresa_id no startup:", e.message);
     }
 
+    // Migration: garantir que telefone, email e cpf aceitem NULL (roda sempre no startup)
+    // Necessário porque o modelo Cliente define esses campos como opcionais (allowNull: true),
+    // mas o banco pode ter sido criado com NOT NULL. O Sequelize não altera colunas existentes.
+    try {
+      const [colsTelefoneNull] = await sequelize.query(
+        "SHOW COLUMNS FROM Clientes LIKE 'telefone'",
+      );
+      if (colsTelefoneNull.length > 0 && colsTelefoneNull[0].Null === "NO") {
+        await sequelize.query(
+          "ALTER TABLE Clientes MODIFY COLUMN telefone VARCHAR(255) NULL",
+        );
+        console.log("✅ Migration: telefone alterado para NULL em Clientes");
+      }
+    } catch (e) {
+      console.warn("⚠️ Migration telefone NULL no startup:", e.message);
+    }
+    try {
+      const [colsEmailNull] = await sequelize.query(
+        "SHOW COLUMNS FROM Clientes LIKE 'email'",
+      );
+      if (colsEmailNull.length > 0 && colsEmailNull[0].Null === "NO") {
+        await sequelize.query(
+          "ALTER TABLE Clientes MODIFY COLUMN email VARCHAR(255) NULL",
+        );
+        console.log("✅ Migration: email alterado para NULL em Clientes");
+      }
+    } catch (e) {
+      console.warn("⚠️ Migration email NULL no startup:", e.message);
+    }
+    try {
+      const [colsCpfNull] = await sequelize.query(
+        "SHOW COLUMNS FROM Clientes LIKE 'cpf'",
+      );
+      if (colsCpfNull.length > 0 && colsCpfNull[0].Null === "NO") {
+        await sequelize.query(
+          "ALTER TABLE Clientes MODIFY COLUMN cpf VARCHAR(255) NULL",
+        );
+        console.log("✅ Migration: cpf alterado para NULL em Clientes");
+      }
+    } catch (e) {
+      console.warn("⚠️ Migration cpf NULL no startup:", e.message);
+    }
+
     // Garantir tabela produto_lembrete_recorrente
     try {
       const { ProdutoLembreteRecorrente } = require("./models");
