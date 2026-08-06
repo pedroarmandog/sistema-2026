@@ -6,11 +6,13 @@
 const { sequelize } = require("../models/Cliente");
 
 async function addLembreteColunas() {
+  // Usar "Clientes" com C maiúsculo — MySQL em Linux é case-sensitive
+  // e a tabela real no banco de produção foi criada com esse nome.
   const queries = [
-    "ALTER TABLE clientes ADD COLUMN lembrete_automatico_ativo TINYINT(1) NOT NULL DEFAULT 0",
-    "ALTER TABLE clientes ADD COLUMN lembrete_automatico_dias INT NOT NULL DEFAULT 30",
-    "ALTER TABLE clientes ADD COLUMN lembrete_produto_id INT NULL",
-    "ALTER TABLE clientes ADD COLUMN lembrete_produto_nome VARCHAR(255) NULL",
+    "ALTER TABLE Clientes ADD COLUMN lembrete_automatico_ativo TINYINT(1) NOT NULL DEFAULT 0",
+    "ALTER TABLE Clientes ADD COLUMN lembrete_automatico_dias INT NOT NULL DEFAULT 30",
+    "ALTER TABLE Clientes ADD COLUMN lembrete_produto_id INT NULL",
+    "ALTER TABLE Clientes ADD COLUMN lembrete_produto_nome VARCHAR(255) NULL",
   ];
 
   for (const sql of queries) {

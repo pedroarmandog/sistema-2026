@@ -41,6 +41,14 @@ exports.createCliente = async (req, res) => {
 
     const imagem_perfil = req.file ? req.file.filename : null;
 
+    // Converter tipo_pessoa: "fisica" → "F", "juridica" → "J"
+    let tipoPessoaConvertido = null;
+    if (tipo_pessoa) {
+      const tp = String(tipo_pessoa).toLowerCase();
+      if (tp === "fisica" || tp === "f") tipoPessoaConvertido = "F";
+      else if (tp === "juridica" || tp === "j") tipoPessoaConvertido = "J";
+    }
+
     // Processar telefones e emails adicionais
     let telefonesAdicionaisArray = null;
     let emailsAdicionaisArray = null;
@@ -113,7 +121,7 @@ exports.createCliente = async (req, res) => {
         ? parseInt(lembrete_automatico_dias, 10) || 30
         : 30,
       // Campos fiscais
-      tipo_pessoa: tipo_pessoa || null,
+      tipo_pessoa: tipoPessoaConvertido,
       cnpj: cnpj || null,
       inscricao_estadual: inscricao_estadual || null,
       indicador_ie: indicador_ie !== undefined && indicador_ie !== ""

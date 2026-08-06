@@ -1389,29 +1389,29 @@ async function syncAllTables() {
     await sequelize.sync();
     console.log("✅ Tabelas da instância principal criadas");
 
-    // Migration inline: adicionar saldo_haver e saldo_crediario à tabela clientes
+    // Migration inline: adicionar saldo_haver e saldo_crediario à tabela Clientes
     try {
       const [colsHaver] = await sequelize.query(
-        "SHOW COLUMNS FROM clientes LIKE 'saldo_haver'",
+        "SHOW COLUMNS FROM Clientes LIKE 'saldo_haver'",
       );
       if (colsHaver.length === 0) {
         await sequelize.query(
-          "ALTER TABLE clientes ADD COLUMN saldo_haver DECIMAL(12,2) NOT NULL DEFAULT 0.00",
+          "ALTER TABLE Clientes ADD COLUMN saldo_haver DECIMAL(12,2) NOT NULL DEFAULT 0.00",
         );
-        console.log("  ✅ Migration: saldo_haver adicionado em clientes");
+        console.log("  ✅ Migration: saldo_haver adicionado em Clientes");
       }
     } catch (e) {
       console.warn("  ⚠️ Migration saldo_haver:", e.message);
     }
     try {
       const [colsCrediario] = await sequelize.query(
-        "SHOW COLUMNS FROM clientes LIKE 'saldo_crediario'",
+        "SHOW COLUMNS FROM Clientes LIKE 'saldo_crediario'",
       );
       if (colsCrediario.length === 0) {
         await sequelize.query(
-          "ALTER TABLE clientes ADD COLUMN saldo_crediario DECIMAL(12,2) NOT NULL DEFAULT 0.00",
+          "ALTER TABLE Clientes ADD COLUMN saldo_crediario DECIMAL(12,2) NOT NULL DEFAULT 0.00",
         );
-        console.log("  ✅ Migration: saldo_crediario adicionado em clientes");
+        console.log("  ✅ Migration: saldo_crediario adicionado em Clientes");
       }
     } catch (e) {
       console.warn("  ⚠️ Migration saldo_crediario:", e.message);
@@ -1541,7 +1541,7 @@ async function runFiscalMigrations() {
         ["natureza_operacao_iss", "VARCHAR(100) NULL"],
         ["cnae_servico", "VARCHAR(7) NULL"],
       ],
-      clientes: [
+      Clientes: [
         ["tipo_pessoa", "CHAR(1) NULL"],
         ["cnpj", "VARCHAR(18) NULL"],
         ["inscricao_estadual", "VARCHAR(20) NULL"],
@@ -1844,52 +1844,52 @@ function startServer() {
       console.warn("⚠️ Migration numeroOrdem no startup:", e.message);
     }
 
-    // Migration: saldo_haver e saldo_crediario em clientes (roda sempre no startup)
+    // Migration: saldo_haver e saldo_crediario em Clientes (roda sempre no startup)
     // Necessário porque o modelo Cliente define defaultValue para esses campos,
     // e o Sequelize os inclui no INSERT mesmo sem serem passados. Se a coluna
     // não existir no banco, o INSERT falha com ER_BAD_FIELD_ERROR (500).
     try {
       const [colsHaverStartup] = await sequelize.query(
-        "SHOW COLUMNS FROM clientes LIKE 'saldo_haver'",
+        "SHOW COLUMNS FROM Clientes LIKE 'saldo_haver'",
       );
       if (colsHaverStartup.length === 0) {
         await sequelize.query(
-          "ALTER TABLE clientes ADD COLUMN saldo_haver DECIMAL(12,2) NOT NULL DEFAULT 0.00",
+          "ALTER TABLE Clientes ADD COLUMN saldo_haver DECIMAL(12,2) NOT NULL DEFAULT 0.00",
         );
-        console.log("✅ Migration: saldo_haver adicionado em clientes");
+        console.log("✅ Migration: saldo_haver adicionado em Clientes");
       }
     } catch (e) {
       console.warn("⚠️ Migration saldo_haver no startup:", e.message);
     }
     try {
       const [colsCrediarioStartup] = await sequelize.query(
-        "SHOW COLUMNS FROM clientes LIKE 'saldo_crediario'",
+        "SHOW COLUMNS FROM Clientes LIKE 'saldo_crediario'",
       );
       if (colsCrediarioStartup.length === 0) {
         await sequelize.query(
-          "ALTER TABLE clientes ADD COLUMN saldo_crediario DECIMAL(12,2) NOT NULL DEFAULT 0.00",
+          "ALTER TABLE Clientes ADD COLUMN saldo_crediario DECIMAL(12,2) NOT NULL DEFAULT 0.00",
         );
-        console.log("✅ Migration: saldo_crediario adicionado em clientes");
+        console.log("✅ Migration: saldo_crediario adicionado em Clientes");
       }
     } catch (e) {
       console.warn("⚠️ Migration saldo_crediario no startup:", e.message);
     }
 
-    // Migration: empresa_id em clientes (roda sempre no startup)
+    // Migration: empresa_id em Clientes (roda sempre no startup)
     // Garante que o isolamento por empresa funcione mesmo se a migração
     // add-empresa-id não tiver sido executada.
     try {
       const [colsEmpresaStartup] = await sequelize.query(
-        "SHOW COLUMNS FROM clientes LIKE 'empresa_id'",
+        "SHOW COLUMNS FROM Clientes LIKE 'empresa_id'",
       );
       if (colsEmpresaStartup.length === 0) {
         await sequelize.query(
-          "ALTER TABLE clientes ADD COLUMN empresa_id INT NULL DEFAULT NULL",
+          "ALTER TABLE Clientes ADD COLUMN empresa_id INT NULL DEFAULT NULL",
         );
         await sequelize.query(
-          "ALTER TABLE clientes ADD INDEX idx_clientes_empresa_id (empresa_id)",
+          "ALTER TABLE Clientes ADD INDEX idx_clientes_empresa_id (empresa_id)",
         );
-        console.log("✅ Migration: empresa_id adicionado em clientes");
+        console.log("✅ Migration: empresa_id adicionado em Clientes");
       }
     } catch (e) {
       console.warn("⚠️ Migration empresa_id no startup:", e.message);
