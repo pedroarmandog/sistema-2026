@@ -235,8 +235,8 @@
         const grupoCpf = document.getElementById("cpf");
         if (grupoCnpj) grupoCnpj.style.display = isPJ ? "" : "none";
         if (grupoFiscalPJ) grupoFiscalPJ.style.display = isPJ ? "" : "none";
-        // CPF não é obrigatório para PJ
-        if (grupoCpf) grupoCpf.required = !isPJ;
+        // CPF nunca é obrigatório — sempre opcional
+        if (grupoCpf) grupoCpf.removeAttribute("required");
       };
       tipoPessoaField.addEventListener("change", toggleCamposPJ);
       toggleCamposPJ(); // inicializar ao carregar
