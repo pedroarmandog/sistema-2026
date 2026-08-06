@@ -660,10 +660,10 @@
     const telefoneValue = field.value.replace(/\D/g, "");
     const errorElement = document.getElementById("telefone-error");
 
-    // Se o campo estiver vazio, mostrar erro pois é obrigatório
+    // Se o campo estiver vazio, não mostrar erro (campo é opcional)
     if (!telefoneValue) {
-      this.showFieldError(field, errorElement, "Telefone é obrigatório");
-      return false;
+      this.clearFieldError(field, errorElement);
+      return true;
     }
 
     // Verificar se tem 10 ou 11 dígitos (com DDD)
@@ -1040,19 +1040,11 @@
     // Limpar erros anteriores
     this.clearFieldErrors();
 
-    // Validar nome
+    // Validar nome (único campo obrigatório)
     const nomeField = document.getElementById("nome");
     const nomeError = document.getElementById("nome-error");
     if (!nomeField.value.trim()) {
       this.showFieldError(nomeField, nomeError);
-      isValid = false;
-    }
-
-    // Validar telefone
-    const telefoneField = document.getElementById("telefone");
-    const telefoneError = document.getElementById("telefone-error");
-    if (!telefoneField.value.trim()) {
-      this.showFieldError(telefoneField, telefoneError);
       isValid = false;
     }
 

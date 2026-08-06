@@ -89,13 +89,13 @@ exports.createCliente = async (req, res) => {
 
     const cliente = await Cliente.create({
       nome,
-      cpf,
-      rg,
+      cpf: cpf || null,
+      rg: rg || null,
       data_nascimento,
       idade,
-      sexo,
-      telefone,
-      email,
+      sexo: sexo || null,
+      telefone: telefone || null,
+      email: email || null,
       telefones_adicionais: telefonesAdicionaisArray,
       emails_adicionais: emailsAdicionaisArray,
       cep,

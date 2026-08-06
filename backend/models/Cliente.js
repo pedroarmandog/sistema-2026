@@ -182,9 +182,10 @@ const Cliente = sequelize.define(
     sexo: { type: DataTypes.ENUM("Masculino", "Feminino") },
 
     // Contato
-    telefone: { type: DataTypes.STRING, allowNull: false },
+    // Telefone é opcional — permitir cliente sem telefone
+    telefone: { type: DataTypes.STRING, allowNull: true },
     telefones_adicionais: { type: DataTypes.JSON },
-    email: { type: DataTypes.STRING },
+    email: { type: DataTypes.STRING, allowNull: true },
     emails_adicionais: { type: DataTypes.JSON },
 
     // Endereço
@@ -286,16 +287,15 @@ const Cliente = sequelize.define(
     tableName: "Clientes",
     freezeTableName: true,
     // Definir índices de forma controlada
+    // CPF e email NÃO são únicos — permitir múltiplos clientes sem esses dados
     indexes: [
       {
-        unique: true,
         fields: ["cpf"],
-        name: "clientes_cpf_unique",
+        name: "clientes_cpf_index",
       },
       {
-        unique: true,
         fields: ["email"],
-        name: "clientes_email_unique",
+        name: "clientes_email_index",
       },
       {
         fields: ["nome"],
