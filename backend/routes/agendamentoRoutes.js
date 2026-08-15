@@ -1023,6 +1023,56 @@ router.get("/:id/comprovante", async (req, res) => {
       return res.status(404).json({ error: "Agendamento não encontrado" });
     }
 
+    // ===== DETERMINAÇÃO DA EMPRESA DO COMPROVANTE (isolamento multi-tenant) =====
+    // A empresa que deve aparecer no comprovante é a do contexto autenticado
+    // (req.user.empresaId, resolvido pelo middleware authUser) e a do vínculo do
+    // próprio atendimento (agendamento.empresa_id). Não há fallback silencioso
+    // para outra empresa: quando ambos existem, precisam apontar para a mesma.
+    const empresaUsuarioId =
+      req.user && req.user.empresaId != null
+        ? Number(req.user.empresaId)
+        : null;
+    const empresaAtendimentoId =
+      agendamento.empresa_id != null ? Number(agendamento.empresa_id) : null;
+
+    if (
+      empresaUsuarioId &&
+      empresaAtendimentoId &&
+      empresaUsuarioId !== empresaAtendimentoId
+    ) {
+      console.error(
+        `[comprovante] INCONSISTÊNCIA MULTI-TENANT: usuário empresa=${empresaUsuarioId}, atendimento empresa=${empresaAtendimentoId}`,
+      );
+      return res.status(403).json({
+        erro:
+          "Inconsistência de empresa: este atendimento não pertence à empresa do usuário autenticado.",
+        empresaUsuario: empresaUsuarioId,
+        empresaAtendimento: empresaAtendimentoId,
+      });
+    }
+
+    const empresaIdEfetivo = empresaUsuarioId || empresaAtendimentoId;
+
+    if (!empresaIdEfetivo) {
+      console.error(
+        "[comprovante] Nenhuma empresa identificada (usuário e atendimento sem empresa_id)",
+      );
+      return res.status(403).json({
+        erro:
+          "Empresa não identificada para gerar o comprovante. Contate o suporte.",
+      });
+    }
+
+    const empresa = await Empresa.findByPk(empresaIdEfetivo);
+    if (!empresa) {
+      console.error(
+        `[comprovante] Empresa ${empresaIdEfetivo} não encontrada no cadastro`,
+      );
+      return res
+        .status(404)
+        .json({ erro: "Empresa do atendimento não encontrada no cadastro." });
+    }
+
     // Criar PDF para impressora de cupom (ajustado para ser um pouco mais largo)
     const mmToPt = (mm) => (mm * 72) / 25.4;
     const RECEIPT_MM = 72; // aumentar um pouco a largura do cupom (pouquinho mais largo que 58mm)
@@ -1054,63 +1104,53 @@ router.get("/:id/comprovante", async (req, res) => {
     const pageWidth = doc.page.width;
     const lineHeight = 12;
 
-    // Cabeçalho: tentar usar logo da empresa (cadastro-empresa) com fallback em texto
+    // Cabeçalho: usar a logo cadastrada da empresa correta (campo `logo` da tabela empresas)
     let logoRendered = false;
-    let empresa = null;
+    var y = 0;
     try {
-      // Buscar empresa do usuário via cookie JWT
-      const jwt = require("jsonwebtoken");
-      const JWT_SECRET =
-        process.env.JWT_USER_SECRET || "pethub_user_secret_2026_!@#$%";
-      let empresaId = null;
-      try {
-        const cookieHeader = req.headers.cookie || "";
-        const match = cookieHeader.match(/pethub_token=([^;]+)/);
-        if (match) {
-          const decoded = jwt.verify(match[1], JWT_SECRET);
-          if (decoded.empresaId) empresaId = decoded.empresaId;
-        }
-      } catch (_) {}
-      if (
-        !empresaId &&
-        req.query &&
-        (req.query.empresaId || req.query.empresa_id)
-      ) {
-        empresaId = req.query.empresaId || req.query.empresa_id;
-      }
-      if (empresaId) empresa = await Empresa.findByPk(empresaId);
-      if (!empresa)
-        empresa = await Empresa.findOne({
-          where: { ativa: true },
-          order: [["id", "ASC"]],
-        });
-
       let logoPath = null;
+      let logoBuffer = null;
+
+      // A logo da empresa é armazenada como arquivo em uploads/ (ex.: empresa_<timestamp>.png)
+      // ou, ocasionalmente, como data URI/base64 gravado diretamente no campo `logo`.
       if (empresa && empresa.logo) {
-        const candidates = [
-          path.join(__dirname, "../../uploads", String(empresa.logo)),
-          path.join(
-            __dirname,
-            "../../uploads/logos-empresas",
-            String(empresa.logo),
-          ),
-        ];
-        for (const c of candidates) {
-          if (fs.existsSync(c)) {
-            logoPath = c;
-            break;
+        const logoStr = String(empresa.logo);
+        if (logoStr.startsWith("data:image")) {
+          try {
+            const b64 = logoStr.split(",")[1] || "";
+            logoBuffer = Buffer.from(b64, "base64");
+          } catch (e) {
+            logoBuffer = null;
+          }
+        } else {
+          const candidates = [];
+          if (logoStr.startsWith("/") || logoStr.startsWith("uploads")) {
+            candidates.push(
+              path.join(__dirname, "../../..", logoStr.replace(/^\/+/, "")),
+            );
+          }
+          candidates.push(
+            path.join(__dirname, "../../uploads", logoStr),
+            path.join(__dirname, "../../uploads/logos-empresas", logoStr),
+          );
+          for (const c of candidates) {
+            if (fs.existsSync(c)) {
+              logoPath = c;
+              break;
+            }
           }
         }
       }
 
-      if (logoPath && fs.existsSync(logoPath)) {
-        // ajustar o logo proporcionalmente à largura do cupom
+      const imagemLogo =
+        logoBuffer || (logoPath && fs.existsSync(logoPath) ? logoPath : null);
+      if (imagemLogo) {
         const maxLogoWidth = Math.round(pageWidth * 0.6);
         const logoWidth = Math.min(maxLogoWidth, Math.round(mmToPt(30)));
         const logoX = (pageWidth - logoWidth) / 2;
         const logoY = smallMargin + 4;
         try {
-          doc.image(logoPath, logoX, logoY, {
+          doc.image(imagemLogo, logoX, logoY, {
             width: logoWidth,
             align: "center",
           });
@@ -1118,10 +1158,8 @@ router.get("/:id/comprovante", async (req, res) => {
         } catch (e) {
           logoRendered = false;
         }
-        // ajustar início do conteúdo abaixo da logo — manter espaço maior para evitar sobreposição
         const logoEstimatedHeight = Math.round(logoWidth * 0.9);
-        // reduzir ligeiramente o espaçamento para aproximar a razão social da logo
-        var y = logoY + logoEstimatedHeight + 2;
+        y = logoY + logoEstimatedHeight + 2;
       }
     } catch (e) {
       console.warn("Erro ao buscar logo da empresa:", e && e.message);
@@ -1144,7 +1182,7 @@ router.get("/:id/comprovante", async (req, res) => {
       }
       // iniciar y logo -> conteúdo; aumentar espaçamento quando não há logo real
       // aproximar um pouco (menos espaçamento) para a razão social
-      var y = doc.y + 12;
+      y = doc.y + 12;
     }
 
     // Exibir Razão Social da empresa abaixo da logo (se disponível)
@@ -1162,6 +1200,74 @@ router.get("/:id/comprovante", async (req, res) => {
       }
     } catch (e) {
       /* não bloquear geração por erro de leitura */
+    }
+
+    // Dados cadastrais da empresa (CNPJ, endereço, contato) — dados reais do cadastro
+    try {
+      if (empresa) {
+        const infoLines = [];
+
+        const cnpjRaw = String(empresa.cnpj || "").trim();
+        if (cnpjRaw) {
+          const cnpjLimpo = cnpjRaw.replace(/\D/g, "");
+          const cnpjExib =
+            cnpjLimpo.length === 14
+              ? cnpjLimpo.replace(
+                  /^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,
+                  "$1.$2.$3/$4-$5",
+                )
+              : cnpjRaw;
+          infoLines.push(`CNPJ: ${cnpjExib}`);
+        }
+
+        const end =
+          empresa.endereco && typeof empresa.endereco === "object"
+            ? empresa.endereco
+            : {};
+        const rua = String(end.rua || "").trim();
+        const numero = String(end.numero || "").trim();
+        const complemento = String(end.complemento || "").trim();
+        const bairro = String(end.bairro || "").trim();
+        const enderecoParts = [];
+        if (rua) enderecoParts.push(rua + (numero ? `, ${numero}` : ""));
+        if (complemento) enderecoParts.push(`Cpl: ${complemento}`);
+        if (bairro) enderecoParts.push(`Bairro: ${bairro}`);
+        if (enderecoParts.length) infoLines.push(enderecoParts.join(" - "));
+
+        const cidade = String(end.cidade || "").trim();
+        const uf = String(end.estado || end.uf || "").trim();
+        const cep = String(end.cep || "").trim();
+        const localParts = [];
+        if (cidade) localParts.push(cidade + (uf ? `/${uf}` : ""));
+        if (cep) localParts.push(`CEP: ${cep}`);
+        if (localParts.length) infoLines.push(localParts.join(" - "));
+
+        const telefone = String(empresa.telefone || "").trim();
+        const telefone2 = String(empresa.telefone2 || "").trim();
+        const email = String(empresa.email || "").trim();
+        const contatoParts = [];
+        // Sem logo, o fallback já imprime "Contato: <telefone>" — evita duplicação
+        if (logoRendered && telefone) contatoParts.push(`Tel: ${telefone}`);
+        if (telefone2) contatoParts.push(`Tel 2: ${telefone2}`);
+        if (email) contatoParts.push(`E-mail: ${email}`);
+        if (contatoParts.length) infoLines.push(contatoParts.join(" • "));
+
+        if (infoLines.length) {
+          doc.fontSize(8).font("Helvetica").fillColor("#333");
+          for (const line of infoLines) {
+            const lineH = doc.heightOfString(line, { width: right - left });
+            doc.text(line, left, y, {
+              width: right - left,
+              align: "center",
+              lineGap: 1,
+            });
+            y += lineH + 2;
+          }
+          y += 3;
+        }
+      }
+    } catch (e) {
+      /* não bloquear a geração do comprovante por erro no bloco de dados da empresa */
     }
 
     // Dados do cliente e emissão (blocos à esquerda e direita)

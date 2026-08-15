@@ -8291,7 +8291,14 @@ document.addEventListener("DOMContentLoaded", function () {
         console.log("📡 Response status:", response.status);
 
         if (!response.ok) {
-          throw new Error("Erro ao gerar comprovante");
+          let msg = "Erro ao gerar comprovante";
+          try {
+            const errData = await response.json();
+            if (errData && (errData.erro || errData.error)) {
+              msg = errData.erro || errData.error;
+            }
+          } catch (_) {}
+          throw new Error(msg);
         }
 
         const blob = await response.blob();
@@ -8301,7 +8308,10 @@ document.addEventListener("DOMContentLoaded", function () {
         openPdfModal(blobUrl, "Comprovante de atendimento");
       } catch (error) {
         console.error("❌ Erro ao gerar comprovante:", error);
-        showNotification("Erro ao gerar comprovante", "error");
+        showNotification(
+          (error && error.message) || "Erro ao gerar comprovante",
+          "error",
+        );
       }
     });
   } else {
