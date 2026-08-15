@@ -3,7 +3,10 @@ const crypto = require("crypto");
 
 const JWT_SECRET =
   process.env.JWT_USER_SECRET || "pethub_user_secret_2026_!@#$%";
-const JWT_EXPIRES_IN = "30d"; // JWT de longa duração — a validade real é controlada por ultima_atividade no DB (8h de inatividade)
+const JWT_EXPIRES_IN = "30d"; // JWT de longa duração — a validade real é controlada por ultima_atividade no DB (30 dias de inatividade)
+
+// Tempo máximo de inatividade de sessão — fonte única em acessosController
+const { SESSAO_TIMEOUT_MS } = require("../controllers/acessosController");
 
 // Cache simples em memória para usuários e status de empresa
 const USER_CACHE = new Map(); // key: userId -> { user, expiresAt }
@@ -283,9 +286,9 @@ async function authUser(req, res, next) {
           }
         }
 
-        // Verificar inatividade de 8h: se ultima_atividade > 8h → sessão expirada.
+        // Verificar inatividade (30 dias): se ultima_atividade ultrapassou o limite, sessão expirada.
         // Executado apenas no cache miss (máximo 1x a cada 60s por usuário).
-        const _INATIVIDADE_MAX_MS = 8 * 60 * 60 * 1000;
+        const _INATIVIDADE_MAX_MS = SESSAO_TIMEOUT_MS;
         try {
           const _tHash = crypto
             .createHash("sha256")

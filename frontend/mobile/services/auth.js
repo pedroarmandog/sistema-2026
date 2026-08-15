@@ -8,7 +8,13 @@
 window.MobileAuth = (function () {
   "use strict";
 
-  // Estado em memória (NÃO usar localStorage para dados sensíveis)
+  // Estado em memória (primária) + localStorage (persistente).
+  // O token é persistido em localStorage para que a sessão sobreviva a
+  // fechar/minimizar o PWA, reiniciar o celular e abrir o app depois de
+  // horas — a sessão só acaba com "Sair" explícito ou invalidação real
+  // no servidor. (Trade-off: localStorage é legível por XSS, mesmo nível
+  // do sessionStorage anterior, porém persistente; o backend também mantém
+  // o cookie HttpOnly de 30 dias como camada de fallback.)
   let _currentUser = null;
   let _token = null; // JWT guardado em memória
   let _heartbeatTimer = null;
@@ -18,28 +24,42 @@ window.MobileAuth = (function () {
   const TOKEN_STORAGE_KEY = "pethub_mobile_token";
 
   /**
-   * Guarda o token em memória e sessionStorage (sobrevive a recargas).
+   * Guarda o token em memória (primária) e localStorage (persistente).
+   * O localStorage sobrevive ao fechamento/reabertura do PWA, ao reinício do
+   * celular e a longos períodos sem uso — a sessão só acaba com "Sair"
+   * explícito ou invalidação real no servidor.
    */
   function _setToken(token) {
     _token = token || null;
     try {
       if (token) {
-        sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
+        localStorage.setItem(TOKEN_STORAGE_KEY, token);
+        // Limpar chave legada (versões anteriores gravavam só em sessionStorage)
+        sessionStorage.removeItem(TOKEN_STORAGE_KEY);
       } else {
+        localStorage.removeItem(TOKEN_STORAGE_KEY);
         sessionStorage.removeItem(TOKEN_STORAGE_KEY);
       }
     } catch (_) {}
   }
 
   /**
-   * Recupera o token (memória primeiro, depois sessionStorage).
+   * Recupera o token (memória → localStorage → sessionStorage legado).
    */
   function _getToken() {
     if (_token) return _token;
     try {
-      _token = sessionStorage.getItem(TOKEN_STORAGE_KEY) || null;
+      _token = localStorage.getItem(TOKEN_STORAGE_KEY) || null;
     } catch (_) {
       _token = null;
+    }
+    // Abas/instâncias antigas podem ter o token apenas no sessionStorage
+    if (!_token) {
+      try {
+        _token = sessionStorage.getItem(TOKEN_STORAGE_KEY) || null;
+      } catch (_) {
+        _token = null;
+      }
     }
     return _token;
   }
@@ -67,9 +87,16 @@ window.MobileAuth = (function () {
       _heartbeatFalhas = 0;
       return _currentUser;
     } catch (err) {
-      // Sem sessão válida — mostrar login sem redirecionar
+      // Sem conexão com o servidor NÃO significa logout: mantém o token/sessão
+      // e sinaliza ao boot que deve aguardar a rede — em vez de mostrar login.
+      if (err.offline) {
+        console.warn(
+          "[MobileAuth] Sem conexão ao verificar sessão — sessão preservada",
+        );
+        return { __offline: true };
+      }
+      // Erro HTTP real (401 sem sessão válida, servidor recusando, etc.)
       _currentUser = null;
-      if (err.offline) console.warn("[MobileAuth] Sem conexão");
       return null;
     }
   }

@@ -1,10 +1,15 @@
 const { EmpresaPainel, SessaoAtiva, sequelize } = require("../models");
 const { Op } = require("sequelize");
 
-// Tempo máximo de inatividade: 8 horas sem qualquer requisição autenticada = sessão expirada.
-// Cada requisição via authUser middleware atualiza ultima_atividade automaticamente.
-// Não depende de heartbeat — o timeout é detectado na próxima tentativa de acesso.
-const SESSAO_TIMEOUT_MS = 8 * 60 * 60 * 1000; // 8 horas
+// Tempo máximo de inatividade: 30 dias por padrão — alinhado ao JWT de 30d
+// e ao cookie de 30d. A sessão só é encerrada por logout explícito, derrubada
+// administrativa/limite de acessos, ou após este período sem NENHUMA
+// requisição autenticada. Configurável via env SESSAO_TIMEOUT_MS.
+// Cada requisição via authUser middleware atualiza ultima_atividade
+// automaticamente (não depende de heartbeat — o timeout é detectado na
+// próxima tentativa de acesso).
+const SESSAO_TIMEOUT_MS =
+  Number(process.env.SESSAO_TIMEOUT_MS) || 30 * 24 * 60 * 60 * 1000; // 30 dias
 
 /**
  * Limpa sessões expiradas via Sequelize ORM (timezone-safe).
@@ -705,4 +710,5 @@ module.exports = {
   limparSessoesExpiradas,
   verificarSessaoAtiva,
   heartbeatSessao,
+  SESSAO_TIMEOUT_MS,
 };

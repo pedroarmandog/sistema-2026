@@ -84,6 +84,12 @@
     if (forceLogout) {
       console.log("[App] forceLogout=true — verificando sessão real antes de mostrar login");
       const usuarioLogout = await MobileAuth.verificarSessao();
+      if (usuarioLogout && usuarioLogout.__offline) {
+        // Sem conexão não dá para confirmar o logout — preservar a sessão
+        console.log("[App] Sem conexão no forceLogout — preservando estado, aguardando rede…");
+        await _iniciarModoReconectando(targetPage);
+        return;
+      }
       if (usuarioLogout) {
         console.log("[App] Sessão ainda válida apesar do ?logout=1 — iniciando app:", usuarioLogout.nome);
         await _initApp(usuarioLogout, targetPage);
@@ -97,6 +103,13 @@
     // 5. Verificar sessão
     console.log("[App] Verificando sessão...");
     const usuario = await MobileAuth.verificarSessao();
+    if (usuario && usuario.__offline) {
+      // Sem conexão na abertura NÃO é logout: entrar em modo "reconectando"
+      // e reverificar automaticamente quando a rede voltar.
+      console.log("[App] Sem conexão na abertura — sessão preservada, modo reconectando");
+      await _iniciarModoReconectando(targetPage);
+      return;
+    }
     console.log("[App] Resultado verificarSessao:", usuario ? `OK: ${usuario.nome} (id=${usuario.id})` : "NULL — sem sessão");
     if (!usuario) {
       console.log("[App] Sem sessão — mostrando login");
@@ -210,6 +223,40 @@
     MobileBottomNav.hide();
     _hideSplash();
     _loadPage("login");
+  }
+
+  /* ── Modo offline / reconexão ─────────────────────────────────
+     Sem conexão NÃO é logout. Entramos no app com um usuário place-
+     holder e aguardamos o evento `online` para revalidar a sessão. */
+  async function _iniciarModoReconectando(targetPage) {
+    _hideSplash();
+    const placeholder = {
+      id: null,
+      nome: "Reconectando…",
+      empresaId: null,
+      grupoUsuario: null,
+      empresaNome: "",
+    };
+    await _initApp(placeholder, targetPage);
+    _aguardarReconexao(targetPage);
+  }
+
+  async function _aguardarReconexao(targetPage) {
+    const onOnline = async () => {
+      window.removeEventListener("online", onOnline);
+      const u = await MobileAuth.verificarSessao();
+      if (u && !u.__offline) {
+        console.log("[App] Conexão restaurada — sessão reconfirmada:", u.nome);
+        await _initApp(u, targetPage);
+      } else if (u && u.__offline) {
+        // Ainda sem rede — continuar aguardando
+        _aguardarReconexao(targetPage);
+      } else {
+        // Sessão realmente inválida (sem token/cookie e servidor confirmou)
+        _showLogin();
+      }
+    };
+    window.addEventListener("online", onOnline);
   }
 
   /* ── Carregar Página ────────────────────────────────────── */

@@ -9,6 +9,7 @@ const {
   encerrarSessaoPorToken,
   atualizarAtividade,
   heartbeatSessao,
+  SESSAO_TIMEOUT_MS,
 } = require("../controllers/acessosController");
 
 // Rota de login (limite por minuto, aplicada somente no login)
@@ -60,7 +61,7 @@ router.get("/sessao-ativa", async (req, res) => {
 
   try {
     const { SessaoAtiva } = require("../models");
-    const INATIVIDADE_MAX_MS = 8 * 60 * 60 * 1000;
+    const INATIVIDADE_MAX_MS = SESSAO_TIMEOUT_MS;
     const registro = await SessaoAtiva.findOne({
       where: { token_hash: tokenHash },
       attributes: ["id", "ativo", "ultima_atividade"],
