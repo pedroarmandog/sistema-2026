@@ -127,7 +127,7 @@ const PAYLOADS = {
   nova_venda: (dados) => ({
     title: "💰 Nova Venda Realizada",
     body: dados.clienteNome
-      ? `Cliente: ${dados.clienteNome}\nValor: R$ ${Number(dados.total || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}${dados.pagamento ? "\nPagamento: " + dados.pagamento : ""}${dados.horario ? "\nHorário: " + dados.horario : ""}`
+      ? `Cliente: ${dados.clienteNome}${dados.pagamento ? "\nPagamento: " + dados.pagamento : ""}${dados.horario ? "\nHorário: " + dados.horario : ""}`
       : "Uma nova venda foi realizada",
     tag: "nova_venda",
     data: { page: "financeiro" },
