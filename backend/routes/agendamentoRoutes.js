@@ -725,6 +725,10 @@ router.patch("/:id/status", async (req, res) => {
     const { id } = req.params;
     const { status, pagamentos, totalPago } = req.body;
 
+    // Instante real em que a ação (check-in/check-out) foi executada.
+    // Usado nas notificações push — NUNCA substituir pelo horário agendado (`horario`).
+    const momentoAcao = new Date();
+
     if (!status) {
       return res.status(400).json({ error: "Status é obrigatório" });
     }
@@ -820,9 +824,20 @@ router.patch("/:id/status", async (req, res) => {
           });
           const empresaId = ag?.empresa_id;
           if (empresaId) {
+            // Valor final já existente no registro (sem recalcular regra financeira).
+            // Prioriza o total efetivamente pago; senão usa o valor do serviço.
+            const totalPagoNum = parseFloat(ag?.totalPago) || 0;
+            const valorServicoNum = parseFloat(ag?.valor) || 0;
+            const valorCheckout =
+              totalPagoNum > 0
+                ? totalPagoNum
+                : valorServicoNum > 0
+                  ? valorServicoNum
+                  : null;
             await pushService.notificarEmpresa(empresaId, "checkout", {
               petNome: ag?.pet?.nome || "",
-              horario: ag?.horario || "",
+              horario: pushService.formatarHorarioBrasilia(momentoAcao),
+              valor: valorCheckout,
             });
           }
         } catch (e) {
@@ -891,7 +906,7 @@ router.patch("/:id/status", async (req, res) => {
           if (empresaId) {
             await pushService.notificarEmpresa(empresaId, "checkin_pet", {
               petNome: ag?.pet?.nome || "",
-              horario: ag?.horario || "",
+              horario: pushService.formatarHorarioBrasilia(momentoAcao),
             });
           }
         } catch (e) {

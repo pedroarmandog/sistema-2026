@@ -369,7 +369,9 @@ exports.criarVenda = async (req, res) => {
               : null;
             valorTotal = totais?.final || totais?.totalFinal || totais?.total || venda.valor || 0;
           } catch (_) {}
-          const horario = venda.data ? new Date(venda.data).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
+          const horario = venda.data
+            ? pushService.formatarHorarioBrasilia(venda.data, false)
+            : "";
           await pushService.notificarEmpresa(empresaId, "nova_venda", {
             clienteNome: venda.cliente || "",
             total: valorTotal,
@@ -442,7 +444,9 @@ exports.atualizarVenda = async (req, res) => {
               : null;
             valorTotal = totais?.final || totais?.totalFinal || totais?.total || vendaAtualizada.valor || 0;
           } catch (_) {}
-          const horario = vendaAtualizada.data ? new Date(vendaAtualizada.data).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
+          const horario = vendaAtualizada.data
+            ? pushService.formatarHorarioBrasilia(vendaAtualizada.data, false)
+            : "";
           await pushService.notificarEmpresa(empresaId, "nova_venda", {
             clienteNome: vendaAtualizada.cliente || "",
             total: valorTotal,

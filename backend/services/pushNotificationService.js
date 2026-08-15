@@ -48,6 +48,32 @@ function _configurarVAPID() {
 // Configurar ao carregar o módulo
 const _vapidConfigurado = _configurarVAPID();
 
+// ── Helpers auxiliares ────────────────────────────────────
+
+/**
+ * Formata uma data/instante no fuso de Brasília (America/Sao_Paulo).
+ * Usa Intl com timeZone explícito — nunca soma/subtrai horas manualmente.
+ * @param {Date|string|number|null|undefined} data Instante a formatar
+ * @param {boolean} comSegundos true = HH:MM:SS, false = HH:MM
+ * @returns {string} horário formatado ou "" quando inválido/ausente
+ */
+function formatarHorarioBrasilia(data, comSegundos = true) {
+  if (!data) return "";
+  const d = new Date(data);
+  if (isNaN(d.getTime())) return "";
+  try {
+    return new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      hour: "2-digit",
+      minute: "2-digit",
+      ...(comSegundos ? { second: "2-digit" } : {}),
+      hourCycle: "h23",
+    }).format(d);
+  } catch (e) {
+    return "";
+  }
+}
+
 // ── Payloads por evento ───────────────────────────────────
 const PAYLOADS = {
   novo_agendamento: (dados) => ({
@@ -70,15 +96,23 @@ const PAYLOADS = {
     requireInteraction: true,
   }),
 
-  checkout: (dados) => ({
-    title: "✅ Check-out Realizado",
-    body: dados.petNome
-      ? `${dados.petNome} realizou check-out${dados.horario ? " às " + dados.horario : ""}`
-      : "Um pet realizou check-out",
-    tag: "checkout",
-    data: { page: "agenda" },
-    requireInteraction: true,
-  }),
+  checkout: (dados) => {
+    const linhaValor = dados.valor
+      ? `\nValor: R$ ${Number(dados.valor).toLocaleString("pt-BR", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}`
+      : "";
+    return {
+      title: "✅ Check-out Realizado",
+      body: dados.petNome
+        ? `${dados.petNome} realizou check-out${dados.horario ? " às " + dados.horario : ""}${linhaValor}`
+        : "Um pet realizou check-out",
+      tag: "checkout",
+      data: { page: "agenda" },
+      requireInteraction: true,
+    };
+  },
 
   servico_concluido: (dados) => ({
     title: "✅ Serviço Concluído",
@@ -328,4 +362,5 @@ module.exports = {
   notificarEmpresa,
   notificarUsuario,
   getVapidPublicKey,
+  formatarHorarioBrasilia,
 };
