@@ -1595,6 +1595,17 @@ async function runFiscalMigrations() {
       if (NotaFiscal?.sync) await NotaFiscal.sync();
     } catch (e) {}
 
+    // Garantir tabela essencial do financeiro (contas_receber).
+    // Em produção o AUTO_SYNC fica desabilitado, então a tabela é criada
+    // aqui no startup caso não exista (sync() sem alter é idempotente).
+    try {
+      const ContaReceber = require("./models/ContaReceber");
+      if (ContaReceber?.sync) await ContaReceber.sync();
+      console.log("  ✅ Tabela contas_receber garantida/criada");
+    } catch (e) {
+      console.warn("  ⚠️ contas_receber:", e.message);
+    }
+
     console.log("✅ Migrações fiscais verificadas!");
   } catch (err) {
     console.warn("⚠️ Migrações fiscais:", err.message);
