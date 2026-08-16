@@ -261,6 +261,14 @@ body {
   border-left-color: var(--border-active);
 }
 
+.submenu-item.active {
+  background: var(--overlay-light);
+  color: white;
+  border-left-color: var(--border-active);
+  border-left-width: 3px;
+  font-weight: 600;
+}
+
 .submenu-item span {
   margin-left: 10px;
 }

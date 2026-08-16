@@ -113,6 +113,9 @@ document.addEventListener("DOMContentLoaded", function () {
   // Limpar estado anterior para evitar conflitos
   limparEstadoSubmenus();
 
+  // Garantir itens fiscais no menu (Central Fiscal e Configuração Fiscal) — global
+  garantirItensFiscaisNoMenu();
+
   // Menu toggle para sidebar
   const menuToggle = document.querySelector(".menu-toggle");
   const sidebar = document.querySelector(".sidebar");
@@ -1610,6 +1613,70 @@ function limparEstadoSubmenus() {
   // Estado mantido apenas em memória (sem localStorage)
 }
 
+// ── Itens fiscais no menu (integração Central Fiscal + Configuração Fiscal) ──
+// Inseridos abaixo de "Cores" em TODOS os #configuracaoSubmenu, de forma
+// idempotente — esse é o ponto único que mantém o menu global consistente,
+// sem duplicar código em cada página.
+function garantirItensFiscaisNoMenu() {
+  try {
+    const itensFiscais = [
+      { href: "/fiscal/central-fiscal.html", label: "Central Fiscal" },
+      { href: "/configuracoes/configuracao-fiscal.html", label: "Configuração Fiscal" },
+    ];
+
+    document.querySelectorAll("#configuracaoSubmenu").forEach((submenu) => {
+      if (submenu.dataset.fiscalItensInjetados === "1") return;
+
+      const links = Array.prototype.slice.call(submenu.querySelectorAll("a"));
+      const temCentral = links.some((a) =>
+        (a.getAttribute("href") || "").includes("central-fiscal"),
+      );
+      const temConfig = links.some((a) =>
+        (a.getAttribute("href") || "").includes("configuracao-fiscal"),
+      );
+      if (temCentral && temConfig) {
+        submenu.dataset.fiscalItensInjetados = "1";
+        return;
+      }
+
+      // Inserir logo abaixo do item "Cores" (ou no fim, se "Cores" não existir)
+      let refItem = null;
+      links.forEach((a) => {
+        if (/^Cores$/i.test((a.textContent || "").trim())) refItem = a;
+      });
+
+      itensFiscais.forEach((item) => {
+        const a = document.createElement("a");
+        a.className = "submenu-item";
+        a.href = item.href;
+
+        const icone = document.createElement("i");
+        icone.className = item.href.includes("central-fiscal")
+          ? "fas fa-file-invoice"
+          : "fas fa-gears";
+        icone.style.marginRight = "8px";
+
+        const sp = document.createElement("span");
+        sp.textContent = item.label;
+
+        a.appendChild(icone);
+        a.appendChild(sp);
+
+        if (refItem) {
+          refItem.parentNode.insertBefore(a, refItem.nextSibling);
+          refItem = a;
+        } else {
+          submenu.appendChild(a);
+        }
+      });
+
+      submenu.dataset.fiscalItensInjetados = "1";
+    });
+  } catch (e) {
+    console.warn("garantirItensFiscaisNoMenu:", e && e.message);
+  }
+}
+
 function detectarEAbrirSubmenuAtual() {
   const paginaAtual = window.location.pathname.split("/").pop() || "index.html";
   console.log("Página atual detectada:", paginaAtual);
@@ -1633,6 +1700,10 @@ function detectarEAbrirSubmenuAtual() {
 
     // Páginas do Painel
     "dashboard.html": "painel",
+
+    // Módulo Fiscal
+    "central-fiscal.html": "configuracao",
+    "configuracao-fiscal.html": "configuracao",
   };
 
   const submenuParaAbrir = mapeamentoPaginas[paginaAtual];
@@ -1713,6 +1784,10 @@ function destacarSecaoAtiva() {
 
     // Dashboard
     "dashboard.html": "dashboard",
+
+    // Módulo Fiscal
+    "central-fiscal.html": "configuracaoMenuItem",
+    "configuracao-fiscal.html": "configuracaoMenuItem",
   };
 
   const itemParaDestacar = mapeamentoPaginas[paginaAtual];
@@ -1728,6 +1803,29 @@ function destacarSecaoAtiva() {
       // Adicionar classe active ao item atual
       menuItem.classList.add("active");
       console.log(`Item ${itemParaDestacar} marcado como ativo`);
+    }
+  }
+
+  // Páginas fiscais: abrir a seção Configuração e destacar o subitem específico
+  if (paginaAtual === "central-fiscal.html" || paginaAtual === "configuracao-fiscal.html") {
+    try {
+      abrirSubmenuEspecifico("configuracao");
+    } catch (e) {
+      console.warn("Erro ao abrir submenu Configuração", e);
+    }
+    try {
+      const linkSub = document.querySelector(
+        '#configuracaoSubmenu a[href*="' + paginaAtual + '"]',
+      );
+      if (linkSub) {
+        document.querySelectorAll(".submenu-item").forEach((el) => {
+          el.classList.remove("active");
+        });
+        linkSub.classList.add("active");
+        console.log(`Subitem fiscal ${paginaAtual} marcado como ativo`);
+      }
+    } catch (e) {
+      console.warn("Erro ao destacar item fiscal", e);
     }
   }
 }

@@ -515,6 +515,8 @@ let permissions = {
     "configuracoes.formularios": true,
     "configuracoes.feriado": true,
     "configuracoes.ip": true,
+    "configuracoes.central-fiscal": true,
+    "gerenciar_configuracao_fiscal": true,
   },
   usuarios: {},
 };
