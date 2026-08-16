@@ -76,7 +76,21 @@ async function getConfiguracao(req, res) {
 async function salvarConfiguracao(req, res) {
   try {
     const empresa_id = req.user.empresaId;
-    const dados = { ...req.body, empresa_id };
+
+    const normalizarOpcional = (valor) => {
+      return valor === "" || valor === undefined ? null : valor;
+    };
+
+    const dados = {
+      ...req.body,
+      empresa_id,
+      provedor_api: normalizarOpcional(req.body.provedor_api),
+      token_api: normalizarOpcional(req.body.token_api),
+      certificado_digital: normalizarOpcional(req.body.certificado_digital),
+      senha_certificado_hash: normalizarOpcional(req.body.senha_certificado_hash),
+      municipio_ibge: normalizarOpcional(req.body.municipio_ibge),
+      cfop_padrao_servico: normalizarOpcional(req.body.cfop_padrao_servico),
+    };
 
     // Remover campos que não devem ser gravados diretamente sem criptografia
     // (proteção enquanto criptografia não está implementada)
