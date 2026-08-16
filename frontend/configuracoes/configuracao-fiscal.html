@@ -18,6 +18,437 @@
     <link rel="stylesheet" href="../colors.css" />
     <link rel="stylesheet" href="../dashboard.css" />
     <style>
+      /* Importar cores globais */
+      @import url("./colors.css");
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background-color: var(--bg-body);
+        color: var(--text-primary);
+      }
+          /* Sidebar */
+    .sidebar {
+      position: fixed;
+      left: 0;
+      top: 0;
+      width: 120px; /* diminuído para ficar mais compacto */
+      height: 100vh;
+      background: var(--bg-sidebar);
+      color: white;
+      overflow-x: hidden !important; /* remove scroll horizontal */
+      z-index: 1000;
+      transition:
+        transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+        width 0.25s ease;
+      transform: translateX(0);
+    }
+
+    .sidebar.collapsed {
+      transform: translateX(-100%);
+    }
+
+    .menu-toggle {
+      background: none;
+      border: none;
+      color: var(--text-primary);
+      font-size: 20px;
+      cursor: pointer;
+      padding: 10px;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 44px;
+      height: 44px;
+      margin-right: 15px;
+    }
+
+    .menu-toggle:hover {
+      background: var(--bg-light);
+      color: var(--text-link);
+      transform: scale(1.05);
+    }
+
+    .menu-toggle:active {
+      transform: scale(0.95);
+    }
+
+    /* Centraliza o bloco de logo no sidebar sem alterar tamanho da imagem */
+    .logo {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 6px 0; /* reduzir espaço superior para subir os ícones */
+    }
+
+    .logo-pet-cria {
+      height: 36px; /* diminuir um pouco a logo para caber melhor */
+      border-radius: 6px;
+      margin: 2px auto 4px auto; /* reduzir margem inferior para aproximar itens */
+    }
+
+    .logo i {
+      font-size: 24px;
+      color: var(--color-primary-light);
+    }
+
+    .sidebar-nav {
+      padding: 6px 0;
+    }
+
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px; /* aumentar espaço entre ícone e texto */
+      padding: 15px 8px; /* aumentar espaçamento vertical */
+      color: var(--text-sidebar);
+      text-decoration: none;
+      transition: all 0.22s ease;
+      border-left: 0;
+      min-height: 58px; /* aumentar altura mínima */
+    }
+
+    /* Hover com caixa arredondada: usamos um pseudo-elemento para desenhar
+      o fundo arredondado atrás do conteúdo sem alterar o fluxo/HTML. Isso
+      garante que o efeito cubra ícone+texto e mantenha o alinhamento. */
+    .nav-item {
+      position: relative;
+      z-index: 1;
+    }
+    .nav-item::before {
+      content: "";
+      position: absolute;
+      left: 8px;
+      right: 8px;
+      top: 8px;
+      bottom: 8px;
+      border-radius: 12px;
+      background: transparent;
+      transition:
+        background 180ms ease,
+        transform 180ms ease,
+        box-shadow 180ms ease;
+      z-index: 0;
+    }
+    .nav-item > * {
+      position: relative;
+      z-index: 2; /* conteúdo acima do pseudo-fundo */
+    }
+    .nav-item:hover::before {
+      background: var(--overlay-light); /* leve overlay definido no CSS */
+      transform: translateY(-2px);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+    }
+    .nav-item:hover {
+      color: white;
+    }
+
+    .nav-item.active {
+      background-color: transparent;
+      color: white;
+    }
+
+    .nav-item i {
+      width: auto;
+      font-size: 22px; /* ícones um pouco menores para caber mais itens */
+      display: block;
+    }
+
+    .nav-item span {
+      display: block;
+      font-size: 13px; /* aumentar levemente a fonte dos rótulos */
+      line-height: 1.1;
+      margin-top: 6px;
+      text-align: center;
+      white-space: nowrap;
+      font-weight: 600; /* deixar mais gordinho */
+    }
+
+    /* Submenu Styles */
+    .nav-item-with-submenu {
+      position: relative;
+    }
+    /* Esconder setinhas de submenu (remover chevrons que aparecem abaixo)
+      Aplicar !important para garantir que desapareçam em todas as páginas
+      que importam este CSS. */
+    .nav-item .submenu-arrow {
+      display: none !important;
+    }
+
+    .nav-item-with-submenu.open .submenu-arrow {
+      display: none !important;
+      transform: none !important;
+    }
+
+    /* Submenu como painel lateral à direita do sidebar */
+    /* Painel lateral: usar position:fixed para evitar clipping por overflow do sidebar
+      e garantir que o painel fique visível ao lado da sidebar mesmo quando a
+      sidebar tem overflow oculto. Também adicionamos um destaque visual temporário
+      para facilitar o debug (remover se tudo funcionar). */
+    .nav-item-with-submenu .submenu {
+      position: fixed;
+      left: 140px; /* corresponde à largura atual da sidebar */
+      top: 0;
+      width: 240px; /* largura do painel lateral (reduzida) */
+      height: 100vh; /* painel ocupa altura completa */
+      max-height: none;
+      overflow-y: auto;
+      background: var(--bg-sidebar); /* usar o mesmo gradiente do sidebar */
+      transition: none;
+      margin: 0;
+      border-radius: 0 6px 6px 0;
+      display: none;
+      padding: 20px 18px;
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
+      z-index: 2500; /* maior que o sidebar para garantir visibilidade */
+    }
+
+    /* Quando o submenu for movido para o body, aplicamos esta classe para garantir
+      que ocupe toda a altura da viewport e mantenha o mesmo background do sidebar. */
+    .submenu-fixed {
+      position: fixed !important;
+      top: 0 !important;
+      height: 100vh !important;
+      overflow-y: auto !important;
+      width: 240px !important;
+      padding: 20px 18px !important;
+      background: var(--bg-sidebar) !important;
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18) !important;
+      border-radius: 0 6px 6px 0 !important;
+      z-index: 2500 !important;
+      display: flex !important;
+      flex-direction: column !important;
+    }
+
+    .submenu-fixed-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+      color: var(--text-white);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+    }
+    .submenu-fixed-header-title {
+      color: var(--btn-success);
+      font-size: 15px;
+    }
+
+    /* Mostrar painel ao hover ou quando a classe .open for aplicada via JS */
+    .nav-item-with-submenu:hover > .submenu,
+    .nav-item-with-submenu.open > .submenu {
+      display: block;
+    }
+
+    .submenu.open {
+      display: block;
+    }
+
+    .submenu-item {
+      display: flex;
+      align-items: center;
+      padding: 10px 20px;
+      color: #ffffff; /* forçar branco para legibilidade */
+      text-decoration: none;
+      font-size: 14px;
+      transition: all 0.2s ease;
+      border-left: 2px solid transparent;
+    }
+
+    .submenu-item:hover {
+      background: var(--overlay-light);
+      color: white;
+      border-left-color: var(--border-active);
+    }
+
+    .submenu-item span {
+      margin-left: 10px;
+    }
+    
+
+    /* Main Content */
+    .main-content {
+      margin-left: 110px;
+      padding-top: 64px; /* altura do header fixo */
+      min-height: 100vh;
+      transition: margin-left 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      position: relative;
+      width: calc(100% - 110px);
+    }
+
+    .main-content.sidebar-collapsed {
+      margin-left: 0;
+      width: 100%;
+    }
+
+    /* Header */
+    .header {
+      background: var(--bg-white);
+      padding: 15px 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: var(--shadow-medium);
+      position: fixed;
+      top: 0;
+      left: 110px; /* acompanha a largura da sidebar */
+      right: 0;
+      z-index: 100;
+      transition: left 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    }
+
+    /* Quando sidebar recolhe, header ocupa a largura total */
+    .main-content.sidebar-collapsed .header {
+      left: 0;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .header-left h1 {
+      margin: 0;
+      font-size: 24px;
+      color: var(--text-primary);
+    }
+
+    .header h1 {
+      font-size: 24px;
+      color: var(--bg-sidebar-start);
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    /* Calendar Widget */
+    .calendar-widget {
+      position: relative;
+    }
+
+    .btn-calendar {
+      background: var(--bg-card);
+      border: 2px solid var(--border-primary);
+      color: var(--text-primary);
+      padding: 10px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 44px;
+      height: 44px;
+    }
+
+    .btn-calendar:hover {
+      background: var(--btn-primary);
+      color: white;
+      border-color: var(--btn-primary);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(44, 90, 160, 0.2);
+    }
+
+    .btn-calendar:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 6px rgba(44, 90, 160, 0.2);
+    }
+
+    .btn-primary {
+      background: var(--btn-success);
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: background-color 0.3s ease;
+    }
+
+    .btn-primary:hover {
+      background: var(--btn-success-hover);
+    }
+
+    .btn-primary-small {
+      background: var(--btn-success);
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background-color 0.3s ease;
+      font-size: 14px;
+    }
+
+    .btn-primary-small:hover {
+      background: #229954;
+    }
+
+    .search-box {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .search-box i {
+      position: absolute;
+      left: 12px;
+      color: #999;
+    }
+
+    .search-box input {
+      padding: 10px 15px 10px 40px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      width: 300px;
+      font-size: 14px;
+    }
+
+    .user-menu {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      padding: 8px 12px;
+      border-radius: 6px;
+      transition: background-color 0.3s ease;
+    }
+
+    .user-menu:hover {
+      background-color: #f8f9fa;
+    }
+
+    .user-menu i {
+      font-size: 24px;
+      color: #3498db;
+    }
       .fiscal-section {
         background: #fff;
         border-radius: 8px;
@@ -692,6 +1123,396 @@
         </div>
       </nav>
     </div>
+    
+    <script src="logo-manager.js"></script>
+    <script>
+      // Toggle para submenu aninhado à esquerda (Item -> Novo)
+      (function () {
+        var leftBtn = document.getElementById("leftBtnNovo");
+        var leftSub = document.getElementById("leftSubNovo");
+        var leftCaret = document.getElementById("leftCaretNovo");
+        if (leftBtn && leftSub) {
+          leftBtn.addEventListener("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var open =
+              leftSub.style.display === "block" ||
+              leftSub.style.display === "flex";
+            leftSub.style.display = open ? "none" : "block";
+            if (leftCaret) leftCaret.innerText = open ? "▼" : "▲";
+          });
+        }
+        // Toggle para submenu aninhado Estoque
+        var leftBtnEst = document.getElementById("leftBtnEstoque");
+        var leftSubEst = document.getElementById("leftSubEstoque");
+        var leftCaretEst = document.getElementById("leftCaretEstoque");
+        if (leftBtnEst && leftSubEst) {
+          leftBtnEst.addEventListener("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var open =
+              leftSubEst.style.display === "block" ||
+              leftSubEst.style.display === "flex";
+            leftSubEst.style.display = open ? "none" : "block";
+            if (leftCaretEst) leftCaretEst.innerText = open ? "▼" : "▲";
+          });
+        }
+        // Toggle para submenu aninhado Clínica
+        var leftBtnClin = document.getElementById("leftBtnClinica");
+        var leftSubClin = document.getElementById("leftSubClinica");
+        var leftCaretClin = document.getElementById("leftCaretClinica");
+        if (leftBtnClin && leftSubClin) {
+          leftBtnClin.addEventListener("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var open =
+              leftSubClin.style.display === "block" ||
+              leftSubClin.style.display === "flex";
+            leftSubClin.style.display = open ? "none" : "block";
+            if (leftCaretClin) leftCaretClin.innerText = open ? "▼" : "▲";
+          });
+        }
+        // Toggle para submenus em Atendimento: Vendas, Caixa, Relatórios
+        var attBtnVendas = document.getElementById("attBtnVendas");
+        var attSubVendas = document.getElementById("attSubVendas");
+        var attCaretVendas = document.getElementById("attCaretVendas");
+        if (attBtnVendas && attSubVendas) {
+          attBtnVendas.addEventListener("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var open =
+              attSubVendas.style.display === "block" ||
+              attSubVendas.style.display === "flex";
+            attSubVendas.style.display = open ? "none" : "block";
+            if (attCaretVendas) attCaretVendas.innerText = open ? "▼" : "▲";
+          });
+        }
+
+        var attBtnCaixa = document.getElementById("attBtnCaixa");
+        var attSubCaixa = document.getElementById("attSubCaixa");
+        var attCaretCaixa = document.getElementById("attCaretCaixa");
+        if (attBtnCaixa && attSubCaixa) {
+          attBtnCaixa.addEventListener("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var open =
+              attSubCaixa.style.display === "block" ||
+              attSubCaixa.style.display === "flex";
+            attSubCaixa.style.display = open ? "none" : "block";
+            if (attCaretCaixa) attCaretCaixa.innerText = open ? "▼" : "▲";
+          });
+        }
+
+        var attBtnRel = document.getElementById("attBtnRelatorios");
+        var attSubRel = document.getElementById("attSubRelatorios");
+        var attCaretRel = document.getElementById("attCaretRel");
+        if (attBtnRel && attSubRel) {
+          attBtnRel.addEventListener("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var open =
+              attSubRel.style.display === "block" ||
+              attSubRel.style.display === "flex";
+            attSubRel.style.display = open ? "none" : "block";
+            if (attCaretRel) attCaretRel.innerText = open ? "▼" : "▲";
+          });
+        }
+        // Toggle para submenu aninhado em Compras: Relatórios
+        var compBtnRel = document.getElementById("compBtnRelatorios");
+        var compSubRel = document.getElementById("compSubRelatorios");
+        var compCaretRel = document.getElementById("compCaretRel");
+        if (compBtnRel && compSubRel) {
+          compBtnRel.addEventListener("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var open =
+              compSubRel.style.display === "block" ||
+              compSubRel.style.display === "flex";
+            compSubRel.style.display = open ? "none" : "block";
+            if (compCaretRel) compCaretRel.innerText = open ? "▼" : "▲";
+          });
+        }
+        // Toggle para submenus em Financeiro
+        var finBtnReceber = document.getElementById("finBtnReceber");
+        var finSubReceber = document.getElementById("finSubReceber");
+        var finCaretReceber = document.getElementById("finCaretReceber");
+        if (finBtnReceber && finSubReceber) {
+          finBtnReceber.addEventListener("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var open =
+              finSubReceber.style.display === "block" ||
+              finSubReceber.style.display === "flex";
+            finSubReceber.style.display = open ? "none" : "block";
+            if (finCaretReceber) finCaretReceber.innerText = open ? "▼" : "▲";
+          });
+        }
+
+        var finBtnPagar = document.getElementById("finBtnPagar");
+        var finSubPagar = document.getElementById("finSubPagar");
+        var finCaretPagar = document.getElementById("finCaretPagar");
+        if (finBtnPagar && finSubPagar) {
+          finBtnPagar.addEventListener("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var open =
+              finSubPagar.style.display === "block" ||
+              finSubPagar.style.display === "flex";
+            finSubPagar.style.display = open ? "none" : "block";
+            if (finCaretPagar) finCaretPagar.innerText = open ? "▼" : "▲";
+          });
+        }
+
+        var finBtnConta = document.getElementById("finBtnConta");
+        var finSubConta = document.getElementById("finSubConta");
+        var finCaretConta = document.getElementById("finCaretConta");
+        if (finBtnConta && finSubConta) {
+          finBtnConta.addEventListener("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var open =
+              finSubConta.style.display === "block" ||
+              finSubConta.style.display === "flex";
+            finSubConta.style.display = open ? "none" : "block";
+            if (finCaretConta) finCaretConta.innerText = open ? "▼" : "▲";
+          });
+        }
+
+        var finBtnCartao = document.getElementById("finBtnCartao");
+        var finSubCartao = document.getElementById("finSubCartao");
+        var finCaretCartao = document.getElementById("finCaretCartao");
+        if (finBtnCartao && finSubCartao) {
+          finBtnCartao.addEventListener("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var open =
+              finSubCartao.style.display === "block" ||
+              finSubCartao.style.display === "flex";
+            finSubCartao.style.display = open ? "none" : "block";
+            if (finCaretCartao) finCaretCartao.innerText = open ? "▼" : "▲";
+          });
+        }
+
+        var finBtnRel = document.getElementById("finBtnRelatorios");
+        var finSubRel = document.getElementById("finSubRelatorios");
+        var finCaretRel = document.getElementById("finCaretRel");
+        if (finBtnRel && finSubRel) {
+          finBtnRel.addEventListener("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var open =
+              finSubRel.style.display === "block" ||
+              finSubRel.style.display === "flex";
+            finSubRel.style.display = open ? "none" : "block";
+            if (finCaretRel) finCaretRel.innerText = open ? "▼" : "▲";
+          });
+        }
+
+        // fechar ao clicar em outro lugar da sidebar (mantém outras opções)
+        document.addEventListener("click", function (e) {
+          if (!e.target.closest("#itemSubmenu")) {
+            if (leftSub) leftSub.style.display = "none";
+            if (leftCaret) leftCaret.innerText = "▼";
+            // também fechar o submenu pai (#itemSubmenu) se estiver aberto
+            try {
+              var parentSub = document.getElementById("itemSubmenu");
+              if (parentSub) {
+                if (
+                  parentSub.classList &&
+                  parentSub.classList.contains("open")
+                ) {
+                  parentSub.classList.remove("open");
+                  try {
+                    restoreSubmenu(parentSub);
+                  } catch (e) {}
+                } else {
+                  parentSub.style.display = "none";
+                }
+              }
+            } catch (e) {
+              console.warn("Erro ao fechar submenu pai", e);
+            }
+          }
+        });
+      })();
+    </script>
+    <script>
+      // Handler global de click fora que fecha dropdowns e painéis abertos
+      (function () {
+        function closeAllMenus() {
+          try {
+            var leftSub = document.getElementById("leftSubNovo");
+            var leftCaret = document.getElementById("leftCaretNovo");
+            if (leftSub) leftSub.style.display = "none";
+            if (leftCaret) leftCaret.innerText = "▼";
+            // reset carets dos submenus de Atendimento
+            try {
+              var aV = document.getElementById("attCaretVendas");
+              if (aV) aV.innerText = "▼";
+            } catch (e) {}
+            try {
+              var aC = document.getElementById("attCaretCaixa");
+              if (aC) aC.innerText = "▼";
+            } catch (e) {}
+            try {
+              var aR = document.getElementById("attCaretRel");
+              if (aR) aR.innerText = "▼";
+            } catch (e) {}
+            // reset caret do submenu de Compras -> Relatórios
+            try {
+              var cR = document.getElementById("compCaretRel");
+              if (cR) cR.innerText = "▼";
+            } catch (e) {}
+            // reset carets dos submenus de Financeiro
+            try {
+              var fR1 = document.getElementById("finCaretReceber");
+              if (fR1) fR1.innerText = "▼";
+            } catch (e) {}
+            try {
+              var fR2 = document.getElementById("finCaretPagar");
+              if (fR2) fR2.innerText = "▼";
+            } catch (e) {}
+            try {
+              var fR3 = document.getElementById("finCaretConta");
+              if (fR3) fR3.innerText = "▼";
+            } catch (e) {}
+            try {
+              var fR4 = document.getElementById("finCaretCartao");
+              if (fR4) fR4.innerText = "▼";
+            } catch (e) {}
+            try {
+              var fR5 = document.getElementById("finCaretRel");
+              if (fR5) fR5.innerText = "▼";
+            } catch (e) {}
+
+            // fechar todos os .submenu e remover classe open
+            document.querySelectorAll(".submenu").forEach(function (s) {
+              try {
+                s.classList.remove("open");
+              } catch (e) {}
+              try {
+                restoreSubmenu(s);
+              } catch (e) {}
+              s.style.display = "none";
+            });
+
+            // remover open dos containers
+            document
+              .querySelectorAll(".nav-item-with-submenu.open")
+              .forEach(function (c) {
+                c.classList.remove("open");
+              });
+
+            // fechar painéis
+            document.querySelectorAll(".panel").forEach(function (p) {
+              p.style.display = "none";
+            });
+          } catch (e) {
+            console.warn("closeAllMenus error", e);
+          }
+        }
+
+        document.addEventListener("click", function (ev) {
+          // esperar handlers internos processarem (por exemplo, abrir menus)
+          setTimeout(function () {
+            // se o clique ocorreu dentro da sidebar ou dentro de um submenu/painel, não fecha
+            if (
+              ev.target.closest(".sidebar") ||
+              ev.target.closest(".submenu") ||
+              ev.target.closest(".panel")
+            )
+              return;
+            closeAllMenus();
+          }, 20);
+        });
+      })();
+    </script>
+
+    <!-- Pedido de Venda: toast simples (azul claro) -->
+    <style>
+      .pedido-toast-container {
+        position: fixed;
+        top: 18px;
+        right: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        z-index: 99999;
+        pointer-events: none;
+      }
+      .pedido-toast {
+        pointer-events: auto;
+        background: linear-gradient(180deg, #e8f6ff, #d3efff);
+        color: #023047;
+        padding: 10px 14px;
+        border-radius: 8px;
+        box-shadow: 0 8px 24px rgba(2, 16, 26, 0.12);
+        min-width: 220px;
+        max-width: 380px;
+        font-weight: 300;
+        opacity: 0;
+        transform: translateY(-6px) scale(0.98);
+        transition:
+          opacity 0.18s,
+          transform 0.18s;
+      }
+    </style>
+    <script>
+      (function () {
+        if (window.__pedidoToastInstalled) return;
+        window.__pedidoToastInstalled = true;
+        function showPedidoToast(message) {
+          var c = document.querySelector(".pedido-toast-container");
+          if (!c) {
+            c = document.createElement("div");
+            c.className = "pedido-toast-container";
+            document.body.appendChild(c);
+          }
+          var t = document.createElement("div");
+          t.className = "pedido-toast";
+          t.textContent = message;
+          c.appendChild(t);
+          requestAnimationFrame(function () {
+            t.style.opacity = "1";
+            t.style.transform = "none";
+          });
+          setTimeout(function () {
+            t.style.opacity = "0";
+            t.style.transform = "translateY(-6px) scale(0.98)";
+            setTimeout(function () {
+              try {
+                t.remove();
+              } catch (e) {}
+            }, 220);
+          }, 5000);
+        }
+
+        document.addEventListener(
+          "click",
+          function (e) {
+            try {
+              var a = e.target && e.target.closest && e.target.closest("a");
+              if (!a) return;
+              var txt = (a.textContent || "").trim();
+              var href = a.getAttribute && (a.getAttribute("href") || "");
+              if (
+                txt === "Pedido de Venda" ||
+                (href && href.indexOf("pedido-venda") !== -1)
+              ) {
+                e.preventDefault();
+                e.stopPropagation();
+                showPedidoToast(
+                  "Pedido de Venda ainda está sendo desenvolvido",
+                );
+              }
+            } catch (err) {
+              /* silencioso */
+            }
+          },
+          true,
+        ); // usar capture para garantir execução antes de handlers que fazem stopPropagation
+      })();
+    </script>
 
     <!-- Main Content -->
     <div class="main-content">
@@ -778,7 +1599,7 @@
       </header>
 
 
-    <div class="main-content">
+    <div class="page-header-wrap">
       <div
         class="page-header"
         style="
@@ -1190,5 +2011,10 @@
 
       document.addEventListener("DOMContentLoaded", carregarConfiguracao);
     </script>
+    
+  <!-- Scripts do menu/logo/calendário — mesmo padrão das demais páginas (dashboard) -->
+    <script src="../dashboard.js"></script>
+    <script src="../logo-manager.js"></script>
+    <script src="../novo-atendimento-global.js"></script>
   </body>
 </html>
