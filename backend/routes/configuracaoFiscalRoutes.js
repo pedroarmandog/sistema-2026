@@ -8,6 +8,7 @@ const {
   getConfiguracao,
   salvarConfiguracao,
   listarProvedores,
+  getFluxo,
 } = require("../controllers/configuracaoFiscalController");
 
 /**
@@ -36,5 +37,8 @@ router.post(
 
 // Provedores disponíveis
 router.get("/provedores", listarProvedores);
+
+// Fluxo de emissão para o ciclo de venda (somente autenticação)
+router.get("/fluxo", getFluxo);
 
 module.exports = router;

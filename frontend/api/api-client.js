@@ -948,6 +948,56 @@ class ApiClient {
       method: "DELETE",
     });
   }
+
+  // ========================================
+  // FISCAL — FLUXO E NOTAS (integração com o ciclo de venda)
+  // ========================================
+
+  /** Dados mínimos do fluxo fiscal (modo, tipos habilitados) — só auth */
+  static async getFluxoFiscal() {
+    return await this.request("/fiscal/fluxo");
+  }
+
+  /** Notas associadas a uma venda */
+  static async listarNotasPorVenda(vendaId) {
+    return await this.request(`/notas-fiscais/por-venda/${vendaId}`);
+  }
+
+  /** Registra a nota pendente de uma venda sem emitir (modos manual/lote/confirmação) */
+  static async registrarNotaPendente(vendaId) {
+    return await this.request("/notas-fiscais/pendente", {
+      method: "POST",
+      body: JSON.stringify({ venda_id: vendaId }),
+    });
+  }
+
+  /** Emite a nota de uma venda (registra pendente se necessário) */
+  static async emitirNotaPorVenda(vendaId) {
+    return await this.request("/notas-fiscais/emitir", {
+      method: "POST",
+      body: JSON.stringify({ venda_id: vendaId }),
+    });
+  }
+
+  /** Emite uma nota já cadastrada pelo id (Central Fiscal / retentativa) */
+  static async emitirNotaPorId(notaId) {
+    return await this.request(`/notas-fiscais/${notaId}/emitir`, {
+      method: "POST",
+    });
+  }
+
+  /** Emissão em lote — recebe array de ids de notas */
+  static async emitirNotasEmLote(notasIds) {
+    return await this.request("/notas-fiscais/lote-emitir", {
+      method: "POST",
+      body: JSON.stringify({ notas_ids: notasIds }),
+    });
+  }
+
+  /** Resumo de status (Central Fiscal) */
+  static async obterResumoFiscal() {
+    return await this.request("/notas-fiscais/resumo");
+  }
 }
 
 // Exportar para uso global

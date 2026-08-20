@@ -828,6 +828,12 @@
             <a href="/configuracoes/cores.html" class="submenu-item">
               <span>Cores</span>
             </a>
+            <a href="/configuracoes/configuracao-fiscal.html" class="submenu-item">
+              <span>Configuração Fiscal</span>
+            </a>
+            <a href="/fiscal/central-fiscal.html" class="submenu-item">
+              <span>Central Fiscal</span>
+            </a>
           </div>
         </div>
       </nav>
@@ -1411,6 +1417,14 @@
           <i class="fas fa-search"></i> Filtrar
         </button>
         <button class="btn-limpar" id="btnLimpar">Limpar</button>
+        <button
+          class="btn-filtrar"
+          id="btnEmitirPendentes"
+          style="background: #16a34a"
+          title="Tenta emitir as notas pendentes/erro da listagem atual"
+        >
+          <i class="fas fa-paper-plane"></i> Emitir pendentes
+        </button>
       </div>
 
       <!-- Tabela -->
@@ -1551,7 +1565,7 @@
           tbody.innerHTML = data.notas
             .map(function (n) {
               return (
-                "<tr>" +
+                '<tr data-nota-id="' + n.id + '">' +
                 "<td>" +
                 badgeTipo(n.tipo) +
                 "</td>" +
@@ -1574,9 +1588,17 @@
                 (n.ambiente === "producao" ? "🚀 Prod" : "🧪 Homol") +
                 "</span></td>" +
                 '<td><div class="cf-actions">' +
-                '<button class="cf-btn disabled" title="Emitir (disponível futuramente)"><i class="fas fa-paper-plane"></i></button>' +
+                (n.status === "autorizada"
+                  ? '<button class="cf-btn" title="Imprimir DANFE" onclick="imprimirDanfe(' +
+                    n.id +
+                    ')"><i class="fas fa-file-pdf"></i></button>'
+                  : "") +
+                (["rascunho", "erro", "denegada", "aguardando"].indexOf(n.status) !== -1
+                  ? '<button class="cf-btn" title="Emitir nota" onclick="emitirNota(' +
+                    n.id +
+                    ')"><i class="fas fa-paper-plane"></i></button>'
+                  : "") +
                 '<button class="cf-btn disabled" title="Download XML (disponível futuramente)"><i class="fas fa-code"></i></button>' +
-                '<button class="cf-btn disabled" title="Download DANFE (disponível futuramente)"><i class="fas fa-file-pdf"></i></button>' +
                 "</div></td>" +
                 "</tr>"
               );
@@ -1621,6 +1643,96 @@
         }
       }
 
+      // ── Ações: emitir nota (individual), imprimir DANFE e emissão em lote ──
+      function emitirNota(notaId) {
+        if (!confirm("Emitir esta nota fiscal agora?")) return;
+        fetch(API + "/api/notas-fiscais/" + notaId + "/emitir", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+        })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (data) {
+            if (data && data.emitida) {
+              alert("✅ Nota emitida com sucesso.");
+            } else {
+              alert(
+                "⚠️ " +
+                  ((data && data.motivo) ||
+                    (data && data.erro) ||
+                    "Emissão não concluída."),
+              );
+            }
+            carregarResumo();
+            carregarNotas(paginaAtual);
+          })
+          .catch(function (e) {
+            alert("Erro ao emitir nota: " + e.message);
+          });
+      }
+
+      function imprimirDanfe(notaId) {
+        window.open(
+          API + "/api/notas-fiscais/" + notaId + "/danfe",
+          "_blank",
+        );
+      }
+
+      function emitirPendentesDaPagina() {
+        var ids = [];
+        document
+          .querySelectorAll(
+            '#cfTableBody .cf-actions button[title="Emitir nota"]',
+          )
+          .forEach(function (b) {
+            var m = (b.getAttribute("onclick") || "").match(
+              /emitirNota\((\d+)\)/,
+            );
+            if (m) ids.push(Number(m[1]));
+          });
+
+        if (!ids.length) {
+          alert("Nenhuma nota pendente/erro na listagem atual.");
+          return;
+        }
+        if (
+          !confirm(
+            "Emitir " +
+              ids.length +
+              " nota(s) pendente(s)?\n\n(Emissão real só ocorre se o provedor fiscal estiver configurado.)",
+          )
+        ) {
+          return;
+        }
+
+        fetch(API + "/api/notas-fiscais/lote-emitir", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ notas_ids: ids }),
+        })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (data) {
+            var msg =
+              "Processadas: " +
+              (data.processadas || 0) +
+              "\nEmitidas: " +
+              (data.emitidas || 0) +
+              "\nCom erro: " +
+              (data.comErro || 0);
+            alert(msg);
+            carregarResumo();
+            carregarNotas(paginaAtual);
+          })
+          .catch(function (e) {
+            alert("Erro na emissão em lote: " + e.message);
+          });
+      }
+
       document
         .getElementById("btnFiltrar")
         .addEventListener("click", function () {
@@ -1640,6 +1752,10 @@
           });
           carregarNotas(1);
         });
+
+      document
+        .getElementById("btnEmitirPendentes")
+        .addEventListener("click", emitirPendentesDaPagina);
 
       document.addEventListener("DOMContentLoaded", function () {
         carregarResumo();

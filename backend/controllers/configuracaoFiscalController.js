@@ -132,8 +132,26 @@ async function listarProvedores(req, res) {
   });
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/fiscal/fluxo
+// Dados mínimos para os fluxos de venda decidirem os botões/regras fiscais.
+// Apenas authUser (sem exigePermissao) para não bloquear operadores de venda.
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function getFluxo(req, res) {
+  try {
+    const { fluxoParaFront } = require("../services/notaFiscalService");
+    const fluxo = await fluxoParaFront(req.user.empresaId);
+    return res.json(fluxo);
+  } catch (err) {
+    console.error("[fiscal/fluxo] GET:", err);
+    return res.status(500).json({ erro: "Erro ao buscar fluxo fiscal" });
+  }
+}
+
 module.exports = {
   getConfiguracao,
   salvarConfiguracao,
   listarProvedores,
+  getFluxo,
 };

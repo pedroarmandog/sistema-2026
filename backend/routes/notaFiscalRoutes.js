@@ -10,6 +10,11 @@ const {
   criar,
   atualizar,
   resumo,
+  registrarPendente,
+  emitirPorVenda,
+  emitirNotaPorId,
+  emitirLote,
+  danfePdf,
 } = require("../controllers/notaFiscalController");
 
 /**
@@ -32,6 +37,14 @@ router.get("/resumo", resumo);
 router.get("/por-venda/:vendaId", buscarPorVenda);
 router.get("/", listar);
 router.get("/:id", buscarPorId);
+
+// Ações de emissão / impressão (integração com o ciclo de venda + Central Fiscal)
+router.post("/emitir", emitirPorVenda);
+router.post("/lote-emitir", emitirLote);
+router.post("/pendente", registrarPendente);
+router.post("/:id/emitir", emitirNotaPorId);
+router.get("/:id/danfe", danfePdf);
+
 router.post("/", criar);
 router.put("/:id", atualizar);
 
