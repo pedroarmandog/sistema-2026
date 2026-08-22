@@ -1,4 +1,4 @@
-﻿"use strict";
+"use strict";
 
 /**
  * notaFiscalService
@@ -151,6 +151,33 @@ async function _marcarErroNota(nota, venda, fase, erro) {
     await venda.save().catch(() => {});
   }
 }
+
+/**
+ * Consulta o provedor algumas vezes até a nota ter desfecho (autorizada ou
+ * cancelada). Retorna o resultado final ou null se continuar processando.
+ * Usado no fluxo assíncrono (ex.: Focus NFe responde "processando_autorizacao").
+ */
+async function _consultarAteFinalizar(
+  service,
+  referencia,
+  maxTentativas = 4,
+  intervaloMs = 2000,
+) {
+  for (let tentativa = 0; tentativa < maxTentativas; tentativa++) {
+    await new Promise((r) => setTimeout(r, intervaloMs));
+    try {
+      const st = await service.consultar(referencia);
+      const status = String((st && st.status) || "");
+      if (["autorizado", "cancelado", "erro_autorizacao"].includes(status)) {
+        return st;
+      }
+    } catch (_) {
+      // 404/instabilidade logo após o envio é comum — segue tentando
+    }
+  }
+  return null;
+}
+
 /**
  * Núcleo da emissão: executa a transmissão via FiscalServiceFactory + payload.
  * Sempre deixa o ciclo da nota em um estado coerente (autorizada/erro).
@@ -217,13 +244,120 @@ async function _emitirNotaRecord(nota) {
       payload = FiscalPayloadBuilder.buildNFe(venda, empresa, config, cliente);
     }
 
+    // Referência única da nota no provedor (usada em consultas/cancelamentos)
+    payload._notaId = nota.id;
+
     // Marca como "aguardando" (Emitindo) antes de chamar o provedor
     await nota
-      .update({ status: "aguardando", numero_requisicao: null })
+      .update({
+        status: "aguardando",
+        numero_requisicao: nota.numero_requisicao ?? null,
+      })
       .catch(() => {});
 
     const service = FiscalServiceFactory.create(config);
-    const resposta = await service.transmitir(payload);
+
+    let resposta = null;
+
+    // Se a nota já tem referência de uma tentativa anterior (enviada e ainda
+    // em processamento), consulta o status atual ANTES de retransmitir —
+    // evita reenviar uma referência já aceita pelo provedor.
+    if (
+      typeof service.consultar === "function" &&
+      nota.numero_requisicao &&
+      !["autorizada", "cancelada", "inutilizada"].includes(nota.status)
+    ) {
+      try {
+        const st = await service.consultar(nota.numero_requisicao);
+        const stStatus = String((st && st.status) || "");
+        if (["autorizado", "cancelado"].includes(stStatus)) {
+          resposta = st; // já tem desfecho — usa direto
+        } else if (stStatus !== "erro_autorizacao") {
+          resposta = st; // ainda processando — segue para o fluxo de espera
+        }
+        // erro_autorizacao → pode reenviar com a mesma referência
+      } catch (_) {
+        resposta = null; // consulta falhou → segue para nova transmissão
+      }
+    }
+
+    // Transmite (apenas se a consulta anterior não trouxe desfecho)
+    if (!resposta) {
+      resposta = await service.transmitir(payload);
+
+      // Fluxo assíncrono: provedor aceitou e está processando na SEFAZ
+      if (
+        ["processando_autorizacao", "aguardando"].includes(
+          String((resposta && resposta.status) || ""),
+        )
+      ) {
+        const referencia =
+          resposta?.ref || resposta?.referencia || resposta?.numero_requisicao;
+        if (referencia) {
+          await nota
+            .update({
+              status: "aguardando",
+              numero_requisicao: String(referencia),
+              resposta_api: resposta.dados || resposta,
+            })
+            .catch(() => {});
+          const final = await _consultarAteFinalizar(
+            service,
+            String(referencia),
+          );
+          if (
+            final &&
+            ["autorizado", "cancelado"].includes(String(final.status))
+          ) {
+            resposta = final;
+          }
+        }
+      }
+    }
+
+    // Ainda em processamento após a espera — mantém "aguardando"
+    if (
+      resposta &&
+      ["processando_autorizacao", "aguardando"].includes(
+        String(resposta.status || ""),
+      )
+    ) {
+      await nota.update({
+        status: "aguardando",
+        numero_requisicao:
+          resposta.ref || resposta.referencia || nota.numero_requisicao,
+        resposta_api: resposta.dados || resposta,
+      });
+      const notaAtualizada = await NotaFiscal.findByPk(nota.id);
+      return {
+        nota: notaAtualizada,
+        emitida: false,
+        status: "aguardando",
+        motivo:
+          "Nota enviada ao provedor e em processamento na SEFAZ. Em alguns segundos, " +
+          "clique em 'Tentar emitir novamente' — o sistema consultará o status e concluirá.",
+      };
+    }
+
+    // Cancelada no provedor (caso raro, em retentativa)
+    if (resposta && String(resposta.status || "") === "cancelado") {
+      await nota.update({
+        status: "cancelada",
+        motivo_cancelamento: "Cancelada no provedor fiscal.",
+        resposta_api: resposta.dados || resposta,
+      });
+      if (venda && venda.status_fiscal !== "emitida") {
+        venda.status_fiscal = "cancelada";
+        await venda.save().catch(() => {});
+      }
+      const notaAtualizada = await NotaFiscal.findByPk(nota.id);
+      return {
+        nota: notaAtualizada,
+        emitida: false,
+        status: "cancelada",
+        motivo: "A nota consta como cancelada no provedor fiscal.",
+      };
+    }
 
     // ── Sucesso real do provedor ──
     const dados =
@@ -235,8 +369,10 @@ async function _emitirNotaRecord(nota) {
     const chave =
       dados.chaveAcesso ||
       dados.chave_acesso ||
+      dados.chave_nfe ||
       dados.chave ||
       resposta?.chaveAcesso ||
+      resposta?.chave_acesso ||
       resposta?.chave ||
       null;
     const protocolo =
@@ -249,6 +385,8 @@ async function _emitirNotaRecord(nota) {
       serie: serie ?? nota.serie,
       chave_acesso: chave || nota.chave_acesso,
       protocolo: protocolo || null,
+      numero_requisicao:
+        resposta?.ref || resposta?.referencia || nota.numero_requisicao,
       xml_autorizado: xml || nota.xml_autorizado,
       data_emissao: new Date(),
       data_autorizacao: new Date(),

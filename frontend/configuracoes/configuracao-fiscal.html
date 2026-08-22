@@ -1669,6 +1669,13 @@
               id="token_api"
               placeholder="Cole o token fornecido pelo provedor"
             />
+            <div
+              class="fiscal-hint"
+              style="font-size: 11px; color: #888; margin-top: 3px"
+            >
+              O token salvo não é reexibido (segurança) — deixe em branco para manter o atual.
+              Use o token do MESMO ambiente selecionado: a homologação possui token próprio no painel do provedor.
+            </div>
           </div>
           <div class="fiscal-field" style="grid-column: span 2">
             <label>Certificado Digital (A1) — Base64</label>
@@ -1698,6 +1705,13 @@
               </option>
               <option value="producao">🚀 Produção</option>
             </select>
+            <div
+              class="fiscal-hint"
+              style="font-size: 11px; color: #888; margin-top: 3px"
+            >
+              Homologação emite notas de TESTE (sem valor fiscal) e exige o token de homologação.
+              Produção emite notas REAIS e exige o token de produção.
+            </div>
           </div>
         </div>
       </div>
@@ -1932,6 +1946,16 @@
               data[id] !== "***"
             ) {
               el.value = data[id];
+            }
+          });
+          // Token/senha salvos vêm mascarados ("***") por segurança:
+          // mantemos o campo em branco e sinalizamos que já existe valor salvo.
+          ["token_api", "senha_certificado_hash"].forEach(function (id) {
+            const el = document.getElementById(id);
+            if (el && data[id] === "***") {
+              el.value = "";
+              el.placeholder =
+                "Já configurado — deixe em branco para manter o valor salvo";
             }
           });
           ["emitir_nfe", "emitir_nfce", "emitir_nfse"].forEach(function (id) {
