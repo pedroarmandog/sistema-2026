@@ -4491,6 +4491,10 @@ async function salvarProduto(e) {
         produtoAtual && produtoAtual.createdAt
           ? produtoAtual.createdAt
           : new Date().toISOString(),
+
+      // Campos fiscais do formulario (NCM/CEST obrigatorios para emissao)
+      ncm: (dados.ncm || "").toString().trim(),
+      cest: (dados.cest || "").toString().trim(),
     };
 
     // Anexar lista completa de códigos de barras (frontend-only field); backend precisa suportar para persistir

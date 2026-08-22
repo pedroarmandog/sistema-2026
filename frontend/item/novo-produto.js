@@ -4888,6 +4888,8 @@ async function salvarProduto(e) {
           : new Date().toISOString(),
 
       // Campos fiscais
+      ncm: (dados.ncm || "").toString().trim(),
+      cest: (dados.cest || "").toString().trim(),
       sku: (dados.sku || "").toString(),
       gtin: (dados.gtin || "").toString(),
       peso: dados.peso ? Number(dados.peso) : null,
