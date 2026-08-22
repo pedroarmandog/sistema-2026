@@ -30,6 +30,7 @@ const {
   Agendamento,
   ConfiguracaoFiscal,
   NotaFiscal,
+  Produto,
 } = require("../models");
 
 const { FiscalPayloadBuilder, FiscalServiceFactory } = require("./fiscal");
@@ -180,6 +181,77 @@ async function _consultarAteFinalizar(
 }
 
 /**
+ * Mescla o cadastro ATUAL dos produtos dentro do snapshot `produto` de cada
+ * item da venda. Função PURA (sem banco) — usada pela enriquecedora e
+ * exportada para testes.
+ *
+ * A venda guarda apenas { nome, id } no snapshot; sem este merge, produtos com
+ * NCM/CEST/CFOP cadastrados DEPOIS da venda não teriam os dados fiscais na
+ * hora da emissão.
+ */
+function _mesclarCadastroNosItens(itens, produtos) {
+  const mapa = new Map();
+  for (const p of Array.isArray(produtos) ? produtos : []) {
+    const idNum = Number(p && p.id);
+    if (Number.isInteger(idNum) && idNum > 0) {
+      mapa.set(idNum, p && p.get ? p.get({ plain: true }) : p);
+    }
+  }
+  if (!mapa.size) return itens;
+
+  for (const it of Array.isArray(itens) ? itens : []) {
+    if (!it || typeof it !== "object") continue;
+    const pid = Number(
+      (it.produto && it.produto.id) ?? it.produtoId ?? it.id,
+    );
+    const cadastro = mapa.get(pid);
+    if (!cadastro) continue;
+    it.produto = {
+      ...(it.produto && typeof it.produto === "object" ? it.produto : {}),
+      ...cadastro,
+    };
+  }
+  return itens;
+}
+
+/**
+ * Enriquece venda.itens com o cadastro atual dos produtos (em memória — não
+ * altera a venda gravada). Chamada antes de montar o payload fiscal.
+ */
+async function _enriquecerItensVendaComCadastro(venda, { produtoModel } = {}) {
+  try {
+    if (!venda) return;
+    const itens = _asArray(venda.itens);
+    if (!itens.length) return;
+
+    const ids = [];
+    for (const it of itens) {
+      const pid = Number(
+        (it && ((it.produto && it.produto.id) ?? it.produtoId ?? it.id)) ||
+          0,
+      );
+      if (Number.isInteger(pid) && pid > 0) ids.push(pid);
+    }
+    if (!ids.length) return;
+
+    const ProdutoModel = produtoModel || Produto;
+    const produtos = await ProdutoModel.findAll({
+      where: { id: { [Op.in]: [...new Set(ids)] } },
+    });
+
+    _mesclarCadastroNosItens(itens, produtos);
+
+    // Reflete em venda.itens quando veio como array (JSON) — sem persistir.
+    if (Array.isArray(venda.itens)) venda.itens = itens;
+  } catch (e) {
+    console.warn(
+      "[fiscal] Falha ao enriquecer itens com cadastro de produtos:",
+      e && e.message,
+    );
+  }
+}
+
+/**
  * Núcleo da emissão: executa a transmissão via FiscalServiceFactory + payload.
  * Sempre deixa o ciclo da nota em um estado coerente (autorizada/erro).
  */
@@ -231,6 +303,13 @@ async function _emitirNotaRecord(nota) {
       venda && venda.clienteId
         ? await Cliente.findByPk(venda.clienteId).catch(() => null)
         : null;
+
+    // Dados fiscais SEMPRE do cadastro atual dos produtos: a venda grava
+    // apenas um snapshot mínimo (nome+id) nos itens; sem isto, produtos com
+    // NCM/CEST/CFOP cadastrados DEPOIS da venda não emitiriam.
+    if (nota.tipo !== "nfse") {
+      await _enriquecerItensVendaComCadastro(venda);
+    }
 
     let payload;
     if (nota.tipo === "nfse") {
@@ -691,4 +770,6 @@ module.exports = {
   emitirNotaPorId,
   emitirLote,
   gerarDanfe,
+  _mesclarCadastroNosItens,
+  _enriquecerItensVendaComCadastro,
 };
