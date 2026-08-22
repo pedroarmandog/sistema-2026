@@ -160,13 +160,14 @@ async function _marcarErroNota(nota, venda, fase, erro) {
 async function _consultarAteFinalizar(
   service,
   referencia,
+  tipoDocumento = "nfe",
   maxTentativas = 4,
   intervaloMs = 2000,
 ) {
   for (let tentativa = 0; tentativa < maxTentativas; tentativa++) {
     await new Promise((r) => setTimeout(r, intervaloMs));
     try {
-      const st = await service.consultar(referencia);
+      const st = await service.consultar(referencia, tipoDocumento);
       const status = String((st && st.status) || "");
       if (["autorizado", "cancelado", "erro_autorizacao"].includes(status)) {
         return st;
@@ -246,6 +247,8 @@ async function _emitirNotaRecord(nota) {
 
     // Referência única da nota no provedor (usada em consultas/cancelamentos)
     payload._notaId = nota.id;
+    // Tipo real do documento (nfe | nfce) — define o endpoint do provedor
+    payload._notaTipo = nota.tipo;
 
     // Marca como "aguardando" (Emitindo) antes de chamar o provedor
     await nota
@@ -268,7 +271,10 @@ async function _emitirNotaRecord(nota) {
       !["autorizada", "cancelada", "inutilizada"].includes(nota.status)
     ) {
       try {
-        const st = await service.consultar(nota.numero_requisicao);
+        const st = await service.consultar(
+          nota.numero_requisicao,
+          nota.tipo,
+        );
         const stStatus = String((st && st.status) || "");
         if (["autorizado", "cancelado"].includes(stStatus)) {
           resposta = st; // já tem desfecho — usa direto
@@ -304,6 +310,7 @@ async function _emitirNotaRecord(nota) {
           const final = await _consultarAteFinalizar(
             service,
             String(referencia),
+            nota.tipo,
           );
           if (
             final &&

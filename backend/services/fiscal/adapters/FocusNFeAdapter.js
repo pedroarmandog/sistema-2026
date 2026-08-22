@@ -221,7 +221,7 @@ static _baseICMS(item, config) {
     return simples ? "102" : "00";
   }
 
-  static montarPayloadNFe(payload, config = null) {
+  static montarPayloadNFe(payload, config = null, tipoDocumento = "nfe") {
     const emitente = (payload && payload.emitente) || {};
     const destinatario = (payload && payload.destinatario) || {};
     const itens = Array.isArray(payload && payload.itens) ? payload.itens : [];
@@ -232,30 +232,42 @@ static _baseICMS(item, config) {
     const endEmit = emitente.endereco || {};
     const endDest = destinatario.endereco || {};
 
-    const cnpjEmitente = _soDigitos(emitente.cnpj);
+    // O cadastro da Empresa aceita CPF (11) ou CNPJ (14) no campo cnpj
+    const docEmit = _soDigitos(emitente.cnpj);
     const docDest = _soDigitos(destinatario.documento);
     const ufEmit = (endEmit.uf || "").toUpperCase();
     const ufDest = (endDest.uf || "").toUpperCase();
     const localDestino = ufEmit && ufEmit === ufDest ? "1" : "2";
 
     const ieDest = _limpar(destinatario.ie);
+    const ehNfce = tipoDocumento === "nfce";
 
     const corpo = {
       natureza_operacao:
         (payload && payload.natureza_operacao) || "VENDA DE MERCADORIA",
       data_emissao: _dataHora(new Date()),
-      data_entrada_saida: _dataHora(new Date()),
       tipo_documento: "1",
       local_destino: localDestino,
       finalidade_emissao: "1",
-      consumidor_final: destinatario.consumidor_final ? "1" : "0",
+      // NFC-e só pode ser emitida para consumidor final
+      consumidor_final: ehNfce
+        ? "1"
+        : destinatario.consumidor_final
+          ? "1"
+          : "0",
       presenca_comprador: String(
         (payload && payload.indicador_presenca) || "1",
       ),
     };
+    if (!ehNfce) {
+      // dhSaiEnt existe apenas na NF-e (modelo 55)
+      corpo.data_entrada_saida = _dataHora(new Date());
+    }
 
-    // Emitente
-    corpo.cnpj_emitente = cnpjEmitente || null;
+    // Emitente — CPF (11 dígitos) ou CNPJ (14 dígitos)
+    if (docEmit.length === 14) corpo.cnpj_emitente = docEmit;
+    else if (docEmit.length === 11) corpo.cpf_emitente = docEmit;
+
     corpo.nome_emitente = _limpar(emitente.razao_social);
     corpo.nome_fantasia_emitente = _limpar(emitente.nome_fantasia);
     corpo.inscricao_estadual_emitente = _soDigitos(emitente.ie) || null;
@@ -287,7 +299,10 @@ static _baseICMS(item, config) {
     corpo.cep_destinatario = _soDigitos(endDest.cep) || null;
     corpo.telefone_destinatario = _soDigitos(destinatario.telefone) || null;
     if (destinatario.email) corpo.email_destinatario = _limpar(destinatario.email);
-    corpo.indicador_inscricao_estadual_destinatario = ieDest ? "1" : "9";
+    // Indicador da IE do destinatario so faz sentido quando identificado
+    if (docDest.length) {
+      corpo.indicador_inscricao_estadual_destinatario = ieDest ? "1" : "9";
+    }
 
 // Itens de produto
     corpo.itens = itens.map((item, idx) => {
@@ -344,10 +359,10 @@ static _baseICMS(item, config) {
       };
     });
 
-    // Remove campos nulos/vazios (exceto cnpj_emitente, validado depois)
+    // Remove campos nulos/vazios (as validacoes obrigatorias ficam no transmitir)
     for (const chave of Object.keys(corpo)) {
       if (corpo[chave] === null || corpo[chave] === undefined) {
-        if (chave !== "cnpj_emitente") delete corpo[chave];
+        delete corpo[chave];
       }
     }
 
@@ -363,7 +378,11 @@ static _baseICMS(item, config) {
       numero: resposta && (resposta.numero ?? null),
       serie: resposta && (resposta.serie ?? null),
       chave_acesso:
-        (resposta && (resposta.chave_nfe || resposta.chave)) || null,
+        (resposta &&
+          (resposta.chave_nfe ||
+            resposta.chave_nfce ||
+            resposta.chave)) ||
+        null,
       protocolo:
         (resposta && (resposta.protocolo_sefaz || resposta.protocolo)) ||
         null,
@@ -390,28 +409,69 @@ static _baseICMS(item, config) {
     return base;
   }
 
-  /** Transmite uma NF-e para o Focus NFe. POST /nfe?ref={referencia} */
+  /**
+   * Transmite NF-e ou NFC-e. POST /{nfe|nfce}?ref={referencia}
+   * O tipo do documento vem de payload._notaTipo (gravado pelo servico fiscal);
+   * cai em "nfe" quando ausente.
+   */
   async transmitir(payload) {
-    if (!payload || payload.tipo !== "nfe") {
+    const doc =
+      payload && (payload._notaTipo === "nfce" || payload.tipo === "nfce")
+        ? "nfce"
+        : "nfe";
+
+    const ref = _referencia(payload);
+    const corpo = FocusNFeAdapter.montarPayloadNFe(
+      payload,
+      this.config,
+      doc,
+    );
+
+    // ── Validacoes locais antes de gastar a chamada (mensagens acionaveis) ──
+    if (!corpo.cnpj_emitente && !corpo.cpf_emitente) {
       throw new Error(
-        "FocusNFeAdapter: neste momento o adaptador implementa apenas NF-e. " +
-          "Configuracoes de NFC-e/NFS-e usam outro provimento.",
+        "CPF/CNPJ do emitente nao informado ou invalido. Preencha o CPF (11 digitos) ou o " +
+          "CNPJ (14 digitos) da empresa em Configuracoes -> Empresa. Importante: use o mesmo " +
+          "documento com que a empresa foi cadastrada no painel do provedor.",
+      );
+    }
+    if (!corpo.itens || !corpo.itens.length) {
+      throw new Error("A venda nao possui itens para emitir.");
+    }
+    const itensSemNcm = corpo.itens.filter((i) => !i.codigo_ncm);
+    if (itensSemNcm.length) {
+      throw new Error(
+        "Todo produto precisa ter NCM cadastrado para emissao fiscal. Itens sem NCM: " +
+          itensSemNcm.map((i) => i.descricao).join(", ") +
+          ".",
       );
     }
 
-    const ref = _referencia(payload);
-    const corpo = FocusNFeAdapter.montarPayloadNFe(payload, this.config);
-
-    if (!corpo.cnpj_emitente) {
-      throw new Error(
-        "CNPJ do emitente nao informado. Cadastre o CNPJ e o endereco completo da empresa " +
-          "(com Codigo IBGE do municipio) em Configuracoes -> Empresa antes de emitir NF-e.",
-      );
+    if (doc === "nfe") {
+      // NF-e (modelo 55) EXIGE destinatario identificado com endereco completo.
+      // Para venda de balcao sem identificacao, use NFC-e.
+      const faltando = [];
+      if (!corpo.nome_destinatario) faltando.push("nome do cliente");
+      if (!corpo.cpf_destinatario && !corpo.cnpj_destinatario)
+        faltando.push("CPF/CNPJ do cliente");
+      if (!corpo.logradouro_destinatario) faltando.push("logradouro");
+      if (!corpo.numero_destinatario) faltando.push("numero do endereco");
+      if (!corpo.bairro_destinatario) faltando.push("bairro");
+      if (!corpo.municipio_destinatario) faltando.push("municipio");
+      if (!corpo.uf_destinatario) faltando.push("UF");
+      if (faltando.length) {
+        throw new Error(
+          "NF-e exige cliente cadastrado com CPF/CNPJ e endereco completo. Faltando: " +
+            faltando.join(", ") +
+            ". Para venda de balcao sem identificacao do cliente, marque 'Emitir NFC-e' " +
+            "em Configuracoes -> Fiscal.",
+        );
+      }
     }
 
     const resposta = await this._request(
       "POST",
-      `/nfe?ref=${encodeURIComponent(ref)}`,
+      `/${doc}?ref=${encodeURIComponent(ref)}`,
       { body: corpo },
     );
 
@@ -432,8 +492,8 @@ static _baseICMS(item, config) {
     return normalizado;
   }
 
-  /** Consulta o status de uma NF-e pela referencia. GET /nfe/{referencia} */
-  async consultar(chaveOuRequisicao) {
+  /** Consulta o status de um documento pela referencia. GET /{doc}/{referencia} */
+  async consultar(chaveOuRequisicao, tipoDocumento = "nfe") {
     if (!chaveOuRequisicao) {
       const e = new Error(
         "Referencia (numero_requisicao) e obrigatoria para consultar no Focus NFe.",
@@ -450,14 +510,33 @@ static _baseICMS(item, config) {
       );
     }
 
-    const resposta = await this._request("GET", `/nfe/${encodeURIComponent(ref)}`);
-    return this._normalizar(resposta, ref);
+    // Tenta primeiro o documento informado; se nao existir (404), tenta o outro
+    const docs =
+      tipoDocumento === "nfce" ? ["nfce", "nfe"] : ["nfe", "nfce"];
+
+    let ultimoErro = null;
+    for (let i = 0; i < docs.length; i++) {
+      try {
+        const resposta = await this._request(
+          "GET",
+          `/${docs[i]}/${encodeURIComponent(ref)}`,
+        );
+        return this._normalizar(resposta, ref);
+      } catch (err) {
+        ultimoErro = err;
+        if (err && err.code === "FOCUS_404" && i < docs.length - 1) {
+          continue; // ref pode ter sido criada como o outro documento
+        }
+        throw err;
+      }
+    }
+    throw ultimoErro;
   }
 /**
-   * Cancela uma NF-e autorizada (dentro do prazo legal).
-   * DELETE /nfe/{referencia} com body { justificativa }
+   * Cancela uma NF-e/NFC-e autorizada (dentro do prazo legal).
+   * DELETE /{nfe|nfce}/{referencia} com body { justificativa }
    */
-  async cancelar(chaveAcesso, motivo) {
+  async cancelar(chaveAcesso, motivo, tipoDocumento = "nfe") {
     const justificativa = String(motivo || "").trim();
     if (justificativa.length < 15) {
       throw new Error(
@@ -472,9 +551,10 @@ static _baseICMS(item, config) {
       );
     }
 
+    const doc = tipoDocumento === "nfce" ? "nfce" : "nfe";
     const resposta = await this._request(
       "DELETE",
-      `/nfe/${encodeURIComponent(chaveAcesso)}`,
+      `/${doc}/${encodeURIComponent(chaveAcesso)}`,
       { body: { justificativa } },
     );
     const normalizado = this._normalizar(resposta, chaveAcesso);
