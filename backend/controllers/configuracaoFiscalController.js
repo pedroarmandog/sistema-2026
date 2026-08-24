@@ -81,13 +81,62 @@ async function salvarConfiguracao(req, res) {
       return valor === "" || valor === undefined ? null : valor;
     };
 
-    const dados = {
-      ...req.body,
-      empresa_id,
-      provedor_api: normalizarOpcional(req.body.provedor_api),
-      municipio_ibge: normalizarOpcional(req.body.municipio_ibge),
-      cfop_padrao_servico: normalizarOpcional(req.body.cfop_padrao_servico),
-    };
+    // Whitelist de campos aceitos no payload — impede que chaves desconhecidas
+    // (ex.: "configurado"/"provedores_disponiveis" devolvidos pelo GET) ou
+    // campos inexistentes no banco quebrem o INSERT/UPDATE com erro 500.
+    const CAMPOS_PERMITIDOS = [
+      "provedor_api",
+      "ambiente",
+      "modo_emissao",
+      "serie_nfe",
+      "serie_nfce",
+      "serie_nfse",
+      "proximo_numero_nfe",
+      "proximo_numero_nfce",
+      "proximo_numero_nfse",
+      "natureza_operacao_padrao",
+      "cfop_padrao_saida",
+      "cfop_padrao_servico",
+      "municipio_ibge",
+      "regime_tributario",
+      "emitir_nfe",
+      "emitir_nfce",
+      "emitir_nfse",
+      "ativo",
+    ];
+
+    // Colunas INTEGER/TINYINT: string vazia vira NULL — o MySQL em modo
+    // estrito rejeita '' com "Incorrect integer value" (causa clássica de 500).
+    const CAMPOS_NUMERICOS = [
+      "proximo_numero_nfe",
+      "proximo_numero_nfce",
+      "proximo_numero_nfse",
+      "regime_tributario",
+    ];
+
+    // Booleanos passam direto; demais (strings/ENUMs) são normalizados ('' → null)
+    const CAMPOS_BOOLEANOS = [
+      "emitir_nfe",
+      "emitir_nfce",
+      "emitir_nfse",
+      "ativo",
+    ];
+
+    const dados = { empresa_id };
+    for (const campo of CAMPOS_PERMITIDOS) {
+      if (!(campo in req.body)) continue; // não enviado → preserva valor atual
+      let valor = req.body[campo];
+      if (CAMPOS_NUMERICOS.includes(campo)) {
+        valor = normalizarOpcional(valor);
+        if (valor !== null) {
+          valor = Number(valor);
+          if (!Number.isFinite(valor)) continue; // valor inválido → ignora campo
+        }
+      } else if (!CAMPOS_BOOLEANOS.includes(campo)) {
+        valor = normalizarOpcional(valor);
+      }
+      dados[campo] = valor;
+    }
 
     // Campos sensíveis (token/certificado/senha) só são alterados quando um
     // NOVO valor é enviado. Se o campo vier vazio/ausente (frontend deixa em
