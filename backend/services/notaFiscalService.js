@@ -94,13 +94,29 @@ function _sinteticaDeVenda(venda) {
   };
 }
 /**
+ * Detecta se o cliente é pessoa jurídica (destinatário com CNPJ).
+ * Usado pela regra do Ajuste SINIEF 11/2025: NFC-e somente para pessoa física.
+ */
+function _clienteEhPJ(cliente) {
+  if (!cliente) return false;
+  if (String(cliente.tipo_pessoa || "").toUpperCase() === "J") return true;
+  return String(cliente.cnpj || "").replace(/\D/g, "").length > 0;
+}
+
+/**
  * Define o tipo de nota mais adequado para uma venda, respeitando a
  * configuração da empresa (mesma regra documentada no FiscalPayloadBuilder):
  *  - Serviço (vinda de agendamento ou item tipo serviço) → NFS-e se habilitada;
  *  - Produtos → NFC-e se habilitada, senão NF-e;
  *  - Se nada habilitado → null (fluxo fiscal não se aplica a esta venda).
+ *
+ * REGRA FISCAL (Ajuste SINIEF 11/2025 — vigente desde 03/11/2025): NFC-e
+ * somente pode ser emitida para consumidor final PESSOA FÍSICA. Destinatário
+ * PJ (CNPJ) exige NF-e modelo 55: quando a empresa também emite NF-e o tipo é
+ * trocado automaticamente; caso contrário retorna null (bloqueia a emissão).
+ * Venda sem cliente identificado (balcão) continua podendo ser NFC-e.
  */
-function resolveTipoNota(venda, config, agendamentoId = null) {
+function resolveTipoNota(venda, config, agendamentoId = null, cliente = null) {
   if (!config) return null;
 
   const idAgendamento = agendamentoId || _agendamentoIdVenda(venda);
@@ -114,11 +130,18 @@ function resolveTipoNota(venda, config, agendamentoId = null) {
     tipos.includes("serviço") ||
     tipos.includes("servicos");
 
-  if (ehServico && config.emitir_nfse) return "nfse";
-  if (config.emitir_nfce) return "nfce";
-  if (config.emitir_nfe) return "nfe";
-  if (config.emitir_nfse) return "nfse";
-  return null;
+  let tipo = null;
+  if (ehServico && config.emitir_nfse) tipo = "nfse";
+  else if (config.emitir_nfce) tipo = "nfce";
+  else if (config.emitir_nfe) tipo = "nfe";
+  else if (config.emitir_nfse) tipo = "nfse";
+
+  // Destinatário PJ não pode receber NFC-e (Ajuste SINIEF 11/2025)
+  if (tipo === "nfce" && _clienteEhPJ(cliente)) {
+    if (config.emitir_nfe) return "nfe";
+    return null; // PJ e apenas NFC-e habilitada → sem fluxo válido
+  }
+  return tipo;
 }
 
 /**
@@ -133,6 +156,17 @@ async function _marcarErroNota(nota, venda, fase, erro) {
   if (/não implementado/i.test(mensagem)) {
     mensagem =
       "Emissão real não iniciada: a integração com o provedor de notas ainda não está ativa nesta instalação (testes internos sem certificado digital).";
+  }
+
+  // Provedor bloqueou a emissão porque a empresa/CNPJ ainda não está habilitado
+  // para o tipo de documento (ex.: Focus NFe — "Empresa ainda não habilitada
+  // para emissão de NFCe"). Orienta o usuário em vez de devolver o texto cru.
+  if (/n[ãa]o habilitada para emiss[ãa]o/i.test(mensagem)) {
+    mensagem =
+      "Empresa ainda não habilitada para este tipo de documento no provedor fiscal " +
+      "(ex.: Focus NFe). Habilite a empresa para NFC-e/NF-e no painel do provedor ou " +
+      "contate o suporte deles. Alternativa para testes: ajuste os tipos de emissão " +
+      "(NF-e/NFC-e/NFS-e) em Configurações → Fiscal.";
   }
 
   const resposta = {
@@ -579,11 +613,21 @@ async function registrarNotaPendente({ vendaId, empresaId }) {
   }
 
   const idAgendamento = _agendamentoIdVenda(venda);
-  const tipo = resolveTipoNota(venda, config, idAgendamento);
+
+  // Cliente carregado ANTES de resolver o tipo: a regra do Ajuste SINIEF
+  // 11/2025 depende do documento do destinatário (PJ → NF-e, não NFC-e).
+  const cliente = venda.clienteId
+    ? await Cliente.findByPk(venda.clienteId).catch(() => null)
+    : null;
+
+  const tipo = resolveTipoNota(venda, config, idAgendamento, cliente);
   if (!tipo) {
-    const e = new Error(
-      "Emissão de nota fiscal não habilitada para esta venda (configuração da empresa).",
-    );
+    // Diferencia a causa para orientar corretamente o usuário
+    const msg = _clienteEhPJ(cliente)
+      ? "Destinatário pessoa jurídica (CNPJ) exige NF-e (modelo 55), mas a " +
+        "NF-e não está habilitada. Habilite 'Emitir NF-e' em Configurações → Fiscal."
+      : "Emissão de nota fiscal não habilitada para esta venda (configuração da empresa).";
+    const e = new Error(msg);
     e.status = 400;
     throw e;
   }
@@ -598,10 +642,19 @@ async function registrarNotaPendente({ vendaId, empresaId }) {
     order: [["createdAt", "DESC"]],
   });
 
+  // Se a nota reaproveitada tem tipo diferente do necessário agora (ex.:
+  // pendente antiga como NFC-e e a regra PJ→NF-e passou a valer), atualiza —
+  // apenas em rascunho/erro. Notas "aguardando" já podem ter sido transmitidas:
+  // mantêm o tipo original para consulta/retransmissão funcionar.
+  if (
+    nota &&
+    nota.tipo !== tipo &&
+    ["rascunho", "erro"].includes(nota.status)
+  ) {
+    await nota.update({ tipo }).catch(() => {});
+  }
+
   if (!nota) {
-    const cliente = venda.clienteId
-      ? await Cliente.findByPk(venda.clienteId).catch(() => null)
-      : null;
     const totais = _asObject(venda.totais);
     nota = await NotaFiscal.create({
       empresa_id: empresaId,
