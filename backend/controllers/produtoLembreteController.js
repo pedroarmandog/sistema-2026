@@ -63,8 +63,14 @@ async function garantirTemplateProdutoRecorrente(empresaId) {
 exports.listarLembretes = async (req, res) => {
   try {
     const { ProdutoLembreteRecorrente, Cliente } = require("../models");
-    const empresaId = req.user?.empresaId || req.query.empresaId || 1;
-    const empId = Number(empresaId);
+    const empresaId =
+      req.user && req.user.empresaId ? Number(req.user.empresaId) : null;
+    if (!empresaId) {
+      return res
+        .status(403)
+        .json({ success: false, error: "Empresa não identificada" });
+    }
+    const empId = empresaId;
 
     let lembretes = await ProdutoLembreteRecorrente.findAll({
       where: { empresa_id: empId },
@@ -199,7 +205,13 @@ exports.criarOuAtualizar = async (req, res) => {
     const dataDisparo = new Date(dataVenda);
     dataDisparo.setDate(dataDisparo.getDate() + dias - 1);
 
-    const empId = Number(empresa_id) || req.user?.empresaId || 1;
+    const empId =
+      req.user && req.user.empresaId ? Number(req.user.empresaId) : null;
+    if (!empId) {
+      return res
+        .status(403)
+        .json({ success: false, error: "Empresa não identificada" });
+    }
 
     // Verificar se já existe lembrete ativo para este cliente+produto
     const existing = await ProdutoLembreteRecorrente.findOne({
@@ -366,10 +378,15 @@ exports.getConfigCliente = async (req, res) => {
   try {
     const { Cliente } = require("../models");
     const { clienteId } = req.params;
-    const empresaId = req.user?.empresaId || req.query?.empresaId;
+    const empresaId =
+      req.user && req.user.empresaId ? Number(req.user.empresaId) : null;
+    if (!empresaId) {
+      return res
+        .status(403)
+        .json({ success: false, error: "Empresa não identificada" });
+    }
 
-    const where = { id: Number(clienteId) };
-    if (empresaId) where.empresa_id = Number(empresaId);
+    const where = { id: Number(clienteId), empresa_id: empresaId };
 
     const cliente = await Cliente.findOne({
       where,
@@ -416,7 +433,12 @@ exports.saveConfigCliente = async (req, res) => {
     const { clienteId } = req.params;
     const { ativo, dias, produto_id, produto_nome } = req.body;
     const empresaId =
-      req.user?.empresaId || req.body?.empresaId || req.query?.empresaId;
+      req.user && req.user.empresaId ? Number(req.user.empresaId) : null;
+    if (!empresaId) {
+      return res
+        .status(403)
+        .json({ success: false, error: "Empresa não identificada" });
+    }
 
     if (!clienteId || isNaN(Number(clienteId))) {
       return res
@@ -433,8 +455,7 @@ exports.saveConfigCliente = async (req, res) => {
 
     const lembreteAtivo = ativo === true || ativo === "true";
 
-    const where = { id: Number(clienteId) };
-    if (empresaId) where.empresa_id = empresaId;
+    const where = { id: Number(clienteId), empresa_id: empresaId };
 
     const [updated] = await Cliente.update(
       {
@@ -453,7 +474,7 @@ exports.saveConfigCliente = async (req, res) => {
     }
 
     // ── Sincronizar produto_lembrete_recorrente ────────────────────────────
-    const empId = Number(empresaId) || 1;
+    const empId = Number(empresaId);
     const cliId = Number(clienteId);
 
     if (lembreteAtivo) {
@@ -606,7 +627,13 @@ exports.saveConfigCliente = async (req, res) => {
 exports.estatisticas = async (req, res) => {
   try {
     const { ProdutoLembreteRecorrente } = require("../models");
-    const empresaId = req.user?.empresaId || req.query.empresaId || 1;
+    const empresaId =
+      req.user && req.user.empresaId ? Number(req.user.empresaId) : null;
+    if (!empresaId) {
+      return res
+        .status(403)
+        .json({ success: false, error: "Empresa não identificada" });
+    }
 
     const totalAtivos = await ProdutoLembreteRecorrente.count({
       where: { empresa_id: Number(empresaId), ativo: true, status: "ativo" },
@@ -818,6 +845,14 @@ exports.dispararIndividual = async function dispararIndividual(req, res) {
     const { ProdutoLembreteRecorrente, Cliente, Pet } = require("../models");
     const { dispararMensagemAutomatica } = require("./marketingController");
 
+    const empresaAuth =
+      req.user && req.user.empresaId ? Number(req.user.empresaId) : null;
+    if (!empresaAuth) {
+      return res
+        .status(403)
+        .json({ success: false, error: "Empresa não identificada" });
+    }
+
     const lembrete = await ProdutoLembreteRecorrente.findOne({
       where: { id, ativo: true },
       include: [
@@ -852,6 +887,12 @@ exports.dispararIndividual = async function dispararIndividual(req, res) {
     }
 
     const empresaId = lembrete.empresa_id || cliente.empresa_id || 1;
+    if (Number(empresaId) !== empresaAuth) {
+      return res.status(403).json({
+        success: false,
+        error: "Lembrete não pertence à sua empresa",
+      });
+    }
     const primeiroPet = cliente.pets && cliente.pets[0];
 
     await garantirTemplateProdutoRecorrente(empresaId);

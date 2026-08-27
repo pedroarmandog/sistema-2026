@@ -357,6 +357,16 @@ exports.obterMensagem = async (req, res) => {
     if (!mensagem)
       return res.status(404).json({ erro: "Mensagem não encontrada" });
 
+    // ISOLAMENTO MULTI-TENANT: mensagem deve pertencer à empresa autenticada
+    const empresaAuth =
+      req.user && req.user.empresaId ? Number(req.user.empresaId) : null;
+    if (
+      !empresaAuth ||
+      Number(mensagem.empresaId) !== empresaAuth
+    ) {
+      return res.status(403).json({ erro: "Mensagem não pertence à sua empresa" });
+    }
+
     return res.json(mensagem);
   } catch (err) {
     return res.status(500).json({ erro: err.message });
@@ -374,6 +384,13 @@ exports.atualizarMensagem = async (req, res) => {
 
     if (!mensagem)
       return res.status(404).json({ erro: "Mensagem não encontrada" });
+
+    // ISOLAMENTO MULTI-TENANT: mensagem deve pertencer à empresa autenticada
+    const empresaAuth =
+      req.user && req.user.empresaId ? Number(req.user.empresaId) : null;
+    if (!empresaAuth || Number(mensagem.empresaId) !== empresaAuth) {
+      return res.status(403).json({ erro: "Mensagem não pertence à sua empresa" });
+    }
 
     const { conteudo, titulo } = req.body;
 
@@ -408,6 +425,13 @@ exports.ativarMensagem = async (req, res) => {
     if (!mensagem)
       return res.status(404).json({ erro: "Mensagem não encontrada" });
 
+    // ISOLAMENTO MULTI-TENANT: mensagem deve pertencer à empresa autenticada
+    const empresaAuth =
+      req.user && req.user.empresaId ? Number(req.user.empresaId) : null;
+    if (!empresaAuth || Number(mensagem.empresaId) !== empresaAuth) {
+      return res.status(403).json({ erro: "Mensagem não pertence à sua empresa" });
+    }
+
     const { configuracaoEnvio } = req.body;
 
     await mensagem.update({
@@ -441,6 +465,13 @@ exports.desativarMensagem = async (req, res) => {
     if (!mensagem)
       return res.status(404).json({ erro: "Mensagem não encontrada" });
 
+    // ISOLAMENTO MULTI-TENANT: mensagem deve pertencer à empresa autenticada
+    const empresaAuth =
+      req.user && req.user.empresaId ? Number(req.user.empresaId) : null;
+    if (!empresaAuth || Number(mensagem.empresaId) !== empresaAuth) {
+      return res.status(403).json({ erro: "Mensagem não pertence à sua empresa" });
+    }
+
     await mensagem.update({ ativo: false });
 
     await LogEnvio.create({
@@ -470,6 +501,15 @@ exports.uploadImagem = async (req, res) => {
 
     if (!mensagem)
       return res.status(404).json({ erro: "Mensagem não encontrada" });
+
+    // ISOLAMENTO MULTI-TENANT: mensagem deve pertencer à empresa autenticada
+    const empresaUpload =
+      req.user && req.user.empresaId ? Number(req.user.empresaId) : null;
+    if (!empresaUpload || Number(mensagem.empresaId) !== empresaUpload) {
+      return res
+        .status(403)
+        .json({ erro: "Mensagem não pertence à sua empresa" });
+    }
 
     const imagemPath = `/uploads/marketing/${req.file.filename}`;
     await mensagem.update({ imagemPath });

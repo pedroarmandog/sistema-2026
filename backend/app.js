@@ -313,7 +313,9 @@ const contaReceberRoutes = require("./routes/contaReceberRoutes");
 // PWA Mobile — Push Notifications
 const pushNotificationRoutes = require("./routes/pushNotificationRoutes");
 // Disparador de Mensagens (Marketing)
-app.use("/api/disparador", disparadorRoutes);
+// ISOLAMENTO MULTI-TENANT: módulo agora exige usuário autenticado
+// (antes estava público, permitindo acesso a campanhas/contatos de qualquer empresa).
+app.use("/api/disparador", authUser, disparadorRoutes);
 // Instâncias de WhatsApp (Puppeteer / sessões)
 app.use("/api/instancias", authUser, instanciaRoutes);
 // Integrar módulo Entrada de Mercadoria (Prisma + TypeScript)

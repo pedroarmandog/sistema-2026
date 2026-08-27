@@ -11,7 +11,12 @@ console.log("[Marketing] Módulo carregado");
 // ─────────────────────────────────────────────────────────────────
 // CONFIGURAÇÕES
 // ─────────────────────────────────────────────────────────────────
-const VPS_URL = window.VPS_URL || "https://api.pethubflow.com.br";
+// ISOLAMENTO MULTI-TENANT: respeitar window.VPS_URL mesmo quando vazio (same-origin).
+// "" (string vazia) é intencional — nunca cair no fallback de produção.
+const VPS_URL =
+  window.VPS_URL !== undefined && window.VPS_URL !== null
+    ? window.VPS_URL
+    : "https://api.pethubflow.com.br";
 const API = VPS_URL + "/api/marketing";
 
 // Converte caminho relativo de imagem para URL absoluta da VPS
@@ -24,12 +29,13 @@ function resolveImgPath(p) {
   return VPS_URL + "/uploads/marketing/" + p;
 }
 
-// Obter empresaId do usuário logado — via JWT ou cookie legado
+// Obter empresaId do usuário logado — SEMPRE via JWT (endpoint autenticado /me).
+// ISOLAMENTO MULTI-TENANT: a empresa do usuário vem do backend, nunca de cookie
+// legado ou de dados públicos (/api/usuarios/:id era público e expunha empresas).
 let EMPRESA_ID = null;
 let _empresaIdPromise = (async function detectarEmpresaId() {
-  // Estratégia 1: tentar obter do JWT via endpoint de sessão atual
   try {
-    const sessRes = await fetch(VPS_URL + "/api/usuarios/sessao-atual", {
+    const sessRes = await fetch(VPS_URL + "/api/usuarios/me", {
       credentials: "include",
     });
     if (sessRes.ok) {
@@ -39,39 +45,15 @@ let _empresaIdPromise = (async function detectarEmpresaId() {
         console.log("[Marketing] empresaId do JWT:", EMPRESA_ID);
         return;
       }
+      console.warn(
+        "[Marketing] /me respondeu mas sem empresaId. Sessão antiga?",
+      );
+    } else {
+      console.warn("[Marketing] /me não autenticado (HTTP", sessRes.status, ")");
     }
-  } catch (_) {}
-  // Estratégia 2: cookie legado usuarioLogadoId (fallback)
-  try {
-    const ca = document.cookie.split(";");
-    let usuarioId = null;
-    for (const c of ca) {
-      const t = c.trim();
-      if (t.startsWith("usuarioLogadoId=")) {
-        usuarioId = t.substring("usuarioLogadoId=".length);
-        break;
-      }
-    }
-    if (!usuarioId) {
-      console.warn("[Marketing] Nenhum usuário logado detectado.");
-      return;
-    }
-    const r = await fetch(VPS_URL + "/api/usuarios/" + usuarioId);
-    if (!r.ok) return;
-    const u = await r.json();
-    if (!u?.empresas?.length) return;
-    const e = u.empresas[0];
-    const id =
-      typeof e === "number"
-        ? e
-        : typeof e === "string"
-          ? parseInt(e, 10)
-          : e?.id || e?.ID || null;
-    if (id) {
-      EMPRESA_ID = id;
-      console.log("[Marketing] empresaId detectado (cookie):", EMPRESA_ID);
-    }
-  } catch (_) {}
+  } catch (e) {
+    console.warn("[Marketing] Falha ao consultar /me:", e && e.message);
+  }
 })();
 
 // Estado em memória (espelho do banco — não é fonte da verdade)

@@ -305,6 +305,15 @@ async function processarEnvio(envio, LogEnvio, queriesCounter = { count: 0 }) {
  */
 async function agendarEnvio(params) {
   try {
+    // ISOLAMENTO MULTI-TENANT: a empresa é obrigatória — nunca usar fallback || 1
+    if (!params.empresaId) {
+      console.error(
+        "[Queue] agendarEnvio rejeitado: empresaId ausente (telefone:",
+        params && params.telefone,
+        ")",
+      );
+      return null;
+    }
     const { EnvioAgendado } = require("../models");
 
     // Evitar duplicata: checar se já existe envio pendente/enviado para o mesmo contexto + mensagem
@@ -375,7 +384,7 @@ async function agendarEnvio(params) {
     }
 
     const envio = await EnvioAgendado.create({
-      empresaId: params.empresaId || 1,
+      empresaId: params.empresaId,
       mensagemAutomaticaId: params.mensagemAutomaticaId,
       telefoneDestino: String(params.telefone).replace(/\D/g, ""),
       conteudoFinal: params.conteudoFinal,

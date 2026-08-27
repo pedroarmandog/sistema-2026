@@ -1504,7 +1504,10 @@ async function atualizarStatusNoBanco(empresaId, status, numero) {
     } else {
       // Sistema principal: buscar por empresaId
       const [session] = await WhatsappSession.findOrCreate({
-        where: { empresaId: numericId },
+        // ISOLAMENTO MULTI-TENANT: garantir a linha principal de marketing
+        // (nome NULL), sem colidir com as instâncias do disparador
+        // (nome='config_disparador' ou sessões nom=disp_*).
+        where: { empresaId: numericId, nome: null },
         defaults: {
           status,
           numero,

@@ -67,7 +67,13 @@ function replacePlaceholders(template, contato, phone) {
 
 async function criarCampanha(req, res) {
   try {
-    const empresaId = req.body.empresaId || 1;
+    // ISOLAMENTO MULTI-TENANT: a empresa é SEMPRE a do usuário autenticado.
+    // Nunca confiar em empresaId vindo do body e nunca usar fallback || 1.
+    const empresaId =
+      req.user && req.user.empresaId ? Number(req.user.empresaId) : null;
+    if (!empresaId) {
+      return res.status(403).json({ error: "Empresa não identificada" });
+    }
     const nome = req.body.nome || "Campanha " + Date.now();
     const mensagemTemplate = req.body.mensagemTemplate || "";
     const configuracao = req.body.configuracao
@@ -286,12 +292,52 @@ async function iniciarCampanha(req, res) {
   try {
     const id = req.params.id;
     const instanciaId = req.body.instanciaId || null;
+
+    // ISOLAMENTO MULTI-TENANT: empresa sempre do contexto autenticado
+    const empresaAuth =
+      req.user && req.user.empresaId ? Number(req.user.empresaId) : null;
+    if (!empresaAuth) {
+      return res.status(403).json({ error: "Empresa não identificada" });
+    }
+
     const camp = await Campanha.findByPk(id);
     if (!camp)
       return res.status(404).json({ error: "Campanha não encontrada" });
 
-    // Verificar/reconectar o cliente WhatsApp
-    const chaveWpp = DISP_PREFIX + String(instanciaId || camp.empresaId || 1);
+    // A campanha deve pertencer à empresa autenticada
+    if (Number(camp.empresaId) !== empresaAuth) {
+      return res
+        .status(403)
+        .json({ error: "Campanha não pertence à sua empresa" });
+    }
+
+    // A instância WhatsApp informada deve pertencer à empresa autenticada.
+    // Sem instância válida da própria empresa, o disparo é recusado
+    // (nunca usar sessão de outra empresa nem fallback || 1).
+    let instanciaValida = null;
+    if (instanciaId) {
+      instanciaValida = await WhatsappSession.findOne({
+        where: { id: Number(instanciaId), empresaId: empresaAuth },
+      });
+      if (!instanciaValida) {
+        return res.status(403).json({
+          error: "Instância não pertence à sua empresa",
+        });
+      }
+    } else {
+      instanciaValida = await WhatsappSession.findOne({
+        where: { empresaId: empresaAuth },
+      });
+      if (!instanciaValida) {
+        return res.status(400).json({
+          error:
+            "Nenhuma instância WhatsApp encontrada para sua empresa. Crie uma instância primeiro.",
+        });
+      }
+    }
+
+    // Verificar/reconectar o cliente WhatsApp (chave validada)
+    const chaveWpp = DISP_PREFIX + String(instanciaValida.id);
     // Ao iniciar campanha manualmente, abrir o Chrome (headful) para monitoramento
     const conectado = await aguardarConexao(chaveWpp, { headless: false });
     if (!conectado) {
@@ -304,8 +350,8 @@ async function iniciarCampanha(req, res) {
     camp.status = "rodando";
     await camp.save();
 
-    // Iniciar worker em background
-    startWorker(camp, instanciaId);
+    // Iniciar worker em background — SEMPRE com a instância validada
+    startWorker(camp, String(instanciaValida.id));
 
     return res.json({ success: true });
   } catch (err) {
@@ -320,8 +366,15 @@ async function iniciarCampanha(req, res) {
  */
 function startWorker(campanha, instanciaId) {
   const campId = campanha.id;
-  const empresaId =
-    DISP_PREFIX + String(instanciaId || campanha.empresaId || 1);
+  // ISOLAMENTO MULTI-TENANT: worker só roda com instância explicitamente
+  // validada pelo controller (pertencente à empresa autenticada).
+  if (!instanciaId) {
+    console.error(
+      `[Disparador] Worker da campanha ${campId} abortado: nenhuma instância validada.`,
+    );
+    return;
+  }
+  const empresaId = DISP_PREFIX + String(instanciaId);
 
   if (activeWorkers.has(campId)) return;
 
@@ -645,6 +698,19 @@ async function pausarCampanha(req, res) {
     const camp = await Campanha.findByPk(id);
     if (!camp)
       return res.status(404).json({ error: "Campanha não encontrada" });
+
+    // ISOLAMENTO MULTI-TENANT: campanha deve pertencer à empresa autenticada
+    const empresaAuth =
+      req.user && req.user.empresaId ? Number(req.user.empresaId) : null;
+    if (!empresaAuth) {
+      return res.status(403).json({ error: "Empresa não identificada" });
+    }
+    if (Number(camp.empresaId) !== empresaAuth) {
+      return res
+        .status(403)
+        .json({ error: "Campanha não pertence à sua empresa" });
+    }
+
     camp.status = "pausada";
     await camp.save();
 
@@ -665,12 +731,50 @@ async function continuarCampanha(req, res) {
   try {
     const id = req.params.id;
     const instanciaId = req.body.instanciaId || null;
+
+    // ISOLAMENTO MULTI-TENANT: empresa sempre do contexto autenticado
+    const empresaAuth =
+      req.user && req.user.empresaId ? Number(req.user.empresaId) : null;
+    if (!empresaAuth) {
+      return res.status(403).json({ error: "Empresa não identificada" });
+    }
+
     const camp = await Campanha.findByPk(id);
     if (!camp)
       return res.status(404).json({ error: "Campanha não encontrada" });
 
-    // Verificar/reconectar o cliente WhatsApp
-    const chaveWpp = DISP_PREFIX + String(instanciaId || camp.empresaId || 1);
+    // A campanha deve pertencer à empresa autenticada
+    if (Number(camp.empresaId) !== empresaAuth) {
+      return res
+        .status(403)
+        .json({ error: "Campanha não pertence à sua empresa" });
+    }
+
+    // A instância WhatsApp deve pertencer à empresa autenticada
+    let instanciaValida = null;
+    if (instanciaId) {
+      instanciaValida = await WhatsappSession.findOne({
+        where: { id: Number(instanciaId), empresaId: empresaAuth },
+      });
+      if (!instanciaValida) {
+        return res
+          .status(403)
+          .json({ error: "Instância não pertence à sua empresa" });
+      }
+    } else {
+      instanciaValida = await WhatsappSession.findOne({
+        where: { empresaId: empresaAuth },
+      });
+      if (!instanciaValida) {
+        return res.status(400).json({
+          error:
+            "Nenhuma instância WhatsApp encontrada para sua empresa. Crie uma instância primeiro.",
+        });
+      }
+    }
+
+    // Verificar/reconectar o cliente WhatsApp (chave validada)
+    const chaveWpp = DISP_PREFIX + String(instanciaValida.id);
     const conectado = await aguardarConexao(chaveWpp);
     if (!conectado) {
       return res.status(400).json({
@@ -682,7 +786,7 @@ async function continuarCampanha(req, res) {
     camp.status = "rodando";
     await camp.save();
 
-    startWorker(camp, instanciaId);
+    startWorker(camp, String(instanciaValida.id));
 
     return res.json({ success: true });
   } catch (err) {
@@ -694,6 +798,22 @@ async function continuarCampanha(req, res) {
 async function obterLogs(req, res) {
   try {
     const id = req.params.id;
+
+    // ISOLAMENTO MULTI-TENANT: o envio (e seus logs) deve pertencer
+    // à empresa autenticada.
+    const empresaAuth =
+      req.user && req.user.empresaId ? Number(req.user.empresaId) : null;
+    if (!empresaAuth) {
+      return res.status(403).json({ error: "Empresa não identificada" });
+    }
+    const envioRef = await EnvioAgendado.findByPk(id);
+    if (!envioRef) {
+      return res.status(404).json({ error: "Envio não encontrado" });
+    }
+    if (Number(envioRef.empresaId) !== empresaAuth) {
+      return res.status(403).json({ error: "Envio não pertence à sua empresa" });
+    }
+
     const logs = await LogEnvio.findAll({
       where: { envioAgendadoId: id },
       order: [["createdAt", "DESC"]],
@@ -709,6 +829,24 @@ async function obterLogs(req, res) {
 async function obterContatos(req, res) {
   try {
     const id = req.params.id;
+
+    // ISOLAMENTO MULTI-TENANT: a campanha (e seus contatos) deve pertencer
+    // à empresa autenticada.
+    const empresaAuth =
+      req.user && req.user.empresaId ? Number(req.user.empresaId) : null;
+    if (!empresaAuth) {
+      return res.status(403).json({ error: "Empresa não identificada" });
+    }
+    const camp = await Campanha.findByPk(id);
+    if (!camp) {
+      return res.status(404).json({ error: "Campanha não encontrada" });
+    }
+    if (Number(camp.empresaId) !== empresaAuth) {
+      return res
+        .status(403)
+        .json({ error: "Campanha não pertence à sua empresa" });
+    }
+
     const contatos = await Contato.findAll({
       where: { campanhaId: id },
       order: [["createdAt", "ASC"]],
@@ -723,6 +861,13 @@ async function obterContatos(req, res) {
 async function eventoSSE(req, res) {
   try {
     const id = req.params.id;
+    // ISOLAMENTO MULTI-TENANT: só permite acompanhar campanha da própria empresa
+    const empresaSSE =
+      req.user && req.user.empresaId ? Number(req.user.empresaId) : null;
+    const campSSE = await Campanha.findByPk(id);
+    if (!empresaSSE || !campSSE || Number(campSSE.empresaId) !== empresaSSE) {
+      return res.status(403).json({ error: "Campanha não pertence à sua empresa" });
+    }
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
@@ -767,10 +912,19 @@ async function eventoSSE(req, res) {
 }
 
 /**
- * Salva configuração global do disparador no banco (WhatsappSession com nome='config_disparador').
+ * Salva configuração do disparador NO BANCO, por empresa
+ * (WhatsappSession com nome='config_disparador' e empresaId da sessão).
+ * ISOLAMENTO MULTI-TENANT: cada empresa tem sua própria configuração —
+ * a antiga linha global (empresaId=0) nunca é lida nem atualizada.
  */
 async function salvarConfig(req, res) {
   try {
+    const empresaAuth =
+      req.user && req.user.empresaId ? Number(req.user.empresaId) : null;
+    if (!empresaAuth) {
+      return res.status(403).json({ error: "Empresa não identificada" });
+    }
+
     const { intervalo, delayInicial, limite, delayRand } = req.body;
     const config = {
       intervalo: Number(intervalo) || 10,
@@ -780,10 +934,11 @@ async function salvarConfig(req, res) {
     };
 
     const [registro] = await WhatsappSession.findOrCreate({
-      where: { nome: "config_disparador" },
+      where: { nome: "config_disparador", empresaId: empresaAuth },
       defaults: {
-        empresaId: 0,
+        empresaId: empresaAuth,
         status: "desconectado",
+        numeroOrdem: 0,
         sessionData: JSON.stringify(config),
       },
     });
@@ -798,12 +953,20 @@ async function salvarConfig(req, res) {
 }
 
 /**
- * Carrega configuração global do disparador do banco.
+ * Carrega configuração do disparador do banco, por empresa.
+ * ISOLAMENTO MULTI-TENANT: retorna apenas a config DA empresa autenticada;
+ * se não existir, retorna os padrões (nunca herda de outra empresa).
  */
 async function carregarConfig(req, res) {
   try {
+    const empresaAuth =
+      req.user && req.user.empresaId ? Number(req.user.empresaId) : null;
+    if (!empresaAuth) {
+      return res.status(403).json({ error: "Empresa não identificada" });
+    }
+
     const registro = await WhatsappSession.findOne({
-      where: { nome: "config_disparador" },
+      where: { nome: "config_disparador", empresaId: empresaAuth },
     });
     if (!registro || !registro.sessionData) {
       return res.json({

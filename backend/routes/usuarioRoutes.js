@@ -229,7 +229,7 @@ router.get("/me", authUser, async (req, res) => {
 
 // Rotas de usuários
 router.get("/", authUser, usuarioController.listarUsuarios);
-router.get("/:id", usuarioController.buscarUsuario);
+router.get("/:id", authUser, usuarioController.buscarUsuario);
 router.post("/", usuarioController.criarUsuario);
 router.put("/:id", usuarioController.atualizarUsuario);
 router.delete("/:id", usuarioController.deletarUsuario);
